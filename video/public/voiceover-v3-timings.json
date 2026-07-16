@@ -1,0 +1,1080 @@
+[
+  {
+    "text": " Financial",
+    "startMs": 0,
+    "endMs": 500,
+    "timestampMs": 0,
+    "confidence": null
+  },
+  {
+    "text": " answers",
+    "startMs": 500,
+    "endMs": 920,
+    "timestampMs": 500,
+    "confidence": null
+  },
+  {
+    "text": " shouldn't",
+    "startMs": 920,
+    "endMs": 1420,
+    "timestampMs": 920,
+    "confidence": null
+  },
+  {
+    "text": " be",
+    "startMs": 1420,
+    "endMs": 1620,
+    "timestampMs": 1420,
+    "confidence": null
+  },
+  {
+    "text": " a",
+    "startMs": 1620,
+    "endMs": 1800,
+    "timestampMs": 1620,
+    "confidence": null
+  },
+  {
+    "text": " black",
+    "startMs": 1800,
+    "endMs": 2000,
+    "timestampMs": 1800,
+    "confidence": null
+  },
+  {
+    "text": " box",
+    "startMs": 2000,
+    "endMs": 2380,
+    "timestampMs": 2000,
+    "confidence": null
+  },
+  {
+    "text": " General",
+    "startMs": 3520,
+    "endMs": 3520,
+    "timestampMs": 3520,
+    "confidence": null
+  },
+  {
+    "text": " purpose",
+    "startMs": 3520,
+    "endMs": 3860,
+    "timestampMs": 3520,
+    "confidence": null
+  },
+  {
+    "text": " chatbots",
+    "startMs": 3860,
+    "endMs": 4360,
+    "timestampMs": 3860,
+    "confidence": null
+  },
+  {
+    "text": " give",
+    "startMs": 4360,
+    "endMs": 4660,
+    "timestampMs": 4360,
+    "confidence": null
+  },
+  {
+    "text": " you",
+    "startMs": 4660,
+    "endMs": 5220,
+    "timestampMs": 4660,
+    "confidence": null
+  },
+  {
+    "text": " shallow",
+    "startMs": 5220,
+    "endMs": 5220,
+    "timestampMs": 5220,
+    "confidence": null
+  },
+  {
+    "text": " answers",
+    "startMs": 5220,
+    "endMs": 5660,
+    "timestampMs": 5220,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 6800,
+    "endMs": 7100,
+    "timestampMs": 6800,
+    "confidence": null
+  },
+  {
+    "text": " shows",
+    "startMs": 7100,
+    "endMs": 7520,
+    "timestampMs": 7100,
+    "confidence": null
+  },
+  {
+    "text": " you",
+    "startMs": 7520,
+    "endMs": 7680,
+    "timestampMs": 7520,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 7680,
+    "endMs": 7940,
+    "timestampMs": 7680,
+    "confidence": null
+  },
+  {
+    "text": " research",
+    "startMs": 7940,
+    "endMs": 8180,
+    "timestampMs": 7940,
+    "confidence": null
+  },
+  {
+    "text": " behind",
+    "startMs": 8180,
+    "endMs": 8660,
+    "timestampMs": 8180,
+    "confidence": null
+  },
+  {
+    "text": " them",
+    "startMs": 8660,
+    "endMs": 9000,
+    "timestampMs": 8660,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 9820,
+    "endMs": 10320,
+    "timestampMs": 9820,
+    "confidence": null
+  },
+  {
+    "text": " is",
+    "startMs": 10320,
+    "endMs": 10960,
+    "timestampMs": 10320,
+    "confidence": null
+  },
+  {
+    "text": " an",
+    "startMs": 10960,
+    "endMs": 11140,
+    "timestampMs": 10960,
+    "confidence": null
+  },
+  {
+    "text": " open",
+    "startMs": 11140,
+    "endMs": 11400,
+    "timestampMs": 11140,
+    "confidence": null
+  },
+  {
+    "text": " source",
+    "startMs": 11400,
+    "endMs": 11560,
+    "timestampMs": 11400,
+    "confidence": null
+  },
+  {
+    "text": " financial",
+    "startMs": 11560,
+    "endMs": 12040,
+    "timestampMs": 11560,
+    "confidence": null
+  },
+  {
+    "text": " research",
+    "startMs": 12040,
+    "endMs": 12440,
+    "timestampMs": 12040,
+    "confidence": null
+  },
+  {
+    "text": " agent",
+    "startMs": 12440,
+    "endMs": 12720,
+    "timestampMs": 12440,
+    "confidence": null
+  },
+  {
+    "text": " for",
+    "startMs": 12720,
+    "endMs": 13280,
+    "timestampMs": 12720,
+    "confidence": null
+  },
+  {
+    "text": " questions",
+    "startMs": 13280,
+    "endMs": 13660,
+    "timestampMs": 13280,
+    "confidence": null
+  },
+  {
+    "text": " that",
+    "startMs": 13660,
+    "endMs": 13900,
+    "timestampMs": 13660,
+    "confidence": null
+  },
+  {
+    "text": " need",
+    "startMs": 13900,
+    "endMs": 14060,
+    "timestampMs": 13900,
+    "confidence": null
+  },
+  {
+    "text": " more",
+    "startMs": 14060,
+    "endMs": 14340,
+    "timestampMs": 14060,
+    "confidence": null
+  },
+  {
+    "text": " than",
+    "startMs": 14340,
+    "endMs": 14420,
+    "timestampMs": 14340,
+    "confidence": null
+  },
+  {
+    "text": " a",
+    "startMs": 14420,
+    "endMs": 14620,
+    "timestampMs": 14420,
+    "confidence": null
+  },
+  {
+    "text": " quick",
+    "startMs": 14620,
+    "endMs": 14780,
+    "timestampMs": 14620,
+    "confidence": null
+  },
+  {
+    "text": " response",
+    "startMs": 14780,
+    "endMs": 15200,
+    "timestampMs": 14780,
+    "confidence": null
+  },
+  {
+    "text": " Ask",
+    "startMs": 16340,
+    "endMs": 16340,
+    "timestampMs": 16340,
+    "confidence": null
+  },
+  {
+    "text": " how",
+    "startMs": 16340,
+    "endMs": 16680,
+    "timestampMs": 16340,
+    "confidence": null
+  },
+  {
+    "text": " fundamentals",
+    "startMs": 16680,
+    "endMs": 17240,
+    "timestampMs": 16680,
+    "confidence": null
+  },
+  {
+    "text": " price",
+    "startMs": 17820,
+    "endMs": 17820,
+    "timestampMs": 17820,
+    "confidence": null
+  },
+  {
+    "text": " action",
+    "startMs": 17820,
+    "endMs": 18240,
+    "timestampMs": 17820,
+    "confidence": null
+  },
+  {
+    "text": " options",
+    "startMs": 18660,
+    "endMs": 18880,
+    "timestampMs": 18660,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 19020,
+    "endMs": 19420,
+    "timestampMs": 19020,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 19420,
+    "endMs": 19840,
+    "timestampMs": 19420,
+    "confidence": null
+  },
+  {
+    "text": " market",
+    "startMs": 19840,
+    "endMs": 19840,
+    "timestampMs": 19840,
+    "confidence": null
+  },
+  {
+    "text": " backdrop",
+    "startMs": 19840,
+    "endMs": 20260,
+    "timestampMs": 19840,
+    "confidence": null
+  },
+  {
+    "text": " fit",
+    "startMs": 20260,
+    "endMs": 20580,
+    "timestampMs": 20260,
+    "confidence": null
+  },
+  {
+    "text": " together",
+    "startMs": 20580,
+    "endMs": 20840,
+    "timestampMs": 20580,
+    "confidence": null
+  },
+  {
+    "text": " In",
+    "startMs": 21520,
+    "endMs": 21840,
+    "timestampMs": 21520,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 21840,
+    "endMs": 22040,
+    "timestampMs": 21840,
+    "confidence": null
+  },
+  {
+    "text": " browser",
+    "startMs": 22040,
+    "endMs": 22340,
+    "timestampMs": 22040,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 22920,
+    "endMs": 23400,
+    "timestampMs": 22920,
+    "confidence": null
+  },
+  {
+    "text": " builds",
+    "startMs": 23400,
+    "endMs": 23700,
+    "timestampMs": 23400,
+    "confidence": null
+  },
+  {
+    "text": " a",
+    "startMs": 23700,
+    "endMs": 24220,
+    "timestampMs": 23700,
+    "confidence": null
+  },
+  {
+    "text": " plan",
+    "startMs": 24220,
+    "endMs": 24220,
+    "timestampMs": 24220,
+    "confidence": null
+  },
+  {
+    "text": " chooses",
+    "startMs": 25040,
+    "endMs": 25040,
+    "timestampMs": 25040,
+    "confidence": null
+  },
+  {
+    "text": " finance",
+    "startMs": 25040,
+    "endMs": 25560,
+    "timestampMs": 25040,
+    "confidence": null
+  },
+  {
+    "text": " specific",
+    "startMs": 25560,
+    "endMs": 25960,
+    "timestampMs": 25560,
+    "confidence": null
+  },
+  {
+    "text": " tools",
+    "startMs": 25960,
+    "endMs": 26420,
+    "timestampMs": 25960,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 26720,
+    "endMs": 27260,
+    "timestampMs": 26720,
+    "confidence": null
+  },
+  {
+    "text": " works",
+    "startMs": 27260,
+    "endMs": 27320,
+    "timestampMs": 27260,
+    "confidence": null
+  },
+  {
+    "text": " through",
+    "startMs": 27320,
+    "endMs": 27520,
+    "timestampMs": 27320,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 27520,
+    "endMs": 28020,
+    "timestampMs": 27520,
+    "confidence": null
+  },
+  {
+    "text": " evidence",
+    "startMs": 28020,
+    "endMs": 28020,
+    "timestampMs": 28020,
+    "confidence": null
+  },
+  {
+    "text": " before",
+    "startMs": 28020,
+    "endMs": 28440,
+    "timestampMs": 28020,
+    "confidence": null
+  },
+  {
+    "text": " answering",
+    "startMs": 28440,
+    "endMs": 28800,
+    "timestampMs": 28440,
+    "confidence": null
+  },
+  {
+    "text": " Inspect",
+    "startMs": 29560,
+    "endMs": 30000,
+    "timestampMs": 29560,
+    "confidence": null
+  },
+  {
+    "text": " quotes",
+    "startMs": 30000,
+    "endMs": 30440,
+    "timestampMs": 30000,
+    "confidence": null
+  },
+  {
+    "text": " filings",
+    "startMs": 31220,
+    "endMs": 31220,
+    "timestampMs": 31220,
+    "confidence": null
+  },
+  {
+    "text": " indicators",
+    "startMs": 32120,
+    "endMs": 32120,
+    "timestampMs": 32120,
+    "confidence": null
+  },
+  {
+    "text": " options",
+    "startMs": 32800,
+    "endMs": 32800,
+    "timestampMs": 32800,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 33100,
+    "endMs": 33240,
+    "timestampMs": 33100,
+    "confidence": null
+  },
+  {
+    "text": " every",
+    "startMs": 33240,
+    "endMs": 33460,
+    "timestampMs": 33240,
+    "confidence": null
+  },
+  {
+    "text": " source",
+    "startMs": 33460,
+    "endMs": 33680,
+    "timestampMs": 33460,
+    "confidence": null
+  },
+  {
+    "text": " behind",
+    "startMs": 33680,
+    "endMs": 34060,
+    "timestampMs": 33680,
+    "confidence": null
+  },
+  {
+    "text": " them",
+    "startMs": 34060,
+    "endMs": 34540,
+    "timestampMs": 34060,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 35220,
+    "endMs": 35620,
+    "timestampMs": 35220,
+    "confidence": null
+  },
+  {
+    "text": " understands",
+    "startMs": 35620,
+    "endMs": 36260,
+    "timestampMs": 35620,
+    "confidence": null
+  },
+  {
+    "text": " your",
+    "startMs": 36260,
+    "endMs": 36920,
+    "timestampMs": 36260,
+    "confidence": null
+  },
+  {
+    "text": " question",
+    "startMs": 36920,
+    "endMs": 36920,
+    "timestampMs": 36920,
+    "confidence": null
+  },
+  {
+    "text": " connects",
+    "startMs": 37580,
+    "endMs": 37580,
+    "timestampMs": 37580,
+    "confidence": null
+  },
+  {
+    "text": " your",
+    "startMs": 37580,
+    "endMs": 37940,
+    "timestampMs": 37580,
+    "confidence": null
+  },
+  {
+    "text": " model",
+    "startMs": 37940,
+    "endMs": 38100,
+    "timestampMs": 37940,
+    "confidence": null
+  },
+  {
+    "text": " to",
+    "startMs": 38100,
+    "endMs": 38320,
+    "timestampMs": 38100,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 38320,
+    "endMs": 38580,
+    "timestampMs": 38320,
+    "confidence": null
+  },
+  {
+    "text": " right",
+    "startMs": 38580,
+    "endMs": 38580,
+    "timestampMs": 38580,
+    "confidence": null
+  },
+  {
+    "text": " financial",
+    "startMs": 38580,
+    "endMs": 39040,
+    "timestampMs": 38580,
+    "confidence": null
+  },
+  {
+    "text": " tools",
+    "startMs": 39040,
+    "endMs": 39420,
+    "timestampMs": 39040,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 39540,
+    "endMs": 40260,
+    "timestampMs": 39540,
+    "confidence": null
+  },
+  {
+    "text": " gathers",
+    "startMs": 40260,
+    "endMs": 40260,
+    "timestampMs": 40260,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 40260,
+    "endMs": 40860,
+    "timestampMs": 40260,
+    "confidence": null
+  },
+  {
+    "text": " evidence",
+    "startMs": 40860,
+    "endMs": 40860,
+    "timestampMs": 40860,
+    "confidence": null
+  },
+  {
+    "text": " The",
+    "startMs": 41220,
+    "endMs": 41740,
+    "timestampMs": 41220,
+    "confidence": null
+  },
+  {
+    "text": " answer",
+    "startMs": 41740,
+    "endMs": 42040,
+    "timestampMs": 41740,
+    "confidence": null
+  },
+  {
+    "text": " keeps",
+    "startMs": 42040,
+    "endMs": 42400,
+    "timestampMs": 42040,
+    "confidence": null
+  },
+  {
+    "text": " that",
+    "startMs": 42400,
+    "endMs": 42900,
+    "timestampMs": 42400,
+    "confidence": null
+  },
+  {
+    "text": " trail",
+    "startMs": 42900,
+    "endMs": 42900,
+    "timestampMs": 42900,
+    "confidence": null
+  },
+  {
+    "text": " attached",
+    "startMs": 42900,
+    "endMs": 43360,
+    "timestampMs": 42900,
+    "confidence": null
+  },
+  {
+    "text": " so",
+    "startMs": 43360,
+    "endMs": 43880,
+    "timestampMs": 43360,
+    "confidence": null
+  },
+  {
+    "text": " you",
+    "startMs": 43880,
+    "endMs": 44020,
+    "timestampMs": 43880,
+    "confidence": null
+  },
+  {
+    "text": " can",
+    "startMs": 44020,
+    "endMs": 44280,
+    "timestampMs": 44020,
+    "confidence": null
+  },
+  {
+    "text": " verify",
+    "startMs": 44280,
+    "endMs": 44540,
+    "timestampMs": 44280,
+    "confidence": null
+  },
+  {
+    "text": " it",
+    "startMs": 44540,
+    "endMs": 45160,
+    "timestampMs": 44540,
+    "confidence": null
+  },
+  {
+    "text": " Prefer",
+    "startMs": 45780,
+    "endMs": 45920,
+    "timestampMs": 45780,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 45920,
+    "endMs": 46140,
+    "timestampMs": 45920,
+    "confidence": null
+  },
+  {
+    "text": " command",
+    "startMs": 46140,
+    "endMs": 46420,
+    "timestampMs": 46140,
+    "confidence": null
+  },
+  {
+    "text": " line",
+    "startMs": 46420,
+    "endMs": 46640,
+    "timestampMs": 46420,
+    "confidence": null
+  },
+  {
+    "text": " Run",
+    "startMs": 47360,
+    "endMs": 47360,
+    "timestampMs": 47360,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 47360,
+    "endMs": 47540,
+    "timestampMs": 47360,
+    "confidence": null
+  },
+  {
+    "text": " same",
+    "startMs": 47540,
+    "endMs": 47840,
+    "timestampMs": 47540,
+    "confidence": null
+  },
+  {
+    "text": " workflow",
+    "startMs": 47840,
+    "endMs": 48120,
+    "timestampMs": 47840,
+    "confidence": null
+  },
+  {
+    "text": " in",
+    "startMs": 48120,
+    "endMs": 48520,
+    "timestampMs": 48120,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 48520,
+    "endMs": 48700,
+    "timestampMs": 48520,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 48700,
+    "endMs": 49220,
+    "timestampMs": 48700,
+    "confidence": null
+  },
+  {
+    "text": " CLI",
+    "startMs": 49220,
+    "endMs": 49760,
+    "timestampMs": 49220,
+    "confidence": null
+  },
+  {
+    "text": " with",
+    "startMs": 49760,
+    "endMs": 50380,
+    "timestampMs": 49760,
+    "confidence": null
+  },
+  {
+    "text": " reasoning",
+    "startMs": 50380,
+    "endMs": 50760,
+    "timestampMs": 50380,
+    "confidence": null
+  },
+  {
+    "text": " steps",
+    "startMs": 50760,
+    "endMs": 51100,
+    "timestampMs": 50760,
+    "confidence": null
+  },
+  {
+    "text": " tool",
+    "startMs": 51600,
+    "endMs": 51740,
+    "timestampMs": 51600,
+    "confidence": null
+  },
+  {
+    "text": " calls",
+    "startMs": 51740,
+    "endMs": 52040,
+    "timestampMs": 51740,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 52120,
+    "endMs": 52860,
+    "timestampMs": 52120,
+    "confidence": null
+  },
+  {
+    "text": " evidence",
+    "startMs": 52860,
+    "endMs": 52860,
+    "timestampMs": 52860,
+    "confidence": null
+  },
+  {
+    "text": " visible",
+    "startMs": 52860,
+    "endMs": 53320,
+    "timestampMs": 52860,
+    "confidence": null
+  },
+  {
+    "text": " as",
+    "startMs": 53320,
+    "endMs": 53520,
+    "timestampMs": 53320,
+    "confidence": null
+  },
+  {
+    "text": " it",
+    "startMs": 53520,
+    "endMs": 53980,
+    "timestampMs": 53520,
+    "confidence": null
+  },
+  {
+    "text": " works",
+    "startMs": 53980,
+    "endMs": 53980,
+    "timestampMs": 53980,
+    "confidence": null
+  },
+  {
+    "text": " Use",
+    "startMs": 54700,
+    "endMs": 54920,
+    "timestampMs": 54700,
+    "confidence": null
+  },
+  {
+    "text": " your",
+    "startMs": 54920,
+    "endMs": 55180,
+    "timestampMs": 54920,
+    "confidence": null
+  },
+  {
+    "text": " model",
+    "startMs": 55180,
+    "endMs": 55400,
+    "timestampMs": 55180,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 55400,
+    "endMs": 55660,
+    "timestampMs": 55400,
+    "confidence": null
+  },
+  {
+    "text": " data",
+    "startMs": 55660,
+    "endMs": 55900,
+    "timestampMs": 55660,
+    "confidence": null
+  },
+  {
+    "text": " providers",
+    "startMs": 55900,
+    "endMs": 56360,
+    "timestampMs": 55900,
+    "confidence": null
+  },
+  {
+    "text": " Keep",
+    "startMs": 56360,
+    "endMs": 57000,
+    "timestampMs": 56360,
+    "confidence": null
+  },
+  {
+    "text": " control",
+    "startMs": 57000,
+    "endMs": 57380,
+    "timestampMs": 57000,
+    "confidence": null
+  },
+  {
+    "text": " of",
+    "startMs": 57380,
+    "endMs": 57680,
+    "timestampMs": 57380,
+    "confidence": null
+  },
+  {
+    "text": " the",
+    "startMs": 57680,
+    "endMs": 57860,
+    "timestampMs": 57680,
+    "confidence": null
+  },
+  {
+    "text": " research",
+    "startMs": 57860,
+    "endMs": 58220,
+    "timestampMs": 57860,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 59240,
+    "endMs": 59580,
+    "timestampMs": 59240,
+    "confidence": null
+  },
+  {
+    "text": " open",
+    "startMs": 60400,
+    "endMs": 60580,
+    "timestampMs": 60400,
+    "confidence": null
+  },
+  {
+    "text": " source",
+    "startMs": 60580,
+    "endMs": 60800,
+    "timestampMs": 60580,
+    "confidence": null
+  },
+  {
+    "text": " financial",
+    "startMs": 60800,
+    "endMs": 61280,
+    "timestampMs": 60800,
+    "confidence": null
+  },
+  {
+    "text": " research",
+    "startMs": 61280,
+    "endMs": 61680,
+    "timestampMs": 61280,
+    "confidence": null
+  },
+  {
+    "text": " you",
+    "startMs": 61680,
+    "endMs": 62080,
+    "timestampMs": 61680,
+    "confidence": null
+  },
+  {
+    "text": " can",
+    "startMs": 62080,
+    "endMs": 62300,
+    "timestampMs": 62080,
+    "confidence": null
+  },
+  {
+    "text": " inspect",
+    "startMs": 62300,
+    "endMs": 62580,
+    "timestampMs": 62300,
+    "confidence": null
+  },
+  {
+    "text": " and",
+    "startMs": 62580,
+    "endMs": 63200,
+    "timestampMs": 62580,
+    "confidence": null
+  },
+  {
+    "text": " verify",
+    "startMs": 63200,
+    "endMs": 63200,
+    "timestampMs": 63200,
+    "confidence": null
+  },
+  {
+    "text": " Run",
+    "startMs": 64220,
+    "endMs": 64220,
+    "timestampMs": 64220,
+    "confidence": null
+  },
+  {
+    "text": " it",
+    "startMs": 64220,
+    "endMs": 64400,
+    "timestampMs": 64220,
+    "confidence": null
+  },
+  {
+    "text": " with",
+    "startMs": 64400,
+    "endMs": 64660,
+    "timestampMs": 64400,
+    "confidence": null
+  },
+  {
+    "text": " NPS",
+    "startMs": 64660,
+    "endMs": 65120,
+    "timestampMs": 64660,
+    "confidence": null
+  },
+  {
+    "text": " OpenCandle",
+    "startMs": 65120,
+    "endMs": 65940,
+    "timestampMs": 65120,
+    "confidence": null
+  }
+]
