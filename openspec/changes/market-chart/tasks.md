@@ -36,8 +36,8 @@ Follow AGENTS.md (TDD mandatory — failing test first; `.js` extensions on rela
 
 ## 6. useInstrumentHistory hook (TDD)
 
-- [ ] 6.1 Failing tests in `tests/unit/gui-web/use-instrument-history.test.ts` (mock `globalThis.fetch`): initial call fetches `/api/instruments/history?symbol=AAPL&range=1D` and exposes `{ snapshot, loading, error }`; `range` change to `1Y` refetches with `loading: true` until resolve; out-of-order resolution (1D resolves after 1Y was issued) leaves the `1Y` snapshot in place; fetch failure sets `error` and clears `loading`; `stale`/`dataAsOf` pass through from the response body.
-- [ ] 6.2 Implement `gui/web/src/hooks/useInstrumentHistory.jsx` (sibling to `useMarketState.jsx`, same conventions): request-sequence counter or `AbortController` to discard superseded responses; re-fetch effect keyed on `[symbol, range]`.
+- [x] 6.1 Failing tests in `tests/unit/gui-web/use-instrument-history.test.ts` (mock `globalThis.fetch`): initial call fetches `/api/instruments/history?symbol=AAPL&range=1D` and exposes `{ snapshot, loading, error }`; `range` change to `1Y` refetches with `loading: true` until resolve; out-of-order resolution (1D resolves after 1Y was issued) leaves the `1Y` snapshot in place; fetch failure sets `error` and clears `loading`; `stale`/`dataAsOf` pass through from the response body.
+- [x] 6.2 Implement `gui/web/src/hooks/useInstrumentHistory.jsx` (sibling to `useMarketState.jsx`, same conventions): request-sequence counter or `AbortController` to discard superseded responses; re-fetch effect keyed on `[symbol, range]`.
 
 ## 7. Attribution surface
 
