@@ -151,6 +151,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("$83.02");
     expect(html).toContain("−0.53");
     expect(html).toContain("−0.64%");
+    const extendedHoursQuoteClasses = html.match(
+      /data-slot="extended-hours-quote" class="([^"]+)"/,
+    )?.[1];
+    expect(extendedHoursQuoteClasses?.split(" ")).not.toContain("hidden");
     expect(html).toContain("Day range");
     expect(html).toContain("52-week range");
     expect(html).toContain("Create alert");

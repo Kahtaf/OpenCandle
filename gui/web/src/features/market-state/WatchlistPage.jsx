@@ -290,11 +290,7 @@ function QuoteBoard({
                     <span data-slot="mobile-price-change" className="mt-0.5 sm:hidden">
                       <SignedPercent value={quote.changePercent} />
                     </span>
-                    <ExtendedHoursQuote
-                      quote={quote}
-                      currency={quote.currency ?? item.currency}
-                      className="hidden sm:flex"
-                    />
+                    <ExtendedHoursQuote quote={quote} currency={quote.currency ?? item.currency} />
                   </div>
                 ) : (
                   "—"
