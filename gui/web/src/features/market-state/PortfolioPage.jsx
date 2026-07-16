@@ -1,5 +1,6 @@
 import { BriefcaseBusiness, ChevronRight, Plus } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
@@ -31,16 +32,7 @@ const ALLOCATION_COLORS = [
   "oklch(0.62 0.1 35)",
 ];
 
-export function PortfolioPage({
-  state,
-  loading = false,
-  filter,
-  setFilter,
-  readOnly,
-  openPanel,
-  invokeTool,
-  renderPageHeader,
-}) {
+function usePortfolioPageState(state, filter) {
   const portfolios = useMemo(() => {
     const saved = state.portfolios ?? [];
     return saved.length > 0 ? saved : [{ id: "default", name: "Default", isDefault: true }];
@@ -90,7 +82,6 @@ export function PortfolioPage({
       (candidate) => candidate.portfolioId === activePortfolio?.id,
     ) ?? (activePortfolio?.isDefault ? state.quoteSnapshot?.portfolioSummary : null);
   const [expanded, setExpanded] = useState(() => new Set());
-
   const toggleExpanded = (symbol) => {
     setExpanded((current) => {
       const next = new Set(current);
@@ -99,12 +90,52 @@ export function PortfolioPage({
       return next;
     });
   };
-
-  const lotCount = activeLots.length;
   const portfolioCounts = useMemo(
     () => countLotsByPortfolio(state.portfolio ?? []),
     [state.portfolio],
   );
+
+  return {
+    portfolios,
+    setActivePortfolioId,
+    activePortfolio,
+    activeLots,
+    holdings,
+    rows,
+    quoteFlashes,
+    quoteBadge,
+    summary,
+    expanded,
+    toggleExpanded,
+    portfolioCounts,
+  };
+}
+
+export function PortfolioPage({
+  state,
+  loading = false,
+  filter,
+  setFilter,
+  readOnly,
+  openPanel,
+  invokeTool,
+  renderPageHeader,
+}) {
+  const {
+    portfolios,
+    setActivePortfolioId,
+    activePortfolio,
+    activeLots,
+    holdings,
+    rows,
+    quoteFlashes,
+    quoteBadge,
+    summary,
+    expanded,
+    toggleExpanded,
+    portfolioCounts,
+  } = usePortfolioPageState(state, filter);
+  const lotCount = activeLots.length;
   const addHolding = () => openPanel("holding-add", { portfolio: activePortfolio });
 
   return (
@@ -161,110 +192,160 @@ export function PortfolioPage({
               cta={{ label: "Clear search", onClick: () => setFilter("") }}
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm md:min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-border text-xs text-muted-foreground">
-                    <th className="w-8 px-2 py-2" aria-label="Expand" />
-                    <th className="px-2 py-2 font-medium">Symbol</th>
-                    <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Qty</th>
-                    <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Last</th>
-                    <th className="px-2 py-2 text-right font-medium">Value</th>
-                    <th className="px-2 py-2 text-right font-medium">Today</th>
-                    <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">
-                      Total return
-                    </th>
-                    <th className="hidden px-2 py-2 pr-4 text-right font-medium md:table-cell">
-                      Weight
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <Fragment key={row.symbol}>
-                      <tr
-                        className={cn(
-                          "cursor-pointer border-b border-border/70 last:border-0 hover:bg-secondary/60",
-                          quoteFlashClass(quoteFlashes.get(row.symbol)),
-                        )}
-                        onClick={() => toggleExpanded(row.symbol)}
-                      >
-                        <td className="px-2 py-2.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="size-10 md:size-8"
-                            aria-expanded={expanded.has(row.symbol)}
-                            aria-label={`${expanded.has(row.symbol) ? "Collapse" : "Expand"} ${row.symbol} lots`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleExpanded(row.symbol);
-                            }}
-                          >
-                            <ChevronRight
-                              className={`size-3.5 transition-transform duration-150 ease-out ${
-                                expanded.has(row.symbol) ? "rotate-90" : "rotate-0"
-                              }`}
+            <>
+              <MobileHoldingRows
+                rows={rows}
+                expanded={expanded}
+                toggleExpanded={toggleExpanded}
+                activePortfolio={activePortfolio}
+                readOnly={readOnly}
+                openPanel={openPanel}
+                invokeTool={invokeTool}
+              />
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted-foreground">
+                      <th className="w-8 px-2 py-2" aria-label="Expand" />
+                      <th className="px-2 py-2 font-medium">Symbol</th>
+                      <th className="px-2 py-2 text-right font-medium">Price</th>
+                      <th className="px-2 py-2 text-right font-medium">Value</th>
+                      <th className="px-2 py-2 font-medium">24 hr sparkline</th>
+                      <th className="px-2 py-2 text-right font-medium">Change</th>
+                      <th className="px-2 py-2 text-right font-medium">Total Gain/Loss</th>
+                      <th className="px-2 py-2 text-right font-medium">% of Portfolio</th>
+                      <th className="px-2 py-2 text-right font-medium">Quantity</th>
+                      <th className="px-2 py-2 pr-4 text-right font-medium">Avg. Cost Basis</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <Fragment key={row.symbol}>
+                        <tr
+                          className={cn(
+                            "cursor-pointer border-b border-border/70 last:border-0 hover:bg-secondary/60",
+                            quoteFlashClass(quoteFlashes.get(row.symbol)),
+                          )}
+                          onClick={() => toggleExpanded(row.symbol)}
+                        >
+                          <td className="px-2 py-2.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="size-10 md:size-8"
+                              aria-expanded={expanded.has(row.symbol)}
+                              aria-label={`${expanded.has(row.symbol) ? "Collapse" : "Expand"} ${row.symbol} lots`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleExpanded(row.symbol);
+                              }}
+                            >
+                              <ChevronRight
+                                className={`size-3.5 transition-transform duration-150 ease-out ${
+                                  expanded.has(row.symbol) ? "rotate-90" : "rotate-0"
+                                }`}
+                              />
+                            </Button>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <Sym symbol={row.symbol} name={row.name} />
+                          </td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">
+                            <div className="flex flex-col items-end">
+                              <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
+                              <ExtendedHoursQuote quote={row} currency={row.currency} />
+                            </div>
+                          </td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">
+                            {moneyOrDash(row.marketValue, row.currency)}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            <SignedPercent value={row.changePercent} />
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            <SignedMoney
+                              value={row.pnl}
+                              percent={row.pnlPercent}
+                              currency={row.currency}
                             />
-                          </Button>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <Sym symbol={row.symbol} name={row.name} />
-                        </td>
-                        <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
-                          {row.totalQuantity.toLocaleString()}
-                        </td>
-                        <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
-                          <div className="flex flex-col items-end">
-                            <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
-                            <ExtendedHoursQuote quote={row} currency={row.currency} />
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums">
-                          {moneyOrDash(row.marketValue, row.currency)}
-                        </td>
-                        <td className="px-2 py-2.5 text-right">
-                          <SignedPercent value={row.changePercent} />
-                        </td>
-                        <td className="hidden px-2 py-2.5 text-right sm:table-cell">
-                          <SignedMoney
-                            value={row.pnl}
-                            percent={row.pnlPercent}
-                            currency={row.currency}
-                          />
-                        </td>
-                        <td className="hidden px-2 py-2.5 pr-4 text-right tabular-nums md:table-cell">
-                          {typeof row.allocationPercent === "number"
-                            ? `${row.allocationPercent.toFixed(1)}%`
-                            : "—"}
-                        </td>
-                      </tr>
-                      <tr inert={!expanded.has(row.symbol)}>
-                        <td colSpan={8} className="p-0">
-                          <div
-                            data-slot="portfolio-lot-reveal"
-                            className={`grid transition-[grid-template-rows] duration-150 ease-out ${
-                              expanded.has(row.symbol) ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                            }`}
+                          </td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">
+                            {typeof row.allocationPercent === "number"
+                              ? `${row.allocationPercent.toFixed(1)}%`
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">
+                            {row.totalQuantity.toLocaleString()}
+                          </td>
+                          <td
+                            data-slot="avg-cost-basis"
+                            className="px-2 py-2.5 pr-4 text-right tabular-nums"
                           >
-                            <div className="min-h-0 overflow-hidden">
-                              {row.lots.map((lot) => (
-                                <div
-                                  key={lot.id}
-                                  className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-x-2 border-b border-border/70 bg-secondary/60 px-2 py-2 text-[13px] md:grid-cols-[2rem_minmax(0,1fr)_5rem_7rem_7rem_4rem_9rem_auto]"
-                                >
-                                  <div />
-                                  <div>
-                                    <div className="font-mono text-xs text-muted-foreground">
-                                      Lot · {shortDateLabel(lot.openedAt) || "—"}
-                                      {lot.notes ? ` · ${lot.notes}` : ""}
+                            {moneyOrDash(row.blendedCost, row.currency)}
+                          </td>
+                        </tr>
+                        <tr inert={!expanded.has(row.symbol)}>
+                          <td colSpan={10} className="p-0">
+                            <div
+                              data-slot="portfolio-lot-reveal"
+                              className={`grid transition-[grid-template-rows] duration-150 ease-out ${
+                                expanded.has(row.symbol) ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                              }`}
+                            >
+                              <div className="min-h-0 overflow-hidden">
+                                {row.lots.map((lot) => (
+                                  <div
+                                    key={lot.id}
+                                    className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-x-2 border-b border-border/70 bg-secondary/60 px-2 py-2 text-[13px] md:grid-cols-[2rem_minmax(0,1fr)_5rem_7rem_7rem_4rem_9rem_auto]"
+                                  >
+                                    <div />
+                                    <div>
+                                      <div className="font-mono text-xs text-muted-foreground">
+                                        Lot · {shortDateLabel(lot.openedAt) || "—"}
+                                        {lot.notes ? ` · ${lot.notes}` : ""}
+                                      </div>
+                                      <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
+                                        {lot.quantity.toLocaleString()} @{" "}
+                                        {money(lot.avgCost, lot.currency)}
+                                      </div>
+                                      <div className="mt-1 flex gap-1 md:hidden">
+                                        <LotActions
+                                          lot={lot}
+                                          portfolio={activePortfolio}
+                                          readOnly={readOnly || !expanded.has(row.symbol)}
+                                          openPanel={openPanel}
+                                          invokeTool={invokeTool}
+                                        />
+                                      </div>
                                     </div>
-                                    <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
-                                      {lot.quantity.toLocaleString()} @{" "}
-                                      {money(lot.avgCost, lot.currency)}
+                                    <div className="hidden text-right tabular-nums md:block">
+                                      {lot.quantity.toLocaleString()}
                                     </div>
-                                    <div className="mt-1 flex gap-1 md:hidden">
+                                    <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
+                                      cost {money(lot.avgCost, lot.currency)}
+                                    </div>
+                                    <div className="text-right tabular-nums">
+                                      {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                                    </div>
+                                    <div className="hidden md:block" />
+                                    <div className="hidden text-right sm:block">
+                                      {lot.quote?.status === "ok" ? (
+                                        <SignedMoney
+                                          value={lot.quote.pnl}
+                                          percent={lot.quote.pnlPercent}
+                                          currency={lot.currency}
+                                        />
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">
+                                          {lot.quote?.reason ?? "Awaiting quote"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="hidden justify-end gap-1 md:flex">
                                       <LotActions
                                         lot={lot}
                                         portfolio={activePortfolio}
@@ -274,49 +355,17 @@ export function PortfolioPage({
                                       />
                                     </div>
                                   </div>
-                                  <div className="hidden text-right tabular-nums md:block">
-                                    {lot.quantity.toLocaleString()}
-                                  </div>
-                                  <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
-                                    cost {money(lot.avgCost, lot.currency)}
-                                  </div>
-                                  <div className="text-right tabular-nums">
-                                    {moneyOrDash(lot.quote?.marketValue, lot.currency)}
-                                  </div>
-                                  <div className="hidden md:block" />
-                                  <div className="hidden text-right sm:block">
-                                    {lot.quote?.status === "ok" ? (
-                                      <SignedMoney
-                                        value={lot.quote.pnl}
-                                        percent={lot.quote.pnlPercent}
-                                        currency={lot.currency}
-                                      />
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">
-                                        {lot.quote?.reason ?? "Awaiting quote"}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="hidden justify-end gap-1 md:flex">
-                                    <LotActions
-                                      lot={lot}
-                                      portfolio={activePortfolio}
-                                      readOnly={readOnly || !expanded.has(row.symbol)}
-                                      openPanel={openPanel}
-                                      invokeTool={invokeTool}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                        </tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           {summary?.excludedFromTotals?.length ? (
             <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
@@ -326,6 +375,120 @@ export function PortfolioPage({
           ) : null}
         </Panel>
       ) : null}
+    </div>
+  );
+}
+
+function MobileHoldingRows({
+  rows,
+  expanded,
+  toggleExpanded,
+  activePortfolio,
+  readOnly,
+  openPanel,
+  invokeTool,
+}) {
+  return (
+    <div className="divide-y divide-border sm:hidden">
+      {rows.map((row) => {
+        const isExpanded = expanded.has(row.symbol);
+        return (
+          <div key={row.symbol} data-slot="mobile-portfolio-holding">
+            <button
+              type="button"
+              className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_6rem_5.25rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40 focus-visible:ring-inset"
+              aria-expanded={isExpanded}
+              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${row.symbol} holding details`}
+              onClick={() => toggleExpanded(row.symbol)}
+            >
+              <ChevronRight
+                className={`size-3.5 text-muted-foreground transition-transform duration-150 ease-out ${
+                  isExpanded ? "rotate-90" : "rotate-0"
+                }`}
+                aria-hidden="true"
+              />
+              <Sym symbol={row.symbol} name={row.name} />
+              <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
+              <span className="flex flex-col items-end gap-0.5 tabular-nums">
+                <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
+                <SignedPercent value={row.changePercent} />
+              </span>
+            </button>
+            <div
+              inert={!isExpanded}
+              className={`grid transition-[grid-template-rows] duration-150 ease-out ${
+                isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <dl className="grid grid-cols-2 gap-x-5 gap-y-3 border-t border-border bg-secondary/40 px-4 py-3 text-xs">
+                  <MobileMetric label="Value" value={moneyOrDash(row.marketValue, row.currency)} />
+                  <MobileMetric
+                    label="Total Gain/Loss"
+                    value={
+                      <SignedMoney
+                        value={row.pnl}
+                        percent={row.pnlPercent}
+                        currency={row.currency}
+                      />
+                    }
+                  />
+                  <MobileMetric
+                    label="% of Portfolio"
+                    value={
+                      typeof row.allocationPercent === "number"
+                        ? `${row.allocationPercent.toFixed(1)}%`
+                        : "—"
+                    }
+                  />
+                  <MobileMetric label="Quantity" value={row.totalQuantity.toLocaleString()} />
+                  <MobileMetric
+                    label="Avg. Cost Basis"
+                    value={moneyOrDash(row.blendedCost, row.currency)}
+                  />
+                </dl>
+                <div className="divide-y divide-border/70 border-t border-border bg-secondary/60">
+                  {row.lots.map((lot) => (
+                    <div key={lot.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0 text-xs text-muted-foreground">
+                        <div className="font-mono">Lot · {shortDateLabel(lot.openedAt) || "—"}</div>
+                        <div className="mt-1 tabular-nums">
+                          {lot.quantity.toLocaleString()} @ {money(lot.avgCost, lot.currency)}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className="text-xs tabular-nums">
+                          {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                        </span>
+                        <div className="flex gap-1">
+                          <LotActions
+                            lot={lot}
+                            portfolio={activePortfolio}
+                            readOnly={readOnly || !isExpanded}
+                            openPanel={openPanel}
+                            invokeTool={invokeTool}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileMetric({ label, value }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="mt-0.5 tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }

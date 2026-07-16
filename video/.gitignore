@@ -1,0 +1,11 @@
+node_modules/
+.cache/
+out/
+stills/
+public/product/
+public/captions.json
+public/transcription.json
+public/voiceover.wav
+public/voiceover-transcript.txt
+public/voiceover-v2*
+public/voiceover-*-transcription.json

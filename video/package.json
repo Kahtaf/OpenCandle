@@ -1,0 +1,50 @@
+{
+  "name": "opencandle-release-video",
+  "version": "1.0.0",
+  "description": "OpenCandle release video built with Remotion",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.489",
+    "@remotion/media": "4.0.489",
+    "lucide-react": "^1.24.0",
+    "openai": "^6.15.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.489"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.489",
+    "@types/node": "^22.10.2",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "voiceover": "node scripts/generate-voiceover.mjs",
+    "captions": "node scripts/transcribe-voiceover.mjs",
+    "render": "node scripts/build-pipeline.mjs",
+    "render:stills": "node scripts/build-pipeline.mjs --stills-only",
+    "render:with-voice": "node scripts/build-pipeline.mjs --regenerate-voice",
+    "pipeline:validate": "node scripts/validate-pipeline.mjs --require-staged",
+    "test:pipeline": "node --test test/pipeline.test.mjs",
+    "test:gui-motion": "node --test test/gui-motion.test.mjs",
+    "test:tui-motion": "node --test test/tui-motion.test.mjs",
+    "render:approved-gui": "remotion render OpenCandleGUI public/approved/gui.mp4 --frames=0-689 --codec=h264 --crf=18",
+    "render:approved-tour": "remotion render OpenCandleArchitecture public/approved/architecture.mp4 --codec=h264 --crf=18",
+    "render:approved-tui": "remotion render OpenCandleTUI public/approved/tui.mp4 --codec=h264 --crf=18",
+    "still:approved-gui-start": "remotion still OpenCandleGUI public/approved/gui-start.png --frame=0",
+    "still:approved-gui-final": "remotion still OpenCandleGUI public/approved/gui-final.png --frame=1000",
+    "still:approved-tui-final": "remotion still OpenCandleTUI public/approved/tui-final.png --frame=179",
+    "render:approved-surfaces": "npm run render:approved-gui && npm run render:approved-tour && npm run render:approved-tui && npm run still:approved-gui-start && npm run still:approved-gui-final && npm run still:approved-tui-final",
+    "still": "remotion still OpenCandleLaunch stills/preview.png --frame=1050",
+    "lint": "eslint src && tsc --noEmit"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
