@@ -144,6 +144,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
     "acpx": "^0.12.0",
+    "jsdom": "^27.0.0",
     "playwright-core": "^1.61.1",
     "tsx": "^4.22.4",
     "typescript": "^7.0.2",
