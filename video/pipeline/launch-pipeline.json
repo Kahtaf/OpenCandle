@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "compositionId": "OpenCandleLaunch",
+  "message": "OpenCandle replaces shallow chatbot answers with inspectable, finance-specific research across the browser and CLI.",
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "totalFrames": 2010,
+  "audio": {
+    "file": "voiceover-v3.wav",
+    "durationFrames": 1989
+  },
+  "assets": {
+    "tui": {
+      "source": "public/approved/tui.mp4",
+      "public": "public/approved/tui.mp4",
+      "durationFrames": 180
+    },
+    "gui": {
+      "source": "public/approved/gui.mp4",
+      "public": "public/approved/gui.mp4",
+      "durationFrames": 690
+    },
+    "guiStart": {
+      "source": "public/approved/gui-start.png",
+      "public": "public/approved/gui-start.png",
+      "durationFrames": 1
+    },
+    "architecture": {
+      "source": "public/approved/architecture.mp4",
+      "public": "public/approved/architecture.mp4",
+      "durationFrames": 487
+    },
+    "dualGui": {
+      "source": "public/approved/gui-final.png",
+      "public": "public/approved/gui-final.png",
+      "durationFrames": 1
+    },
+    "dualTui": {
+      "source": "public/approved/tui-final.png",
+      "public": "public/approved/tui-final.png",
+      "durationFrames": 1
+    }
+  },
+  "beats": [
+    {
+      "id": "browser-proof-hook",
+      "surface": "proof",
+      "from": 0,
+      "duration": 294,
+      "transitionIn": 0,
+      "transitionOut": 0,
+      "narrativeRole": "Turn an opaque answer into visible finance-specific evidence, then flow directly into the real browser workflow.",
+      "focalPoint": "OpenCandle displacing general-purpose chatbots, revealing finance sources, and flowing into a pixel-matched browser handoff.",
+      "voiceover": [0, 265],
+      "onScreenText": "Financial answers",
+      "qaFrame": 246
+    },
+    {
+      "id": "browser-question-and-trace",
+      "surface": "gui",
+      "from": 294,
+      "duration": 690,
+      "transitionIn": 0,
+      "transitionOut": 39,
+      "playbackRate": 1,
+      "trimBefore": 0,
+      "narrativeRole": "Demonstrate the complete browser workflow from a complex financial question to an inspectable answer.",
+      "focalPoint": "The question, visible plan, finance-specific tool results, sources, and completed response.",
+      "voiceover": [291, 984],
+      "onScreenText": "",
+      "qaFrame": 765
+    },
+    {
+      "id": "routing-and-evidence",
+      "surface": "architecture",
+      "from": 945,
+      "duration": 429,
+      "transitionIn": 39,
+      "transitionOut": 0,
+      "playbackRate": 1,
+      "trimBefore": 58,
+      "narrativeRole": "Continue inside the browser to show how the selected model, financial tool calls, sources, and answer trail work together.",
+      "focalPoint": "Narration-synchronized quote, SEC filing, indicator, options, and source views followed by the gpt-6 selector and completed answer.",
+      "voiceover": [887, 1355],
+      "onScreenText": "",
+      "qaFrame": 1230
+    },
+    {
+      "id": "continue-in-cli",
+      "surface": "tui",
+      "from": 1374,
+      "duration": 267,
+      "transitionIn": 0,
+      "transitionOut": 0,
+      "playbackRate": 0.6741573034,
+      "narrativeRole": "Demonstrate the same transparent research workflow in the OpenCandle CLI.",
+      "focalPoint": "The preserved prompt, reasoning trace, and tool rows in the terminal.",
+      "voiceover": [1373, 1620],
+      "onScreenText": "",
+      "qaFrame": 1508
+    },
+    {
+      "id": "browser-and-cli-control",
+      "surface": "dual",
+      "from": 1641,
+      "duration": 136,
+      "transitionIn": 0,
+      "transitionOut": 0,
+      "narrativeRole": "Land user control across the browser and CLI without introducing another feature.",
+      "focalPoint": "The overlapping approved browser and CLI surfaces.",
+      "voiceover": [1641, 1747],
+      "onScreenText": "",
+      "qaFrame": 1709
+    },
+    {
+      "id": "closing-reframe",
+      "surface": "cta",
+      "from": 1777,
+      "duration": 233,
+      "transitionIn": 0,
+      "transitionOut": 0,
+      "narrativeRole": "Close on inspectable financial research and one direct install action.",
+      "focalPoint": "OpenCandle brand followed by the install command.",
+      "voiceover": [1777, 1979],
+      "onScreenText": "$ npx opencandle",
+      "qaFrame": 1888
+    }
+  ]
+}

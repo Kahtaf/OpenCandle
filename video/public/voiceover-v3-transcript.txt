@@ -1,0 +1,19 @@
+Financial answers shouldn’t be a black box.
+
+General-purpose chatbots give you shallow answers. OpenCandle shows you the research behind them.
+
+OpenCandle is an open-source financial research agent for questions that need more than a quick response.
+
+Ask how fundamentals, price action, options, and the market backdrop fit together. In the browser, OpenCandle builds a plan, chooses finance-specific tools, and works through the evidence before answering.
+
+Inspect quotes, filings, indicators, options, and every source behind them.
+
+OpenCandle understands your question, connects your model to the right financial tools, and gathers the evidence. The answer keeps that trail attached, so you can verify it.
+
+Prefer the command line? Run the same workflow in the OpenCandle CLI, with reasoning steps, tool calls, and evidence visible as it works.
+
+Use your model and data providers. Keep control of the research.
+
+OpenCandle. Open-source financial research you can inspect and verify.
+
+Run it with N P X OpenCandle.
