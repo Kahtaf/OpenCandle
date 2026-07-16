@@ -10,7 +10,7 @@ import { cache } from "../../../src/infra/cache.js";
 import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDatabase } from "../../../src/memory/sqlite.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
@@ -21,6 +21,7 @@ vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
   };
 });
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getHistory: vi.fn(),
   getQuote: vi.fn(),
 }));
 
@@ -28,6 +29,7 @@ describe("market-state API helpers", () => {
   beforeEach(() => {
     cache.clear();
     vi.clearAllMocks();
+    vi.mocked(getHistory).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -326,6 +328,52 @@ describe("market-state API helpers", () => {
       totalCost: 850,
       totalPnl: 150,
     });
+    db.close();
+  });
+
+  it("reuses provider-backed intraday history with source and freshness metadata", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T20:20:00.000Z"));
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 150,
+      currency: "USD",
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 190));
+    vi.mocked(getHistory).mockResolvedValue([
+      { date: "2026-06-12", open: 187, high: 189, low: 186, close: 188, volume: 100 },
+      { date: "2026-06-12", open: 188, high: 191, low: 188, close: 190, volume: 120 },
+    ]);
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    const expectedSparkline = {
+      status: "ok",
+      source: "Yahoo Finance",
+      dataAsOf: "2026-06-12",
+      fetchedAt: "2026-06-12T20:20:00.000Z",
+      points: [188, 190],
+    };
+    expect(snapshot.watchlistQuotes[0]).toMatchObject({ sparkline: expectedSparkline });
+    expect(snapshot.portfolioQuotes[0]).toMatchObject({ sparkline: expectedSparkline });
+    expect(getHistory).toHaveBeenCalledOnce();
+    expect(getHistory).toHaveBeenCalledWith("AAPL", "1d", "5m");
     db.close();
   });
 

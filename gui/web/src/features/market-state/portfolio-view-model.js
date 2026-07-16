@@ -25,6 +25,7 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
         extendedChange: null,
         extendedChangePercent: null,
         extendedAsOf: null,
+        sparkline: null,
         excludedLotCount: 0,
         lots: [],
       };
@@ -34,6 +35,7 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
     row.totalQuantity += lot.quantity;
     row.lots.push({ ...lot, quote });
     row.name = quote?.name ?? row.name;
+    row.sparkline = row.sparkline ?? quote?.sparkline ?? null;
 
     if (quote?.status === "ok" && quote.includedInTotals) {
       row.totalCost += quote.totalCost;

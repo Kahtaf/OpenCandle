@@ -1,5 +1,6 @@
 import { ListPlus, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -247,13 +248,15 @@ function QuoteBoard({
   onCreateAlert,
 }) {
   return (
-    <Table className="sm:min-w-[620px]">
+    <Table className="sm:min-w-[760px]">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Symbol</TableHead>
-          <TableHead className="text-right">Last</TableHead>
-          <TableHead className="hidden text-right md:table-cell">Chg $</TableHead>
-          <TableHead className="text-right">Chg %</TableHead>
+          <TableHead className="px-1 sm:px-3">
+            <span className="sr-only sm:not-sr-only">24 hr sparkline</span>
+          </TableHead>
+          <TableHead className="text-right">Price</TableHead>
+          <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
           <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
           <TableHead className="hidden sm:table-cell">Signals</TableHead>
           <TableHead className="w-10" aria-label="Actions" />
@@ -274,27 +277,33 @@ function QuoteBoard({
               )}
               onClick={() => onSelect(item.id)}
             >
-              <TableCell className="py-2.5">
+              <TableCell className="w-[88px] max-w-[88px] px-2 py-2.5 sm:w-auto sm:max-w-none sm:px-3">
                 <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
               </TableCell>
-              <TableCell className="py-2.5 text-right tabular-nums">
+              <TableCell className="px-1 py-1.5 sm:px-3">
+                <MarketSparkline symbol={item.symbol} sparkline={quote?.sparkline} />
+              </TableCell>
+              <TableCell className="w-[82px] px-2 py-2.5 text-right tabular-nums sm:w-auto sm:px-3">
                 {quote?.status === "ok" ? (
                   <div className="flex flex-col items-end">
                     <span>{money(quote.price, quote.currency ?? item.currency)}</span>
+                    <span data-slot="mobile-price-change" className="mt-0.5 sm:hidden">
+                      <SignedPercent value={quote.changePercent} />
+                    </span>
                     <ExtendedHoursQuote quote={quote} currency={quote.currency ?? item.currency} />
                   </div>
                 ) : (
                   "—"
                 )}
               </TableCell>
-              <TableCell className="hidden py-2.5 text-right md:table-cell">
-                <SignedMoney
-                  value={quote?.status === "ok" ? quote.change : null}
-                  currency={quote?.currency ?? item.currency ?? "USD"}
-                />
-              </TableCell>
-              <TableCell className="py-2.5 text-right">
-                <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />
+              <TableCell className="hidden py-2.5 text-right sm:table-cell">
+                <div className="flex flex-col items-end gap-0.5">
+                  <SignedMoney
+                    value={quote?.status === "ok" ? quote.change : null}
+                    currency={quote?.currency ?? item.currency ?? "USD"}
+                  />
+                  <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />
+                </div>
               </TableCell>
               <TableCell className="hidden py-2.5 text-right tabular-nums lg:table-cell">
                 {quote?.status === "ok" ? formatNumber(quote.volume) : "—"}
@@ -320,13 +329,15 @@ function QuoteBoard({
 
 function QuoteBoardSkeleton() {
   return (
-    <Table data-slot="watchlist-skeleton" className="sm:min-w-[620px]" aria-label="Loading quotes">
+    <Table data-slot="watchlist-skeleton" className="sm:min-w-[760px]" aria-label="Loading quotes">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Symbol</TableHead>
-          <TableHead className="text-right">Last</TableHead>
-          <TableHead className="hidden text-right md:table-cell">Chg $</TableHead>
-          <TableHead className="text-right">Chg %</TableHead>
+          <TableHead className="px-1 sm:px-3">
+            <span className="sr-only sm:not-sr-only">24 hr sparkline</span>
+          </TableHead>
+          <TableHead className="text-right">Price</TableHead>
+          <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
           <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
           <TableHead className="hidden sm:table-cell">Signals</TableHead>
           <TableHead className="w-10" />
@@ -335,16 +346,16 @@ function QuoteBoardSkeleton() {
       <TableBody>
         {["first", "second", "third", "fourth"].map((key) => (
           <TableRow key={key} className="hover:bg-transparent">
-            <TableCell className="py-2.5">
+            <TableCell className="w-[88px] max-w-[88px] px-2 py-2.5 sm:w-auto sm:max-w-none sm:px-3">
               <Skeleton className="h-8 w-28" />
             </TableCell>
-            <TableCell className="py-2.5">
+            <TableCell className="px-1 py-2.5 sm:px-3">
+              <Skeleton className="h-[29px] w-24 sm:h-9 sm:w-[120px]" />
+            </TableCell>
+            <TableCell className="w-[82px] px-2 py-2.5 sm:w-auto sm:px-3">
               <Skeleton className="ml-auto h-4 w-14" />
             </TableCell>
-            <TableCell className="hidden py-2.5 md:table-cell">
-              <Skeleton className="ml-auto h-4 w-12" />
-            </TableCell>
-            <TableCell className="py-2.5">
+            <TableCell className="hidden py-2.5 sm:table-cell">
               <Skeleton className="ml-auto h-4 w-12" />
             </TableCell>
             <TableCell className="hidden py-2.5 lg:table-cell">
