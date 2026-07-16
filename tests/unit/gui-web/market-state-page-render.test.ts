@@ -109,6 +109,14 @@ describe("MarketStatePage rendering", () => {
                   extendedChange: -0.53,
                   extendedChangePercent: -0.64,
                   extendedAsOf: "2026-06-12T20:14:00.000Z",
+                  sparkline: {
+                    status: "ok",
+                    source: "Yahoo Finance",
+                    points: [188, 189.5, 187.75, 190],
+                    fetchedAt: "2026-06-12T20:20:00.000Z",
+                    dataAsOf: "2026-06-12",
+                    stale: false,
+                  },
                 },
               ],
               portfolioQuotes: [],
@@ -125,8 +133,17 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Apple Inc. quote name");
-    expect(html).toContain("Chg $");
-    expect(html).toContain("Chg %");
+    expect(html).toContain("24 hr sparkline");
+    expect(html).toContain('data-slot="market-sparkline"');
+    expect(html).toContain(
+      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
+    );
+    expect(html).toContain('data-source="Yahoo Finance"');
+    expect(html).toContain("Yahoo · 2026-06-12");
+    expect(html).toContain('data-slot="mobile-price-change"');
+    expect(html).not.toContain("ticker-line.com");
+    expect(html).toContain("Price");
+    expect(html).toContain("Change");
     expect(html).toContain("Volume");
     expect(html).toContain("1.25");
     expect(html).toContain("+0.66%");
@@ -134,6 +151,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("$83.02");
     expect(html).toContain("−0.53");
     expect(html).toContain("−0.64%");
+    const extendedHoursQuoteClasses = html.match(
+      /data-slot="extended-hours-quote" class="([^"]+)"/,
+    )?.[1];
+    expect(extendedHoursQuoteClasses?.split(" ")).not.toContain("hidden");
     expect(html).toContain("Day range");
     expect(html).toContain("52-week range");
     expect(html).toContain("Create alert");
@@ -220,6 +241,14 @@ describe("MarketStatePage rendering", () => {
                 extendedPrice: 151.25,
                 extendedChange: 1.25,
                 extendedChangePercent: 0.83,
+                sparkline: {
+                  status: "ok",
+                  source: "Yahoo Finance",
+                  points: [148, 149.25, 147.5, 150],
+                  fetchedAt: "2026-06-12T20:20:00.000Z",
+                  dataAsOf: "2026-06-12",
+                  stale: false,
+                },
               },
               {
                 lotId: 2,
@@ -256,6 +285,21 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("oklch(");
     expect(html).toContain("AAPL 60.0%");
     expect(html).toContain("NVDA 40.0%");
+    expect(html).toContain("Price");
+    expect(html).toContain("Value");
+    expect(html).toContain("24 hr sparkline");
+    expect(html).toContain("Change");
+    expect(html).toContain("Total Gain/Loss");
+    expect(html).toContain("% of Portfolio");
+    expect(html).toContain("Quantity");
+    expect(html).toContain("Avg. Cost Basis");
+    expect(html).toContain(
+      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
+    );
+    expect(html).not.toContain("ticker-line.com");
+    expect(html).toContain('data-slot="avg-cost-basis"');
+    expect(html).toContain('data-slot="mobile-portfolio-holding"');
+    expect(html).toContain("focus-visible:ring-inset");
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("NVIDIA Corporation quote name");
     expect(html).toContain("Pre-market");
