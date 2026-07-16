@@ -22,8 +22,8 @@ Follow AGENTS.md (TDD mandatory — failing test first; `.js` extensions on rela
 
 ## 4. HTTP route (TDD)
 
-- [ ] 4.1 Failing route tests in the existing gui-server http-routes test file (pattern: existing `/api/instruments/quote` tests): untrusted request → rejected by `allowTrustedGuiRequest` with no snapshot call; trusted `GET /api/instruments/history?symbol=AAPL&range=1D` → 200 JSON matching the snapshot builder output; `compare=MSFT` present → ignored (identical response); invalid range/interval → HTTP 400 with the `{ status: "invalid_request", reason }` body from `resolveHistoryRange`.
-- [ ] 4.2 Implement the route in `gui/server/http-routes.ts` directly below the `/api/instruments/quote` block (line 254), guard string `"Market-state API"`, method GET only, calling `getInstrumentHistorySnapshot(url.searchParams.get("symbol") ?? "", url.searchParams.get("range") ?? "1D", url.searchParams.get("interval") ?? undefined)`; write `invalid_request` results with `writeJson(res, body, 400)`, everything else with `writeJson(res, body)`. No session, no writer lock (spec: follower-safe).
+- [x] 4.1 Failing route tests in the existing gui-server http-routes test file (pattern: existing `/api/instruments/quote` tests): untrusted request → rejected by `allowTrustedGuiRequest` with no snapshot call; trusted `GET /api/instruments/history?symbol=AAPL&range=1D` → 200 JSON matching the snapshot builder output; `compare=MSFT` present → ignored (identical response); invalid range/interval → HTTP 400 with the `{ status: "invalid_request", reason }` body from `resolveHistoryRange`.
+- [x] 4.2 Implement the route in `gui/server/http-routes.ts` directly below the `/api/instruments/quote` block (line 254), guard string `"Market-state API"`, method GET only, calling `getInstrumentHistorySnapshot(url.searchParams.get("symbol") ?? "", url.searchParams.get("range") ?? "1D", url.searchParams.get("interval") ?? undefined)`; write `invalid_request` results with `writeJson(res, body, 400)`, everything else with `writeJson(res, body)`. No session, no writer lock (spec: follower-safe).
 
 ## 5. MarketChart component (TDD)
 

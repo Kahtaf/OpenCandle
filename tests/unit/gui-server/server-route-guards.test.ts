@@ -49,6 +49,11 @@ describe("GUI server route guards", () => {
       handler: "await buildDoctorReport({",
       guard: 'allowTrustedGuiRequest(req, res, "Diagnostics API", options)',
     },
+    {
+      route: 'url.pathname === "/api/instruments/history"',
+      handler: "await getInstrumentHistorySnapshot(",
+      guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
+    },
   ])("requires trusted GUI requests before serving $route", ({ route, handler, guard }) => {
     const routeBlock = routeBlockBefore(route, handler);
 

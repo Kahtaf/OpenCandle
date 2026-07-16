@@ -29,6 +29,7 @@ import type {
 } from "./local-session-coordinator.js";
 import {
   buildMarketStateSnapshot,
+  getInstrumentHistorySnapshot,
   getInstrumentQuoteSnapshot,
   getSavedMarketStateSymbols,
   searchInstrumentCandidates,
@@ -254,6 +255,21 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/instruments/quote" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await getInstrumentQuoteSnapshot(url.searchParams.get("symbol") ?? ""));
+      return;
+    }
+
+    if (url.pathname === "/api/instruments/history" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      const snapshot = await getInstrumentHistorySnapshot(
+        url.searchParams.get("symbol") ?? "",
+        url.searchParams.get("range") ?? "1D",
+        url.searchParams.get("interval") ?? undefined,
+      );
+      if (snapshot.status === "invalid_request") {
+        writeJson(res, snapshot, 400);
+        return;
+      }
+      writeJson(res, snapshot);
       return;
     }
 
