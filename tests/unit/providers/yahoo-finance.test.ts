@@ -4,6 +4,7 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import { getHistory, getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
+import intradayHistoryFixture from "../../fixtures/yahoo-finance/chart-1d-5m.json";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
 import postMarketQuoteFixture from "../../fixtures/yahoo/AAPL-post-market-quote.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
@@ -236,6 +237,23 @@ describe("yahoo-finance provider", () => {
   });
 
   describe("getHistory", () => {
+    it("preserves intraday epoch-second timestamps alongside date strings", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(intradayHistoryFixture),
+      });
+
+      const bars = await getHistory("AAPL", "1d", "5m");
+      const timestamps = intradayHistoryFixture.chart.result[0].timestamp;
+
+      expect(bars.map((bar) => bar.timestamp)).toEqual(timestamps);
+      expect(new Set(bars.map((bar) => bar.timestamp)).size).toBe(timestamps.length);
+      expect(bars.map((bar) => bar.date)).toEqual(
+        timestamps.map((timestamp) => new Date(timestamp * 1000).toISOString().split("T")[0]),
+      );
+      expect(new Set(bars.map((bar) => bar.date))).toEqual(new Set(["2026-07-15"]));
+    });
+
     it("returns OHLCV array for valid symbol", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,

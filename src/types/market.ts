@@ -25,6 +25,8 @@ export interface StockQuote {
 
 export interface OHLCV {
   date: string;
+  /** UTC epoch seconds; present when the provider supplies per-bar timestamps. */
+  timestamp?: number;
   open: number;
   high: number;
   low: number;
