@@ -45,9 +45,9 @@ Follow AGENTS.md (TDD mandatory — failing test first; `.js` extensions on rela
 
 ## 8. Verification
 
-- [ ] 8.1 `npm test` green; `npx tsc --noEmit` green; `npx biome ci .` green; React Doctor clean on changed GUI files (autoreview runs it — no error-level diagnostics).
-- [ ] 8.2 Live check: `npm run gui`, hit `http://127.0.0.1:14567/api/instruments/history?symbol=AAPL&range=1D` from the GUI origin and confirm distinct intraday `time` values; mount `MarketChart` in a scratch route or Vitest browser harness only if needed — production mounts belong to `symbol-page`/`chat-answer-charts`.
+- [x] 8.1 `npm test` green; `npx tsc --noEmit` green; `npx biome ci .` green; React Doctor clean on changed GUI files (autoreview runs it — no error-level diagnostics).
+- [x] 8.2 Live check: `npm run gui`, hit `http://127.0.0.1:14567/api/instruments/history?symbol=AAPL&range=1D` from the GUI origin and confirm distinct intraday `time` values; mount `MarketChart` in a scratch route or Vitest browser harness only if needed — production mounts belong to `symbol-page`/`chat-answer-charts`.
 - [ ] 8.3 GUI screenshots at 1440x960 and 390x844 of a rendered chart (area + candlestick, range selector visible; from the scratch mount or a consumer branch) for the PR description.
-- [ ] 8.4 CHANGELOG `[Unreleased]` → Added: history endpoint + `MarketChart` component entry (one atomic entry; use the changelog-automation skill).
-- [ ] 8.5 `graphify update .`
-- [ ] 8.6 `npx openspec validate market-chart --strict` passes (command verified available in this repo).
+- [x] 8.4 CHANGELOG `[Unreleased]` → Added: history endpoint + `MarketChart` component entry (one atomic entry; use the changelog-automation skill).
+- [x] 8.5 `graphify update .`
+- [x] 8.6 `npx openspec validate market-chart --strict` passes (command verified available in this repo).

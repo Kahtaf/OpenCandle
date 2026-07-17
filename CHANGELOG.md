@@ -4,6 +4,7 @@
 
 ### Added
 
+- The local GUI gained a reusable `MarketChart` component (self-hosted TradingView lightweight-charts v5) with area/candlestick/indexed modes, a keyboard-operable range selector, previous-close line, volume histogram, crosshair tooltip, and design-token theming, backed by a new guarded read-only `GET /api/instruments/history` endpoint with server-side range/interval validation, request coalescing, and additive intraday epoch-second timestamps on history bars.
 - Watchlist and portfolio rows now include locally rendered intraday Yahoo Finance sparklines with source and freshness context; portfolio tables also expose price, value, daily change, total gain/loss, allocation, quantity, and average cost basis in a responsive desktop table and expandable mobile summary, while mobile watchlist rows retain active pre-/post-market quotes.
 - A non-gating nightly GitHub Actions drift canary now runs live provider checks and, when `GEMINI_API_KEY` is configured, deterministic and advisory live-router evals.
 - GUI release smoke coverage now exercises first-run invalid OpenAI and Google model-key feedback, cold diagnostics readiness, and composer key management without relying on third-party APIs.

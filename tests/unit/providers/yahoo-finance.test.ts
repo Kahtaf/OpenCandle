@@ -4,12 +4,12 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import { getHistory, getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
-import intradayHistoryFixture from "../../fixtures/yahoo-finance/chart-1d-5m.json";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
 import postMarketQuoteFixture from "../../fixtures/yahoo/AAPL-post-market-quote.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
+import intradayHistoryFixture from "../../fixtures/yahoo-finance/chart-1d-5m.json";
 
 const yahooFinanceMock = vi.hoisted(() => ({
   fundamentalsTimeSeries: vi.fn(),
