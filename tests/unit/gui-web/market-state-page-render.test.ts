@@ -57,6 +57,45 @@ vi.mock("vaul", async () => {
 });
 
 describe("MarketStatePage rendering", () => {
+  it("links watchlist symbols to their encoded symbol pages while keeping the inspector", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistPage, {
+        loading: false,
+        state: {
+          watchlists: [{ id: 1, name: "Default", isDefault: true }],
+          watchlist: [
+            {
+              id: 10,
+              watchlistId: 1,
+              instrumentId: 4,
+              symbol: "^GSPC",
+              name: "S&P 500",
+            },
+          ],
+          alerts: [],
+          alertEvents: [],
+          instruments: [],
+          portfolio: [],
+          quoteSnapshot: { watchlistQuotes: [], portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('href="/symbol/%5EGSPC"');
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain('aria-label="^GSPC details"');
+    expect(html).toContain("Create alert");
+    expect(html).toContain("Open full page");
+    expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
+  });
+
   it("renders the watchlist as a quote board with signed market data and row actions", () => {
     const html = renderToStaticMarkup(
       React.createElement(
@@ -195,6 +234,40 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain('data-slot="portfolio-skeleton"');
     expect(html).not.toContain("No holdings yet");
+  });
+
+  it("links desktop and mobile portfolio symbols to encoded symbol pages", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "^GSPC",
+              name: "S&P 500",
+              quantity: 2,
+              avgCost: 5000,
+              currency: "USD",
+            },
+          ],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain('aria-label="Expand ^GSPC lots"');
   });
 
   it("renders portfolio allocation as categorical proportional segments", () => {

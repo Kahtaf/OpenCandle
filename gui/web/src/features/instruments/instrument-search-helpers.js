@@ -1,4 +1,10 @@
+import { symbolPageHref } from "../../route-resolution.js";
 import { formatExchangeLabel, formatInstrumentTypeLabel } from "./exchange-labels.js";
+
+export function navigateToInstrumentCandidate(navigate, candidate) {
+  if (!navigate || !candidate?.symbol) return;
+  void navigate({ to: symbolPageHref(candidate.symbol) });
+}
 
 export function instrumentSuggestionOptionId(optionIdPrefix, index) {
   return `${optionIdPrefix || "instrument-suggestion"}-option-${index}`;

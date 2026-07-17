@@ -11,6 +11,25 @@ const baseMarketState = {
 };
 
 describe("EntityPopover", () => {
+  it("offers an encoded symbol-page action beside the ask action", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(EntityPopover, {
+        open: true,
+        symbol: "TSLA",
+        marketState: baseMarketState,
+        resolvedCandidate: { symbol: "TSLA" },
+        navigate: vi.fn(),
+        onAddToWatchlist: vi.fn(),
+        onAskAbout: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('href="/symbol/TSLA"');
+    expect(html).toContain("Open $TSLA page");
+    expect(html).toContain("Ask about $TSLA");
+    expect(html).toContain("focus-visible:ring-2");
+  });
+
   it("renders cached quote price and change without freshness copy", () => {
     const html = renderToStaticMarkup(
       React.createElement(EntityPopover, {

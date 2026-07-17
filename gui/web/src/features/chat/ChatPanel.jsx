@@ -60,6 +60,7 @@ export function ChatPanel({
   sessionId = "",
   scrollAnchorId = "",
   dashboard,
+  navigate,
 }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
@@ -374,6 +375,7 @@ export function ChatPanel({
         resolving={symbolResolution.resolving}
         onAddToWatchlist={addSelectedToWatchlist}
         onAskAbout={askAboutSymbol}
+        navigate={navigate}
       />
       {!isEmptyThread ? composer : null}
     </section>

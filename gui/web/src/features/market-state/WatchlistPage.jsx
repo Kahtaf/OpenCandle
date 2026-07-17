@@ -1,4 +1,4 @@
-import { ListPlus, MoreHorizontal, Plus } from "lucide-react";
+import { ExternalLink, ListPlus, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import {
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "../../components/ui/table.jsx";
 import { cn } from "../../lib/utils.js";
+import { symbolPageHref } from "../../route-resolution.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
 import { degradedQuoteBadge } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
@@ -60,6 +61,7 @@ export function WatchlistPage({
   readOnly,
   openPanel,
   invokeTool,
+  navigate,
   renderPageHeader,
 }) {
   const watchlists = useMemo(
@@ -191,6 +193,7 @@ export function WatchlistPage({
               onSelect={setSelectedId}
               onRemove={setPendingRemoval}
               onCreateAlert={(item) => openPanel("alert-create", { symbol: item.symbol })}
+              navigate={navigate}
             />
           )}
         </Panel>
@@ -204,6 +207,7 @@ export function WatchlistPage({
             readOnly={readOnly}
             onRemove={() => setPendingRemoval(selected)}
             onCreateAlert={() => openPanel("alert-create", { symbol: selected.symbol })}
+            navigate={navigate}
           />
         ) : null}
       </div>
@@ -247,6 +251,7 @@ function QuoteBoard({
   onSelect,
   onRemove,
   onCreateAlert,
+  navigate,
 }) {
   return (
     <Table className="sm:min-w-[760px]">
@@ -279,7 +284,18 @@ function QuoteBoard({
               onClick={() => onSelect(item.id)}
             >
               <TableCell className="w-[88px] max-w-[88px] px-2 py-2.5 sm:w-auto sm:max-w-none sm:px-3">
-                <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
+                <a
+                  href={symbolPageHref(item.symbol)}
+                  className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!navigate) return;
+                    event.preventDefault();
+                    void navigate({ to: symbolPageHref(item.symbol) });
+                  }}
+                >
+                  <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
+                </a>
               </TableCell>
               <TableCell className="px-1 py-1.5 sm:px-3">
                 <MarketSparkline symbol={item.symbol} sparkline={quote?.sparkline} />
@@ -419,7 +435,7 @@ function SignalBadge({ alerts, quote }) {
   return <Badge tone="ok">{active.length}</Badge>;
 }
 
-function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert }) {
+function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert, navigate }) {
   const positionRow = useMemo(() => {
     const rows = buildHoldingRows(
       (state.portfolio ?? []).filter((lot) => lot.symbol === item.symbol),
@@ -499,6 +515,19 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
       </InspectorSection>
 
       <div className="flex flex-wrap gap-2 p-4">
+        <Button asChild variant="bordered" size="sm">
+          <a
+            href={symbolPageHref(item.symbol)}
+            onClick={(event) => {
+              if (!navigate) return;
+              event.preventDefault();
+              void navigate({ to: symbolPageHref(item.symbol) });
+            }}
+          >
+            <ExternalLink className="button-icon" />
+            Open full page
+          </a>
+        </Button>
         <Button
           type="button"
           variant="bordered"

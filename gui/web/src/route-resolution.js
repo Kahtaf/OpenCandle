@@ -12,6 +12,10 @@ export function tickerFromPath(pathname) {
   }
 }
 
+export function symbolPageHref(ticker) {
+  return `/symbol/${encodeURIComponent(String(ticker || "").toUpperCase())}`;
+}
+
 export function appPageFromPath(pathname) {
   if (pathname === "/diagnostics") return { page: "diagnostics" };
 

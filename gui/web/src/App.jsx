@@ -460,6 +460,7 @@ export function AppShell() {
             sessionId={sessionView.activeSessionId}
             scrollAnchorId={scrollAnchorId}
             dashboard={visibleDashboard}
+            navigate={navigate}
           />
         )}
         <ToolDrawerInline />

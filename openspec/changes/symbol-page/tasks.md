@@ -29,16 +29,16 @@ Follow AGENTS.md (TDD, CHANGELOG, `graphify update .`). HARD dependency: impleme
 
 ## 4. Entry-point wiring (TDD per surface)
 
-- [ ] 4.1 WatchlistPage QuoteBoard: symbol cell renders a link to `/symbol/$ticker` (URL-encoded; test `^GSPC` → `/symbol/%5EGSPC`) while the inline inspector affordance remains. Render test first, then implement.
-- [ ] 4.2 PortfolioPage rows: same symbol-cell link treatment; render test first.
-- [ ] 4.3 entity-popover.jsx: add "Open $X page" beside "Ask about $X" (entity-popover.jsx:164); extend tests/unit/gui-web/entity-popover.test.ts with the new action and its navigation target first.
-- [ ] 4.4 SymbolInspector: add an "Open full page" link; render test first.
-- [ ] 4.5 Instrument search (`SymbolSearchInput`, gui/web/src/features/market-state/MarketStatePage.jsx:936, backed by gui/web/src/features/instruments/use-instrument-search.js): selecting a candidate can navigate to `/symbol/$ticker`; test the navigation callback wiring first. Every link added in 4.1-4.5 is a real anchor/button with the ui primitives' focus-visible ring.
+- [x] 4.1 WatchlistPage QuoteBoard: symbol cell renders a link to `/symbol/$ticker` (URL-encoded; test `^GSPC` → `/symbol/%5EGSPC`) while the inline inspector affordance remains. Render test first, then implement.
+- [x] 4.2 PortfolioPage rows: same symbol-cell link treatment; render test first.
+- [x] 4.3 entity-popover.jsx: add "Open $X page" beside "Ask about $X" (entity-popover.jsx:164); extend tests/unit/gui-web/entity-popover.test.ts with the new action and its navigation target first.
+- [x] 4.4 SymbolInspector: add an "Open full page" link; render test first.
+- [x] 4.5 Instrument search (`SymbolSearchInput`, gui/web/src/features/market-state/MarketStatePage.jsx:936, backed by gui/web/src/features/instruments/use-instrument-search.js): selecting a candidate can navigate to `/symbol/$ticker`; test the navigation callback wiring first. Every link added in 4.1-4.5 is a real anchor/button with the ui primitives' focus-visible ring.
 
 ## 5. Verification
 
 - [ ] 5.1 `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; React Doctor clean on changed GUI files (via `npm run review:pr` tooling or direct run).
 - [ ] 5.2 Live check: `npm run gui`, open `/symbol/AAPL` (equity, full page), `/symbol/BTC-USD` (no KeyStats), `/symbol/ZZZZZZ` (not-found) as writer; open the same page in a second follower window and confirm disabled-but-labeled affordances with neutral copy and no session creation (session list unchanged). Confirm a writer analyze chip navigates to the new session. At 390px width, confirm single-column section order and no document-level horizontal scrolling.
 - [ ] 5.3 Screenshots at 1440x960 and 390x844 for the PR: equity page, non-equity page, follower read-only state.
-- [ ] 5.4 CHANGELOG `[Unreleased]` entries (symbol page + entry points; overview endpoint; marketCap fix) per the changelog-automation skill.
+- [x] 5.4 CHANGELOG `[Unreleased]` entries (symbol page + entry points; overview endpoint; marketCap fix) per the changelog-automation skill.
 - [ ] 5.5 `graphify update .`; `npx openspec validate symbol-page --strict` passes.

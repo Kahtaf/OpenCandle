@@ -101,6 +101,7 @@ export function MarketStatePage({
   domain,
   role,
   invokeTool: invokeToolRequest,
+  navigate,
   setToast,
   onOpenSidebar,
   onOpenHome,
@@ -188,6 +189,7 @@ export function MarketStatePage({
                 readOnly={readOnly || mutationPending}
                 openPanel={openPanel}
                 invokeTool={invokeTool}
+                navigate={navigate}
                 renderPageHeader={(tabs) => (
                   <PageHeader
                     meta={active}
@@ -208,6 +210,7 @@ export function MarketStatePage({
                 readOnly={readOnly || mutationPending}
                 openPanel={openPanel}
                 invokeTool={invokeTool}
+                navigate={navigate}
                 renderPageHeader={(tabs) => (
                   <PageHeader
                     meta={active}
@@ -245,6 +248,7 @@ export function MarketStatePage({
                 readOnly={readOnly || mutationPending}
                 invokeTool={invokeTool}
                 closePanel={closePanel}
+                navigate={navigate}
               />
             </ContextPanel>
           ) : null}
@@ -276,7 +280,7 @@ function PageHeader({ meta, loading, readOnly, onPrimary, tabs }) {
   );
 }
 
-function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
+function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate }) {
   const lot = panel.data?.lot;
   const alert = panel.data?.alert;
   const watchlist = panel.data?.watchlist;
@@ -303,6 +307,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
       <SymbolActionPanel
         key={`${panel.type}:${watchlist?.id ?? "default"}`}
         disabled={readOnly}
+        navigate={navigate}
         onSubmit={async (values) => {
           const saved = await invokeTool("manage_watchlist", {
             action: "add",
@@ -390,6 +395,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
         key={`${panel.type}:${lot?.id ?? "new"}`}
         disabled={readOnly}
         lot={lot}
+        navigate={navigate}
         onSubmit={async (values) => {
           const saved = await invokeTool("track_portfolio", {
             action: lot ? "update" : "add",
@@ -414,6 +420,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
         invokeTool={invokeTool}
         onSaved={closePanel}
         symbol={panel.data?.symbol}
+        navigate={navigate}
       />
     );
   }
@@ -428,6 +435,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
         disabled={readOnly}
         invokeTool={invokeTool}
         alert={alert}
+        navigate={navigate}
         symbol={
           panel.data?.symbol ??
           state?.instruments?.find((instrument) => instrument.id === alert.instrumentId)?.symbol
@@ -701,7 +709,7 @@ export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
   );
 }
 
-export function SymbolActionPanel({ disabled, onSubmit }) {
+export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState("");
   const resolvedSymbol = selected;
@@ -728,6 +736,7 @@ export function SymbolActionPanel({ disabled, onSubmit }) {
         disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        navigate={navigate}
       />
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
         {resolvedSymbol ? "Save" : "Select a ticker to save"}
@@ -736,7 +745,7 @@ export function SymbolActionPanel({ disabled, onSubmit }) {
   );
 }
 
-export function HoldingForm({ disabled, lot, onSubmit }) {
+export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
   const quantityId = useId();
   const averageCostId = useId();
   const currencyId = useId();
@@ -811,6 +820,7 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
         disabled={disabled || pending || Boolean(lot)}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        navigate={navigate}
       />
       <label htmlFor={quantityId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Quantity
@@ -933,7 +943,14 @@ function formatAutofillNumber(value) {
   return Number.parseFloat(String(value)).toString();
 }
 
-export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
+export function SymbolSearchInput({
+  query,
+  selected,
+  disabled,
+  onQueryChange,
+  onSelectedChange,
+  navigate,
+}) {
   const inputId = useId();
   const listboxId = useId();
   const searchRef = useRef(null);
@@ -1019,6 +1036,7 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
           rowClassName="text-xs"
           onActiveIndexChange={setActiveIndex}
           onSelect={selectCandidate}
+          navigate={navigate}
         />
       ) : null}
     </div>
@@ -1127,7 +1145,7 @@ export function isAlertDraftValid(draft, fields) {
   return true;
 }
 
-export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }) {
+export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, navigate }) {
   const conditionId = useId();
   const thresholdId = useId();
   const periodId = useId();
@@ -1185,6 +1203,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
         disabled={disabled}
         onQueryChange={(value) => setDraftField("query", value)}
         onSelectedChange={(value) => setDraftField("selected", value)}
+        navigate={navigate}
       />
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
