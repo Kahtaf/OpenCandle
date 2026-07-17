@@ -19,7 +19,7 @@ export function SourceGrid({ sources, onOpenAll, className, max = 3 }) {
           href={s.url || undefined}
           target={s.url ? "_blank" : undefined}
           rel={s.url ? "noreferrer" : undefined}
-          className="group flex min-h-[68px] flex-col justify-between rounded-md border border-border bg-card p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group flex min-h-[68px] flex-col justify-between rounded-md border border-border bg-card p-2 text-left transition-[background-color,border-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <div className="flex items-center gap-1.5">
             <Favicon url={s.url} size="xs" />
@@ -36,7 +36,7 @@ export function SourceGrid({ sources, onOpenAll, className, max = 3 }) {
         <button
           type="button"
           onClick={onOpenAll}
-          className="flex min-h-[68px] flex-col justify-between rounded-md border border-border bg-secondary p-2 text-left transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex min-h-[68px] flex-col justify-between rounded-md border border-border bg-secondary p-2 text-left transition-[background-color,border-color,transform,scale] duration-150 ease-out hover:bg-card active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <span className="flex flex-row pl-0.5">
             {overflow.slice(0, 5).map((s, i) => (

@@ -14,7 +14,7 @@ export function MarketSparkline({ symbol, sparkline, className = "" }) {
         <div className="flex h-[29px] items-center text-[10px] text-muted-foreground sm:h-9">
           Unavailable
         </div>
-        <figcaption className="truncate text-[8px] leading-none text-muted-foreground">
+        <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
           Yahoo · unavailable
         </figcaption>
       </figure>
@@ -48,7 +48,7 @@ export function MarketSparkline({ symbol, sparkline, className = "" }) {
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <figcaption className="truncate text-[8px] leading-none text-muted-foreground">
+      <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
         Yahoo · {dataAsOf}
       </figcaption>
     </figure>

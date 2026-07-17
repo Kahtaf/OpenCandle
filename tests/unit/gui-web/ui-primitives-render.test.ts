@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../../gui/web/src/components/ui/alert-dialog.jsx";
+import { Button } from "../../../gui/web/src/components/ui/button.jsx";
 import {
   ChartContainer,
   ChartTooltip,
@@ -49,6 +50,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../../gui/web/src/components/ui/tabs.jsx";
+import { Textarea } from "../../../gui/web/src/components/ui/textarea.jsx";
 
 vi.mock("recharts", async (importOriginal) => {
   const ReactModule = await import("react");
@@ -61,6 +63,32 @@ vi.mock("recharts", async (importOriginal) => {
 });
 
 describe("GUI UI primitives rendering", () => {
+  it("keeps textareas visibly focused", () => {
+    const html = renderToStaticMarkup(React.createElement(Textarea, { "aria-label": "Message" }));
+
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain("focus-visible:ring-ring");
+  });
+
+  it("keeps icon controls named, focusable, pressable, and at least 40px square", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(Button, {
+        "aria-label": "Open menu",
+        icon: () => React.createElement("svg", null),
+        size: "icon-xs",
+      }),
+    );
+
+    expect(html).toContain('aria-label="Open menu"');
+    expect(html).toContain("min-h-10");
+    expect(html).toContain("min-w-10");
+    expect(html).toContain("active:enabled:scale-[0.96]");
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain(
+      "transition-[background-color,border-color,color,opacity,transform,scale]",
+    );
+  });
+
   it("renders table semantics", () => {
     const html = renderToStaticMarkup(
       React.createElement(
@@ -82,7 +110,7 @@ describe("GUI UI primitives rendering", () => {
 
     expect(html).toContain("<table");
     expect(html).toContain("Portfolio positions");
-    expect(html).toContain("<th");
+    expect(html).toContain('<th data-slot="table-head" scope="col"');
     expect(html).toContain("<td");
   });
 
@@ -103,6 +131,10 @@ describe("GUI UI primitives rendering", () => {
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab"');
     expect(html).toContain("OpenCandle");
+    expect(html).toContain("min-h-10");
+    expect(html).toContain("active:scale-[0.96]");
+    expect(html).toContain("transition-[background-color,color,box-shadow,transform,scale]");
+    expect(html).toContain("focus-visible:ring-2");
   });
 
   it("renders a dropdown menu trigger", () => {

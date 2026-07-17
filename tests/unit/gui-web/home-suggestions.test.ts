@@ -34,6 +34,20 @@ describe("homePromptsForMarketState", () => {
     ]);
   });
 
+  it("uses natural copy for default saved collections", () => {
+    expect(
+      homePromptsForMarketState({
+        watchlists: [{ id: "default-watchlist", name: "Default" }],
+        watchlistItems: [{ watchlistId: "default-watchlist", symbol: "NVDA" }],
+        portfolios: [{ id: "default-portfolio", name: "Default" }],
+        portfolioLots: [{ portfolioId: "default-portfolio", symbol: "AMD" }],
+      }),
+    ).toEqual([
+      ["What's moving in my watchlist?", "What's moving in my watchlist?"],
+      ["How is my portfolio doing?", "How is my portfolio doing?"],
+    ]);
+  });
+
   it("allows long suggestion labels to wrap within the home width", () => {
     const html = renderToStaticMarkup(
       React.createElement(EmptyThread, {

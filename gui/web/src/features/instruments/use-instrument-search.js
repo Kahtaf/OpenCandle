@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { searchInstruments } from "./instrument-api.js";
-import { resolveInstrumentSearchState } from "./instrument-search-helpers.js";
+import {
+  rankInstrumentCandidates,
+  resolveInstrumentSearchState,
+} from "./instrument-search-helpers.js";
 
 export const DEFAULT_INSTRUMENT_SEARCH_DEBOUNCE_MS = 200;
 
@@ -36,7 +39,7 @@ export function useInstrumentSearch({
       searchInstruments(trimmedQuery)
         .then((items) => {
           if (disposed) return;
-          const next = Array.isArray(items) ? items.slice(0, limit) : [];
+          const next = rankInstrumentCandidates(items, trimmedQuery).slice(0, limit);
           setSearchState({
             query: trimmedQuery,
             candidates: next,

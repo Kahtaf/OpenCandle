@@ -15,7 +15,7 @@ export const AlertDialogOverlay = forwardRef(function AlertDialogOverlay(
       ref={ref}
       data-slot="alert-dialog-overlay"
       className={cn(
-        "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
         className,
       )}
       {...props}
@@ -34,7 +34,7 @@ export const AlertDialogContent = forwardRef(function AlertDialogContent(
         ref={ref}
         data-slot="alert-dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-5 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-5 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
           className,
         )}
         {...props}
@@ -97,7 +97,7 @@ export const AlertDialogAction = forwardRef(function AlertDialogAction(
       ref={ref}
       data-slot="alert-dialog-action"
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-md bg-brand px-3 text-sm font-medium text-brand-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center rounded-md bg-brand px-3 text-sm font-medium text-brand-foreground transition-[background-color,color,opacity,transform,scale] duration-150 ease-out hover:opacity-90 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}
@@ -114,7 +114,7 @@ export const AlertDialogCancel = forwardRef(function AlertDialogCancel(
       ref={ref}
       data-slot="alert-dialog-cancel"
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition-[background-color,border-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}

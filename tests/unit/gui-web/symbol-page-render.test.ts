@@ -136,6 +136,11 @@ describe("symbol page", () => {
     );
 
     expect(html).toContain("<h1");
+    expect(html).toContain('data-slot="panel-card"');
+    expect(html).toContain('data-slot="panel-header"');
+    expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
+      html.indexOf('data-slot="symbol-price-row"'),
+    );
     expect(html).toContain("text-balance");
     expect(html).toContain("Microsoft Corporation");
     expect(html).toContain("MSFT");
@@ -171,6 +176,11 @@ describe("symbol page", () => {
 
     expect(html).toContain('data-slot="extended-hours-quote"');
     expect(html).toContain("Pre-market");
+    expect(html).toContain('data-slot="symbol-session-line"');
+    expect(html.indexOf('data-slot="symbol-session-line"')).toBeGreaterThan(
+      html.indexOf('data-slot="symbol-price-row"'),
+    );
+    expect(html).not.toContain("Pre-market session");
   });
 
   it("renders available key stats as a divided definition list and omits provider placeholders", () => {
@@ -197,7 +207,9 @@ describe("symbol page", () => {
     expect(html).toContain("<dl");
     expect(html).toContain("<dt");
     expect(html).toContain("<dd");
-    expect(html).toContain("divide-y");
+    expect(html).toContain("md:grid-cols-2");
+    expect(html).toContain("xl:grid-cols-3");
+    expect(html).toContain("border-b");
     expect(html).toContain("text-muted-foreground");
     expect(html).toContain("text-right tabular-nums");
     expect(html).toContain("Forward P/E");
@@ -355,7 +367,7 @@ describe("symbol page", () => {
     expect(html).toContain("Available in the writer window");
     expect(html).toContain("min-h-10");
     expect(html).toContain("active:scale-[0.96]");
-    expect(html).toContain("transition-[background-color,color,box-shadow,scale]");
+    expect(html).toContain("transition-[background-color,color,box-shadow,transform,scale]");
     expect(html).not.toContain("transition-all");
   });
 
@@ -383,7 +395,10 @@ describe("symbol page", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
-  it.each(["BTC-USD", "^GSPC"])("renders %s as header and chart only", (ticker) => {
+  it.each([
+    ["BTC-USD", "Fundamental stats aren&#x27;t available for crypto assets."],
+    ["^GSPC", "Fundamental stats aren&#x27;t available for market indices."],
+  ])("renders %s with an explicit limited-data note", (ticker, note) => {
     const html = renderSymbolPage({
       ticker,
       data: okSymbolData(ticker, { overview: { status: "unavailable", reason: "N/A" } }),
@@ -392,6 +407,8 @@ describe("symbol page", () => {
     expect(html).toContain(ticker);
     expect(html).toContain('data-slot="test-chart"');
     expect(html).not.toContain('aria-label="Key stats"');
+    expect(html).toContain('aria-label="Fundamental data availability"');
+    expect(html).toContain(note);
     expect(html).not.toContain('aria-label="Position"');
     expect(html).not.toContain('aria-label="Analyze"');
   });
@@ -462,7 +479,7 @@ describe("symbol page", () => {
     const indices = labels.map((label) => html.indexOf(`aria-label="${label}"`));
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
     expect(html).toContain('aria-label="Watchlist membership"');
-    expect(html).toContain("overflow-x-auto");
+    expect(html).not.toContain("min-w-[560px]");
     expect(html.match(/<main[^>]*overflow-x-auto/g)).toBeNull();
   });
 
@@ -481,6 +498,8 @@ describe("symbol page", () => {
     });
 
     expect(html).toContain('data-slot="symbol-header-skeleton"');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain("Loading MSFT</h1>");
     expect(html).toContain('data-slot="symbol-chart-skeleton"');
     expect(html).toContain('data-slot="symbol-stats-skeleton"');
     expect(html).not.toContain("animate-in");

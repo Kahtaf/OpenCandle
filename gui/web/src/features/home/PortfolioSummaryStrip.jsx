@@ -1,8 +1,8 @@
 import { Skeleton } from "../../components/ui/skeleton.jsx";
-import { degradedQuoteBadge } from "../market-state/format.js";
+import { formatMoney } from "../../lib/financial-format.js";
+import { degradedQuoteBadge, quoteFreshnessTitle } from "../market-state/format.js";
 import { derivePortfolioDayMove } from "../market-state/portfolio-view-model.js";
-import { Badge, money, Panel } from "../market-state/shared.jsx";
-import { DeltaChip } from "../renderers/cards/_shared.jsx";
+import { Badge, Panel, SignedMoney } from "../market-state/shared.jsx";
 
 const HEADING_ID = "home-portfolio-heading";
 const EMPTY_PORTFOLIOS = [];
@@ -11,14 +11,16 @@ export function PortfolioSummaryStrip({
   portfolios = EMPTY_PORTFOLIOS,
   quoteSnapshot,
   nowMs = Date.now(),
+  timeZone,
 }) {
   const loading = portfolios.length > 0 && quoteSnapshot == null;
   const summaries = quoteSnapshot?.portfolioSummaries ?? [];
   const totals = sumPortfolioSummaries(summaries, quoteSnapshot?.portfolioSummary?.baseCurrency);
+  const portfolioIds = new Set(totals.portfolioIds);
   const selectedPortfolioQuotes = (quoteSnapshot?.portfolioQuotes ?? []).filter(
     (quote) =>
       (totals.portfolioIds.length <= 1 && quote.portfolioId == null) ||
-      totals.portfolioIds.includes(quote.portfolioId),
+      portfolioIds.has(quote.portfolioId),
   );
   const selectedQuotes = selectedPortfolioQuotes.filter(
     (quote) => quote.includedInTotals !== false,
@@ -32,9 +34,17 @@ export function PortfolioSummaryStrip({
         Number.isFinite(quote.marketValue),
     );
   const dayMove = derivePortfolioDayMove(selectedQuotes);
+  const selectedMarketValue = selectedQuotes.reduce(
+    (total, quote) => total + (Number.isFinite(quote.marketValue) ? quote.marketValue : 0),
+    0,
+  );
+  const priorDayValue = dayMove == null ? null : selectedMarketValue - dayMove;
+  const dayMovePercent =
+    dayMove != null && priorDayValue > 0 ? (dayMove / priorDayValue) * 100 : null;
   const freshness = quoteSnapshot
     ? degradedQuoteBadge(quoteSnapshot.portfolioQuotes ?? [], nowMs)
     : null;
+  const freshnessTitle = quoteFreshnessTitle(quoteSnapshot?.portfolioQuotes ?? [], timeZone);
 
   return (
     <section aria-labelledby={HEADING_ID} data-slot="home-portfolio-summary">
@@ -43,7 +53,11 @@ export function PortfolioSummaryStrip({
         meta={
           freshness || totals.excludedCurrencies.length > 0 ? (
             <span className="flex flex-wrap gap-2">
-              {freshness ? <Badge tone="warn">{freshness}</Badge> : null}
+              {freshness ? (
+                <Badge tone="warn" title={freshnessTitle}>
+                  {freshness}
+                </Badge>
+              ) : null}
               {totals.excludedCurrencies.length > 0 ? (
                 <Badge tone="warn">
                   {totals.excludedCurrencies.join(", ")} portfolios excluded
@@ -72,41 +86,44 @@ export function PortfolioSummaryStrip({
           </div>
         ) : (
           <div className="grid min-h-[152px] grid-cols-1 gap-3 p-4 sm:grid-cols-3">
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 Total value
               </div>
               <div className="mt-1 truncate tabular-nums text-2xl font-semibold tracking-tight text-foreground">
-                {money(totals.totalValue, totals.currency)}
+                {formatMoney(totals.totalValue, totals.currency)}
               </div>
             </div>
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 Today&apos;s move
               </div>
               <div className="mt-2">
-                {dayMove == null ? (
+                {dayMove == null || !Number.isFinite(dayMovePercent) ? (
                   <span className="text-sm font-medium text-muted-foreground">Unavailable</span>
                 ) : (
-                  <DeltaChip
+                  <SignedMoney
                     value={dayMove}
-                    prefix={totals.currency === "USD" ? "$" : `${totals.currency} `}
-                    size="lg"
+                    percent={dayMovePercent}
+                    currency={totals.currency}
                   />
                 )}
               </div>
             </div>
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 All-time P&amp;L
               </div>
               <div className="mt-2">
-                <DeltaChip
-                  value={totals.totalPnl}
-                  percent={totals.totalPnlPercent}
-                  prefix={totals.currency === "USD" ? "$" : `${totals.currency} `}
-                  size="lg"
-                />
+                {Number.isFinite(totals.totalPnl) && Number.isFinite(totals.totalPnlPercent) ? (
+                  <SignedMoney
+                    value={totals.totalPnl}
+                    percent={totals.totalPnlPercent}
+                    currency={totals.currency}
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">Unavailable</span>
+                )}
               </div>
             </div>
           </div>

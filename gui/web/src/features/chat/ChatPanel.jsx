@@ -24,6 +24,7 @@ import { chatRowsFromEvents } from "./chat-rows.js";
 import { EntityPopover } from "./entity-popover.jsx";
 import { collectSessionMarketFacts, enrichGroupedRows } from "./session-market-facts.js";
 import { StepsCard } from "./steps-card.jsx";
+import { compactThinkingText } from "./thinking-text.js";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
 import { useSymbolResolution } from "./use-symbol-resolution.js";
@@ -282,6 +283,7 @@ export function ChatPanel({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       data-run-state={runState}
     >
+      {!isEmptyThread ? <h1 className="sr-only">Session transcript</h1> : null}
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="relative min-h-0 flex-1">
@@ -342,20 +344,25 @@ export function ChatPanel({
             </div>
           )}
         </section>
-        {transcript.showJumpToLatest ? (
+      </div>
+      {transcript.showJumpToLatest ? (
+        <div
+          data-slot="jump-to-latest"
+          className="z-10 flex h-12 shrink-0 items-center justify-center"
+        >
           <Button
             type="button"
             size="sm"
             rounded="full"
-            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 gap-1.5 shadow-subtle-md"
+            className="min-h-10 gap-1.5 shadow-md"
             onClick={transcript.jumpToLatest}
             aria-label="Jump to latest"
           >
             <ArrowDown className="h-4 w-4" />
             Latest
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <EntityPopover
         open={Boolean(selectedSymbol)}
         onOpenChange={(open) => {
@@ -831,6 +838,7 @@ function MessageRowContent({
       <CustomMessage
         customType={entry.customType}
         content={entry.content}
+        details={entry.details}
         onRetry={() => onRetryFailedRun?.(entry.details?.prompt)}
         onFixModelKey={onFixModelKey}
       />
@@ -929,12 +937,4 @@ function thinkingForRun(liveState, run) {
       (thinking) => thinking.runId === run.id && thinking.sessionId === run.sessionId,
     )
   );
-}
-
-function compactThinkingText(text) {
-  const normalized = String(text || "")
-    .trim()
-    .replace(/\n{3,}/g, "\n\n");
-  if (normalized.length <= 700) return normalized;
-  return `${normalized.slice(0, 700).trimEnd()}...`;
 }

@@ -63,8 +63,46 @@ describe("ChatPanel event transcript rendering", () => {
     const html = renderChatPanelHtml({ events });
 
     expect(html).toContain("quickly compare AAPL and MSFT");
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain("Session transcript</h1>");
     expect(html).not.toContain("Current date: 2026-06-12 Compare these assets");
     expect(html).not.toContain('data-slot="home-dashboard"');
+  });
+
+  it("renders internal workflow prompts as collapsed step cards", () => {
+    const events: ChatEvent[] = [
+      { type: "message.created", messageId: "user-1", role: "user", seq: 1 },
+      {
+        type: "message.completed",
+        messageId: "user-1",
+        content: [{ type: "text", text: "Analyze NVDA" }],
+        seq: 2,
+      },
+      {
+        type: "custom.message",
+        messageId: "workflow-step-user-1",
+        customType: "opencandle-workflow-step",
+        content: [{ type: "text", text: "Full internal bear researcher prompt" }],
+        details: {
+          label: "Bear researcher",
+          stage: "debate_bear",
+          step: 4,
+          total: 7,
+        },
+        seq: 3,
+      },
+    ];
+
+    const html = renderChatPanelHtml({ events });
+
+    expect(html).toContain('data-slot="workflow-step"');
+    expect(html).toContain("Bear researcher");
+    expect(html).toContain("step 4 of 7");
+    expect(html).toContain("Full internal bear researcher prompt");
+    expect(html).toContain("<details");
+    expect(html).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
+    expect(html).toContain("min-h-10");
+    expect(html).toContain("focus-visible:ring-2");
   });
 
   it("renders user attachment chips and image thumbnails without exposing expanded prompt text", () => {
@@ -291,13 +329,16 @@ describe("ChatPanel event transcript rendering", () => {
           type: "thinking.delta",
           sessionId: "session-1",
           runId: "run-1",
-          text: "Reviewing the latest quote data",
+          text: "**Reviewing the latest quote data**\n- Comparing volume",
           seq: 2,
         },
       ],
     });
 
     expect(html).toContain("Reviewing the latest quote data");
+    expect(html).toContain("Comparing volume");
+    expect(html).not.toContain("**Reviewing");
+    expect(html).not.toContain("- Comparing volume");
     expect(html).not.toContain('data-slot="home-dashboard"');
   });
 

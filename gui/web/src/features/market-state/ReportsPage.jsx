@@ -1,17 +1,20 @@
 import { FileText } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
 import { NotificationsPanel } from "./AlertsPage.jsx";
-import { relativeTime, shortDateLabel } from "./format.js";
+import { formatHumanDateTime, shortDateLabel } from "./format.js";
+import { humanizeReportMarkdown, reportRunTitle, reportStatusLabel } from "./report-format.js";
+import { ReportRichText } from "./report-rich-text.jsx";
 import { Badge, EmptyState, Panel } from "./shared.jsx";
 
-export function ReportsPage({ state, readOnly, invokeTool }) {
+export function ReportsPage({ state, readOnly, invokeTool, timeZone }) {
   const template =
     state.reportTemplates.find((candidate) => candidate.enabled) ??
     state.reportTemplates[0] ??
     null;
   const latestRun = state.reportRuns.find((run) => run.status === "completed") ?? null;
-  const reportText =
+  const rawReportText =
     typeof latestRun?.summaryJson?.text === "string" ? latestRun.summaryJson.text : null;
+  const reportText = rawReportText ? humanizeReportMarkdown(rawReportText, timeZone) : null;
   const reportNotifications = state.notifications.filter(
     (notification) => notification.sourceType === "report_run",
   );
@@ -43,13 +46,13 @@ export function ReportsPage({ state, readOnly, invokeTool }) {
           <article className="max-w-[720px] px-5 py-4">
             <p className="text-xs text-muted-foreground">
               Generated{" "}
-              {relativeTime(latestRun.completedAt || latestRun.startedAt) ||
+              {formatHumanDateTime(latestRun.completedAt || latestRun.startedAt, timeZone) ||
                 shortDateLabel(latestRun.startedAt)}
               {latestRun.triggerType === "scheduled" ? " · scheduled" : " · manual"}
             </p>
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-[13px] leading-6 text-foreground">
-              {reportText}
-            </pre>
+            <div className="mt-3">
+              <ReportRichText>{reportText}</ReportRichText>
+            </div>
           </article>
         ) : (
           <EmptyState
@@ -76,22 +79,20 @@ export function ReportsPage({ state, readOnly, invokeTool }) {
                   key={run.id ?? run.startedAt}
                   className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2.5 text-[13px] last:border-0"
                 >
-                  <div>
-                    <div className="font-medium text-foreground">
-                      {shortDateLabel(run.startedAt) || "—"}
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-foreground">
+                      {reportRunTitle(run)}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {run.triggerType}
+                    <div className="truncate text-xs tabular-nums text-muted-foreground">
+                      {formatHumanDateTime(run.startedAt, timeZone) || "—"} · {run.triggerType}
                       {Array.isArray(run.errorsJson) && run.errorsJson.length
                         ? ` · ${run.errorsJson.length} data gap${run.errorsJson.length === 1 ? "" : "s"}`
                         : ""}
                     </div>
                   </div>
-                  {run.status === "completed" ? (
-                    <Badge tone="ok">done</Badge>
-                  ) : (
-                    <Badge tone="warn">{run.status}</Badge>
-                  )}
+                  <Badge tone={run.status === "completed" ? "ok" : "warn"}>
+                    {reportStatusLabel(run.status)}
+                  </Badge>
                 </li>
               ))}
             </ul>

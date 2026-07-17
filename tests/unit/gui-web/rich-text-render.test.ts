@@ -12,16 +12,27 @@ describe("rich text rendering", () => {
     expect(renderRichText("First\n\n---\n\nSecond")).toBe("<p>First</p><hr><p>Second</p>");
   });
 
+  it("promotes workflow synthesis labels into spaced markdown sections", () => {
+    const html = renderRichText(
+      "**BULL THESIS:** Demand remains strong. **BEAR THESIS:** Valuation is elevated. **VERDICT:** Hold. **CORRECTIONS NEEDED:** None.",
+    );
+
+    expect(html).toBe(
+      "<h3>BULL THESIS</h3><p>Demand remains strong.</p><h3>BEAR THESIS</h3><p>Valuation is elevated.</p><h3>VERDICT</h3><p>Hold.</p><h3>CORRECTIONS NEEDED</h3><p>None.</p>",
+    );
+  });
+
   it("marks numeric markdown-table columns for right-aligned tabular styling", () => {
     const html = renderRichText(
       "| Symbol | Price | Change | Note |\n| --- | ---: | ---: | --- |\n| NVDA | $1,234.50 | +2.50% | Strong |\n| AMD | $165.25 | −1.20% | Watch |",
     );
 
-    expect(html).toContain('<th class="rich-table__numeric">Price</th>');
-    expect(html).toContain('<th class="rich-table__numeric">Change</th>');
+    expect(html).toContain('<th scope="col"');
+    expect(html).toContain('<th scope="col" class="rich-table__numeric">Price</th>');
+    expect(html).toContain('<th scope="col" class="rich-table__numeric">Change</th>');
     expect(html).toContain('<td class="rich-table__numeric">$1,234.50</td>');
-    expect(html).not.toContain('<th class="rich-table__numeric">Symbol</th>');
-    expect(html).not.toContain('<th class="rich-table__numeric">Note</th>');
+    expect(html).not.toContain('<th scope="col" class="rich-table__numeric">Symbol</th>');
+    expect(html).not.toContain('<th scope="col" class="rich-table__numeric">Note</th>');
   });
 
   it("keeps a column numeric when placeholder cells like N/A appear", () => {
@@ -29,10 +40,10 @@ describe("rich text rendering", () => {
       "| Metric | Value |\n| --- | --- |\n| Current Price | $50.32 |\n| Fundamental Data | N/A |\n| RSI (14D) | 32.8 |",
     );
 
-    expect(html).toContain('<th class="rich-table__numeric">Value</th>');
+    expect(html).toContain('<th scope="col" class="rich-table__numeric">Value</th>');
     expect(html).toContain('<td class="rich-table__numeric">$50.32</td>');
     expect(html).toContain('<td class="rich-table__numeric">N/A</td>');
-    expect(html).not.toContain('<th class="rich-table__numeric">Metric</th>');
+    expect(html).not.toContain('<th scope="col" class="rich-table__numeric">Metric</th>');
   });
 
   it("renders explicit cashtags as entity chips", () => {

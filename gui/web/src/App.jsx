@@ -86,7 +86,7 @@ export function AppShell() {
   });
   const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
-  const sessionsOpen = activeDrawer === "history" || pathname === "/history";
+  const sessionsOpen = activeDrawer === "history";
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

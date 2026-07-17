@@ -3,6 +3,7 @@
 import React, { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getChartPriceAutoscaleInfo } from "../../../gui/web/src/components/market-chart-autoscale.js";
 import { SERIES_COLORS } from "../../../gui/web/src/lib/series-colors.js";
 
 type MockSeriesApi = {
@@ -185,6 +186,10 @@ describe("MarketChart chart behavior", () => {
       { time: bars[0].time, value: bars[0].close },
       { time: bars[1].time, value: bars[1].close },
     ]);
+    expect(area.options.autoscaleInfoProvider).toBeTypeOf("function");
+    expect(area.options.autoscaleInfoProvider(() => null)).toEqual(
+      getChartPriceAutoscaleInfo(bars, "area"),
+    );
   });
 
   it("maps candlestick bars to OHLC and uses wrapped semantic token colors", async () => {
@@ -200,6 +205,9 @@ describe("MarketChart chart behavior", () => {
       wickUpColor: "hsl(142 71% 35%)",
       wickDownColor: "hsl(0 84% 60%)",
     });
+    expect(candle.options.autoscaleInfoProvider(() => null)).toEqual(
+      getChartPriceAutoscaleInfo(bars, "candlestick"),
+    );
   });
 
   it("rebases indexed series to 100 when no indexed arrays are provided", async () => {
@@ -211,6 +219,7 @@ describe("MarketChart chart behavior", () => {
 
     const lines = addedByDefinition(latestChart(), mocks.LineSeries);
     expect(lines).toHaveLength(2);
+    expect(lines[0].options).not.toHaveProperty("autoscaleInfoProvider");
     expect(lines[0].setData).toHaveBeenCalledWith([
       { time: bars[0].time, value: 100 },
       { time: bars[1].time, value: (bars[1].close / bars[0].close) * 100 },
@@ -365,21 +374,35 @@ describe("MarketChart chart behavior", () => {
     });
     expect(chart.priceScale).toHaveBeenCalledWith("volume");
     expect(chart.scaleOptions.get("volume")).toHaveBeenCalledWith({
-      scaleMargins: { top: 0.8, bottom: 0 },
+      scaleMargins: { top: 0.82, bottom: 0.02 },
     });
     expect(mocks.createChart.mock.calls.at(-1)?.[1]).not.toHaveProperty("leftPriceScale");
   });
 
-  it("uses runtime border and muted tokens for grid and axis chrome", async () => {
+  it("uses sparse horizontal token gridlines and keeps the mobile price scale visible", async () => {
     mounted.push(await mount(chartElement()));
 
     expect(mocks.createChart.mock.calls.at(-1)?.[1]).toMatchObject({
       grid: {
-        vertLines: { color: "hsl(240 6% 90%)" },
-        horzLines: { color: "hsl(240 6% 90%)" },
+        vertLines: { visible: false },
+        horzLines: { visible: false },
       },
       layout: { textColor: "hsl(240 4% 46%)" },
+      rightPriceScale: {
+        visible: true,
+        minimumWidth: 56,
+        scaleMargins: { top: 0.12, bottom: 0.08 },
+      },
     });
+  });
+
+  it("formats the price axis with separators and disables the in-plot attribution logo", async () => {
+    mounted.push(await mount(chartElement()));
+
+    const options = mocks.createChart.mock.calls.at(-1)?.[1];
+    expect(options.layout.attributionLogo).toBe(false);
+    expect(options.localization.priceFormatter(63_086.42)).toBe("63,086");
+    expect(options.localization.priceFormatter(216)).toBe("216.00");
   });
 
   it("renders hovered candlestick details as an absolutely positioned tabular overlay", async () => {
@@ -402,11 +425,11 @@ describe("MarketChart chart behavior", () => {
     expect(tooltip?.className).toContain("pointer-events-none");
     expect(tooltip?.className).toContain("tabular-nums");
     expect(tooltip?.textContent).toContain("2026-07-16 12:15");
-    expect(tooltip?.textContent).toContain("O 190");
-    expect(tooltip?.textContent).toContain("H 192");
-    expect(tooltip?.textContent).toContain("L 189");
-    expect(tooltip?.textContent).toContain("C 191");
-    expect(tooltip?.textContent).toContain("Volume 10,000");
+    expect(tooltip?.textContent).toContain("O 190.00");
+    expect(tooltip?.textContent).toContain("H 192.00");
+    expect(tooltip?.textContent).toContain("L 189.00");
+    expect(tooltip?.textContent).toContain("C 191.00");
+    expect(tooltip?.textContent).toContain("Volume 10K");
   });
 
   it("moves range focus with arrows and activates the focused range with Enter", async () => {

@@ -1,5 +1,6 @@
 import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
+import { formatQuantity } from "../../../lib/financial-format.js";
 import { DeltaChip, MoneyTile, PlainOutput, ToolCard } from "./_shared.jsx";
 import {
   extractDetails,
@@ -53,7 +54,7 @@ export function PortfolioCard({ message, header, text }) {
                 <div className="grid">
                   <span className="font-mono text-sm font-medium text-foreground">{p.symbol}</span>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {p.shares} @ {formatPrice(p.avgCost)}
+                    {formatQuantity(p.shares)} @ {formatPrice(p.avgCost)}
                   </span>
                 </div>
                 <span className="text-right text-sm tabular-nums text-foreground">
@@ -156,11 +157,15 @@ export function CorrelationCard({ message, header, text }) {
         <table className="w-full border-collapse text-xs tabular-nums">
           <thead>
             <tr className="bg-secondary">
-              <th className="border-b border-border px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <th
+                scope="col"
+                className="border-b border-border px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+              >
                 {" "}
               </th>
               {symbols.map((s) => (
                 <th
+                  scope="col"
                   key={s}
                   className="border-b border-border px-2 py-1.5 text-right font-mono text-[11px] font-medium text-foreground"
                 >
@@ -172,7 +177,10 @@ export function CorrelationCard({ message, header, text }) {
           <tbody>
             {symbols.map((rowSym) => (
               <tr key={rowSym}>
-                <th className="border-b border-border px-2 py-1.5 text-left font-mono text-[11px] font-medium text-foreground">
+                <th
+                  scope="row"
+                  className="border-b border-border px-2 py-1.5 text-left font-mono text-[11px] font-medium text-foreground"
+                >
                   {rowSym}
                 </th>
                 {symbols.map((colSym) => {
@@ -290,7 +298,7 @@ export function SECFilingsCard({ message, header, text }) {
                 href={url || undefined}
                 target={url ? "_blank" : undefined}
                 rel={url ? "noreferrer" : undefined}
-                className="grid grid-cols-[20px_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                className="grid min-h-10 grid-cols-[20px_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
                 <Favicon url="https://www.sec.gov" size="sm" />
                 <Badge variant="outline" size="sm" className="font-mono">

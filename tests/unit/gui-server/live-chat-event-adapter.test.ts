@@ -134,6 +134,60 @@ describe("live chat event adapter", () => {
     });
   });
 
+  it("streams workflow-injected prompts as steps without creating extra user bubbles", () => {
+    const events: ChatEvent[] = [];
+    const adapter = createLiveChatEventAdapter({
+      runId: "run-1",
+      sessionId: "session-1",
+      startSeq: 1,
+      emit: (event) => events.push(event),
+      originalPrompt: "Analyze NVDA",
+      dispatchedPrompt: "Analyze NVDA",
+    });
+
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "user",
+          content: "Full valuation analyst prompt",
+          timestamp: Date.now(),
+        },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "user",
+          content: "Full bear researcher prompt",
+          timestamp: Date.now(),
+        },
+      }),
+    );
+
+    expect(events.filter((event) => event.type === "message.created")).toMatchObject([
+      { role: "user", messageId: "run-1-user-1" },
+    ]);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-workflow-step",
+      ),
+    ).toMatchObject([
+      {
+        messageId: "run-1-workflow-step-1",
+        content: [{ type: "text", text: "Full valuation analyst prompt" }],
+        details: { label: "Workflow step", stage: "workflow", step: 1 },
+      },
+      {
+        messageId: "run-1-workflow-step-2",
+        content: [{ type: "text", text: "Full bear researcher prompt" }],
+        details: { label: "Workflow step", stage: "workflow", step: 2 },
+      },
+    ]);
+  });
+
   it("renders attachment chips on the first live user message", () => {
     const events: ChatEvent[] = [];
     const adapter = createLiveChatEventAdapter({

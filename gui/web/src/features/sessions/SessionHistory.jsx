@@ -79,7 +79,7 @@ function SidebarBody({
             type="button"
             aria-label="Go to new chat"
             onClick={onOpenHome}
-            className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-10 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-background active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <OpenCandleLogo />
             <span className="truncate">OpenCandle</span>

@@ -49,7 +49,7 @@ export function WebSearchCard({ message, header, text }) {
               href={r.url || undefined}
               target={r.url ? "_blank" : undefined}
               rel={r.url ? "noreferrer" : undefined}
-              className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              className="grid min-h-10 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             >
               <Favicon url={r.url} size="sm" className="mt-0.5" />
               <div className="min-w-0">
@@ -160,7 +160,7 @@ export function SocialSentimentCard({ message, header, text, sourceLabel }) {
                     href={url || undefined}
                     target={url ? "_blank" : undefined}
                     rel={url ? "noreferrer" : undefined}
-                    className="grid grid-cols-[20px_minmax(0,1fr)] items-start gap-2 px-3 py-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                    className="grid min-h-10 grid-cols-[20px_minmax(0,1fr)] items-start gap-2 px-3 py-2 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                   >
                     <Favicon url={url} size="sm" className="mt-0.5" />
                     <div className="min-w-0">
@@ -281,7 +281,7 @@ export function WebSentimentCard({ message, header, text }) {
                 href={r.url || undefined}
                 target={r.url ? "_blank" : undefined}
                 rel={r.url ? "noreferrer" : undefined}
-                className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                className="grid min-h-10 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
                 <Favicon url={r.url} size="sm" className="mt-0.5" />
                 <div className="min-w-0">

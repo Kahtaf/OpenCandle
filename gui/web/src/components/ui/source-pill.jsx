@@ -17,7 +17,7 @@ export function SourcePill({ url, label, title, snippet, className, onClick }) {
       rel={url ? "noreferrer" : undefined}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-card px-2 text-[11px] text-foreground transition-[background-color,border-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className,
       )}
     >

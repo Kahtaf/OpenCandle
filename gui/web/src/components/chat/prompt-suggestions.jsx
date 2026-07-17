@@ -10,7 +10,7 @@ export function EmptyThread({
   disabled = false,
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 py-6 text-center sm:py-8">
+    <div className="mx-auto grid w-full max-w-[760px] justify-items-center gap-6 px-2 py-6 text-center sm:py-8">
       <div className="grid gap-2">
         <h1 className="m-0 text-3xl font-semibold leading-tight tracking-tight text-foreground">
           What are we watching?
@@ -24,7 +24,7 @@ export function EmptyThread({
         <button
           type="button"
           onClick={() => onOpenCatalog()}
-          className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
           Browse workflows, tools, and providers

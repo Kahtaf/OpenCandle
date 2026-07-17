@@ -5,7 +5,7 @@ export function textContent(content) {
 }
 
 export function renderRichText(markdown, options = {}) {
-  const lines = String(markdown || "").split(/\r?\n/);
+  const lines = promoteWorkflowSections(markdown).split(/\r?\n/);
   const html = [];
   let paragraph = [];
   let list = [];
@@ -38,7 +38,7 @@ export function renderRichText(markdown, options = {}) {
       return meaningful.length > 0 && meaningful.every(isNumericTableCell);
     });
     html.push(
-      `<div class="rich-table"><table><thead><tr>${head.map((cell, index) => `<th${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell, index) => `<td${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
+      `<div class="rich-table"><table><thead><tr>${head.map((cell, index) => `<th scope="col"${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell, index) => `<td${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
     );
     table = [];
   };
@@ -86,6 +86,13 @@ export function renderRichText(markdown, options = {}) {
   }
   flushAll();
   return html.join("");
+}
+
+function promoteWorkflowSections(markdown) {
+  return String(markdown || "").replace(
+    /\*\*(BULL THESIS|BEAR THESIS|VERDICT|CORRECTIONS(?: NEEDED)?)(?::\*\*|\*\*:)[ \t]*/gi,
+    (_match, label) => `\n\n### ${String(label).toUpperCase()}\n\n`,
+  );
 }
 
 function splitTableRow(line) {

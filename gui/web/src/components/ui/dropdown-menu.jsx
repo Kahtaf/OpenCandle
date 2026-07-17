@@ -20,7 +20,7 @@ export const DropdownMenuSubTrigger = forwardRef(function DropdownMenuSubTrigger
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-secondary data-[state=open]:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "flex min-h-10 cursor-default select-none items-center rounded-md px-2 py-1.5 text-[13px] text-foreground outline-none transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         inset && "pl-8",
         className,
       )}
@@ -41,7 +41,7 @@ export const DropdownMenuSubContent = forwardRef(function DropdownMenuSubContent
       ref={ref}
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "z-50 min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+        "z-50 min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-left-1 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-left-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
         className,
       )}
       {...props}
@@ -60,7 +60,7 @@ export const DropdownMenuContent = forwardRef(function DropdownMenuContent(
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "z-50 min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 text-foreground shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
           className,
         )}
         {...props}
@@ -80,7 +80,7 @@ export const DropdownMenuItem = forwardRef(function DropdownMenuItem(
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-[13px] outline-none transition-colors focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10",
+        "relative flex min-h-10 cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-[13px] outline-none transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10",
         className,
       )}
       {...props}
@@ -97,7 +97,7 @@ export const DropdownMenuCheckboxItem = forwardRef(function DropdownMenuCheckbox
       ref={ref}
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-[13px] outline-none transition-colors focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex min-h-10 cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-[13px] outline-none transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       checked={checked}
@@ -122,7 +122,7 @@ export const DropdownMenuRadioItem = forwardRef(function DropdownMenuRadioItem(
       ref={ref}
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-[13px] outline-none transition-colors focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex min-h-10 cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-[13px] outline-none transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}

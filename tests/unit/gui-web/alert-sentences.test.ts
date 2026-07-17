@@ -106,6 +106,30 @@ describe("buildAlertSentenceRows", () => {
 });
 
 describe("formatAlertObservedValue", () => {
+  it.each([
+    {
+      conditionType: "price_crosses_above",
+      value: 50,
+      expected: "price $50.00 vs threshold $55.00",
+    },
+    {
+      conditionType: "price_crosses_above",
+      value: 60.06,
+      expected: "price $60.06 · above $55.00, waiting for next upward cross",
+    },
+    {
+      conditionType: "price_crosses_below",
+      value: 50,
+      expected: "price $50.00 · below $55.00, waiting for next downward cross",
+    },
+  ])("describes the observed edge state for $conditionType at $value", ({
+    conditionType,
+    value,
+    expected,
+  }) => {
+    expect(formatAlertObservedValue(conditionType, { threshold: 55 }, { value })).toBe(expected);
+  });
+
   it("uses condition context and human units for every alert condition", () => {
     expect(
       formatAlertObservedValue(
@@ -113,14 +137,14 @@ describe("formatAlertObservedValue", () => {
         { threshold: 80 },
         { field: "last_price", value: 83.55 },
       ),
-    ).toBe("price $83.55 vs threshold $80.00");
+    ).toBe("price $83.55 · above $80.00, waiting for next upward cross");
     expect(
       formatAlertObservedValue(
         "price_crosses_below",
         { threshold: 80 },
         { field: "last_price", value: 78.25 },
       ),
-    ).toBe("price $78.25 vs threshold $80.00");
+    ).toBe("price $78.25 · below $80.00, waiting for next downward cross");
     expect(
       formatAlertObservedValue(
         "price_crosses_sma",
