@@ -3,6 +3,7 @@
 import React, { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getChartPriceAutoscaleInfo } from "../../../gui/web/src/components/market-chart-autoscale.js";
 import { SERIES_COLORS } from "../../../gui/web/src/lib/series-colors.js";
 
 type MockSeriesApi = {
@@ -185,6 +186,10 @@ describe("MarketChart chart behavior", () => {
       { time: bars[0].time, value: bars[0].close },
       { time: bars[1].time, value: bars[1].close },
     ]);
+    expect(area.options.autoscaleInfoProvider).toBeTypeOf("function");
+    expect(area.options.autoscaleInfoProvider(() => null)).toEqual(
+      getChartPriceAutoscaleInfo(bars, "area"),
+    );
   });
 
   it("maps candlestick bars to OHLC and uses wrapped semantic token colors", async () => {
@@ -200,6 +205,9 @@ describe("MarketChart chart behavior", () => {
       wickUpColor: "hsl(142 71% 35%)",
       wickDownColor: "hsl(0 84% 60%)",
     });
+    expect(candle.options.autoscaleInfoProvider(() => null)).toEqual(
+      getChartPriceAutoscaleInfo(bars, "candlestick"),
+    );
   });
 
   it("rebases indexed series to 100 when no indexed arrays are provided", async () => {
@@ -211,6 +219,7 @@ describe("MarketChart chart behavior", () => {
 
     const lines = addedByDefinition(latestChart(), mocks.LineSeries);
     expect(lines).toHaveLength(2);
+    expect(lines[0].options).not.toHaveProperty("autoscaleInfoProvider");
     expect(lines[0].setData).toHaveBeenCalledWith([
       { time: bars[0].time, value: 100 },
       { time: bars[1].time, value: (bars[1].close / bars[0].close) * 100 },
@@ -379,7 +388,11 @@ describe("MarketChart chart behavior", () => {
         horzLines: { visible: false },
       },
       layout: { textColor: "hsl(240 4% 46%)" },
-      rightPriceScale: { visible: true, minimumWidth: 56 },
+      rightPriceScale: {
+        visible: true,
+        minimumWidth: 56,
+        scaleMargins: { top: 0.12, bottom: 0.08 },
+      },
     });
   });
 

@@ -29,6 +29,18 @@ export function formatInstrumentCandidateMeta(candidate) {
     .join(" · ");
 }
 
+export function rankInstrumentCandidates(candidates, query) {
+  const items = Array.isArray(candidates) ? candidates : [];
+  if (looksLikeFxQuery(query)) return items;
+
+  const primary = [];
+  const fx = [];
+  for (const candidate of items) {
+    (isFxCandidate(candidate) ? fx : primary).push(candidate);
+  }
+  return [...primary, ...fx];
+}
+
 export function clampInstrumentActiveIndex(activeIndex, candidateCount) {
   if (candidateCount <= 0) return -1;
   if (activeIndex < 0) return -1;
@@ -69,4 +81,19 @@ export function resolveInstrumentSearchState({
     candidates: Array.isArray(state.candidates) ? state.candidates : [],
     activeIndex: Number.isInteger(state.activeIndex) ? state.activeIndex : initialActiveIndex,
   };
+}
+
+function looksLikeFxQuery(query) {
+  const normalized = String(query ?? "")
+    .trim()
+    .toUpperCase();
+  return normalized.includes("/") || normalized.endsWith("=X") || /^[A-Z]{6}$/.test(normalized);
+}
+
+function isFxCandidate(candidate) {
+  const quoteType = String(candidate?.quoteType ?? "").toUpperCase();
+  const symbol = String(candidate?.symbol ?? "").toUpperCase();
+  return (
+    quoteType === "CURRENCY" || quoteType === "FX" || quoteType === "FOREX" || symbol.endsWith("=X")
+  );
 }

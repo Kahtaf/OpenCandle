@@ -329,13 +329,16 @@ describe("ChatPanel event transcript rendering", () => {
           type: "thinking.delta",
           sessionId: "session-1",
           runId: "run-1",
-          text: "Reviewing the latest quote data",
+          text: "**Reviewing the latest quote data**\n- Comparing volume",
           seq: 2,
         },
       ],
     });
 
     expect(html).toContain("Reviewing the latest quote data");
+    expect(html).toContain("Comparing volume");
+    expect(html).not.toContain("**Reviewing");
+    expect(html).not.toContain("- Comparing volume");
     expect(html).not.toContain('data-slot="home-dashboard"');
   });
 

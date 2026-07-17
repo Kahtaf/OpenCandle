@@ -24,6 +24,7 @@ import { chatRowsFromEvents } from "./chat-rows.js";
 import { EntityPopover } from "./entity-popover.jsx";
 import { collectSessionMarketFacts, enrichGroupedRows } from "./session-market-facts.js";
 import { StepsCard } from "./steps-card.jsx";
+import { compactThinkingText } from "./thinking-text.js";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
 import { useSymbolResolution } from "./use-symbol-resolution.js";
@@ -936,12 +937,4 @@ function thinkingForRun(liveState, run) {
       (thinking) => thinking.runId === run.id && thinking.sessionId === run.sessionId,
     )
   );
-}
-
-function compactThinkingText(text) {
-  const normalized = String(text || "")
-    .trim()
-    .replace(/\n{3,}/g, "\n\n");
-  if (normalized.length <= 700) return normalized;
-  return `${normalized.slice(0, 700).trimEnd()}...`;
 }

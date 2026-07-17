@@ -7,6 +7,7 @@ import {
   formatInstrumentCandidateMeta,
   navigateToInstrumentCandidate,
   nextInstrumentActiveIndex,
+  rankInstrumentCandidates,
   resolveInstrumentSearchState,
 } from "../../../gui/web/src/features/instruments/instrument-search-helpers.js";
 
@@ -101,5 +102,38 @@ describe("instrument search UI helpers", () => {
         initialActiveIndex: 0,
       }).candidates,
     ).toEqual(staleState.candidates);
+  });
+
+  it("stably demotes FX crosses for an equity-looking query", () => {
+    const mixedCandidates = [
+      { symbol: "NOKAMD=X", quoteType: "CURRENCY" },
+      { symbol: "AMD", quoteType: "EQUITY" },
+      { symbol: "AMDQ", quoteType: "ETF" },
+      { symbol: "AUDAMD=X", quoteType: "CURRENCY" },
+      { symbol: "^AMD", quoteType: "INDEX" },
+      { symbol: "GBPAMD=X", quoteType: "FX" },
+    ];
+
+    expect(rankInstrumentCandidates(mixedCandidates, "AMD").map(({ symbol }) => symbol)).toEqual([
+      "AMD",
+      "AMDQ",
+      "^AMD",
+      "NOKAMD=X",
+      "AUDAMD=X",
+      "GBPAMD=X",
+    ]);
+  });
+
+  it.each([
+    "EURUSD",
+    "NOKAMD=X",
+    "EUR/USD",
+  ])("preserves provider order for the FX-looking query %s", (query) => {
+    const mixedCandidates = [
+      { symbol: "EURUSD=X", quoteType: "CURRENCY" },
+      { symbol: "EUR", quoteType: "EQUITY" },
+    ];
+
+    expect(rankInstrumentCandidates(mixedCandidates, query)).toEqual(mixedCandidates);
   });
 });

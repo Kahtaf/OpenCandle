@@ -18,6 +18,7 @@ import {
 } from "../lib/financial-format.js";
 import { SERIES_COLORS } from "../lib/series-colors.js";
 import { cn } from "../lib/utils.js";
+import { getChartPriceAutoscaleInfo, PRICE_SCALE_MARGINS } from "./market-chart-autoscale.js";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.jsx";
 
 const RANGE_LABELS = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
@@ -65,6 +66,7 @@ function chartOptions(tokens) {
       visible: true,
       minimumWidth: 56,
       borderColor: tokens.border,
+      scaleMargins: { ...PRICE_SCALE_MARGINS },
     },
     timeScale: { borderColor: tokens.border },
     crosshair: {
@@ -75,8 +77,11 @@ function chartOptions(tokens) {
 }
 
 function singleSeriesOptions(mode, bars, tokens) {
+  const autoscaleInfo = getChartPriceAutoscaleInfo(bars, mode);
+  const autoscaleInfoProvider = () => autoscaleInfo;
   if (mode === "candlestick") {
     return {
+      autoscaleInfoProvider,
       upColor: tokens.success,
       downColor: tokens.destructive,
       borderUpColor: tokens.success,
@@ -88,6 +93,7 @@ function singleSeriesOptions(mode, bars, tokens) {
   const rising = (bars.at(-1)?.close ?? 0) >= (bars[0]?.close ?? 0);
   const direction = rising ? tokens.success : tokens.destructive;
   return {
+    autoscaleInfoProvider,
     lineColor: direction,
     topColor: direction,
     bottomColor: tokens.card,

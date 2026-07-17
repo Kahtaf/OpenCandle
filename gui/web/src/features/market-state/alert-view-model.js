@@ -95,7 +95,17 @@ export function formatAlertObservedValue(conditionType, condition, observed) {
   if (value == null) return null;
 
   if (conditionType === "price_crosses_above" || conditionType === "price_crosses_below") {
-    return `price ${moneyLabel(value)} vs threshold ${moneyLabel(numberValue(c.threshold))}`;
+    const threshold = numberValue(c.threshold);
+    if (threshold != null) {
+      const isAboveTriggerSide = conditionType === "price_crosses_above" && value > threshold;
+      const isBelowTriggerSide = conditionType === "price_crosses_below" && value < threshold;
+      if (isAboveTriggerSide || isBelowTriggerSide) {
+        const relation = isAboveTriggerSide ? "above" : "below";
+        const direction = isAboveTriggerSide ? "upward" : "downward";
+        return `price ${moneyLabel(value)} · ${relation} ${moneyLabel(threshold)}, waiting for next ${direction} cross`;
+      }
+    }
+    return `price ${moneyLabel(value)} vs threshold ${moneyLabel(threshold)}`;
   }
 
   if (conditionType === "price_crosses_sma") {
