@@ -30,6 +30,7 @@ import type {
 import {
   buildMarketStateSnapshot,
   getInstrumentHistorySnapshot,
+  getInstrumentOverviewSnapshot,
   getInstrumentQuoteSnapshot,
   getSavedMarketStateSymbols,
   searchInstrumentCandidates,
@@ -255,6 +256,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/instruments/quote" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await getInstrumentQuoteSnapshot(url.searchParams.get("symbol") ?? ""));
+      return;
+    }
+
+    if (url.pathname === "/api/instruments/overview" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      writeJson(res, await getInstrumentOverviewSnapshot(url.searchParams.get("symbol") ?? ""));
       return;
     }
 

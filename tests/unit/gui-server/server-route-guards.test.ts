@@ -54,6 +54,11 @@ describe("GUI server route guards", () => {
       handler: "await getInstrumentHistorySnapshot(",
       guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
     },
+    {
+      route: 'url.pathname === "/api/instruments/overview"',
+      handler: "await getInstrumentOverviewSnapshot(",
+      guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
+    },
   ])("requires trusted GUI requests before serving $route", ({ route, handler, guard }) => {
     const routeBlock = routeBlockBefore(route, handler);
 

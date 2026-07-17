@@ -35,6 +35,12 @@ const diagnosticsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
+const symbolRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/symbol/$ticker",
+  validateSearch: validateGuiSearch,
+});
+
 const watchlistsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/watchlists",
@@ -65,6 +71,7 @@ const routeTree = rootRoute.addChildren([
   historyRoute,
   settingsRoute,
   diagnosticsRoute,
+  symbolRoute,
   watchlistsRoute,
   portfoliosRoute,
   alertsRoute,

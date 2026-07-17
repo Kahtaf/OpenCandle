@@ -4,7 +4,11 @@ import { isZeroFilledQuote, searchYahooInstruments } from "../../src/market-stat
 import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
-import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
+import {
+  getHistory,
+  getQuote,
+  getYahooCompanyOverview,
+} from "../../src/providers/yahoo-finance.js";
 import { HISTORY_INTERVALS, type HISTORY_RANGES } from "../../src/tools/market/stock-history.js";
 import { HistorySnapshotStore } from "./history-snapshot-store.js";
 
@@ -675,6 +679,7 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
       low: number;
       week52High: number;
       week52Low: number;
+      marketCap: number;
       fetchedAt: string;
       dataAsOf?: string;
       marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
@@ -703,6 +708,7 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
     low: quote.low,
     week52High: quote.week52High,
     week52Low: quote.week52Low,
+    marketCap: quote.marketCap,
     fetchedAt: quote.fetchedAt,
     dataAsOf: quote.dataAsOf,
     marketState: quote.marketState,
@@ -713,6 +719,112 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
     stale: quote.stale,
     currency: quote.currency,
   };
+}
+
+export type InstrumentOverviewSnapshot =
+  | {
+      symbol: string;
+      status: "ok";
+      name: string;
+      description: string;
+      exchange: string;
+      sector: string;
+      industry: string;
+      marketCap: number;
+      pe: number | null;
+      forwardPe: number | null;
+      eps: number | null;
+      dividendYield: number | null;
+      beta: number | null;
+      avgVolume: number;
+      profitMargin: number | null;
+      revenueGrowth: number | null;
+      week52High: number;
+      week52Low: number;
+      stale: boolean;
+    }
+  | { symbol: string; status: "unavailable"; reason: string };
+
+interface InstrumentOverviewMemoEntry {
+  snapshot: InstrumentOverviewSnapshot | null;
+  fetchedAtMs: number;
+  inFlight: Promise<InstrumentOverviewSnapshot> | null;
+}
+
+const INSTRUMENT_OVERVIEW_TTL_MS = 5 * 60_000;
+const instrumentOverviewMemo = new Map<string, InstrumentOverviewMemoEntry>();
+
+export async function getInstrumentOverviewSnapshot(
+  symbol: string,
+): Promise<InstrumentOverviewSnapshot> {
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) return { symbol: "", status: "unavailable", reason: "symbol is required" };
+
+  const existing = instrumentOverviewMemo.get(normalized);
+  if (existing?.snapshot && Date.now() - existing.fetchedAtMs < INSTRUMENT_OVERVIEW_TTL_MS) {
+    return existing.snapshot;
+  }
+  if (existing?.snapshot) {
+    if (!existing.inFlight) refreshInstrumentOverview(normalized, existing).catch(() => {});
+    return existing.snapshot;
+  }
+  if (existing?.inFlight) return existing.inFlight;
+
+  const entry = existing ?? { snapshot: null, fetchedAtMs: 0, inFlight: null };
+  return refreshInstrumentOverview(normalized, entry);
+}
+
+function refreshInstrumentOverview(
+  normalized: string,
+  entry: InstrumentOverviewMemoEntry,
+): Promise<InstrumentOverviewSnapshot> {
+  if (entry.inFlight) return entry.inFlight;
+  const inFlight = loadInstrumentOverviewSnapshot(normalized)
+    .then((snapshot) => {
+      entry.snapshot = snapshot;
+      entry.fetchedAtMs = Date.now();
+      return snapshot;
+    })
+    .finally(() => {
+      if (entry.inFlight === inFlight) entry.inFlight = null;
+    });
+  entry.inFlight = inFlight;
+  instrumentOverviewMemo.set(normalized, entry);
+  return inFlight;
+}
+
+async function loadInstrumentOverviewSnapshot(
+  normalized: string,
+): Promise<InstrumentOverviewSnapshot> {
+  const result = await wrapProvider("yahoo", () => getYahooCompanyOverview(normalized));
+  if (result.status === "unavailable") {
+    return { symbol: normalized, status: "unavailable", reason: result.reason };
+  }
+  return {
+    symbol: normalized,
+    status: "ok",
+    name: result.data.name,
+    description: result.data.description,
+    exchange: result.data.exchange,
+    sector: result.data.sector,
+    industry: result.data.industry,
+    marketCap: result.data.marketCap,
+    pe: result.data.pe,
+    forwardPe: result.data.forwardPe,
+    eps: result.data.eps,
+    dividendYield: result.data.dividendYield,
+    beta: result.data.beta,
+    avgVolume: result.data.avgVolume,
+    profitMargin: result.data.profitMargin,
+    revenueGrowth: result.data.revenueGrowth,
+    week52High: result.data.week52High,
+    week52Low: result.data.week52Low,
+    stale: result.stale === true,
+  };
+}
+
+export function resetInstrumentOverviewMemoForTests(): void {
+  instrumentOverviewMemo.clear();
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<
@@ -727,6 +839,7 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
       low: number;
       week52High: number;
       week52Low: number;
+      marketCap: number;
       fetchedAt: string;
       dataAsOf?: string;
       marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
@@ -765,6 +878,7 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
     low: result.data.low,
     week52High: result.data.week52High,
     week52Low: result.data.week52Low,
+    marketCap: result.data.marketCap,
     fetchedAt: result.timestamp,
     dataAsOf: freshness.providerDataAt,
     marketState: result.data.marketState,
