@@ -19,7 +19,9 @@ import {
 } from "./symbol-sections.jsx";
 import { useSymbolData } from "./use-symbol-data.js";
 
-const LazyMarketChart = lazy(() => import("../../components/market-chart.jsx"));
+const LazyMarketChart = lazy(() =>
+  import("../../components/market-chart.jsx").then((m) => ({ default: m.MarketChart })),
+);
 
 export default function SymbolPage({
   ticker,
