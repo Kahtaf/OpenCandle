@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
+import { formatPercent, formatPrice } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
@@ -77,7 +78,6 @@ export function IndicesStrip({
 
 function SignedPercent({ value }) {
   if (!Number.isFinite(value)) return <span className="text-xs text-muted-foreground">—</span>;
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return (
     <div
       className={cn(
@@ -85,18 +85,7 @@ function SignedPercent({ value }) {
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      {sign}
-      {Math.abs(value).toFixed(2)}%
+      {formatPercent(value, { decimals: 2, signed: true })}
     </div>
   );
-}
-
-function formatPrice(value, currency) {
-  if (!Number.isFinite(value)) return "—";
-  const amount = value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  if (!currency) return amount;
-  return currency === "USD" ? `$${amount}` : `${currency} ${amount}`;
 }

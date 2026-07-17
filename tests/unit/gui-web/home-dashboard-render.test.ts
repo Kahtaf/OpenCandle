@@ -111,10 +111,10 @@ describe("home dashboard widgets", () => {
     expect(html).toContain('aria-labelledby="home-portfolio-heading"');
     expect(html).toContain("$12,500.00");
     expect(html).toContain("Today&#x27;s move");
-    expect(html).toContain("↑");
-    expect(html).toContain("$100.00");
-    expect(html).toContain("$2500.00");
-    expect(html).toContain("25.00%");
+    expect(html).toContain("+$100.00 (+10.0%)");
+    expect(html).toContain("+$2,500.00 (+25.0%)");
+    expect(html).not.toContain("↑");
+    expect(html).not.toContain(" · ");
     expect(html).toContain("tabular-nums");
 
     const unavailableHtml = renderToStaticMarkup(
@@ -163,7 +163,7 @@ describe("home dashboard widgets", () => {
     expect(html).toContain("CAD 20,000.00");
     expect(html).not.toContain("25,000.00");
     expect(html).toContain("USD portfolios excluded");
-    expect(html).toContain("CAD 1000.00");
+    expect(html).toContain("+CAD 1,000.00 (+10.0%)");
   });
 
   it("uses the canonical primary currency instead of ranking unconverted nominal totals", () => {

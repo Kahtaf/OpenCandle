@@ -50,7 +50,16 @@ describe("MarketChart static shell", () => {
       expect(attributes).toContain("min-w-10");
       expect(attributes).toContain("active:scale-[0.96]");
     }
-    expect(buttons.find((match) => match[2] === "6M")?.[1]).toContain('aria-pressed="true"');
+    expect(buttons.find((match) => match[2] === "6M")?.[1]).toContain('aria-selected="true"');
+    expect(html).toContain('data-slot="market-chart-range-scroll"');
+    expect(html).toContain("overflow-x-auto");
+    expect(html).toContain('data-slot="market-chart-range-fade"');
+    expect(
+      html.match(/data-slot="market-chart-range-selector"[^>]*class="([^"]*)"/)?.[1],
+    ).not.toContain("absolute");
+    expect(html.indexOf('data-slot="market-chart-range-selector"')).toBeLessThan(
+      html.indexOf('data-slot="market-chart-plot"'),
+    );
     expect(html).not.toContain("transition-all");
   });
 
@@ -88,5 +97,23 @@ describe("MarketChart static shell", () => {
 
     expect(html).not.toContain("<iframe");
     expect(html).not.toMatch(/src="[^"]*tradingview\.com/i);
+  });
+
+  it("reserves a footer outside the plot for TradingView attribution", () => {
+    const html = renderChart();
+
+    expect(html).toContain('data-slot="market-chart-attribution"');
+    expect(html).toContain('href="https://www.tradingview.com/"');
+    expect(html.indexOf('data-slot="market-chart-plot"')).toBeLessThan(
+      html.indexOf('data-slot="market-chart-attribution"'),
+    );
+  });
+
+  it("renders a fixed sparse horizontal token grid over the plot", () => {
+    const html = renderChart();
+
+    expect(html).toContain('data-slot="market-chart-horizontal-grid"');
+    expect(html.match(/data-slot="market-chart-grid-row"/g)).toHaveLength(5);
+    expect(html).toContain("border-border/45");
   });
 });

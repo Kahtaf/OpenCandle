@@ -2,6 +2,12 @@ import { Pencil, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import {
+  formatNumber as formatFinancialNumber,
+  formatMoney,
+  formatPercent,
+  formatSignedMoney,
+} from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { quoteChangeDirections } from "./format.js";
 
@@ -157,7 +163,6 @@ export function SignedPercent({ value, decimals = 2 }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return (
     <span
       className={cn(
@@ -165,8 +170,7 @@ export function SignedPercent({ value, decimals = 2 }) {
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      {sign}
-      {Math.abs(value).toFixed(decimals)}%
+      {formatPercent(value, { decimals, signed: true })}
     </span>
   );
 }
@@ -175,7 +179,6 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return (
     <span
       className={cn(
@@ -183,10 +186,9 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      {sign}
-      {money(Math.abs(value), currency)}
+      {formatSignedMoney(value, currency)}
       {typeof percent === "number" && Number.isFinite(percent)
-        ? ` (${sign}${Math.abs(percent).toFixed(1)}%)`
+        ? ` (${formatPercent(percent, { decimals: 1, signed: true })})`
         : ""}
     </span>
   );
@@ -216,15 +218,15 @@ export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
       <ExtendedHoursChange
         change={quote.extendedChange}
         changePercent={quote.extendedChangePercent}
+        currency={currency}
       />
     </div>
   );
 }
 
-function ExtendedHoursChange({ change, changePercent }) {
+function ExtendedHoursChange({ change, changePercent, currency }) {
   if (!Number.isFinite(change) && !Number.isFinite(changePercent)) return null;
   const signedValue = Number.isFinite(change) ? change : changePercent;
-  const sign = signedValue > 0 ? "+" : signedValue < 0 ? "−" : "";
   const tone =
     signedValue > 0
       ? "text-success"
@@ -233,9 +235,11 @@ function ExtendedHoursChange({ change, changePercent }) {
         : "text-muted-foreground";
   return (
     <span className={cn("tabular-nums font-medium", tone)}>
-      {Number.isFinite(change) ? `${sign}${Math.abs(change).toFixed(2)}` : null}
+      {Number.isFinite(change) ? formatSignedMoney(change, currency) : null}
       {Number.isFinite(change) && Number.isFinite(changePercent) ? " " : null}
-      {Number.isFinite(changePercent) ? `(${sign}${Math.abs(changePercent).toFixed(2)}%)` : null}
+      {Number.isFinite(changePercent)
+        ? `(${formatPercent(changePercent, { decimals: 2, signed: true })})`
+        : null}
     </span>
   );
 }
@@ -416,12 +420,7 @@ export function RowActionButton({ action, disabled }) {
 }
 
 export function money(value, currency = "USD") {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  const formatted = value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return currency === "USD" ? `$${formatted}` : `${currency} ${formatted}`;
+  return formatMoney(value, currency);
 }
 
 export function moneyOrDash(value, currency = "USD") {
@@ -429,7 +428,7 @@ export function moneyOrDash(value, currency = "USD") {
 }
 
 export function formatNumber(value) {
-  return typeof value === "number" ? value.toLocaleString() : "—";
+  return formatFinancialNumber(value);
 }
 
 export function groupBy(items, key) {

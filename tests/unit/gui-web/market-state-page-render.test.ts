@@ -188,7 +188,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("+0.66%");
     expect(html).toContain("After hours");
     expect(html).toContain("$83.02");
-    expect(html).toContain("−0.53");
+    expect(html).toContain("−$0.53");
     expect(html).toContain("−0.64%");
     const extendedHoursQuoteClasses = html.match(
       /data-slot="extended-hours-quote" class="([^"]+)"/,
@@ -379,7 +379,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("NVIDIA Corporation quote name");
     expect(html).toContain("Pre-market");
     expect(html).toContain("$151.25");
-    expect(html).toContain("+1.25");
+    expect(html).toContain("+$1.25");
     expect(html).toContain("+0.83%");
     expect(html).toContain("transition-transform duration-150");
     expect(html).toContain('data-slot="portfolio-lot-reveal"');

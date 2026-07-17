@@ -10,10 +10,18 @@ import {
   LineSeries,
 } from "lightweight-charts";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  formatChartPrice,
+  formatCompactNumber,
+  formatNumber,
+  formatPrice,
+} from "../lib/financial-format.js";
 import { SERIES_COLORS } from "../lib/series-colors.js";
 import { cn } from "../lib/utils.js";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.jsx";
 
 const RANGE_LABELS = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
+const GRID_ROWS = ["20", "40", "60", "80", "100"];
 const TOKEN_NAMES = [
   "foreground",
   "muted-foreground",
@@ -27,12 +35,17 @@ const TOKEN_NAMES = [
 
 function readTokens() {
   const styles = getComputedStyle(document.documentElement);
-  return Object.fromEntries(
+  const tokens = Object.fromEntries(
     TOKEN_NAMES.map((name) => {
       const value = styles.getPropertyValue(`--tw-${name}`).trim();
       return [name.replaceAll("-", "_"), `hsl(${value})`];
     }),
   );
+  const mutedForeground = styles.getPropertyValue("--tw-muted-foreground").trim();
+  return {
+    ...tokens,
+    volume: `hsl(${mutedForeground} / 0.35)`,
+  };
 }
 
 function chartOptions(tokens) {
@@ -41,12 +54,18 @@ function chartOptions(tokens) {
     layout: {
       background: { type: "solid", color: tokens.card },
       textColor: tokens.muted_foreground,
+      attributionLogo: false,
     },
     grid: {
-      vertLines: { color: tokens.border },
-      horzLines: { color: tokens.border },
+      vertLines: { visible: false },
+      horzLines: { visible: false },
     },
-    rightPriceScale: { borderColor: tokens.border },
+    localization: { priceFormatter: formatChartPrice },
+    rightPriceScale: {
+      visible: true,
+      minimumWidth: 56,
+      borderColor: tokens.border,
+    },
     timeScale: { borderColor: tokens.border },
     crosshair: {
       vertLine: { color: tokens.muted_foreground, labelBackgroundColor: tokens.secondary },
@@ -81,7 +100,7 @@ function volumeSeriesOptions(tokens) {
     priceFormat: { type: "volume" },
     priceLineVisible: false,
     lastValueVisible: false,
-    color: tokens.muted_foreground,
+    color: tokens.volume,
   };
 }
 
@@ -104,13 +123,12 @@ function toIndexedData(item) {
 }
 
 function formatValue(value) {
-  if (!Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
+  return formatPrice(value, null);
 }
 
 function formatAriaValue(value) {
   if (!Number.isFinite(value)) return "unavailable";
-  return Number(value.toFixed(4)).toString();
+  return formatNumber(value, { maximumFractionDigits: 4 });
 }
 
 function formatTime(time, intraday) {
@@ -120,12 +138,6 @@ function formatTime(time, intraday) {
 
 function isIntraday(bars) {
   return bars.length > 1 && Number(bars[1].time) - Number(bars[0].time) < 86_400;
-}
-
-function nextRangeIndex(currentIndex, key) {
-  if (key === "ArrowRight") return (currentIndex + 1) % RANGE_LABELS.length;
-  if (key === "ArrowLeft") return (currentIndex - 1 + RANGE_LABELS.length) % RANGE_LABELS.length;
-  return currentIndex;
 }
 
 function makeAriaLabel(series, range) {
@@ -169,7 +181,6 @@ export function MarketChart({
   const colorBySymbolRef = useRef(null);
   const lineLabelElementsRef = useRef(null);
   const updateLineLabelsRef = useRef(() => {});
-  const rangeButtonRefs = useRef([]);
   const propsRef = useRef({ mode, renderedSeries });
   const [tooltip, setTooltip] = useState(null);
 
@@ -177,35 +188,6 @@ export function MarketChart({
   colorBySymbolRef.current ??= new Map();
   lineLabelElementsRef.current ??= new Map();
 
-  propsRef.current = { mode, renderedSeries };
-  updateLineLabelsRef.current = () => {
-    const chart = chartRef.current;
-    const current = propsRef.current;
-    const showLabels =
-      current.mode === "indexed" &&
-      current.renderedSeries.length >= 2 &&
-      current.renderedSeries.length <= 4;
-    if (!chart || !showLabels) return;
-    const timeScale = chart.timeScale();
-    const positions = [];
-    for (const item of current.renderedSeries) {
-      const element = lineLabelElementsRef.current.get(item.symbol);
-      const record = priceSeriesRef.current.get(item.symbol);
-      const last = toIndexedData(item).at(-1);
-      if (!element || !record || !last) continue;
-      const top = record.api.priceToCoordinate(last.value);
-      const left = timeScale.timeToCoordinate(last.time);
-      if (top == null || left == null) {
-        positions.push({ element, top: null, left: null });
-        continue;
-      }
-      positions.push({ element, top, left });
-    }
-    for (const { element, top, left } of positions) {
-      element.hidden = top == null || left == null;
-      if (!element.hidden) element.style.cssText = `top: ${top}px; left: ${left}px;`;
-    }
-  };
   if (mode === "indexed") {
     const usedColors = new Set(
       renderedSeries.flatMap((item) => {
@@ -223,6 +205,36 @@ export function MarketChart({
       }
     });
   }
+
+  useEffect(() => {
+    propsRef.current = { mode, renderedSeries };
+    updateLineLabelsRef.current = () => {
+      const chart = chartRef.current;
+      const showLabels =
+        mode === "indexed" && renderedSeries.length >= 2 && renderedSeries.length <= 4;
+      if (!chart || !showLabels) return;
+      const timeScale = chart.timeScale();
+      const positions = [];
+      for (const item of renderedSeries) {
+        const element = lineLabelElementsRef.current.get(item.symbol);
+        const record = priceSeriesRef.current.get(item.symbol);
+        const last = toIndexedData(item).at(-1);
+        if (!element || !record || !last) continue;
+        const top = record.api.priceToCoordinate(last.value);
+        const left = timeScale.timeToCoordinate(last.time);
+        if (top == null || left == null) {
+          positions.push({ element, top: null, left: null });
+          continue;
+        }
+        positions.push({ element, top, left });
+      }
+      for (const { element, top, left } of positions) {
+        element.hidden = top == null || left == null;
+        if (!element.hidden) element.style.cssText = `top: ${top}px; left: ${left}px;`;
+      }
+    };
+    updateLineLabelsRef.current();
+  }, [mode, renderedSeries]);
 
   useEffect(() => {
     const container = chartContainerRef.current;
@@ -263,7 +275,7 @@ export function MarketChart({
         }
       }
       const bar = primary?.bars.find((candidate) => candidate.time === param.time);
-      if (Number.isFinite(bar?.volume)) lines.push(`Volume ${formatValue(bar.volume)}`);
+      if (Number.isFinite(bar?.volume)) lines.push(`Volume ${formatCompactNumber(bar.volume)}`);
 
       setTooltip({ x: param.point.x, y: param.point.y, lines });
     };
@@ -280,11 +292,12 @@ export function MarketChart({
       tokensRef.current = nextTokens;
       chart.applyOptions(chartOptions(nextTokens));
       const current = propsRef.current;
+      const seriesBySymbol = new Map(current.renderedSeries.map((item) => [item.symbol, item]));
       for (const [symbol, record] of priceSeriesRef.current) {
         if (current.mode === "indexed") {
           record.api.applyOptions({ color: colorBySymbolRef.current.get(symbol) });
         } else {
-          const item = current.renderedSeries.find((candidate) => candidate.symbol === symbol);
+          const item = seriesBySymbol.get(symbol);
           record.api.applyOptions(singleSeriesOptions(current.mode, item?.bars ?? [], nextTokens));
         }
       }
@@ -376,7 +389,7 @@ export function MarketChart({
     if (mode !== "indexed" && showVolume && primary) {
       if (!volumeSeriesRef.current) {
         volumeSeriesRef.current = chart.addSeries(HistogramSeries, volumeSeriesOptions(tokens));
-        chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+        chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0.02 } });
       }
       volumeSeriesRef.current.setData(
         primary.bars.map(({ time, volume }) => ({ time, value: volume ?? 0 })),
@@ -392,110 +405,134 @@ export function MarketChart({
   }, [mode, prevClose, renderedSeries, showVolume]);
 
   const ariaLabel = makeAriaLabel(renderedSeries, range);
-  const activeRangeIndex = Math.max(0, RANGE_LABELS.indexOf(range));
+  const activeRange = RANGE_LABELS.includes(range) ? range : RANGE_LABELS[0];
 
   return (
     <section
       aria-label={ariaLabel}
       data-slot="market-chart"
-      className={cn("relative overflow-hidden", className)}
+      className={cn("relative flex min-h-0 flex-col overflow-hidden tabular-nums", className)}
       style={{ height }}
     >
-      <div ref={chartContainerRef} className="absolute inset-0" aria-hidden="true" />
-
-      {renderedSeries.length >= 2 ? (
-        <div
-          data-slot="market-chart-legend"
-          className="pointer-events-none absolute left-2 top-2 z-10 flex flex-wrap gap-x-3 gap-y-1 rounded-md bg-card/90 px-2 py-1 text-xs tabular-nums"
-        >
-          {renderedSeries.map((item) => (
-            <div
-              key={item.symbol}
-              data-symbol={item.symbol}
-              className="inline-flex items-center gap-1.5"
-            >
-              <span
-                data-slot="series-color-dot"
-                className="size-2 rounded-full"
-                style={{ backgroundColor: colorBySymbolRef.current.get(item.symbol) }}
-                aria-hidden="true"
-              />
-              <span className="text-muted-foreground">{item.symbol}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {mode === "indexed" && renderedSeries.length >= 2 && renderedSeries.length <= 4 ? (
-        <div className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
-          {renderedSeries.map((item) => (
-            <div
-              key={item.symbol}
-              ref={(element) => {
-                if (element) lineLabelElementsRef.current.set(item.symbol, element);
-                else lineLabelElementsRef.current.delete(item.symbol);
-              }}
-              data-slot="market-chart-line-label"
-              className="absolute inline-flex -translate-y-1/2 items-center gap-1 rounded bg-card/90 px-1.5 py-0.5 text-[11px] tabular-nums text-foreground"
-            >
-              <span
-                className="size-1.5 rounded-full"
-                style={{ backgroundColor: colorBySymbolRef.current.get(item.symbol) }}
-              />
-              <span>{item.symbol}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {tooltip ? (
-        <div
-          data-slot="market-chart-tooltip"
-          className="pointer-events-none absolute z-20 rounded-md border border-border bg-card/95 px-2 py-1 text-xs tabular-nums text-foreground shadow-subtle-xs"
-          style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
-        >
-          {tooltip.lines.map((line) => (
-            <div key={line}>{line}</div>
-          ))}
-        </div>
-      ) : null}
-
       {onRangeChange ? (
-        <div
+        <Tabs
+          value={activeRange}
+          onValueChange={onRangeChange}
           data-slot="market-chart-range-selector"
-          className="absolute bottom-2 right-2 z-10 flex max-w-[calc(100%-1rem)] gap-1 overflow-x-auto rounded-lg bg-card/90 p-1"
+          className="relative flex min-h-12 flex-none items-center justify-end border-b border-border bg-card"
         >
-          {RANGE_LABELS.map((label, index) => (
-            <button
-              key={label}
-              ref={(node) => {
-                rangeButtonRefs.current[index] = node;
-              }}
-              type="button"
-              aria-pressed={range === label}
-              tabIndex={index === activeRangeIndex ? 0 : -1}
-              className={cn(
-                "min-h-10 min-w-10 rounded-md px-2 text-xs font-medium transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96]",
-                range === label
-                  ? "bg-foreground text-background shadow-subtle-xs"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-              )}
-              onClick={() => onRangeChange(label)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                  event.preventDefault();
-                  rangeButtonRefs.current[nextRangeIndex(index, event.key)]?.focus();
-                } else if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onRangeChange(label);
-                }
-              }}
-            >
-              {label}
-            </button>
+          <div
+            data-slot="market-chart-range-scroll"
+            className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <TabsList className="ml-auto h-10 w-max min-w-full justify-end bg-transparent p-0">
+              {RANGE_LABELS.map((label) => (
+                <TabsTrigger
+                  key={label}
+                  value={label}
+                  tabIndex={label === activeRange ? 0 : -1}
+                  className="min-h-10 min-w-10 px-2 text-xs transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.96]"
+                >
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <span
+            data-slot="market-chart-range-fade"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-card to-transparent sm:hidden"
+          />
+        </Tabs>
+      ) : null}
+
+      <div data-slot="market-chart-plot" className="relative min-h-0 flex-1 overflow-hidden">
+        <div ref={chartContainerRef} className="absolute inset-0" aria-hidden="true" />
+        <div
+          data-slot="market-chart-horizontal-grid"
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-7 left-0 right-14 top-0 z-[1] grid grid-rows-5"
+        >
+          {GRID_ROWS.map((row) => (
+            <span
+              key={row}
+              data-slot="market-chart-grid-row"
+              className="border-b border-border/45"
+            />
           ))}
         </div>
-      ) : null}
+
+        {renderedSeries.length >= 2 ? (
+          <div
+            data-slot="market-chart-legend"
+            className="pointer-events-none absolute left-2 top-2 z-10 flex flex-wrap gap-x-3 gap-y-1 rounded-md bg-card/90 px-2 py-1 text-xs tabular-nums"
+          >
+            {renderedSeries.map((item) => (
+              <div
+                key={item.symbol}
+                data-symbol={item.symbol}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span
+                  data-slot="series-color-dot"
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: colorBySymbolRef.current.get(item.symbol) }}
+                  aria-hidden="true"
+                />
+                <span className="text-muted-foreground">{item.symbol}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {mode === "indexed" && renderedSeries.length >= 2 && renderedSeries.length <= 4 ? (
+          <div className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
+            {renderedSeries.map((item) => (
+              <div
+                key={item.symbol}
+                ref={(element) => {
+                  if (element) lineLabelElementsRef.current.set(item.symbol, element);
+                  else lineLabelElementsRef.current.delete(item.symbol);
+                }}
+                data-slot="market-chart-line-label"
+                className="absolute inline-flex -translate-y-1/2 items-center gap-1 rounded bg-card/90 px-1.5 py-0.5 text-[11px] tabular-nums text-foreground"
+              >
+                <span
+                  className="size-1.5 rounded-full"
+                  style={{ backgroundColor: colorBySymbolRef.current.get(item.symbol) }}
+                />
+                <span>{item.symbol}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {tooltip ? (
+          <div
+            data-slot="market-chart-tooltip"
+            className="pointer-events-none absolute z-20 rounded-md border border-border bg-card/95 px-2 py-1 text-xs tabular-nums text-foreground shadow-subtle-xs"
+            style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
+          >
+            {tooltip.lines.map((line) => (
+              <div key={line}>{line}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        data-slot="market-chart-attribution"
+        className="flex h-10 flex-none items-center border-t border-border bg-card px-2"
+      >
+        <a
+          href="https://www.tradingview.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex min-h-10 items-center rounded-sm px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Charts by TradingView
+        </a>
+      </div>
     </section>
   );
 }

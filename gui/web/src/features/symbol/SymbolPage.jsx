@@ -13,6 +13,7 @@ import {
   AlertsCard,
   AnalyzePanel,
   KeyStats,
+  LimitedStatsNotice,
   PositionCard,
   SymbolHeader,
   WatchlistMembership,
@@ -133,7 +134,7 @@ export function SymbolPageView({
 
               <fieldset aria-label="Price chart" className="m-0 min-w-0 border-0 p-0">
                 <Panel title="Price chart">
-                  <div className="min-w-0 overflow-x-auto">
+                  <div className="min-w-0">
                     {data.historyLoading && !data.history ? (
                       <ChartSkeleton />
                     ) : (
@@ -147,14 +148,15 @@ export function SymbolPageView({
                           range={range}
                           onRangeChange={onRangeChange}
                           showVolume
-                          height={360}
-                          className="min-w-[560px]"
+                          height={420}
                         />
                       </Suspense>
                     )}
                   </div>
                 </Panel>
               </fieldset>
+
+              {isNonEquitySymbol(ticker) ? <LimitedStatsNotice ticker={ticker} /> : null}
 
               {showEquitySections ? (
                 <>
@@ -226,7 +228,7 @@ function ChartSkeleton() {
     <Skeleton
       data-slot="symbol-chart-skeleton"
       aria-label="Loading price chart"
-      className="h-[360px] min-w-[560px] rounded-none"
+      className="h-[420px] rounded-none"
     />
   );
 }

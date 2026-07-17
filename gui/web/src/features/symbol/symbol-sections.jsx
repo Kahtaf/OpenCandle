@@ -1,19 +1,23 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
 import { buttonVariants } from "../../components/ui/button-variants.js";
+import {
+  formatCompactMoney,
+  formatCompactNumber,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+} from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
 import {
   Badge,
   ExtendedHoursQuote,
-  formatNumber,
-  money,
   Panel,
   SignedMoney,
   SignedPercent,
   StatusDot,
 } from "../market-state/shared.jsx";
-import { formatLargeNumber } from "../renderers/cards/card-format.js";
 import { analyzePromptsForSymbol } from "./symbol-prompts.js";
 
 export function SymbolHeader({ ticker, quote, overview, flashClass }) {
@@ -23,6 +27,9 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
   const DirectionIcon = direction === "down" ? ArrowDown : ArrowUp;
   const staleBadge = quote?.status === "ok" ? degradedQuoteBadge([quote]) : null;
   const marketStateLabel = marketStateText(quote?.marketState);
+  const hasExtendedQuote =
+    (quote?.marketState === "PRE" || quote?.marketState === "POST") &&
+    Number.isFinite(quote?.extendedPrice);
 
   return (
     <fieldset
@@ -32,23 +39,19 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
     >
       <Panel>
         <div className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div data-slot="symbol-identity" className="min-w-0">
             <h1
               id="symbol-heading"
               className="text-balance text-xl font-semibold text-foreground sm:text-2xl"
             >
-              {overview?.name || quote?.name || ticker}{" "}
-              <span className="text-muted-foreground">({ticker})</span>
+              {overview?.name || quote?.name || ticker}
             </h1>
-            <div className="flex flex-wrap items-center gap-2">
-              {marketStateLabel ? <Badge>{marketStateLabel}</Badge> : null}
-              {staleBadge ? <Badge tone="warn">{staleBadge}</Badge> : null}
-            </div>
+            <div className="mt-1 text-xs font-medium text-muted-foreground">{ticker}</div>
           </div>
           <div className={cn("mt-5 rounded-md px-1 py-1", flashClass)} data-slot="symbol-price-row">
             <div className="flex flex-wrap items-end gap-3">
               <span className="text-4xl font-semibold leading-none tabular-nums text-foreground sm:text-5xl">
-                {money(quote?.price, currency)}
+                {formatMoney(quote?.price, currency)}
               </span>
               <span className="pb-0.5 text-xs font-medium text-muted-foreground">{currency}</span>
               {quote?.status === "ok" && Number.isFinite(change) ? (
@@ -69,7 +72,21 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
                 </span>
               ) : null}
             </div>
-            <ExtendedHoursQuote quote={quote} currency={currency} className="justify-start" />
+          </div>
+          <div
+            data-slot="symbol-session-line"
+            className="mt-2 flex min-h-7 flex-wrap items-center gap-2 px-1"
+          >
+            {hasExtendedQuote ? (
+              <ExtendedHoursQuote
+                quote={quote}
+                currency={currency}
+                className="mt-0 justify-start"
+              />
+            ) : marketStateLabel ? (
+              <Badge>{marketStateLabel}</Badge>
+            ) : null}
+            {staleBadge ? <Badge tone="warn">{staleBadge}</Badge> : null}
           </div>
         </div>
       </Panel>
@@ -80,30 +97,29 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
 export function KeyStats({ overview, currency = "USD" }) {
   if (overview?.status !== "ok") return null;
   const stats = [
-    [
-      "Market cap",
-      overview.marketCap,
-      (value) => `${currency === "USD" ? "$" : `${currency} `}${formatLargeNumber(value)}`,
-    ],
+    ["Market cap", overview.marketCap, (value) => formatCompactMoney(value, currency)],
     ["Trailing P/E", overview.pe, formatDecimal],
     ["Forward P/E", overview.forwardPe, formatDecimal],
-    ["EPS", overview.eps, (value) => money(value, currency)],
+    ["EPS", overview.eps, (value) => formatMoney(value, currency)],
     ["Dividend yield", overview.dividendYield, formatRatioPercent],
     ["Beta", overview.beta, formatDecimal],
-    ["Average volume", overview.avgVolume, formatNumber],
+    ["Average volume", overview.avgVolume, formatCompactNumber],
     ["Profit margin", overview.profitMargin, formatRatioPercent],
     ["Revenue growth", overview.revenueGrowth, formatRatioPercent],
-    ["52-week high", overview.week52High, (value) => money(value, currency)],
-    ["52-week low", overview.week52Low, (value) => money(value, currency)],
+    ["52-week high", overview.week52High, (value) => formatMoney(value, currency)],
+    ["52-week low", overview.week52Low, (value) => formatMoney(value, currency)],
   ].filter(([, value]) => Number.isFinite(value) && value !== 0);
   if (stats.length === 0) return null;
 
   return (
     <fieldset aria-label="Key stats" className="m-0 min-w-0 border-0 p-0">
       <Panel title="Key stats">
-        <dl className="divide-y divide-border/70 px-4">
+        <dl className="grid grid-cols-1 px-4 md:grid-cols-2 xl:grid-cols-3">
           {stats.map(([label, value, formatter]) => (
-            <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-3">
+            <div
+              key={label}
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border/70 py-3 md:px-4"
+            >
               <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
               <dd className="text-right tabular-nums text-sm text-foreground">
                 {formatter(value)}
@@ -117,15 +133,24 @@ export function KeyStats({ overview, currency = "USD" }) {
 }
 
 function formatDecimal(value) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+  return formatNumber(value, { maximumFractionDigits: 2 });
 }
 
 function formatRatioPercent(value) {
-  return new Intl.NumberFormat("en-US", {
-    style: "percent",
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 2,
-  }).format(value);
+  return formatPercent(value, { decimals: 2, ratio: true });
+}
+
+export function LimitedStatsNotice({ ticker }) {
+  const message = ticker.trim().toUpperCase().startsWith("^")
+    ? "Fundamental stats aren't available for market indices."
+    : "Fundamental stats aren't available for crypto assets.";
+  return (
+    <fieldset aria-label="Fundamental data availability" className="m-0 min-w-0 border-0 p-0">
+      <Panel title="Key stats">
+        <p className="flex min-h-24 items-center p-4 text-sm text-muted-foreground">{message}</p>
+      </Panel>
+    </fieldset>
+  );
 }
 
 export function PositionCard({ ticker, positionRows = [] }) {
@@ -136,8 +161,8 @@ export function PositionCard({ ticker, positionRows = [] }) {
         {row ? (
           <dl className="divide-y divide-border/70 px-4 text-sm">
             <ContextMetric
-              label={`${row.totalQuantity.toLocaleString()} shares @ ${money(row.blendedCost, row.currency)}`}
-              value={money(row.marketValue, row.currency)}
+              label={`${formatNumber(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
+              value={formatMoney(row.marketValue, row.currency)}
             />
             <ContextMetric
               label="Unrealized gain/loss"
@@ -279,8 +304,8 @@ function ContextMetric({ label, value }) {
 
 function marketStateText(marketState) {
   if (marketState === "REGULAR") return "Regular market";
-  if (marketState === "PRE") return "Pre-market session";
-  if (marketState === "POST") return "After-hours session";
+  if (marketState === "PRE") return "Pre-market";
+  if (marketState === "POST") return "After hours";
   if (marketState === "CLOSED") return "Market closed";
   return null;
 }

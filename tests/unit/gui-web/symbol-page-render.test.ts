@@ -171,6 +171,11 @@ describe("symbol page", () => {
 
     expect(html).toContain('data-slot="extended-hours-quote"');
     expect(html).toContain("Pre-market");
+    expect(html).toContain('data-slot="symbol-session-line"');
+    expect(html.indexOf('data-slot="symbol-session-line"')).toBeGreaterThan(
+      html.indexOf('data-slot="symbol-price-row"'),
+    );
+    expect(html).not.toContain("Pre-market session");
   });
 
   it("renders available key stats as a divided definition list and omits provider placeholders", () => {
@@ -197,7 +202,9 @@ describe("symbol page", () => {
     expect(html).toContain("<dl");
     expect(html).toContain("<dt");
     expect(html).toContain("<dd");
-    expect(html).toContain("divide-y");
+    expect(html).toContain("md:grid-cols-2");
+    expect(html).toContain("xl:grid-cols-3");
+    expect(html).toContain("border-b");
     expect(html).toContain("text-muted-foreground");
     expect(html).toContain("text-right tabular-nums");
     expect(html).toContain("Forward P/E");
@@ -383,7 +390,10 @@ describe("symbol page", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
-  it.each(["BTC-USD", "^GSPC"])("renders %s as header and chart only", (ticker) => {
+  it.each([
+    ["BTC-USD", "Fundamental stats aren&#x27;t available for crypto assets."],
+    ["^GSPC", "Fundamental stats aren&#x27;t available for market indices."],
+  ])("renders %s with an explicit limited-data note", (ticker, note) => {
     const html = renderSymbolPage({
       ticker,
       data: okSymbolData(ticker, { overview: { status: "unavailable", reason: "N/A" } }),
@@ -392,6 +402,8 @@ describe("symbol page", () => {
     expect(html).toContain(ticker);
     expect(html).toContain('data-slot="test-chart"');
     expect(html).not.toContain('aria-label="Key stats"');
+    expect(html).toContain('aria-label="Fundamental data availability"');
+    expect(html).toContain(note);
     expect(html).not.toContain('aria-label="Position"');
     expect(html).not.toContain('aria-label="Analyze"');
   });
@@ -462,7 +474,7 @@ describe("symbol page", () => {
     const indices = labels.map((label) => html.indexOf(`aria-label="${label}"`));
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
     expect(html).toContain('aria-label="Watchlist membership"');
-    expect(html).toContain("overflow-x-auto");
+    expect(html).not.toContain("min-w-[560px]");
     expect(html.match(/<main[^>]*overflow-x-auto/g)).toBeNull();
   });
 
