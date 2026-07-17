@@ -377,11 +377,12 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
     isFundOrIndexAssetScope(resolution.resolved.assetScope) || areLikelyFundOrIndexSymbols(symbols);
   const shouldProbeFundOverlap =
     !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
+  const technicalEndStep = shouldProbeFundOverlap ? 7 : 6;
   const sentimentStep = includeSentiment
-    ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
+    ? `\n${technicalEndStep + 1}. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
   const interestRateStep = isInterestRateSensitive
-    ? `\n${includeSentiment ? "7" : "6"}. Use get_economic_data for the current Fed funds backdrop. Treat this as historical/current context unless you also have explicit futures or forecast evidence.`
+    ? `\n${technicalEndStep + (includeSentiment ? 2 : 1)}. Use get_economic_data for the current Fed funds backdrop. Treat this as historical/current context unless you also have explicit futures or forecast evidence.`
     : "";
   const sentimentMetric = includeSentiment ? ", sentiment score/summary" : "";
   const interestRateGuidance = isInterestRateSensitive
@@ -431,23 +432,23 @@ macro hedge decision guidance:
         : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.`;
   const technicalRiskSteps = isOverlapComparison
-    ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
-4. Use analyze_correlation across [${symbolList}] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
-5. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
+    ? `4. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
+5. Use analyze_correlation across [${symbolList}] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
+6. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
     : shouldProbeFundOverlap
-      ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
-4. Use analyze_correlation across [${symbolList}] as supporting diversification evidence.
-5. Use analyze_risk for each to compare long-horizon risk context.
-6. Use get_technical_indicators only as secondary timing context; do not let RSI or short-term momentum dominate the long-horizon fund decision.`
-      : `3. Use get_technical_indicators for each to compare momentum and trend.
-4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.`;
+      ? `4. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
+5. Use analyze_correlation across [${symbolList}] as supporting diversification evidence.
+6. Use analyze_risk for each to compare long-horizon risk context.
+7. Use get_technical_indicators only as secondary timing context; do not let RSI or short-term momentum dominate the long-horizon fund decision.`
+      : `4. Use get_technical_indicators for each to compare momentum and trend.
+5. Use analyze_risk for each to compare risk metrics.
+6. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
   const budgetLine = budget !== undefined ? `\nBudget: ${formatBudget(budget)}` : "";
   const horizonSteps = timeHorizon
     ? `
-6. Adapt the comparison to the ${timeHorizon} horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
-7. Use historical risk and technical metrics as context, but explain what they do and do not imply over ${timeHorizon}.`
+${technicalEndStep + (includeSentiment ? 1 : 0) + (isInterestRateSensitive ? 1 : 0) + 1}. Adapt the comparison to the ${timeHorizon} horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
+${technicalEndStep + (includeSentiment ? 1 : 0) + (isInterestRateSensitive ? 1 : 0) + 2}. Use historical risk and technical metrics as context, but explain what they do and do not imply over ${timeHorizon}.`
     : "";
   const horizonResponse = timeHorizon
     ? `
@@ -487,6 +488,7 @@ Compare these assets side by side: ${symbolList}${horizonLine}${budgetLine}
 Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
+3. Use get_price_comparison with symbols [${symbolList}] and a range that fits the resolved time horizon; use the default comparison range when no time horizon is resolved so the answer includes an indexed price comparison.
 ${technicalRiskSteps}${sentimentStep}${interestRateStep}${horizonSteps}
 ${macroHedgeSteps}
 ${interestRateGuidance}

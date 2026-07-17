@@ -24,6 +24,23 @@ export const HISTORY_RANGES = [
 ] as const;
 export const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
 
+export async function fetchHistoryWithFallback(
+  symbol: string,
+  range: (typeof HISTORY_RANGES)[number],
+  interval: (typeof HISTORY_INTERVALS)[number],
+): Promise<ProviderResult<OHLCV[]>> {
+  const apiKey = getConfig().alphaVantageApiKey;
+
+  if (DAILY_INTERVALS.has(interval) && apiKey) {
+    return withFallback([
+      { provider: "yahoo", fn: () => getHistory(symbol, range, interval) },
+      { provider: "alphavantage", fn: () => getDailyHistory(symbol, apiKey, range) },
+    ]);
+  }
+
+  return wrapProvider("yahoo", () => getHistory(symbol, range, interval));
+}
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   range: Type.Optional(
@@ -53,20 +70,7 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
     const symbol = args.symbol.toUpperCase();
     const range = args.range ?? "6mo";
     const interval = args.interval ?? "1d";
-    const apiKey = getConfig().alphaVantageApiKey;
-
-    let result: ProviderResult<OHLCV[]>;
-
-    if (DAILY_INTERVALS.has(interval) && apiKey) {
-      // Daily or above — can fall back to Alpha Vantage
-      result = await withFallback([
-        { provider: "yahoo", fn: () => getHistory(symbol, range, interval) },
-        { provider: "alphavantage", fn: () => getDailyHistory(symbol, apiKey, range) },
-      ]);
-    } else {
-      // Intraday — no cross-provider fallback
-      result = await wrapProvider("yahoo", () => getHistory(symbol, range, interval));
-    }
+    const result = await fetchHistoryWithFallback(symbol, range, interval);
 
     if (result.status === "unavailable") {
       const intradayNote = !DAILY_INTERVALS.has(interval)
