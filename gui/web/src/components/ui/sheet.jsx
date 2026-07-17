@@ -57,10 +57,10 @@ const mobileWidthClasses = {
 };
 
 export const SHEET_OVERLAY_CLASS =
-  "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain";
+  "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in";
 
 export const BOTTOM_SHEET_SURFACE_CLASS =
-  "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md outline-none overscroll-contain";
+  "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md outline-none overscroll-contain data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in";
 
 export const BOTTOM_SHEET_HANDLE_CLASS = "mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard";
 
@@ -75,14 +75,14 @@ export function SheetContent({
   if (isDesktop) {
     return (
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
+        <DialogPrimitive.Overlay className={SHEET_OVERLAY_CLASS} />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           data-side={side}
           className={cn(
             side === "right"
-              ? "fixed inset-y-0 right-0 z-50 flex h-dvh w-[min(400px,calc(100vw-16px))] max-w-[400px] flex-col overflow-hidden rounded-l-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-200 data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-150 data-[state=closed]:ease-in"
-              : "fixed left-1/2 top-1/2 z-50 flex max-h-[min(84dvh,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+              ? "fixed inset-y-0 right-0 z-50 flex h-dvh w-[min(400px,calc(100vw-16px))] max-w-[400px] flex-col overflow-hidden rounded-l-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in"
+              : "fixed left-1/2 top-1/2 z-50 flex max-h-[min(84dvh,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
             side === "right" ? null : (desktopWidthClasses[width] ?? desktopWidthClasses.md),
             className,
           )}

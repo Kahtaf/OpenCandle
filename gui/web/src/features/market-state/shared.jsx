@@ -1,7 +1,14 @@
 import { Pencil, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import { Card } from "../../components/ui/card.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import {
+  formatNumber as formatFinancialNumber,
+  formatMoney,
+  formatPercent,
+  formatSignedMoney,
+} from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { quoteChangeDirections } from "./format.js";
 
@@ -9,6 +16,8 @@ import { quoteChangeDirections } from "./format.js";
 export function ConfirmButton({
   label,
   confirmLabel = "Confirm?",
+  icon,
+  ariaLabel,
   disabled,
   onConfirm,
   variant = "ghost",
@@ -28,6 +37,8 @@ export function ConfirmButton({
       type="button"
       variant={armed ? "bordered" : variant}
       size={size}
+      icon={armed ? undefined : icon}
+      aria-label={armed ? confirmLabel : ariaLabel}
       className={cn(armed && "border-destructive/40 text-destructive", className)}
       disabled={disabled}
       onClick={() => {
@@ -39,36 +50,59 @@ export function ConfirmButton({
         }
       }}
     >
-      {armed ? confirmLabel : label}
+      <span className={cn(icon && !armed && "sr-only")}>{armed ? confirmLabel : label}</span>
     </Button>
   );
 }
 
-export function Panel({ title, count, meta, actions, children }) {
+export function Panel({
+  title,
+  count,
+  meta,
+  actions,
+  children,
+  headingLevel = "h2",
+  headingId,
+  headingClassName,
+}) {
   const hasDetails = title || count !== undefined || meta;
   const hasHeader = hasDetails || actions;
+  const Heading = headingLevel;
 
   return (
-    <section className="rounded-xl border border-border bg-card shadow-subtle-xs">
-      {hasHeader ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-          {hasDetails ? (
-            <div className="flex min-w-0 items-center gap-2">
-              {title ? (
-                <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
-              ) : null}
-              {count !== undefined ? (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                  {count}
-                </span>
-              ) : null}
-              {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
-            </div>
-          ) : null}
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-        </div>
-      ) : null}
-      {children}
+    <section>
+      <Card data-slot="panel-card" className="overflow-hidden rounded-xl shadow-subtle-xs">
+        {hasHeader ? (
+          <div
+            data-slot="panel-header"
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"
+          >
+            {hasDetails ? (
+              <div className="flex min-w-0 items-center gap-2">
+                {title ? (
+                  <Heading
+                    id={headingId}
+                    className={cn(
+                      "text-balance text-sm font-semibold text-foreground",
+                      headingClassName,
+                    )}
+                  >
+                    {title}
+                  </Heading>
+                ) : null}
+                {count !== undefined ? (
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                    {count}
+                  </span>
+                ) : null}
+                {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+              </div>
+            ) : null}
+            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          </div>
+        ) : null}
+        {children}
+      </Card>
     </section>
   );
 }
@@ -157,7 +191,6 @@ export function SignedPercent({ value, decimals = 2 }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return (
     <span
       className={cn(
@@ -165,8 +198,7 @@ export function SignedPercent({ value, decimals = 2 }) {
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      {sign}
-      {Math.abs(value).toFixed(decimals)}%
+      {formatPercent(value, { decimals, signed: true })}
     </span>
   );
 }
@@ -175,7 +207,6 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return (
     <span
       className={cn(
@@ -183,10 +214,9 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      {sign}
-      {money(Math.abs(value), currency)}
+      {formatSignedMoney(value, currency)}
       {typeof percent === "number" && Number.isFinite(percent)
-        ? ` (${sign}${Math.abs(percent).toFixed(1)}%)`
+        ? ` (${formatPercent(percent, { decimals: 1, signed: true })})`
         : ""}
     </span>
   );
@@ -202,29 +232,43 @@ export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
     return null;
   }
   const isPreMarket = quote.marketState === "PRE";
+  const hasChange =
+    Number.isFinite(quote.extendedChangePercent) || Number.isFinite(quote.extendedChange);
   return (
     <div
       data-slot="extended-hours-quote"
-      className={cn("mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px]", className)}
+      className={cn(
+        "mt-1 flex max-w-full items-center justify-end gap-1 whitespace-nowrap text-[11px] leading-4",
+        className,
+      )}
     >
-      <Badge tone={isPreMarket ? "warn" : "info"} className="h-[18px] px-1.5 text-[10px]">
-        {isPreMarket ? "Pre-market" : "After hours"}
-      </Badge>
-      <span className="tabular-nums text-muted-foreground">
-        {money(quote.extendedPrice, currency)}
-      </span>
-      <ExtendedHoursChange
-        change={quote.extendedChange}
-        changePercent={quote.extendedChangePercent}
+      <span
+        data-slot="extended-session-dot"
+        className={cn("size-1.5 shrink-0 rounded-full", isPreMarket ? "bg-warning" : "bg-info")}
+        aria-hidden="true"
       />
+      <span className="truncate text-muted-foreground">
+        {isPreMarket ? "Pre-market" : "After hours"} {money(quote.extendedPrice, currency)}
+      </span>
+      {hasChange ? (
+        <span className="text-muted-foreground" aria-hidden="true">
+          ·
+        </span>
+      ) : null}
+      {hasChange ? (
+        <ExtendedHoursChange
+          change={quote.extendedChange}
+          changePercent={quote.extendedChangePercent}
+          currency={currency}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ExtendedHoursChange({ change, changePercent }) {
+function ExtendedHoursChange({ change, changePercent, currency }) {
   if (!Number.isFinite(change) && !Number.isFinite(changePercent)) return null;
   const signedValue = Number.isFinite(change) ? change : changePercent;
-  const sign = signedValue > 0 ? "+" : signedValue < 0 ? "−" : "";
   const tone =
     signedValue > 0
       ? "text-success"
@@ -233,9 +277,9 @@ function ExtendedHoursChange({ change, changePercent }) {
         : "text-muted-foreground";
   return (
     <span className={cn("tabular-nums font-medium", tone)}>
-      {Number.isFinite(change) ? `${sign}${Math.abs(change).toFixed(2)}` : null}
-      {Number.isFinite(change) && Number.isFinite(changePercent) ? " " : null}
-      {Number.isFinite(changePercent) ? `(${sign}${Math.abs(changePercent).toFixed(2)}%)` : null}
+      {Number.isFinite(changePercent)
+        ? formatPercent(changePercent, { decimals: 2, signed: true })
+        : formatSignedMoney(change, currency)}
     </span>
   );
 }
@@ -255,9 +299,10 @@ export function StatusDot({ tone, label }) {
   );
 }
 
-export function Badge({ tone = "neutral", children, className }) {
+export function Badge({ tone = "neutral", children, className, ...props }) {
   return (
     <span
+      {...props}
       className={cn(
         "inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11px] font-medium",
         tone === "warn"
@@ -297,7 +342,7 @@ export function useQuoteChangeFlash(quotes) {
 export function quoteFlashClass(direction) {
   if (!direction) return "";
   return cn(
-    "transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
+    "number-cross-fade transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
     direction === "up" ? "bg-success/[0.08]" : "bg-destructive/[0.08]",
   );
 }
@@ -310,8 +355,10 @@ export function StateTabs({
   renameLabel,
   onSelect,
   onRename,
+  compactSingle = false,
 }) {
   const tabRefs = useRef(new Map());
+  const singleItem = compactSingle && items.length === 1;
 
   const onTabKeyDown = (event, index) => {
     const nextIndex = nextStateTabIndex(index, items.length, event.key);
@@ -325,7 +372,8 @@ export function StateTabs({
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
       <div
-        className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        data-slot={singleItem ? "single-state-tab" : "state-tabs"}
+        className={cn("flex min-w-0 gap-1 overflow-x-auto", singleItem ? "flex-none" : "flex-1")}
         role="tablist"
         aria-orientation="horizontal"
       >
@@ -343,16 +391,18 @@ export function StateTabs({
                 else tabRefs.current.delete(item.id);
               }}
               className={cn(
-                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] md:min-h-8",
+                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
               )}
               onClick={() => onSelect(item.id)}
               onKeyDown={(event) => onTabKeyDown(event, index)}
             >
               <span>{item.name}</span>
-              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                {counts.get(item.id) ?? 0}
-              </span>
+              {!singleItem ? (
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {counts.get(item.id) ?? 0}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -407,6 +457,7 @@ export function RowActionButton({ action, disabled }) {
       type="button"
       variant="ghost"
       size="xs"
+      className="min-h-10"
       disabled={blockedByReadOnly || normalized.disabled}
       onClick={normalized.onClick}
     >
@@ -416,12 +467,7 @@ export function RowActionButton({ action, disabled }) {
 }
 
 export function money(value, currency = "USD") {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  const formatted = value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return currency === "USD" ? `$${formatted}` : `${currency} ${formatted}`;
+  return formatMoney(value, currency);
 }
 
 export function moneyOrDash(value, currency = "USD") {
@@ -429,7 +475,7 @@ export function moneyOrDash(value, currency = "USD") {
 }
 
 export function formatNumber(value) {
-  return typeof value === "number" ? value.toLocaleString() : "—";
+  return formatFinancialNumber(value);
 }
 
 export function groupBy(items, key) {

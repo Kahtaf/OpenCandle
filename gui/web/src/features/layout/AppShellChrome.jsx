@@ -22,7 +22,7 @@ export function MobileHeader({ onOpenSidebar, onOpenHome }) {
         type="button"
         aria-label="Go to new chat"
         onClick={onOpenHome}
-        className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-h-10 min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <OpenCandleLogo />
         <span className="truncate">OpenCandle</span>

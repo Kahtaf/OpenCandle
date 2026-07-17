@@ -49,7 +49,7 @@ export const ToastAction = forwardRef(function ToastAction({ className, ...props
     <ToastPrimitives.Action
       ref={ref}
       className={cn(
-        "inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-10 shrink-0 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}
@@ -61,8 +61,9 @@ export const ToastClose = forwardRef(function ToastClose({ className, ...props }
   return (
     <ToastPrimitives.Close
       ref={ref}
+      aria-label="Close notification"
       className={cn(
-        "absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-80 transition-opacity hover:text-foreground focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-[.destructive]:text-destructive-foreground/80 group-[.destructive]:hover:text-destructive-foreground",
+        "absolute right-2 top-2 inline-flex size-10 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-[color,opacity,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-[.destructive]:text-destructive-foreground/80 group-[.destructive]:hover:text-destructive-foreground",
         className,
       )}
       toast-close=""

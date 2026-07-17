@@ -1,6 +1,12 @@
 import { Image, Newspaper, PieChart, Plus, WalletCards, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover.jsx";
 import { attachmentLabel, attachmentsFromImageFiles, validateImageFiles } from "./attachments.js";
 import {
   normalizePortfolioOptions,
@@ -39,34 +45,30 @@ export function AttachMenu({
   }
 
   return (
-    <div className="relative">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        rounded="full"
-        tooltip="Attach"
-        aria-label="Attach context"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        disabled={disabled}
-      >
-        <span className="sr-only">Attach</span>
-        <Plus />
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        multiple
-        className="hidden"
-        onChange={onFilesSelected}
-      />
-      {open ? (
-        <div
-          role="menu"
-          className="absolute bottom-full left-0 z-20 mb-2 w-48 rounded-lg border border-border bg-popover p-1 text-sm shadow-subtle-md"
-        >
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor className="relative">
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            rounded="full"
+            title="Attach"
+            aria-label="Attach context"
+            disabled={disabled}
+          >
+            <span className="sr-only">Attach</span>
+            <Plus />
+          </Button>
+        </PopoverTrigger>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          className="hidden"
+          onChange={onFilesSelected}
+        />
+        <PopoverContent side="top" sideOffset={8} className="w-48 p-1 text-sm">
           <AttachMenuItem
             icon={<Image />}
             label="Image..."
@@ -108,9 +110,9 @@ export function AttachMenu({
               setOpen(false);
             }}
           />
-        </div>
-      ) : null}
-    </div>
+        </PopoverContent>
+      </PopoverAnchor>
+    </Popover>
   );
 }
 
@@ -133,7 +135,7 @@ export function PendingAttachmentRail({ attachments, onRemoveAttachment }) {
           <span className="min-w-0 truncate">{attachmentLabel(attachment)}</span>
           <button
             type="button"
-            className="ml-auto rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="ml-auto inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`Remove ${attachmentLabel(attachment)}`}
             onClick={() => onRemoveAttachment?.(index)}
           >
@@ -163,7 +165,7 @@ function AttachMenuItem({ icon, label, onClick }) {
     <button
       type="button"
       role="menuitem"
-      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-secondary"
+      className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={onClick}
     >
       {icon ? <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span> : null}

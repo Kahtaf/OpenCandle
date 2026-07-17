@@ -5,7 +5,7 @@ import { Panel } from "../market-state/shared.jsx";
 const HEADING_ID = "home-alerts-heading";
 const EMPTY_ITEMS = [];
 const LINK_CLASS =
-  "inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function AlertsCard({
   alerts = EMPTY_ITEMS,

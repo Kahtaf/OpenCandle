@@ -49,6 +49,21 @@ describe("symbol route", () => {
   });
 });
 
+describe("history route", () => {
+  it("redirects the legacy drawer route to the home page", () => {
+    const route = router.routesByPath["/history"];
+    let redirectResult: { options?: { to?: string } } | undefined;
+
+    try {
+      route.options.beforeLoad?.({});
+    } catch (error) {
+      redirectResult = error as { options?: { to?: string } };
+    }
+
+    expect(redirectResult?.options?.to).toBe("/");
+  });
+});
+
 describe("AppShell page precedence", () => {
   it("selects diagnostics, symbol, market-state, then chat fallthrough", () => {
     expect([

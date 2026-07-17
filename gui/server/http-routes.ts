@@ -730,6 +730,7 @@ async function streamAcceptedSseChatRun({
     startSeq: seq,
     emit: (event) => writeSse(res, event),
     originalPrompt: prompt,
+    dispatchedPrompt,
     originalAttachments: inputAttachmentLabels,
   });
   const observation = createPromptObservation();

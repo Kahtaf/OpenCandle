@@ -60,7 +60,7 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
                       aria-checked={selected}
                       onClick={() => onSelect(model)}
                       className={cn(
-                        "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "flex min-h-10 w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         selected && "bg-secondary",
                       )}
                     >
@@ -91,7 +91,7 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
               type="button"
               role="menuitem"
               onClick={openSetup}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Plus
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground"

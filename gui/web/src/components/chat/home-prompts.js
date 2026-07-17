@@ -18,18 +18,31 @@ export function homePromptsForMarketState({
   const prompts = [];
 
   if (watchlist) {
-    prompts.push([
-      `What's moving in ${watchlist.name}?`,
-      `What's moving in my ${watchlist.name} watchlist?`,
-    ]);
+    prompts.push(
+      isDefaultCollection(watchlist)
+        ? ["What's moving in my watchlist?", "What's moving in my watchlist?"]
+        : [
+            `What's moving in ${watchlist.name}?`,
+            `What's moving in my ${watchlist.name} watchlist?`,
+          ],
+    );
   }
   if (portfolio) {
-    prompts.push([
-      `How is ${portfolio.name} doing?`,
-      `How is my ${portfolio.name} portfolio doing?`,
-    ]);
+    prompts.push(
+      isDefaultCollection(portfolio)
+        ? ["How is my portfolio doing?", "How is my portfolio doing?"]
+        : [`How is ${portfolio.name} doing?`, `How is my ${portfolio.name} portfolio doing?`],
+    );
   }
   return prompts.length > 0 ? prompts : DEFAULT_PROMPTS;
+}
+
+function isDefaultCollection(collection) {
+  return (
+    String(collection?.name ?? "")
+      .trim()
+      .toLowerCase() === "default"
+  );
 }
 
 function namedCollectionWithItems(collections, items, collectionId) {

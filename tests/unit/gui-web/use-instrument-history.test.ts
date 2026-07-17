@@ -82,7 +82,7 @@ describe("useInstrumentHistory", () => {
     expect(latestResult).toEqual({ snapshot: body, loading: false, error: null });
   });
 
-  it("refetches with loading state when the range changes", async () => {
+  it("clears same-symbol history while a new range loads", async () => {
     const oneDay = deferred<Response>();
     const oneYear = deferred<Response>();
     globalThis.fetch = vi
@@ -91,7 +91,8 @@ describe("useInstrumentHistory", () => {
       .mockReturnValueOnce(oneYear.promise);
 
     await renderProbe("AAPL", "1D");
-    await act(async () => oneDay.resolve(response({ symbol: "AAPL", range: "1D" })));
+    const oneDayBody = { symbol: "AAPL", range: "1D", bars: [{ time: 1 }] };
+    await act(async () => oneDay.resolve(response(oneDayBody)));
 
     await renderProbe("AAPL", "1Y");
 

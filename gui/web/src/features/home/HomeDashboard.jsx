@@ -1,5 +1,6 @@
 import { BookOpen } from "lucide-react";
 import { PromptSuggestions } from "../../components/chat/prompt-suggestions.jsx";
+import { Card } from "../../components/ui/card.jsx";
 import { Kbd } from "../../components/ui/kbd.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { useMarketIndices } from "../../hooks/useMarketIndices.jsx";
@@ -50,7 +51,7 @@ export function HomeDashboard({
           <button
             type="button"
             onClick={() => onOpenCatalog()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <BookOpen aria-hidden="true" className="size-3.5" />
             Browse workflows, tools, and providers
@@ -88,12 +89,14 @@ export function HomeDashboard({
             ) : (
               <MarketStateAffordanceCard kind="portfolio" />
             )}
-            <AlertsCard
-              alerts={marketState.alerts}
-              alertEvents={marketState.alertEvents}
-              notifications={marketState.notifications}
-              instruments={marketState.instruments}
-            />
+            <div className="min-w-0 lg:col-span-2" data-slot="home-alerts-grid-cell">
+              <AlertsCard
+                alerts={marketState.alerts}
+                alertEvents={marketState.alertEvents}
+                notifications={marketState.notifications}
+                instruments={marketState.instruments}
+              />
+            </div>
           </>
         )}
       </div>
@@ -104,14 +107,16 @@ export function HomeDashboard({
 function SavedStateSkeletons() {
   return (
     <>
-      {SAVED_STATE_SKELETON_KEYS.map((key) => (
-        <div
+      {SAVED_STATE_SKELETON_KEYS.map((key, index) => (
+        <Card
           key={key}
-          className="min-h-[224px] rounded-xl border border-border bg-card p-4 shadow-subtle-xs"
+          className={`min-h-[224px] rounded-xl p-4 shadow-subtle-xs ${
+            index === SAVED_STATE_SKELETON_KEYS.length - 1 ? "lg:col-span-2" : ""
+          }`}
           data-slot="home-saved-state-skeleton"
         >
           <Skeleton className="h-full min-h-48 w-full" />
-        </div>
+        </Card>
       ))}
     </>
   );

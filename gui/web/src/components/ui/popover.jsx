@@ -13,6 +13,10 @@ import { cn } from "../../lib/utils.js";
 export function Popover({ open: openProp, defaultOpen = false, onOpenChange, children }) {
   const [openState, setOpenState] = useState(defaultOpen);
   const open = openProp !== undefined ? openProp : openState;
+  const hasOpenedRef = useRef(Boolean(defaultOpen || openProp));
+  useEffect(() => {
+    if (open) hasOpenedRef.current = true;
+  }, [open]);
   const setOpen = useCallback(
     (next) => {
       if (openProp === undefined) setOpenState(next);
@@ -48,7 +52,15 @@ export function Popover({ open: openProp, defaultOpen = false, onOpenChange, chi
     };
   }, [open, setOpen]);
 
-  const context = { open, setOpen, triggerRef, contentRef, triggerId, contentId };
+  const context = {
+    open,
+    hasOpened: hasOpenedRef.current,
+    setOpen,
+    triggerRef,
+    contentRef,
+    triggerId,
+    contentId,
+  };
   return <PopoverContext.Provider value={context}>{children}</PopoverContext.Provider>;
 }
 
@@ -94,8 +106,7 @@ export const PopoverContent = forwardRef(function PopoverContent(
   { className, align = "start", side = "bottom", sideOffset = 6, children, ...props },
   _ref,
 ) {
-  const { open, contentRef, contentId, triggerId } = usePopover();
-  if (!open) return null;
+  const { open, hasOpened, contentRef, contentId, triggerId } = usePopover();
   const alignClass =
     align === "end" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0";
   const sideClass =
@@ -108,9 +119,15 @@ export const PopoverContent = forwardRef(function PopoverContent(
       id={contentId}
       role="menu"
       aria-labelledby={triggerId}
+      aria-hidden={!open}
+      inert={!open}
+      data-state={open ? "open" : hasOpened ? "closed" : "dormant"}
       style={{ "--popover-offset": `${sideOffset}px` }}
       className={cn(
-        "absolute z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card shadow-subtle-md outline-none animate-in fade-in-0 zoom-in-95",
+        "absolute z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card shadow-subtle-md outline-none data-[state=dormant]:hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:pointer-events-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
+        side === "top"
+          ? "data-[state=open]:slide-in-from-bottom-1 data-[state=closed]:slide-out-to-bottom-1"
+          : "data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1",
         sideClass,
         alignClass,
         className,

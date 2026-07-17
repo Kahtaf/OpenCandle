@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   degradedQuoteBadge,
+  formatHumanDateTime,
   quoteChangeDirections,
+  quoteFreshnessTitle,
   relativeTime,
   shortDateLabel,
 } from "../../../gui/web/src/features/market-state/format.js";
@@ -23,6 +25,15 @@ describe("shortDateLabel", () => {
     expect(shortDateLabel("2026-06-09T08:00:00Z", NOW)).toBe("Jun 9");
     expect(shortDateLabel("2025-12-31T08:00:00Z", NOW)).toBe("Dec 31, 2025");
     expect(shortDateLabel(null, NOW)).toBe("");
+  });
+});
+
+describe("formatHumanDateTime", () => {
+  it("humanizes exact timestamps for report copy and stale quote tooltips", () => {
+    expect(formatHumanDateTime("2026-07-05T22:05:31.730Z", "UTC")).toBe("Jul 5, 10:05 PM");
+    expect(quoteFreshnessTitle([{ fetchedAt: "2026-07-05T22:05:31.730Z" }], "UTC")).toBe(
+      "Fetched Jul 5, 10:05 PM",
+    );
   });
 });
 

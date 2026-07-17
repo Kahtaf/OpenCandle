@@ -119,7 +119,7 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
           }
           onOpen(session);
         }}
-        className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm focus-visible:outline-none"
+        className="min-h-10 min-w-0 flex-1 truncate rounded-md px-3 py-2 text-left text-sm transition-transform duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={title}
       >
         {title}
@@ -152,7 +152,7 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-foreground hover:bg-secondary"
+              className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => {
                 setMenuOpen(false);
                 setRenaming(true);
@@ -164,7 +164,7 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+              className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-destructive/10 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => {
                 setMenuOpen(false);
                 if (window.confirm(`Delete "${title}"?`)) onDelete?.(session);

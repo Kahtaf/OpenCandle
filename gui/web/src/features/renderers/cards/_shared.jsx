@@ -214,7 +214,7 @@ export function StackBar({
 export function RawDetails({ message, details, text }) {
   return (
     <details className="group">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-sm text-[10.5px] uppercase tracking-wider text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 rounded-sm px-2 text-[10.5px] uppercase tracking-wider text-muted-foreground/80 transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
         <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">
           ›
         </span>

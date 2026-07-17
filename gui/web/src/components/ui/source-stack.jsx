@@ -16,7 +16,7 @@ export function SourceStack({ sources, className, onClick, label }) {
       className={cn(
         "inline-flex items-center gap-1.5 overflow-hidden rounded-full border border-border bg-card pl-1 pr-2 py-0.5 text-[11px]",
         interactive &&
-          "cursor-pointer transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "min-h-10 cursor-pointer transition-[background-color,border-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className,
       )}
     >

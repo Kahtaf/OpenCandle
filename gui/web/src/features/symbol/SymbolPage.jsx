@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import { Card } from "../../components/ui/card.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
-import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import {
   Panel,
@@ -13,6 +13,7 @@ import {
   AlertsCard,
   AnalyzePanel,
   KeyStats,
+  LimitedStatsNotice,
   PositionCard,
   SymbolHeader,
   WatchlistMembership,
@@ -108,11 +109,8 @@ export function SymbolPageView({
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         <div className="mx-auto flex w-full max-w-[1120px] min-w-0 flex-col gap-3">
           {notFound ? (
-            <Panel>
+            <Panel title={`${ticker} was not found`} headingLevel="h1" headingClassName="text-xl">
               <div className="p-6 text-center">
-                <h1 className="text-balance text-xl font-semibold text-foreground">
-                  {ticker} was not found
-                </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Check the ticker and try another symbol.
                 </p>
@@ -121,7 +119,7 @@ export function SymbolPageView({
           ) : (
             <>
               {data.quoteLoading && !data.quote ? (
-                <HeaderSkeleton />
+                <HeaderSkeleton ticker={ticker} />
               ) : (
                 <SymbolHeader
                   ticker={ticker}
@@ -133,7 +131,7 @@ export function SymbolPageView({
 
               <fieldset aria-label="Price chart" className="m-0 min-w-0 border-0 p-0">
                 <Panel title="Price chart">
-                  <div className="min-w-0 overflow-x-auto">
+                  <div className="min-w-0">
                     {data.historyLoading && !data.history ? (
                       <ChartSkeleton />
                     ) : (
@@ -147,14 +145,15 @@ export function SymbolPageView({
                           range={range}
                           onRangeChange={onRangeChange}
                           showVolume
-                          height={360}
-                          className="min-w-[560px]"
+                          height={420}
                         />
                       </Suspense>
                     )}
                   </div>
                 </Panel>
               </fieldset>
+
+              {isNonEquitySymbol(ticker) ? <LimitedStatsNotice ticker={ticker} /> : null}
 
               {showEquitySections ? (
                 <>
@@ -207,17 +206,18 @@ function isInvalidSymbolReason(reason) {
   );
 }
 
-function HeaderSkeleton() {
+function HeaderSkeleton({ ticker }) {
   return (
-    <div
+    <Card
       data-slot="symbol-header-skeleton"
       role="status"
       aria-label="Loading symbol quote"
-      className="rounded-xl border border-border bg-card p-5"
+      className="rounded-xl p-5"
     >
+      <h1 className="sr-only">Loading {ticker}</h1>
       <Skeleton className="h-7 w-64" />
       <Skeleton className="mt-5 h-12 w-80 max-w-full" />
-    </div>
+    </Card>
   );
 }
 
@@ -226,21 +226,21 @@ function ChartSkeleton() {
     <Skeleton
       data-slot="symbol-chart-skeleton"
       aria-label="Loading price chart"
-      className="h-[360px] min-w-[560px] rounded-none"
+      className="h-[420px] rounded-none"
     />
   );
 }
 
 function StatsSkeleton() {
   return (
-    <div
+    <Card
       data-slot="symbol-stats-skeleton"
       role="status"
       aria-label="Loading key stats"
-      className={cn("rounded-xl border border-border bg-card p-4")}
+      className="rounded-xl p-4"
     >
       <Skeleton className="h-5 w-24" />
       <Skeleton className="mt-4 h-36 w-full" />
-    </div>
+    </Card>
   );
 }

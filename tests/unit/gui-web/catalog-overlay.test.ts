@@ -54,5 +54,9 @@ describe("CatalogOverlay helpers", () => {
     expect(html).toContain("Market");
     expect(html).toContain("get_stock_quote");
     expect(html).toContain("!max-h-none flex-1");
+    expect(html).toContain('aria-label="Catalog keyboard shortcuts"');
+    expect(html).toContain("↑↓");
+    expect(html).toContain("↵");
+    expect(html).toContain("esc");
   });
 });

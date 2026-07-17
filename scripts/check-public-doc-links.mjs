@@ -3,11 +3,13 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkUrlWithRetry } from "./check-public-doc-links-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const docsDir = join(root, "website/dist");
 const timeoutMs = Number(process.env.OPENCANDLE_LINK_CHECK_TIMEOUT_MS ?? 10_000);
-const acceptedStatuses = new Set([401, 403, 429]);
+const attempts = Number(process.env.OPENCANDLE_LINK_CHECK_ATTEMPTS ?? 3);
+const retryDelayMs = Number(process.env.OPENCANDLE_LINK_CHECK_RETRY_DELAY_MS ?? 1_000);
 const skippedHosts = new Set(["opencandle.app", "127.0.0.1", "localhost", "::1"]);
 
 function walk(dir) {
@@ -47,17 +49,6 @@ async function fetchWithTimeout(url, method) {
   }
 }
 
-async function checkUrl(url) {
-  const head = await fetchWithTimeout(url, "HEAD");
-  if (head.status !== 405 && head.status !== 501) return head.status;
-  const get = await fetchWithTimeout(url, "GET");
-  return get.status;
-}
-
-function isAcceptedStatus(status) {
-  return (status >= 200 && status < 400) || acceptedStatuses.has(status);
-}
-
 function shouldSkipUrl(url) {
   const parsed = new URL(url);
   if (skippedHosts.has(parsed.hostname)) return true;
@@ -79,17 +70,29 @@ async function main() {
   }
 
   const failures = [];
+  const unverified = [];
   for (const [url, files] of candidates) {
-    try {
-      const status = await checkUrl(url);
-      if (!isAcceptedStatus(status)) {
-        failures.push(`${url} returned HTTP ${status}\n  ${files.join("\n  ")}`);
-      }
-    } catch (error) {
-      failures.push(
-        `${url} failed: ${error instanceof Error ? error.message : String(error)}\n  ${files.join("\n  ")}`,
-      );
+    const { outcome, detail } = await checkUrlWithRetry({
+      url,
+      fetchImpl: fetchWithTimeout,
+      attempts,
+      delayMs: retryDelayMs,
+    });
+    if (outcome === "broken") {
+      failures.push(`${url} returned ${detail}\n  ${files.join("\n  ")}`);
+    } else if (outcome === "unverified") {
+      // Host unreachable from this runner (DNS/TLS/timeout) after retries — cannot verify,
+      // but not proof the link is broken. Report as a non-blocking skip so transient
+      // external outages do not fail the build; a genuine 404 still lands in `failures`.
+      unverified.push(`${url} ${detail}\n  ${files.join("\n  ")}`);
     }
+  }
+
+  if (unverified.length > 0) {
+    console.warn(
+      `Skipped ${unverified.length} unreachable external link(s) after ${attempts} attempt(s) (transient, not verified):`,
+    );
+    console.warn(unverified.join("\n\n"));
   }
 
   if (failures.length > 0) {
@@ -98,7 +101,12 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Checked ${candidates.size} public docs external link(s).`);
+  const checked = candidates.size - unverified.length;
+  console.log(
+    `Checked ${checked} public docs external link(s)${
+      unverified.length > 0 ? `; skipped ${unverified.length} unreachable` : ""
+    }.`,
+  );
 }
 
 main().catch((error) => {
