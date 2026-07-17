@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- Fresh installs no longer crash at startup: the Pi runtime dependency ranges are capped below `0.80.8`, whose removal of the `AuthStorage`/`ModelRegistry`/`SettingsManager` root exports broke `opencandle doctor` and the CLI in newly resolved installs (including the packed-install CI smoke). A follow-up will migrate to the new Pi API surface.
 - Single-instrument GUI quote snapshots now retain Yahoo Finance `marketCap` values instead of dropping the field from the provider response.
 - Fear & Greed index requests now retain the macro tool bundle even when the LLM router assigns an incorrect workflow label, so the agent can call the live index instead of answering without it.
 - Polymarket searches no longer drop explicitly open markets when Gamma supplies stale past end dates; an explicit `active` flag now takes precedence over the date heuristic, and the stale past close date is omitted from those quotes instead of being shown as if an open market had already closed.
