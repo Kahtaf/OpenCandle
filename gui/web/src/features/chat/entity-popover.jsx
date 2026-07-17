@@ -1,4 +1,4 @@
-import { Plus, Search } from "lucide-react";
+import { ExternalLink, Plus, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "../../components/ui/popover.jsx";
 import { Select } from "../../components/ui/select.jsx";
+import { symbolPageHref } from "../../route-resolution.js";
 import { normalizeWatchlistOptions } from "./watchlist-options.js";
 
 export function EntityPopover({
@@ -21,6 +22,7 @@ export function EntityPopover({
   resolving = false,
   onAddToWatchlist,
   onAskAbout,
+  navigate,
   anchorRect = null,
   viewportSize = null,
   sessionMarketFacts = {},
@@ -154,15 +156,31 @@ export function EntityPopover({
               {!canAdd ? (
                 <div className="text-[11px] text-muted-foreground">{disabledHint}</div>
               ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => onAskAbout?.(normalized)}
-              >
-                <Search className="button-icon" />
-                Ask about ${normalized}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button asChild size="sm" variant="bordered" className="px-2 text-xs">
+                  <a
+                    href={symbolPageHref(normalized)}
+                    onClick={(event) => {
+                      if (!navigate) return;
+                      event.preventDefault();
+                      void navigate({ to: symbolPageHref(normalized) });
+                    }}
+                  >
+                    <ExternalLink className="button-icon" />
+                    Open ${normalized} page
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="px-2 text-xs"
+                  onClick={() => onAskAbout?.(normalized)}
+                >
+                  <Search className="button-icon" />
+                  Ask about ${normalized}
+                </Button>
+              </div>
             </div>
           </div>
         </PopoverContent>

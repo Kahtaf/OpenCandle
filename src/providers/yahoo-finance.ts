@@ -508,6 +508,7 @@ export async function getHistory(
     const ohlcv: OHLCV[] = timestamps
       .map((ts, i) => ({
         date: new Date(ts * 1000).toISOString().split("T")[0],
+        timestamp: ts,
         open: quotes.open[i],
         high: quotes.high[i],
         low: quotes.low[i],

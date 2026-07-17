@@ -517,9 +517,10 @@ Compare these assets side by side: VOO, QQQ
 Steps:
 1. Use get_stock_quote for each of: VOO, QQQ.
 2. Use compare_companies with symbols ["VOO", "QQQ"] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
-3. Use get_technical_indicators for each to compare momentum and trend.
-4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [VOO, QQQ] to check diversification.
+3. Use get_price_comparison with symbols [VOO, QQQ] and a range that fits the resolved time horizon; use the default comparison range when no time horizon is resolved so the answer includes an indexed price comparison.
+4. Use get_technical_indicators for each to compare momentum and trend.
+5. Use analyze_risk for each to compare risk metrics.
+6. Use analyze_correlation across [VOO, QQQ] to check diversification.
 
 
 
@@ -543,11 +544,12 @@ Time horizon: 5y
 Steps:
 1. Use get_stock_quote for each of: VOO, QQQ, SCHD.
 2. Use compare_companies with symbols ["VOO", "QQQ", "SCHD"] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
-3. Use analyze_holdings_overlap with symbols [VOO, QQQ, SCHD] to fetch provider top holdings and compute pairwise overlap by weight.
-4. Use analyze_correlation across [VOO, QQQ, SCHD] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
-5. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.
-6. Adapt the comparison to the 5y horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
-7. Use historical risk and technical metrics as context, but explain what they do and do not imply over 5y.
+3. Use get_price_comparison with symbols [VOO, QQQ, SCHD] and a range that fits the resolved time horizon; use the default comparison range when no time horizon is resolved so the answer includes an indexed price comparison.
+4. Use analyze_holdings_overlap with symbols [VOO, QQQ, SCHD] to fetch provider top holdings and compute pairwise overlap by weight.
+5. Use analyze_correlation across [VOO, QQQ, SCHD] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
+6. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.
+7. Adapt the comparison to the 5y horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
+8. Use historical risk and technical metrics as context, but explain what they do and do not imply over 5y.
 
 
 

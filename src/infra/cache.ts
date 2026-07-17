@@ -101,7 +101,9 @@ export const cache = new Cache();
 export const TTL = {
   QUOTE: 60_000, // 1 minute
   HISTORY: 3_600_000, // 1 hour
+  CANDLES: 3_600_000, // 1 hour
   FUNDAMENTALS: 86_400_000, // 24 hours
+  FINANCIAL_REPORTS: 86_400_000, // 24 hours
   MACRO: 3_600_000, // 1 hour
   SENTIMENT: 300_000, // 5 minutes
   OPTIONS_CHAIN: 120_000, // 2 minutes
@@ -116,7 +118,9 @@ export const TTL = {
 export const STALE_LIMIT = {
   QUOTE: 15 * 60_000, // 15 minutes
   HISTORY: 24 * 3_600_000, // 24 hours
+  CANDLES: 24 * 3_600_000, // 24 hours
   FUNDAMENTALS: 7 * 86_400_000, // 7 days
+  FINANCIAL_REPORTS: 7 * 86_400_000, // 7 days
   MACRO: 24 * 3_600_000, // 24 hours
   SENTIMENT: 3_600_000, // 1 hour
   OPTIONS_CHAIN: 30 * 60_000, // 30 minutes

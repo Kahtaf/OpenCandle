@@ -57,6 +57,45 @@ vi.mock("vaul", async () => {
 });
 
 describe("MarketStatePage rendering", () => {
+  it("links watchlist symbols to their encoded symbol pages while keeping the inspector", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistPage, {
+        loading: false,
+        state: {
+          watchlists: [{ id: 1, name: "Default", isDefault: true }],
+          watchlist: [
+            {
+              id: 10,
+              watchlistId: 1,
+              instrumentId: 4,
+              symbol: "^GSPC",
+              name: "S&P 500",
+            },
+          ],
+          alerts: [],
+          alertEvents: [],
+          instruments: [],
+          portfolio: [],
+          quoteSnapshot: { watchlistQuotes: [], portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('href="/symbol/%5EGSPC"');
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain('aria-label="^GSPC details"');
+    expect(html).toContain("Create alert");
+    expect(html).toContain("Open full page");
+    expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
+  });
+
   it("renders the watchlist as a quote board with signed market data and row actions", () => {
     const html = renderToStaticMarkup(
       React.createElement(
@@ -197,6 +236,40 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("No holdings yet");
   });
 
+  it("links desktop and mobile portfolio symbols to encoded symbol pages", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "^GSPC",
+              name: "S&P 500",
+              quantity: 2,
+              avgCost: 5000,
+              currency: "USD",
+            },
+          ],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain('aria-label="Expand ^GSPC lots"');
+  });
+
   it("renders portfolio allocation as categorical proportional segments", () => {
     const html = renderToStaticMarkup(
       React.createElement(PortfolioPage, {
@@ -285,6 +358,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("oklch(");
     expect(html).toContain("AAPL 60.0%");
     expect(html).toContain("NVDA 40.0%");
+    expect(html).toContain("+$0.95 (+0.2%)");
+    expect(html).toContain("today ·");
     expect(html).toContain("Price");
     expect(html).toContain("Value");
     expect(html).toContain("24 hr sparkline");
@@ -508,6 +583,22 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("appearance-none");
     expect(html).toContain("pointer-events-none");
     expect(html).toContain("Condition");
+  });
+
+  it("opens the alert create form with a route-prefilled symbol", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        alertSymbol: "MSFT",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("Create Alert");
+    expect(html).toContain('value="MSFT"');
+    expect(html).toContain("Price threshold ($)");
   });
 
   it("uses human cooldown choices and condition-specific alert field labels", () => {

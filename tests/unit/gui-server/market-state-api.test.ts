@@ -3,14 +3,21 @@ import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
   createSavedSymbolsMemo,
+  getInstrumentOverviewSnapshot,
   getInstrumentQuoteSnapshot,
+  resetInstrumentOverviewMemoForTests,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
 import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDatabase } from "../../../src/memory/sqlite.js";
-import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import {
+  getHistory,
+  getQuote,
+  getYahooCompanyOverview,
+} from "../../../src/providers/yahoo-finance.js";
+import type { CompanyOverview } from "../../../src/types/fundamentals.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
@@ -23,11 +30,13 @@ vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getHistory: vi.fn(),
   getQuote: vi.fn(),
+  getYahooCompanyOverview: vi.fn(),
 }));
 
 describe("market-state API helpers", () => {
   beforeEach(() => {
     cache.clear();
+    resetInstrumentOverviewMemoForTests();
     vi.clearAllMocks();
     vi.mocked(getHistory).mockResolvedValue([]);
   });
@@ -177,6 +186,7 @@ describe("market-state API helpers", () => {
     vi.setSystemTime(new Date("2026-06-12T20:20:00.000Z"));
     vi.mocked(getQuote).mockResolvedValue(
       quote("ASTS", 42.37, {
+        marketCap: 9_876_543_210,
         currency: "USD",
         asOf: "2026-06-12T20:00:00.000Z",
         marketState: "POST",
@@ -199,6 +209,7 @@ describe("market-state API helpers", () => {
       low: 40.37,
       week52High: 52.37,
       week52Low: 32.37,
+      marketCap: 9_876_543_210,
       fetchedAt: "2026-06-12T20:20:00.000Z",
       dataAsOf: "2026-06-12T20:00:00.000Z",
       marketState: "POST",
@@ -209,6 +220,148 @@ describe("market-state API helpers", () => {
       stale: false,
       currency: "USD",
     });
+  });
+
+  it("returns a normalized Yahoo company overview snapshot", async () => {
+    vi.mocked(getYahooCompanyOverview).mockResolvedValue(companyOverview("AAPL"));
+
+    await expect(getInstrumentOverviewSnapshot(" aapl ")).resolves.toEqual({
+      symbol: "AAPL",
+      status: "ok",
+      name: "Apple Inc.",
+      description: "Consumer technology company.",
+      exchange: "NasdaqGS",
+      sector: "Technology",
+      industry: "Consumer Electronics",
+      marketCap: 3_200_000_000_000,
+      pe: 31.5,
+      forwardPe: 28.4,
+      eps: 7.1,
+      dividendYield: 0.0044,
+      beta: 1.2,
+      avgVolume: 55_000_000,
+      profitMargin: 0.24,
+      revenueGrowth: 0.05,
+      week52High: 260.1,
+      week52Low: 164.08,
+      stale: false,
+    });
+    expect(getYahooCompanyOverview).toHaveBeenCalledWith("AAPL");
+  });
+
+  it("returns unavailable overview snapshots for empty and unknown symbols", async () => {
+    vi.mocked(getYahooCompanyOverview).mockRejectedValue(new Error("no company overview"));
+
+    await expect(getInstrumentOverviewSnapshot("   ")).resolves.toEqual({
+      symbol: "",
+      status: "unavailable",
+      reason: "symbol is required",
+    });
+    await expect(getInstrumentOverviewSnapshot("unknown")).resolves.toEqual({
+      symbol: "UNKNOWN",
+      status: "unavailable",
+      reason: "no company overview",
+    });
+    expect(getYahooCompanyOverview).toHaveBeenCalledOnce();
+  });
+
+  it("coalesces concurrent overview requests for one symbol", async () => {
+    resetInstrumentOverviewMemoForTests();
+    let resolveOverview: ((value: CompanyOverview) => void) | undefined;
+    vi.mocked(getYahooCompanyOverview).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveOverview = resolve;
+        }),
+    );
+
+    const first = getInstrumentOverviewSnapshot("AAPL");
+    const second = getInstrumentOverviewSnapshot("aapl");
+
+    expect(getYahooCompanyOverview).toHaveBeenCalledOnce();
+    resolveOverview?.(companyOverview("AAPL"));
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ symbol: "AAPL", status: "ok" }),
+      expect.objectContaining({ symbol: "AAPL", status: "ok" }),
+    ]);
+  });
+
+  it("serves overview memo hits within the TTL and stale data while revalidating", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-16T14:00:00.000Z"));
+    vi.mocked(getYahooCompanyOverview).mockResolvedValueOnce(companyOverview("AAPL"));
+
+    const initial = await getInstrumentOverviewSnapshot("AAPL");
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toBe(initial);
+    expect(getYahooCompanyOverview).toHaveBeenCalledOnce();
+
+    vi.setSystemTime(new Date("2026-07-16T14:05:00.001Z"));
+    let resolveRefresh: ((value: CompanyOverview) => void) | undefined;
+    vi.mocked(getYahooCompanyOverview).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      stale: true,
+    });
+    expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
+
+    resolveRefresh?.(companyOverview("AAPL", { name: "Apple refreshed" }));
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      name: "Apple refreshed",
+    });
+    expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps expired overview data stale when the background refresh degrades", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-16T14:00:00.000Z"));
+    vi.mocked(getYahooCompanyOverview).mockResolvedValueOnce(companyOverview("AAPL"));
+    await getInstrumentOverviewSnapshot("AAPL");
+
+    vi.setSystemTime(new Date("2026-07-16T14:05:00.001Z"));
+    vi.mocked(getYahooCompanyOverview).mockRejectedValueOnce(new Error("provider unavailable"));
+
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      name: "Apple Inc.",
+      stale: true,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      name: "Apple Inc.",
+      stale: true,
+    });
+  });
+
+  it("keeps overview memo entries independent by symbol", async () => {
+    vi.mocked(getYahooCompanyOverview).mockImplementation(async (symbol) =>
+      companyOverview(symbol, { name: `${symbol} Company` }),
+    );
+
+    await expect(
+      Promise.all([
+        getInstrumentOverviewSnapshot("AAPL"),
+        getInstrumentOverviewSnapshot("MSFT"),
+        getInstrumentOverviewSnapshot("AAPL"),
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({ symbol: "AAPL", name: "AAPL Company" }),
+      expect.objectContaining({ symbol: "MSFT", name: "MSFT Company" }),
+      expect.objectContaining({ symbol: "AAPL", name: "AAPL Company" }),
+    ]);
+    expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
+    expect(getYahooCompanyOverview).toHaveBeenCalledWith("AAPL");
+    expect(getYahooCompanyOverview).toHaveBeenCalledWith("MSFT");
   });
 
   it("returns an empty autocomplete result when provider search fails", async () => {
@@ -667,6 +820,32 @@ function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {
     week52Low: price - 10,
     timestamp: Date.now(),
     currency: "USD",
+    ...overrides,
+  };
+}
+
+function companyOverview(
+  symbol: string,
+  overrides: Partial<CompanyOverview> = {},
+): CompanyOverview {
+  return {
+    symbol,
+    name: "Apple Inc.",
+    description: "Consumer technology company.",
+    exchange: "NasdaqGS",
+    sector: "Technology",
+    industry: "Consumer Electronics",
+    marketCap: 3_200_000_000_000,
+    pe: 31.5,
+    forwardPe: 28.4,
+    eps: 7.1,
+    dividendYield: 0.0044,
+    beta: 1.2,
+    week52High: 260.1,
+    week52Low: 164.08,
+    avgVolume: 55_000_000,
+    profitMargin: 0.24,
+    revenueGrowth: 0.05,
     ...overrides,
   };
 }

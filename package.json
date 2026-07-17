@@ -126,9 +126,9 @@
     "node": "^22.19.0 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.80.2",
-    "@earendil-works/pi-ai": "^0.80.2",
-    "@earendil-works/pi-coding-agent": "^0.80.2",
+    "@earendil-works/pi-agent-core": ">=0.80.2 <0.80.8",
+    "@earendil-works/pi-ai": ">=0.80.2 <0.80.8",
+    "@earendil-works/pi-coding-agent": ">=0.80.2 <0.80.8",
     "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
     "yahoo-finance2": "^3.15.3"
@@ -144,6 +144,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
     "acpx": "^0.12.0",
+    "jsdom": "^27.0.0",
     "playwright-core": "^1.61.1",
     "tsx": "^4.22.4",
     "typescript": "^7.0.2",

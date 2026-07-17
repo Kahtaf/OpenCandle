@@ -2,6 +2,7 @@ import type { Message } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
+import { reduceChatEvents } from "../../../gui/shared/event-reducer.js";
 
 describe("sessionEntriesToChatEvents", () => {
   it("converts messages and paired tool calls into canonical events", () => {
@@ -373,6 +374,65 @@ describe("sessionEntriesToChatEvents", () => {
       "tool.started",
       "message.completed",
     ]);
+  });
+
+  it("preserves large multi-symbol OHLCV details through adaptation and reduction", () => {
+    const bars = (offset: number) =>
+      Array.from({ length: 100 }, (_, index) => ({
+        date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+        timestamp: Math.floor(Date.UTC(2026, 0, index + 1) / 1_000),
+        open: offset + index,
+        high: offset + index + 2,
+        low: offset + index - 2,
+        close: offset + index + 1,
+        volume: 1_000_000 + index,
+      }));
+    const details = {
+      range: "1y",
+      interval: "1d",
+      baseDate: "2026-01-01",
+      series: [
+        {
+          symbol: "AAPL",
+          bars: bars(100),
+          indexed: Array.from({ length: 100 }, (_, i) => 100 + i),
+        },
+        {
+          symbol: "MSFT",
+          bars: bars(200),
+          indexed: Array.from({ length: 100 }, (_, i) => 100 + i / 2),
+        },
+      ],
+      unavailableSymbols: [],
+      freshness: {
+        fetchedAt: "2026-04-10T00:00:00.000Z",
+        providerDataAt: "2026-04-10T00:00:00.000Z",
+        providerDataDate: "2026-04-10",
+        cacheStatus: "live",
+        marketSession: "closed_after_hours",
+        isStaleForSession: false,
+      },
+    };
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("large-details", {
+          role: "toolResult",
+          toolCallId: "call-large-details",
+          toolName: "get_price_comparison",
+          content: [{ type: "text", text: "comparison" }],
+          details,
+          isError: false,
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+    const state = reduceChatEvents(events);
+    const output = [...state.tools.values()].find(
+      (tool) => tool.id === "call-large-details",
+    )?.output;
+
+    expect(output?.details).toEqual(details);
   });
 });
 

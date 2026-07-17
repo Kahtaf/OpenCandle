@@ -1,0 +1,31 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "MSFT",
+          "regularMarketPrice": 421.90,
+          "previousClose": 420.72,
+          "regularMarketOpen": 420.10,
+          "regularMarketDayHigh": 423.25,
+          "regularMarketDayLow": 419.60,
+          "regularMarketVolume": 18234567,
+          "fiftyTwoWeekHigh": 430.82,
+          "fiftyTwoWeekLow": 275.37
+        },
+        "timestamp": [1711555200, 1711641600, 1711728000, 1711814400, 1711900800],
+        "indicators": {
+          "quote": [
+            {
+              "open": [417.20, 418.10, 419.25, 420.00, 420.10],
+              "high": [419.40, 420.50, 421.75, 422.80, 423.25],
+              "low": [416.60, 417.30, 418.50, 419.20, 419.60],
+              "close": [418.79, 419.83, 420.72, 421.35, 421.90],
+              "volume": [19500000, 18800000, 20100000, 17600000, 18234567]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

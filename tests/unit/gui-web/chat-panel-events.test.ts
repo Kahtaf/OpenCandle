@@ -64,6 +64,7 @@ describe("ChatPanel event transcript rendering", () => {
 
     expect(html).toContain("quickly compare AAPL and MSFT");
     expect(html).not.toContain("Current date: 2026-06-12 Compare these assets");
+    expect(html).not.toContain('data-slot="home-dashboard"');
   });
 
   it("renders user attachment chips and image thumbnails without exposing expanded prompt text", () => {
@@ -187,6 +188,28 @@ describe("ChatPanel event transcript rendering", () => {
     expect(source).toContain("Non-owner windows submit to the active session");
   });
 
+  it("preserves the fresh-home session target, one retry, and run-started adoption", () => {
+    const appSource = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+    const homeSources = [
+      "HomeDashboard.jsx",
+      "IndicesStrip.jsx",
+      "WatchlistMovers.jsx",
+      "PortfolioSummaryStrip.jsx",
+      "AlertsCard.jsx",
+      "MarketStateAffordanceCard.jsx",
+    ]
+      .map((file) => readFileSync(resolve("gui/web/src/features/home", file), "utf-8"))
+      .join("\n");
+
+    expect(appSource).toContain('canStartFreshHomeSession: gui.role === "writer"');
+    expect(appSource).toContain("for (let attempt = 0; attempt < 2; attempt++)");
+    expect(appSource).toContain("const freshSessionId = await gui.newSession()");
+    expect(appSource).toContain("baseEventCount: 0");
+    expect(appSource).toContain('event.type !== "run.started"');
+    expect(appSource).toContain("gui.adoptSessionId(sessionId)");
+    expect(homeSources).not.toContain("startChatRun");
+  });
+
   it("keeps non-chat actions unavailable for TUI-owned routed sessions", () => {
     const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
 
@@ -231,12 +254,32 @@ describe("ChatPanel event transcript rendering", () => {
   });
 
   it("keeps the composer in the centered empty-home block only before the first message", () => {
-    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+    const html = renderChatPanelHtml();
 
-    expect(source).toContain("const isEmptyThread =");
-    expect(source).toContain('isEmptyThread && "flex flex-col justify-center"');
-    expect(source).toContain("{isEmptyThread ? composer : null}");
-    expect(source).toContain("{!isEmptyThread ? composer : null}");
+    expect(html).toContain('data-slot="home-dashboard"');
+    expect(html.indexOf('data-slot="home-composer"')).toBeLessThan(
+      html.indexOf('data-slot="home-widget-grid"'),
+    );
+    expect(html).toContain('data-slot="home-saved-state-skeleton"');
+  });
+
+  it("does not read per-session research fields while composing home", () => {
+    const accessed = new Set<PropertyKey>();
+    const dashboard = new Proxy(
+      { knownSymbols: [] },
+      {
+        get(target, property, receiver) {
+          accessed.add(property);
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    const html = renderChatPanelHtml({ dashboard });
+
+    expect(html).toContain('data-slot="home-dashboard"');
+    expect(accessed.has("activeAnalyses")).toBe(false);
+    expect(accessed.has("recentResearch")).toBe(false);
   });
 
   it("renders scoped live thinking text for the active run", () => {
@@ -255,9 +298,11 @@ describe("ChatPanel event transcript rendering", () => {
     });
 
     expect(html).toContain("Reviewing the latest quote data");
+    expect(html).not.toContain('data-slot="home-dashboard"');
   });
 
-  it("disables chat submission while model setup is incomplete", () => {
+  it("keeps setup first and blocks a prefilled draft before any chat run", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
     const html = renderChatPanelHtml({
       draft: "Can I buy AAPL today?",
       modelSetup: {
@@ -271,5 +316,23 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).toContain('id="chat-composer"');
     expect(html).toContain("disabled");
     expect(html).toContain('aria-label="Send message"');
+    expect(html).toContain("Connect an AI model");
+    expect(html).not.toContain('data-slot="home-dashboard"');
+    expect(html.indexOf("Connect an AI model")).toBeLessThan(html.indexOf('id="chat-composer"'));
+    expect(source).toContain("Connect or select an AI model before sending this message.");
+    expect(source.indexOf("if (needsSetup)")).toBeLessThan(
+      source.indexOf("void startChatRun(prompt"),
+    );
+  });
+
+  it("renders the same read-only home widgets for follower windows", () => {
+    const writerHtml = renderChatPanelHtml({ role: "writer" });
+    const followerHtml = renderChatPanelHtml({ role: "follower" });
+
+    for (const slot of ["home-dashboard", "home-widget-grid", "home-indices-strip"]) {
+      expect(writerHtml).toContain(`data-slot="${slot}"`);
+      expect(followerHtml).toContain(`data-slot="${slot}"`);
+    }
+    expect(followerHtml).not.toMatch(/writer-only|take ownership|read-only dashboard/i);
   });
 });

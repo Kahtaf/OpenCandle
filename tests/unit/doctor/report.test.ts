@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetConfigCache } from "../../../src/config.js";
+import { renderDoctorReport } from "../../../src/doctor/render.js";
 import {
   buildDoctorReport,
   type DoctorCheck,
@@ -27,6 +29,7 @@ afterEach(() => {
     rmSync(home, { recursive: true, force: true });
   }
   clearProviderStatusCache();
+  resetConfigCache();
   vi.unstubAllEnvs();
 });
 
@@ -49,6 +52,94 @@ function check(overrides: Partial<DoctorCheck>): DoctorCheck {
 }
 
 describe("doctor report", () => {
+  it("warns when London Strategic Edge reaches its monthly soft threshold", async () => {
+    const home = useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    writeFileSync(
+      join(home, "lse-byte-budget.json"),
+      JSON.stringify({
+        month: new Date().toISOString().slice(0, 7),
+        bytesUsed: 42_949_672_960,
+      }),
+    );
+    const lseStatus: ApiKeyProviderStatus = {
+      providerId: "lse",
+      kind: "api-key",
+      state: "configured",
+      credentialSource: "env",
+      checkedAt: new Date().toISOString(),
+      cacheHit: false,
+    };
+
+    const report = await buildDoctorReport({
+      providerStatuses: [lseStatus],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+    const budgetChecks = report.sections
+      .find((section) => section.id === "providers")
+      ?.checks.filter((candidate) => candidate.id === "provider.lse.byte_budget");
+
+    expect(budgetChecks).toHaveLength(1);
+    expect(budgetChecks?.[0]).toMatchObject({
+      label: "London Strategic Edge",
+      status: "warn",
+      capability: "optional",
+      summary:
+        "London Strategic Edge monthly data allowance is 80% used; answers use Yahoo/Alpha Vantage until the month resets.",
+      remediation: expect.any(String),
+    });
+    expect(renderDoctorReport(report)).toContain(`Fix: ${budgetChecks?.[0]?.remediation}`);
+  });
+
+  it("does not warn about the London Strategic Edge budget without a configured key", async () => {
+    const home = useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "");
+    resetConfigCache();
+    writeFileSync(
+      join(home, "lse-byte-budget.json"),
+      JSON.stringify({
+        month: new Date().toISOString().slice(0, 7),
+        bytesUsed: 53_687_091_200,
+      }),
+    );
+
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(
+      report.sections
+        .find((section) => section.id === "providers")
+        ?.checks.some((candidate) => candidate.id === "provider.lse.byte_budget"),
+    ).toBe(false);
+  });
+
+  it("does not warn about the London Strategic Edge budget below the soft threshold", async () => {
+    const home = useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    writeFileSync(
+      join(home, "lse-byte-budget.json"),
+      JSON.stringify({
+        month: new Date().toISOString().slice(0, 7),
+        bytesUsed: 42_949_672_959,
+      }),
+    );
+
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(
+      report.sections
+        .find((section) => section.id === "providers")
+        ?.checks.some((candidate) => candidate.id === "provider.lse.byte_budget"),
+    ).toBe(false);
+  });
+
   it("derives blocked only from core failures", () => {
     expect(deriveDoctorStatus([check({ status: "fail", capability: "core" })])).toBe("blocked");
     expect(deriveDoctorStatus([check({ status: "fail", capability: "optional" })])).toBe(

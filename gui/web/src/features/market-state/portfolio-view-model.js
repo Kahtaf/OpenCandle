@@ -1,3 +1,19 @@
+export function derivePortfolioDayMove(lots = []) {
+  let total = 0;
+  let qualifyingLots = 0;
+  for (const lot of lots) {
+    if (!Number.isFinite(lot?.marketValue) || !Number.isFinite(lot?.changePercent)) continue;
+    const denominator = 1 + lot.changePercent / 100;
+    if (!Number.isFinite(denominator) || denominator <= 0) continue;
+    const move = lot.marketValue - lot.marketValue / denominator;
+    if (!Number.isFinite(move)) continue;
+    total += move;
+    if (!Number.isFinite(total)) return null;
+    qualifyingLots += 1;
+  }
+  return qualifyingLots > 0 ? total : null;
+}
+
 export function buildHoldingRows(lots = [], portfolioQuotes = []) {
   const quotesByLotId = new Map(portfolioQuotes.map((quote) => [quote.lotId, quote]));
   const rowsBySymbol = new Map();

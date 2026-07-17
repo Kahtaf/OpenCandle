@@ -2,9 +2,11 @@ import { BriefcaseBusiness, ChevronRight, Plus } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { SERIES_COLORS } from "../../lib/series-colors.js";
 import { cn } from "../../lib/utils.js";
+import { symbolPageHref } from "../../route-resolution.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
-import { buildHoldingRows } from "./portfolio-view-model.js";
+import { buildHoldingRows, derivePortfolioDayMove } from "./portfolio-view-model.js";
 import {
   Badge,
   ConfirmButton,
@@ -22,15 +24,6 @@ import {
   Sym,
   useQuoteChangeFlash,
 } from "./shared.jsx";
-
-const ALLOCATION_COLORS = [
-  "oklch(0.62 0.1 250)",
-  "oklch(0.66 0.09 175)",
-  "oklch(0.7 0.1 65)",
-  "oklch(0.64 0.1 330)",
-  "oklch(0.66 0.09 145)",
-  "oklch(0.62 0.1 35)",
-];
 
 function usePortfolioPageState(state, filter) {
   const portfolios = useMemo(() => {
@@ -119,6 +112,7 @@ export function PortfolioPage({
   readOnly,
   openPanel,
   invokeTool,
+  navigate,
   renderPageHeader,
 }) {
   const {
@@ -201,6 +195,7 @@ export function PortfolioPage({
                 readOnly={readOnly}
                 openPanel={openPanel}
                 invokeTool={invokeTool}
+                navigate={navigate}
               />
               <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
@@ -249,7 +244,11 @@ export function PortfolioPage({
                             </Button>
                           </td>
                           <td className="px-2 py-2.5">
-                            <Sym symbol={row.symbol} name={row.name} />
+                            <SymbolPageLink
+                              symbol={row.symbol}
+                              name={row.name}
+                              navigate={navigate}
+                            />
                           </td>
                           <td className="px-2 py-2.5 text-right tabular-nums">
                             <div className="flex flex-col items-end">
@@ -387,6 +386,7 @@ function MobileHoldingRows({
   readOnly,
   openPanel,
   invokeTool,
+  navigate,
 }) {
   return (
     <div className="divide-y divide-border sm:hidden">
@@ -394,26 +394,28 @@ function MobileHoldingRows({
         const isExpanded = expanded.has(row.symbol);
         return (
           <div key={row.symbol} data-slot="mobile-portfolio-holding">
-            <button
-              type="button"
-              className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_6rem_5.25rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40 focus-visible:ring-inset"
-              aria-expanded={isExpanded}
-              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${row.symbol} holding details`}
-              onClick={() => toggleExpanded(row.symbol)}
-            >
-              <ChevronRight
-                className={`size-3.5 text-muted-foreground transition-transform duration-150 ease-out ${
-                  isExpanded ? "rotate-90" : "rotate-0"
-                }`}
-                aria-hidden="true"
-              />
-              <Sym symbol={row.symbol} name={row.name} />
+            <div className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_6rem_5.25rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60">
+              <button
+                type="button"
+                className="-m-3 flex size-10 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                aria-expanded={isExpanded}
+                aria-label={`${isExpanded ? "Collapse" : "Expand"} ${row.symbol} lots`}
+                onClick={() => toggleExpanded(row.symbol)}
+              >
+                <ChevronRight
+                  className={`size-3.5 text-muted-foreground transition-transform duration-150 ease-out ${
+                    isExpanded ? "rotate-90" : "rotate-0"
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+              <SymbolPageLink symbol={row.symbol} name={row.name} navigate={navigate} />
               <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
               <span className="flex flex-col items-end gap-0.5 tabular-nums">
                 <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
                 <SignedPercent value={row.changePercent} />
               </span>
-            </button>
+            </div>
             <div
               inert={!isExpanded}
               className={`grid transition-[grid-template-rows] duration-150 ease-out ${
@@ -482,6 +484,24 @@ function MobileHoldingRows({
   );
 }
 
+function SymbolPageLink({ symbol, name, navigate }) {
+  const href = symbolPageHref(symbol);
+  return (
+    <a
+      href={href}
+      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      onClick={(event) => {
+        event.stopPropagation();
+        if (!navigate) return;
+        event.preventDefault();
+        void navigate({ to: href });
+      }}
+    >
+      <Sym symbol={symbol} name={name} />
+    </a>
+  );
+}
+
 function MobileMetric({ label, value }) {
   return (
     <div>
@@ -545,25 +565,14 @@ function LotActions({ lot, portfolio, readOnly, openPanel, invokeTool }) {
 }
 
 function ValueHeader({ summary, holdings, quoteBadge }) {
-  const todayPnl = useMemo(() => {
-    let total = 0;
-    let any = false;
-    for (const row of holdings) {
-      if (typeof row.changePercent === "number" && typeof row.marketValue === "number") {
-        const previous = row.marketValue / (1 + row.changePercent / 100);
-        total += row.marketValue - previous;
-        any = true;
-      }
-    }
-    return any ? total : null;
-  }, [holdings]);
+  const todayPnl = useMemo(() => derivePortfolioDayMove(holdings), [holdings]);
 
   const segments = holdings
     .filter((row) => typeof row.allocationPercent === "number" && row.allocationPercent > 0)
     .map((row, index) => ({
       symbol: row.symbol,
       percent: row.allocationPercent,
-      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
+      color: SERIES_COLORS[index % SERIES_COLORS.length],
     }));
 
   return (

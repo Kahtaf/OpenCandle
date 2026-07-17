@@ -27,6 +27,8 @@ import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
 import { createLocalSessionCoordinator } from "./local-session-coordinator.js";
+import { buildMarketIndicesSnapshot } from "./market-indices-api.js";
+import { MarketIndicesSnapshotStore } from "./market-indices-snapshot-store.js";
 import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest } from "./private-api-access.js";
@@ -123,6 +125,7 @@ const heartbeat = setInterval(() => {
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const localSessionCoordinator = createLocalSessionCoordinator();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
+const indicesSnapshotStore = new MarketIndicesSnapshotStore(() => buildMarketIndicesSnapshot());
 quotePoller = createBackgroundQuotePoller({
   getClientCount: () => wsHub.getClientCount(),
   getSessionManager: () => sessionManager,
@@ -243,6 +246,7 @@ const httpRequestHandler = createHttpRequestHandler({
   sessionActionsController,
   toolInvokeController,
   quoteSnapshotStore,
+  indicesSnapshotStore,
   localSessionCoordinator,
 });
 

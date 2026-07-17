@@ -35,7 +35,7 @@ export function EmptyThread({
   );
 }
 
-function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
+export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
   return (
     <div className="flex w-full min-w-0 flex-wrap justify-center gap-2">
       {prompts.map(([label, prompt]) => (
@@ -44,7 +44,7 @@ function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = fal
           variant="bordered"
           size="sm"
           rounded="full"
-          className="h-auto max-w-full whitespace-normal break-words px-3 py-1.5 text-center font-normal text-muted-foreground"
+          className="h-auto min-h-10 max-w-full whitespace-normal break-words px-3 py-1.5 text-center font-normal text-muted-foreground"
           disabled={disabled}
           onClick={() => {
             if (!disabled) onPrompt(prompt);

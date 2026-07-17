@@ -1,0 +1,65 @@
+{
+  "quotes": {
+    "^GSPC": {
+      "symbol": "^GSPC",
+      "longName": "S&P 500",
+      "regularMarketPrice": 6310.12,
+      "previousClose": 6298.5,
+      "regularMarketOpen": 6301.25,
+      "regularMarketDayHigh": 6320.4,
+      "regularMarketDayLow": 6288.1,
+      "regularMarketVolume": 3120000000,
+      "regularMarketTime": 1784210400,
+      "fiftyTwoWeekHigh": 6350.1,
+      "fiftyTwoWeekLow": 4953.56
+    },
+    "^IXIC": {
+      "symbol": "^IXIC",
+      "longName": "NASDAQ Composite",
+      "regularMarketPrice": 20580.44,
+      "previousClose": 20490.2,
+      "regularMarketOpen": 20505.8,
+      "regularMarketDayHigh": 20610.7,
+      "regularMarketDayLow": 20420.3,
+      "regularMarketVolume": 5100000000,
+      "regularMarketTime": 1784210400,
+      "fiftyTwoWeekHigh": 20700.2,
+      "fiftyTwoWeekLow": 15222.78,
+      "currency": "USD"
+    },
+    "^DJI": {
+      "symbol": "^DJI",
+      "longName": "Dow Jones Industrial Average",
+      "regularMarketPrice": 44780.1,
+      "previousClose": 44810.7,
+      "regularMarketOpen": 44820.2,
+      "regularMarketDayHigh": 44900.5,
+      "regularMarketDayLow": 44650.4,
+      "regularMarketVolume": 410000000,
+      "regularMarketTime": 1784210400,
+      "fiftyTwoWeekHigh": 45073.63,
+      "fiftyTwoWeekLow": 36611.78,
+      "currency": "USD"
+    },
+    "BTC-USD": {
+      "symbol": "BTC-USD",
+      "longName": "Bitcoin USD",
+      "regularMarketPrice": 119420.25,
+      "previousClose": 118900.5,
+      "regularMarketOpen": 118950.2,
+      "regularMarketDayHigh": 120100.75,
+      "regularMarketDayLow": 117800.4,
+      "regularMarketVolume": 58000000000,
+      "regularMarketTime": 1784210700,
+      "fiftyTwoWeekHigh": 123000.1,
+      "fiftyTwoWeekLow": 49050.2,
+      "currency": "USD"
+    }
+  },
+  "history": {
+    "^GSPC": [6290.1, 6302.4, 6310.12],
+    "^IXIC": [20420.2, 20510.5, 20580.44],
+    "^DJI": [44840.6, 44805.2, 44780.1],
+    "BTC-USD": [118300.2, 118950.7, 119420.25]
+  }
+}

@@ -1,12 +1,15 @@
+import { ExternalLink } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
+import { symbolPageHref } from "../../route-resolution.js";
 import {
   formatInstrumentCandidateLabel,
   formatInstrumentCandidateMeta,
   instrumentCandidateKey,
   instrumentSuggestionOptionId,
+  navigateToInstrumentCandidate,
 } from "./instrument-search-helpers.js";
 
 export function InstrumentSuggestionList({
@@ -23,6 +26,7 @@ export function InstrumentSuggestionList({
   portalAnchor,
   onActiveIndexChange,
   onSelect,
+  navigate,
 }) {
   const [position, setPosition] = useState(null);
 
@@ -70,41 +74,72 @@ export function InstrumentSuggestionList({
         className,
       )}
     >
-      {candidates.map((candidate, index) => (
-        <Button
-          key={instrumentCandidateKey(candidate, index)}
-          id={instrumentSuggestionOptionId(prefix, index)}
-          type="button"
-          variant="ghost"
-          role="option"
-          aria-selected={index === activeIndex}
-          className={cn(
-            "flex h-auto w-full items-center justify-between gap-3 rounded-none px-3 py-2 text-left hover:bg-secondary",
-            index === activeIndex && "bg-secondary",
-            rowClassName,
-          )}
-          onMouseDown={(event) => event.preventDefault()}
-          onMouseEnter={() => onActiveIndexChange?.(index)}
-          onClick={() => onSelect?.(candidate, index)}
-        >
-          <span className="shrink-0 font-mono font-medium text-foreground">
-            {symbolPrefix}
-            {String(candidate.symbol || "").toUpperCase()}
-          </span>
-          <span
-            className={cn("min-w-0 flex-1", detailsAlign === "left" ? "text-left" : "text-right")}
+      {candidates.map((candidate, index) => {
+        const symbol = String(candidate.symbol || "").toUpperCase();
+        return (
+          <div
+            key={instrumentCandidateKey(candidate, index)}
+            role="none"
+            className={cn("flex items-stretch", index === activeIndex && "bg-secondary")}
+            onMouseEnter={() => onActiveIndexChange?.(index)}
           >
-            <span className="block truncate text-muted-foreground">
-              {formatInstrumentCandidateLabel(candidate)}
-            </span>
-            {formatInstrumentCandidateMeta(candidate) ? (
-              <span className="block truncate text-xs text-muted-foreground">
-                {formatInstrumentCandidateMeta(candidate)}
+            <Button
+              id={instrumentSuggestionOptionId(prefix, index)}
+              type="button"
+              variant="ghost"
+              role="option"
+              aria-selected={index === activeIndex}
+              className={cn(
+                "flex h-auto min-w-0 flex-1 items-center justify-between gap-3 rounded-none px-3 py-2 text-left hover:bg-secondary",
+                rowClassName,
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect?.(candidate, index)}
+            >
+              <span className="shrink-0 font-mono font-medium text-foreground">
+                {symbolPrefix}
+                {symbol}
               </span>
+              <span
+                className={cn(
+                  "min-w-0 flex-1",
+                  detailsAlign === "left" ? "text-left" : "text-right",
+                )}
+              >
+                <span className="block truncate text-muted-foreground">
+                  {formatInstrumentCandidateLabel(candidate)}
+                </span>
+                {formatInstrumentCandidateMeta(candidate) ? (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {formatInstrumentCandidateMeta(candidate)}
+                  </span>
+                ) : null}
+              </span>
+            </Button>
+            {navigate ? (
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="h-auto shrink-0 rounded-none px-2"
+              >
+                <a
+                  href={symbolPageHref(symbol)}
+                  aria-label={`Open ${symbol} page`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigateToInstrumentCandidate(navigate, candidate);
+                  }}
+                >
+                  <ExternalLink className="button-icon" />
+                  <span className="sr-only">Open {symbol} page</span>
+                </a>
+              </Button>
             ) : null}
-          </span>
-        </Button>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 

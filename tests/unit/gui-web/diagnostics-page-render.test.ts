@@ -130,6 +130,9 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("rounded-xl");
     expect(html).toContain("text-balance");
     expect(html).toContain("tabular-nums");
+    expect(html).toContain("TradingView Lightweight Charts");
+    expect(html).toContain("Copyright (c) 2025 TradingView, Inc.");
+    expect(html).toContain("https://www.tradingview.com/");
   });
 
   it("renders the sessions warning with cancel and confirm actions", () => {

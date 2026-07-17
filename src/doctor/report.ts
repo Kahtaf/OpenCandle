@@ -2,6 +2,8 @@ import { accessSync, constants, existsSync, readFileSync, statSync } from "node:
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getConfig } from "../config.js";
+import { getUsage, isOverSoftThreshold, LSE_MONTHLY_BYTE_CAP } from "../infra/lse-byte-budget.js";
 import { getUnsupportedNodeVersionMessage } from "../infra/node-version.js";
 import {
   getConfigPath,
@@ -378,6 +380,18 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
       respectSkipped: true,
     }));
   const checks: DoctorCheck[] = statuses.map((status) => providerStatusCheck(status));
+
+  if (getConfig().lseApiKey && isOverSoftThreshold()) {
+    const percentUsed = Math.round((getUsage().bytesUsed / LSE_MONTHLY_BYTE_CAP) * 100);
+    checks.push({
+      id: "provider.lse.byte_budget",
+      label: "London Strategic Edge",
+      status: "warn",
+      capability: "optional",
+      summary: `London Strategic Edge monthly data allowance is ${percentUsed}% used; answers use Yahoo/Alpha Vantage until the month resets.`,
+      remediation: "Wait for the monthly allowance to reset before relying on this provider again.",
+    });
+  }
 
   for (const provider of providers.filter(isExternalToolProvider)) {
     const installStatus = statuses.find(

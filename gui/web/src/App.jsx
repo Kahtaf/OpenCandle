@@ -16,8 +16,10 @@ import {
   shouldStartFreshHomeSession,
 } from "./features/sessions/route-session-state.js";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
+import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
+import { domainFromPath, tickerFromPath } from "./route-resolution.js";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
 const CatalogOverlay = lazy(() =>
@@ -367,6 +369,7 @@ export function AppShell() {
         : activeDrawer === "workflows"
           ? "workflows"
           : "workflows";
+  const ticker = tickerFromPath(pathname);
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
     (toolName, args, targetSessionId, options) => {
@@ -403,9 +406,23 @@ export function AppShell() {
             setToast={gui.setToast}
             dataQuality={visibleDashboard?.dataQuality}
           />
+        ) : ticker ? (
+          <SymbolPage
+            ticker={ticker}
+            startChatRun={startRoutedChatRun}
+            navigate={navigate}
+            invokeTool={invokeToolForVisibleSession}
+            role={gui.role}
+            setToast={gui.setToast}
+            onOpenSidebar={() => openDrawer("history")}
+            onOpenHome={openHome}
+            sidebarCollapsed={sidebarCollapsed}
+            onExpandSidebar={() => setSidebarCollapsed(false)}
+          />
         ) : marketDomain ? (
           <MarketStatePage
             domain={marketDomain}
+            alertSymbol={search?.alertSymbol}
             role={gui.role}
             send={gui.send}
             invokeTool={invokeToolForVisibleSession}
@@ -444,6 +461,7 @@ export function AppShell() {
             sessionId={sessionView.activeSessionId}
             scrollAnchorId={scrollAnchorId}
             dashboard={visibleDashboard}
+            navigate={navigate}
           />
         )}
         <ToolDrawerInline />
@@ -494,12 +512,4 @@ function ConnectionStatusBanner({ role }) {
       {message}
     </div>
   );
-}
-
-function domainFromPath(pathname) {
-  if (pathname === "/watchlists") return "watchlists";
-  if (pathname === "/portfolios") return "portfolios";
-  if (pathname === "/alerts") return "alerts";
-  if (pathname === "/reports") return "reports";
-  return "";
 }

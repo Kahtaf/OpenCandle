@@ -1,10 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InstrumentSuggestionList } from "../../../gui/web/src/features/instruments/instrument-search.jsx";
 import {
   formatInstrumentCandidateLabel,
   formatInstrumentCandidateMeta,
+  navigateToInstrumentCandidate,
   nextInstrumentActiveIndex,
   resolveInstrumentSearchState,
 } from "../../../gui/web/src/features/instruments/instrument-search-helpers.js";
@@ -19,6 +20,14 @@ describe("instrument search UI helpers", () => {
       quoteType: "EQUITY",
     },
   ];
+
+  it("wires candidate page actions to encoded client navigation", () => {
+    const navigate = vi.fn();
+
+    navigateToInstrumentCandidate(navigate, { symbol: "^GSPC" });
+
+    expect(navigate).toHaveBeenCalledWith({ to: "/symbol/%5EGSPC" });
+  });
 
   it("renders a shared listbox row with optional cashtag symbol prefix", () => {
     const html = renderToStaticMarkup(
@@ -39,6 +48,23 @@ describe("instrument search UI helpers", () => {
     expect(html).toContain("Apple Inc.");
     expect(html).toContain("Nasdaq");
     expect(html).toContain("Stock");
+  });
+
+  it("renders a focus-visible symbol-page action when navigation is available", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(InstrumentSuggestionList, {
+        id: "ticker-suggestions",
+        optionIdPrefix: "ticker-suggestion",
+        candidates: [{ ...candidates[0], symbol: "^GSPC", name: "S&P 500" }],
+        activeIndex: 0,
+        navigate: vi.fn(),
+        onSelect: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('href="/symbol/%5EGSPC"');
+    expect(html).toContain("Open ^GSPC page");
+    expect(html).toContain("focus-visible:ring-2");
   });
 
   it("formats candidate labels and keyboard movement consistently", () => {

@@ -27,8 +27,11 @@ import type {
   SessionActionEnvelope,
   SessionActionResult,
 } from "./local-session-coordinator.js";
+import type { MarketIndicesSnapshotStore } from "./market-indices-snapshot-store.js";
 import {
   buildMarketStateSnapshot,
+  getInstrumentHistorySnapshot,
+  getInstrumentOverviewSnapshot,
   getInstrumentQuoteSnapshot,
   getSavedMarketStateSymbols,
   searchInstrumentCandidates,
@@ -74,6 +77,7 @@ interface GuiHttpRouteOptions {
   sessionActionsController: SessionActionsController;
   toolInvokeController: ToolInvokeController;
   quoteSnapshotStore: QuoteSnapshotStore;
+  indicesSnapshotStore: MarketIndicesSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
 }
 
@@ -223,6 +227,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/market-state/indices" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      writeJson(res, await options.indicesSnapshotStore.get());
+      return;
+    }
+
     if (url.pathname === "/api/doctor" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Diagnostics API", options)) return;
       const session = options.getSession();
@@ -254,6 +264,27 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/instruments/quote" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await getInstrumentQuoteSnapshot(url.searchParams.get("symbol") ?? ""));
+      return;
+    }
+
+    if (url.pathname === "/api/instruments/overview" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      writeJson(res, await getInstrumentOverviewSnapshot(url.searchParams.get("symbol") ?? ""));
+      return;
+    }
+
+    if (url.pathname === "/api/instruments/history" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      const snapshot = await getInstrumentHistorySnapshot(
+        url.searchParams.get("symbol") ?? "",
+        url.searchParams.get("range") ?? "1D",
+        url.searchParams.get("interval") ?? undefined,
+      );
+      if (snapshot.status === "invalid_request") {
+        writeJson(res, snapshot, 400);
+        return;
+      }
+      writeJson(res, snapshot);
       return;
     }
 

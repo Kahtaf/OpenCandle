@@ -73,6 +73,17 @@ export function Panel({ title, count, meta, actions, children }) {
   );
 }
 
+export function InspectorSection({ title, children }) {
+  return (
+    <section className="border-b border-border p-4 last:border-0">
+      <h3 className="mb-2 text-balance text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 export function PanelSearch({ label, filter, setFilter }) {
   const inputId = useId();
   return (

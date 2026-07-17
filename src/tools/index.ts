@@ -10,6 +10,7 @@ import { fearGreedTool } from "./macro/fear-greed.js";
 import { fredDataTool } from "./macro/fred-data.js";
 import { cryptoHistoryTool } from "./market/crypto-history.js";
 import { cryptoPriceTool } from "./market/crypto-price.js";
+import { priceComparisonTool } from "./market/price-comparison.js";
 import { screenStocksTool } from "./market/screen-stocks.js";
 import { searchTickerTool } from "./market/search-ticker.js";
 import { stockHistoryTool } from "./market/stock-history.js";
@@ -43,6 +44,7 @@ export { fearGreedTool } from "./macro/fear-greed.js";
 export { fredDataTool } from "./macro/fred-data.js";
 export { cryptoHistoryTool } from "./market/crypto-history.js";
 export { cryptoPriceTool } from "./market/crypto-price.js";
+export { priceComparisonTool } from "./market/price-comparison.js";
 export { screenStocksTool } from "./market/screen-stocks.js";
 export { searchTickerTool } from "./market/search-ticker.js";
 export { stockHistoryTool } from "./market/stock-history.js";
@@ -70,6 +72,7 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}) {
     searchTickerTool,
     stockQuoteTool,
     stockHistoryTool,
+    priceComparisonTool,
     screenStocksTool,
     cryptoPriceTool,
     cryptoHistoryTool,

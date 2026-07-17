@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { homePromptsForMarketState } from "../../components/chat/home-prompts.js";
-import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import {
   AssistantMessage,
   CustomMessage,
@@ -16,6 +15,7 @@ import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
+import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
@@ -60,6 +60,7 @@ export function ChatPanel({
   sessionId = "",
   scrollAnchorId = "",
   dashboard,
+  navigate,
 }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
@@ -283,15 +284,10 @@ export function ChatPanel({
     >
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <div
-        className={cn("relative min-h-0 flex-1", isEmptyThread && "flex flex-col justify-center")}
-      >
+      <div className="relative min-h-0 flex-1">
         <section
           ref={transcript.viewportRef}
-          className={cn(
-            "h-full overflow-y-auto px-3 py-6 sm:px-6 md:px-12",
-            isEmptyThread && "h-auto flex-none overflow-visible",
-          )}
+          className="h-full overflow-y-auto px-3 py-6 sm:px-6 md:px-12"
           data-chat-transcript
           data-scroll-anchor-id={scrollAnchorId || undefined}
           aria-label="Chat transcript"
@@ -307,12 +303,16 @@ export function ChatPanel({
           ) : sessionLoading ? (
             <SessionLoadingState />
           ) : isEmptyThread ? (
-            <EmptyThread
+            <HomeDashboard
               prompts={homePrompts}
               onPrompt={submit}
               onOpenCatalog={onOpenCommandPalette}
               disabled={chatDisabled}
-            />
+              marketState={marketState.state}
+              marketStateLoading={marketState.loading}
+            >
+              {composer}
+            </HomeDashboard>
           ) : (
             <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
               {groupedRows.map((entry) => (
@@ -342,7 +342,6 @@ export function ChatPanel({
             </div>
           )}
         </section>
-        {isEmptyThread ? composer : null}
         {transcript.showJumpToLatest ? (
           <Button
             type="button"
@@ -374,6 +373,7 @@ export function ChatPanel({
         resolving={symbolResolution.resolving}
         onAddToWatchlist={addSelectedToWatchlist}
         onAskAbout={askAboutSymbol}
+        navigate={navigate}
       />
       {!isEmptyThread ? composer : null}
     </section>

@@ -8,6 +8,7 @@ import { getEarnings, getFinancials, getOverview } from "../../src/providers/alp
 import { getCryptoHistory, getCryptoPrice } from "../../src/providers/coingecko.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
 import { getSeries } from "../../src/providers/fred.js";
+import { getLseCandles } from "../../src/providers/lse.js";
 import { searchPredictionMarkets } from "../../src/providers/polymarket.js";
 import { getPostComments, getSubredditPosts } from "../../src/providers/reddit.js";
 import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
@@ -70,6 +71,7 @@ const CRYPTO_YAHOO = [
 
 const avKey = process.env.ALPHA_VANTAGE_API_KEY;
 const fredKey = process.env.FRED_API_KEY;
+const lseKey = process.env.LSE_API_KEY;
 
 type Result = { tool: string; ticker: string; status: "PASS" | "FAIL" | "SKIP"; error?: string };
 const results: Result[] = [];
@@ -193,6 +195,43 @@ if (avKey) {
   }
 } else {
   console.log("\n[7/8] Fundamentals — SKIPPED (no ALPHA_VANTAGE_API_KEY)");
+}
+
+// --- LONDON STRATEGIC EDGE ---
+if (lseKey) {
+  console.log("\n--- London Strategic Edge ---");
+  await test("lse_candles", "AAPL", async () => {
+    const rows: unknown = await getLseCandles("AAPL", "1d", { limit: 5 });
+    const validRows =
+      Array.isArray(rows) &&
+      rows.length > 0 &&
+      rows.every((row) => {
+        if (typeof row !== "object" || row === null) return false;
+        const candle = row as Record<string, unknown>;
+        return (
+          typeof candle.ts === "string" &&
+          typeof candle.symbol === "string" &&
+          typeof candle.open === "number" &&
+          Number.isFinite(candle.open) &&
+          typeof candle.high === "number" &&
+          Number.isFinite(candle.high) &&
+          typeof candle.low === "number" &&
+          Number.isFinite(candle.low) &&
+          typeof candle.close === "number" &&
+          Number.isFinite(candle.close) &&
+          typeof candle.volume === "number" &&
+          Number.isFinite(candle.volume)
+        );
+      });
+    if (!validRows) {
+      throw new Error(
+        "London Strategic Edge candle response shape drift: expected a non-empty array of typed OHLCV rows",
+      );
+    }
+    return rows;
+  });
+} else {
+  console.log("\nLondon Strategic Edge — SKIPPED (no LSE_API_KEY)");
 }
 
 // --- MACRO + SENTIMENT ---
