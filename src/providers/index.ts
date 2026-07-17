@@ -5,6 +5,7 @@ export { getSeries } from "./fred.js";
 export {
   getLseCandles,
   getLseFinancialReports,
+  getLseFinancials,
   type LseCandle,
   type LseFinancialReportRow,
   LseHttpError,

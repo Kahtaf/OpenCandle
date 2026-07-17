@@ -106,7 +106,8 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
         order: "asc",
       });
       return rows.map((row) => ({
-        // OHLCV has no timestamp field in this checkout; preserve D5's date-only mapping.
+        // Verified UTC from a live 2026-07-14 1h capture: naive 08:00–23:00 bars
+        // match the 04:00–19:00 ET extended session. OHLCV is date-only here.
         date: row.ts.slice(0, 10),
         open: row.open,
         high: row.high,

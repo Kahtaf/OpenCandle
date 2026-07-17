@@ -2,6 +2,7 @@ import { getConfig } from "../config.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { markExhausted, recordBytes } from "../infra/lse-byte-budget.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import type { FinancialStatement } from "../types/fundamentals.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
 const BASE_URL = "https://api.londonstrategicedge.com/vault";
@@ -21,7 +22,6 @@ export interface LseCandle {
   volume: number;
 }
 
-// The 6.2 mapper is deliberately deferred until real financial-report fixtures exist.
 export type LseFinancialReportRow = Record<string, unknown>;
 
 interface LseCandleOptions {
@@ -172,6 +172,79 @@ export async function getLseFinancialReports(
     if (stale) return stale.value;
     throw error;
   }
+}
+
+function parseNum(value: unknown): number {
+  if (typeof value !== "number" && typeof value !== "string") return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseReportData(row: LseFinancialReportRow): Record<string, unknown> | undefined {
+  if (typeof row.data !== "string") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(row.data);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function indexReportData(rows: LseFinancialReportRow[]): Map<string, Record<string, unknown>> {
+  const indexed = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    if (typeof row.date !== "string") continue;
+    const data = parseReportData(row);
+    if (data) indexed.set(row.date, data);
+  }
+  return indexed;
+}
+
+export async function getLseFinancials(symbol: string): Promise<FinancialStatement[]> {
+  const [incomeRows, balanceRows, cashflowRows] = await Promise.all([
+    getLseFinancialReports(symbol, "income", { period: "FY" }),
+    getLseFinancialReports(symbol, "balance", { period: "FY" }),
+    getLseFinancialReports(symbol, "cashflow", { period: "FY" }),
+  ]);
+  const balanceByDate = indexReportData(balanceRows);
+  const cashflowByDate = indexReportData(cashflowRows);
+
+  return incomeRows
+    .flatMap((row) => {
+      if (typeof row.date !== "string") return [];
+      const income = parseReportData(row);
+      return income ? [{ date: row.date, income }] : [];
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4)
+    .map(({ date, income }) => {
+      const balance = balanceByDate.get(date) ?? {};
+      const cashflow = cashflowByDate.get(date) ?? {};
+      const operatingCashFlow = parseNum(cashflow.operatingCashFlow);
+      const freeCashFlow = Object.hasOwn(cashflow, "freeCashFlow")
+        ? parseNum(cashflow.freeCashFlow)
+        : // LSE capex is negative; subtract its magnitude to match AV's positive-capex semantics.
+          operatingCashFlow - Math.abs(parseNum(cashflow.capitalExpenditure));
+
+      return {
+        fiscalDate: date,
+        revenue: parseNum(income.revenue),
+        grossProfit: parseNum(income.grossProfit),
+        operatingIncome: parseNum(income.operatingIncome),
+        netIncome: parseNum(income.netIncome),
+        eps: parseNum(income.eps),
+        totalAssets: parseNum(balance.totalAssets),
+        totalLiabilities: parseNum(balance.totalLiabilities),
+        totalEquity: parseNum(balance.totalEquity),
+        operatingCashFlow,
+        freeCashFlow,
+        totalDebt: parseNum(balance.totalDebt) || undefined,
+        cashAndEquivalents: parseNum(balance.cashAndCashEquivalents) || undefined,
+        sharesOutstanding: parseNum(income.weightedAverageShsOut) || undefined,
+      };
+    });
 }
 
 export function toLseTimeframe(interval: string): LseTimeframe | undefined {

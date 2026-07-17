@@ -6,12 +6,16 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import {
   getLseCandles,
   getLseFinancialReports,
+  getLseFinancials,
   LseHttpError,
   toLseTimeframe,
 } from "../../../src/providers/lse.js";
 import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import candlesFixture from "../../fixtures/lse/candles-AAPL-1d.json";
 import allowanceFixture from "../../fixtures/lse/error-429-allowance.json";
+import balanceFixture from "../../fixtures/lse/financial-reports-AAPL-balance.json";
+import cashflowFixture from "../../fixtures/lse/financial-reports-AAPL-cashflow.json";
+import incomeFixture from "../../fixtures/lse/financial-reports-AAPL-income.json";
 
 vi.mock("../../../src/config.js", () => ({
   getConfig: vi.fn(() => ({ lseApiKey: "test-lse-key" })),
@@ -216,6 +220,84 @@ describe("LSE provider", () => {
       "https://api.londonstrategicedge.com/vault/ref/financial_reports?symbol=AAPL&report_type=income&period=FY&start=2024-01-01&end=2025-01-01&order=desc&limit=5",
       expect.objectContaining({ headers: { "x-api-key": "test-lse-key" } }),
     );
+  });
+
+  it("maps the newest four annual financial statements from real report fixtures", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const reportType = new URL(String(input)).searchParams.get("report_type");
+      const fixture =
+        reportType === "income"
+          ? incomeFixture
+          : reportType === "balance"
+            ? balanceFixture
+            : cashflowFixture;
+      return Promise.resolve(jsonResponse(fixture));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const statements = await getLseFinancials("AAPL");
+
+    expect(statements).toHaveLength(4);
+    expect(statements.map((statement) => statement.fiscalDate)).toEqual([
+      "2025-09-27",
+      "2024-09-28",
+      "2023-09-30",
+      "2022-09-24",
+    ]);
+    expect(statements[0]).toEqual({
+      fiscalDate: "2025-09-27",
+      revenue: 416_161_000_000,
+      grossProfit: 195_201_000_000,
+      operatingIncome: 133_050_000_000,
+      netIncome: 112_010_000_000,
+      eps: 7.49,
+      totalAssets: 359_241_000_000,
+      totalLiabilities: 285_508_000_000,
+      totalEquity: 73_733_000_000,
+      operatingCashFlow: 111_482_000_000,
+      freeCashFlow: 98_767_000_000,
+      totalDebt: 112_377_000_000,
+      cashAndEquivalents: 35_934_000_000,
+      sharesOutstanding: 14_948_500_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("skips invalid JSON rows and derives missing free cash flow from signed capex", async () => {
+    const reports = {
+      income: [
+        { date: "2025-12-31", data: '{"revenue":"100","weightedAverageShsOut":"10"}' },
+        { date: "2026-12-31", data: "{" },
+      ],
+      balance: [{ date: "2025-12-31", data: '{"totalAssets":"200"}' }],
+      cashflow: [
+        {
+          date: "2025-12-31",
+          data: '{"operatingCashFlow":"100","capitalExpenditure":-25}',
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const reportType = new URL(String(input)).searchParams.get(
+          "report_type",
+        ) as keyof typeof reports;
+        return Promise.resolve(jsonResponse(reports[reportType]));
+      }),
+    );
+
+    const statements = await getLseFinancials("EDGE");
+
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toMatchObject({
+      fiscalDate: "2025-12-31",
+      revenue: 100,
+      totalAssets: 200,
+      operatingCashFlow: 100,
+      freeCashFlow: 75,
+      sharesOutstanding: 10,
+    });
   });
 
   it.each([

@@ -1,7 +1,9 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
+import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
 import { getFinancials, getOverview } from "../../providers/alpha-vantage.js";
+import { getLseFinancials } from "../../providers/lse.js";
 import { ProviderCredentialError } from "../../providers/provider-credential-error.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote, getYahooFinancials } from "../../providers/yahoo-finance.js";
@@ -222,11 +224,29 @@ export const dcfTool: AgentTool<typeof params> = {
     const symbol = args.symbol.toUpperCase();
     const config = getConfig();
     const alphaVantageApiKey = config.alphaVantageApiKey;
-
-    const [alphaVantageFinancialsResult, quoteResult] = await Promise.all([
-      optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey)),
-      wrapProvider("yahoo", () => getQuote(symbol)),
-    ]);
+    const quotePromise = wrapProvider("yahoo", () => getQuote(symbol));
+    const lseEligible = !!config.lseApiKey && !isOverSoftThreshold();
+    let lseFinancialsResult: ProviderResult<FinancialStatement[]> | undefined;
+    if (lseEligible) {
+      try {
+        lseFinancialsResult = await wrapProvider("lse", () => getLseFinancials(symbol));
+      } catch (error) {
+        if (error instanceof ProviderCredentialError) {
+          lseFinancialsResult = {
+            status: "unavailable",
+            reason: `London Strategic Edge credential ${error.reason}`,
+            provider: "lse",
+          };
+        } else {
+          throw error;
+        }
+      }
+    }
+    const lseIsFresh = lseFinancialsResult?.status === "ok" && !lseFinancialsResult.stale;
+    const alphaVantageFinancialsResult = lseIsFresh
+      ? undefined
+      : await optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey));
+    const quoteResult = await quotePromise;
 
     const missing: string[] = [];
     if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
@@ -256,19 +276,24 @@ export const dcfTool: AgentTool<typeof params> = {
       };
     }
 
-    let financialsSource = "Alpha Vantage";
+    let financialsSource = lseIsFresh ? "London Strategic Edge" : "Alpha Vantage";
     let financials: FinancialStatement[];
-    if (alphaVantageFinancialsResult.status === "ok" && !alphaVantageFinancialsResult.stale) {
+    if (lseIsFresh && lseFinancialsResult?.status === "ok") {
+      financials = lseFinancialsResult.data;
+    } else if (
+      alphaVantageFinancialsResult?.status === "ok" &&
+      !alphaVantageFinancialsResult.stale
+    ) {
       financials = alphaVantageFinancialsResult.data;
     } else {
       const alphaVantageReason =
-        alphaVantageFinancialsResult.status === "ok"
+        alphaVantageFinancialsResult?.status === "ok"
           ? `stale cached financial statements${
               alphaVantageFinancialsResult.timestamp
                 ? ` from ${alphaVantageFinancialsResult.timestamp}`
                 : ""
             }`
-          : alphaVantageFinancialsResult.reason;
+          : (alphaVantageFinancialsResult?.reason ?? "Alpha Vantage unavailable");
       const yahooFinancialsResult = await wrapProvider("yahoo", () => getYahooFinancials(symbol));
       if (yahooFinancialsResult.status === "unavailable") {
         return {

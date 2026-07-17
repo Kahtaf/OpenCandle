@@ -114,5 +114,5 @@ Purely additive; no data migration. Rollout: land provider + budget + registry f
 
 - ToS verdict (milestone 0) — the only blocking unknown.
 - Exact `detail` strings for allowance vs. rate-limit 429s must be captured from live responses when recording fixtures; until then the fixture encodes the documented shape.
-- Whether LSE `ts` values are UTC (assumed; see D5 candle-row mapping) — confirm against `GET /meta` or vendor docs during live capture (task 9.3).
-- The exact `/ref/financial_reports` row field names were not captured from the docs; the mapper is written fixture-first against a saved real response (task 2.2), never against guessed field names.
+- **RESOLVED (2026-07-16 live capture):** LSE `ts` values are UTC. AAPL 1h bars for 2026-07-14 ran from naive 08:00 through 23:00, matching the 04:00–19:00 ET extended session.
+- **RESOLVED (2026-07-16 live fixtures):** the exact `/ref/financial_reports` row schema was captured for income, balance, and cashflow; the mapper is fixture-first against those verbatim responses.
