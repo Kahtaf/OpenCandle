@@ -62,12 +62,10 @@ export default function SymbolPage({
       role={role}
       startChatRun={startChatRun}
       onAddToWatchlist={() => mutate("manage_watchlist", { action: "add", symbol: data.symbol })}
-      onCreateAlert={() =>
-        mutate("manage_alerts", {
-          action: "create_price_above",
-          symbol: data.symbol,
-          threshold: data.quote?.price,
-        })
+      createAlertHref={
+        data.quote?.status === "ok"
+          ? `/alerts?alertSymbol=${encodeURIComponent(data.symbol)}`
+          : null
       }
       flashClass={quoteFlashClass(quoteFlashes.get(data.symbol))}
       onOpenSidebar={onOpenSidebar}
@@ -86,7 +84,7 @@ export function SymbolPageView({
   role = "writer",
   startChatRun,
   onAddToWatchlist,
-  onCreateAlert,
+  createAlertHref,
   flashClass,
   onOpenSidebar,
   onOpenHome,
@@ -170,7 +168,7 @@ export function SymbolPageView({
                     ticker={ticker}
                     alertRows={data.alertRows}
                     role={role}
-                    onCreateAlert={onCreateAlert}
+                    createAlertHref={createAlertHref}
                   />
                   <WatchlistMembership
                     ticker={ticker}

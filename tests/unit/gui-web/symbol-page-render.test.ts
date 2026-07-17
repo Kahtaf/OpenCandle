@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SymbolPageView } from "../../../gui/web/src/features/symbol/SymbolPage.jsx";
 import { invokeSymbolMutation } from "../../../gui/web/src/features/symbol/symbol-actions.js";
+import { analyzePromptsForSymbol } from "../../../gui/web/src/features/symbol/symbol-prompts.js";
 import {
   AlertsCard,
   AnalyzePanel,
-  analyzePromptsForSymbol,
   KeyStats,
   PositionCard,
   SymbolHeader,
@@ -217,6 +217,18 @@ describe("symbol page", () => {
     ).toBe("");
   });
 
+  it("formats market cap in the instrument currency", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(KeyStats, {
+        currency: "CAD",
+        overview: { status: "ok", marketCap: 3_000_000_000 },
+      }),
+    );
+
+    expect(html).toContain("CAD 3.00B");
+    expect(html).not.toContain("$3.00B");
+  });
+
   it("renders populated position, alert, and watchlist context with tabular P&L", () => {
     const context = deriveSymbolContext(STATE, "MSFT");
     const html = renderToStaticMarkup(
@@ -245,13 +257,38 @@ describe("symbol page", () => {
     expect(html).toContain("Default");
   });
 
+  it("links alert creation to the threshold form and disables it without a quote", () => {
+    const linked = renderToStaticMarkup(
+      React.createElement(AlertsCard, {
+        ticker: "MSFT",
+        alertRows: [],
+        createAlertHref: "/alerts?alertSymbol=MSFT",
+      }),
+    );
+    const disabled = renderToStaticMarkup(
+      React.createElement(AlertsCard, {
+        ticker: "MSFT",
+        alertRows: [],
+        createAlertHref: null,
+      }),
+    );
+
+    expect(linked).toContain('href="/alerts?alertSymbol=MSFT"');
+    expect(linked).not.toContain('disabled=""');
+    expect(disabled).toContain('disabled=""');
+  });
+
   it("renders saved-context empty states and a writer add-to-watchlist affordance", () => {
     const html = renderToStaticMarkup(
       React.createElement(
         React.Fragment,
         null,
         React.createElement(PositionCard, { ticker: "MSFT", positionRows: [] }),
-        React.createElement(AlertsCard, { ticker: "MSFT", alertRows: [] }),
+        React.createElement(AlertsCard, {
+          ticker: "MSFT",
+          alertRows: [],
+          createAlertHref: "/alerts?alertSymbol=MSFT",
+        }),
         React.createElement(WatchlistMembership, {
           ticker: "MSFT",
           memberships: [],
@@ -298,7 +335,7 @@ describe("symbol page", () => {
           ticker: "NVDA",
           role: "follower",
           alertRows: [],
-          onCreateAlert: vi.fn(),
+          createAlertHref: "/alerts?alertSymbol=NVDA",
         }),
         React.createElement(WatchlistMembership, {
           ticker: "NVDA",

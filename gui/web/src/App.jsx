@@ -422,6 +422,7 @@ export function AppShell() {
         ) : marketDomain ? (
           <MarketStatePage
             domain={marketDomain}
+            alertSymbol={search?.alertSymbol}
             role={gui.role}
             send={gui.send}
             invokeTool={invokeToolForVisibleSession}

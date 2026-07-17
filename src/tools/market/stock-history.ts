@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
+import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
 import { getDailyHistory } from "../../providers/alpha-vantage.js";
 import { getLseCandles, type LseTimeframe, toLseTimeframe } from "../../providers/lse.js";
@@ -166,7 +167,15 @@ const params = Type.Object({
   ),
 });
 
-export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
+export interface StaleStockHistoryDetails {
+  bars: OHLCV[];
+  provider?: string;
+  providerTimestamp: string;
+  stale: true;
+  freshness: FreshnessStamp;
+}
+
+export const stockHistoryTool: AgentTool<typeof params, OHLCV[] | StaleStockHistoryDetails> = {
   name: "get_stock_history",
   label: "Stock History",
   description: "Get historical OHLCV (open, high, low, close, volume) data for a stock",
@@ -193,10 +202,17 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
       };
     }
     const bars = result.data;
+    const freshness = buildFreshnessStamp({
+      asOf: bars.at(-1)?.timestamp ?? bars.at(-1)?.date,
+      stale: result.stale,
+      cached: result.cached,
+      cachedAt: result.stale ? result.timestamp : undefined,
+    });
 
     const summary = [
       `${symbol} — ${bars.length} bars (${range}, ${interval})`,
       `Period: ${bars[0]?.date} to ${bars[bars.length - 1]?.date}`,
+      ...(result.stale ? [`Data status: Stale cache. ${formatAsOfLine(freshness)}`] : []),
     ];
 
     // Include last 10 bars as sample
@@ -209,6 +225,17 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
       .join("\n");
 
     const text = [...summary, "", "Recent bars:", table].join("\n");
-    return { content: [{ type: "text", text }], details: bars };
+    return {
+      content: [{ type: "text", text }],
+      details: result.stale
+        ? {
+            bars,
+            provider: result.provider,
+            providerTimestamp: result.timestamp,
+            stale: true,
+            freshness,
+          }
+        : bars,
+    };
   },
 };

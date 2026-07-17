@@ -96,5 +96,6 @@ function validateGuiSearch(search) {
     messageId: typeof search.messageId === "string" ? search.messageId : undefined,
     researchId: typeof search.researchId === "string" ? search.researchId : undefined,
     synthesisId: typeof search.synthesisId === "string" ? search.synthesisId : undefined,
+    alertSymbol: typeof search.alertSymbol === "string" ? search.alertSymbol : undefined,
   };
 }

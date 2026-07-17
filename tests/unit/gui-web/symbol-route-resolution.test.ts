@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { appPageFromPath, tickerFromPath } from "../../../gui/web/src/route-resolution.js";
+import {
+  appPageFromPath,
+  symbolPageHref,
+  tickerFromPath,
+} from "../../../gui/web/src/route-resolution.js";
 import { router } from "../../../gui/web/src/router.jsx";
 
 describe("tickerFromPath", () => {
@@ -11,6 +15,10 @@ describe("tickerFromPath", () => {
     ["/symbol/BTC-USD", "BTC-USD"],
   ])("resolves %s to %s", (pathname, expected) => {
     expect(tickerFromPath(pathname)).toBe(expected);
+  });
+
+  it.each(["ES=F", "EURUSD=X"])("round-trips the supported = symbol %s", (symbol) => {
+    expect(tickerFromPath(symbolPageHref(symbol))).toBe(symbol);
   });
 
   it.each([
@@ -36,6 +44,7 @@ describe("symbol route", () => {
       messageId: undefined,
       researchId: undefined,
       synthesisId: undefined,
+      alertSymbol: undefined,
     });
   });
 });

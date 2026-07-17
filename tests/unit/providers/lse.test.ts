@@ -69,6 +69,29 @@ describe("LSE provider", () => {
     );
   });
 
+  it("rejects an empty candle payload instead of caching a zero-bar success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => Promise.resolve(jsonResponse([]))),
+    );
+
+    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows/i);
+    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows/i);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { label: "unparseable timestamps", patch: { ts: "not-a-timestamp" } },
+    { label: "negative volume", patch: { volume: -1 } },
+    { label: "high below close", patch: { high: 10, close: 11 } },
+    { label: "low above open", patch: { low: 11, open: 10 } },
+  ])("rejects candle rows with $label", async ({ patch }) => {
+    const malformed = [{ ...candlesFixture[0], ...patch }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(malformed)));
+
+    await expect(getLseCandles("AAPL", "1d")).rejects.toThrow(/valid candle rows/i);
+  });
+
   it("sends candle start dates to LSE as YYYY-MM-DD", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(candlesFixture));
     vi.stubGlobal("fetch", fetchMock);

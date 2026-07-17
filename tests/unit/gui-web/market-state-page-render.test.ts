@@ -585,6 +585,22 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Condition");
   });
 
+  it("opens the alert create form with a route-prefilled symbol", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        alertSymbol: "MSFT",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("Create Alert");
+    expect(html).toContain('value="MSFT"');
+    expect(html).toContain("Price threshold ($)");
+  });
+
   it("uses human cooldown choices and condition-specific alert field labels", () => {
     const html = renderToStaticMarkup(
       React.createElement(AlertCreateForm, {

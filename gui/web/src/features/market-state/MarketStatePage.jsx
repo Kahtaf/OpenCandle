@@ -99,6 +99,7 @@ export async function invokeMarketStateMutation({
 
 export function MarketStatePage({
   domain,
+  alertSymbol,
   role,
   invokeTool: invokeToolRequest,
   navigate,
@@ -113,7 +114,11 @@ export function MarketStatePage({
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
   const [filter, setFilter] = useState("");
-  const [panel, setPanel] = useState(null);
+  const [panel, setPanel] = useState(() =>
+    domain === "alerts" && alertSymbol
+      ? { type: "alert-create", data: { symbol: alertSymbol.trim().toUpperCase() } }
+      : null,
+  );
   const [pendingMutation, setPendingMutation] = useState(null);
   const panelOpenerRef = useRef(null);
   const mutationPending = Boolean(pendingMutation);

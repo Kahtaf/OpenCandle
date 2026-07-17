@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
+import { buttonVariants } from "../../components/ui/button-variants.js";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
 import {
@@ -13,6 +14,7 @@ import {
   StatusDot,
 } from "../market-state/shared.jsx";
 import { formatLargeNumber } from "../renderers/cards/card-format.js";
+import { analyzePromptsForSymbol } from "./symbol-prompts.js";
 
 export function SymbolHeader({ ticker, quote, overview, flashClass }) {
   const currency = quote?.currency ?? "USD";
@@ -78,7 +80,11 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
 export function KeyStats({ overview, currency = "USD" }) {
   if (overview?.status !== "ok") return null;
   const stats = [
-    ["Market cap", overview.marketCap, (value) => `$${formatLargeNumber(value)}`],
+    [
+      "Market cap",
+      overview.marketCap,
+      (value) => `${currency === "USD" ? "$" : `${currency} `}${formatLargeNumber(value)}`,
+    ],
     ["Trailing P/E", overview.pe, formatDecimal],
     ["Forward P/E", overview.forwardPe, formatDecimal],
     ["EPS", overview.eps, (value) => money(value, currency)],
@@ -148,24 +154,28 @@ export function PositionCard({ ticker, positionRows = [] }) {
   );
 }
 
-export function AlertsCard({ ticker, alertRows = [], onCreateAlert, role = "writer" }) {
+export function AlertsCard({ ticker, alertRows = [], createAlertHref, role = "writer" }) {
   const readOnly = role !== "writer";
+  const actionClass =
+    "min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,scale]";
   return (
     <fieldset aria-label="Alerts" className="m-0 min-w-0 border-0 p-0">
       <Panel
         title="Alerts"
         count={alertRows.length}
         actions={
-          <Button
-            type="button"
-            variant="bordered"
-            size="sm"
-            disabled={readOnly}
-            className="min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,scale]"
-            onClick={onCreateAlert}
-          >
-            Create alert
-          </Button>
+          !readOnly && createAlertHref ? (
+            <a
+              href={createAlertHref}
+              className={cn(buttonVariants({ variant: "bordered", size: "sm" }), actionClass)}
+            >
+              Create alert
+            </a>
+          ) : (
+            <Button type="button" variant="bordered" size="sm" disabled className={actionClass}>
+              Create alert
+            </Button>
+          )
         }
       >
         {alertRows.length ? (
@@ -226,15 +236,6 @@ export function WatchlistMembership({ ticker, memberships = [], role = "writer",
       </Panel>
     </fieldset>
   );
-}
-
-export function analyzePromptsForSymbol(ticker) {
-  const symbol = ticker.trim().toUpperCase();
-  return [
-    [`What is ${symbol} trading at?`, `What is ${symbol} trading at?`],
-    [`Options chain for ${symbol}`, `Show options chain for ${symbol}`],
-    [`Deep research: ${symbol} (multi-analyst, takes a few minutes)`, `/analyze ${symbol}`],
-  ];
 }
 
 export function AnalyzePanel({ ticker, role = "writer", startChatRun }) {

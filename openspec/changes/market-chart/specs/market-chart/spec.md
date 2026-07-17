@@ -17,7 +17,7 @@
 
 ### Requirement: GUI server exposes a guarded read-only instrument history endpoint
 
-The GUI server SHALL serve `GET /api/instruments/history?symbol=<sym>&range=<range>&interval=<interval>` from `gui/server/http-routes.ts`, registered alongside `/api/instruments/quote`, guarded by `allowTrustedGuiRequest(req, res, "Market-state API", options)`. The route SHALL be follower-safe: it uses no Pi session and takes no writer lock, so follower GUI processes serve it identically to the writer. A `compare` query parameter is reserved for a future change and SHALL be ignored when present. The response SHALL be built by `getInstrumentHistorySnapshot()` in `gui/server/market-state-api.ts` and have the shape `{ symbol, range, interval, source: "Yahoo Finance", fetchedAt, dataAsOf, stale, prevClose, bars: [{ time, open, high, low, close, volume }] }` where each `time` is a UTC epoch-second bar timestamp; provider failure SHALL yield an unavailable-shaped result (`status: "unavailable"` with a human-readable `reason`), not a thrown 500.
+The GUI server SHALL serve `GET /api/instruments/history?symbol=<sym>&range=<range>&interval=<interval>` from `gui/server/http-routes.ts`, registered alongside `/api/instruments/quote`, guarded by `allowTrustedGuiRequest(req, res, "Market-state API", options)`. The route SHALL be follower-safe: it uses no Pi session and takes no writer lock, so follower GUI processes serve it identically to the writer. A `compare` query parameter is reserved for a future change and SHALL be ignored when present. The response SHALL be built by `getInstrumentHistorySnapshot()` in `gui/server/market-state-api.ts` and have the shape `{ symbol, range, interval, source: "Yahoo Finance" | "Alpha Vantage" | "London Strategic Edge", fetchedAt, dataAsOf, stale, prevClose, bars: [{ time, open, high, low, close, volume }] }` where each `time` is a UTC epoch-second bar timestamp; provider failure SHALL yield an unavailable-shaped result (`status: "unavailable"` with a human-readable `reason`), not a thrown 500.
 
 #### Scenario: Untrusted request is rejected
 
@@ -27,7 +27,7 @@ The GUI server SHALL serve `GET /api/instruments/history?symbol=<sym>&range=<ran
 #### Scenario: Trusted request returns epoch-second bars
 
 - **WHEN** a trusted request asks for `symbol=AAPL&range=1D`
-- **THEN** the JSON response contains `symbol: "AAPL"`, `range: "1D"`, `interval: "5m"`, `source: "Yahoo Finance"`, `fetchedAt`, `dataAsOf`, `stale`, `prevClose`, and `bars` whose `time` values are distinct UTC epoch seconds
+- **THEN** the JSON response contains `symbol: "AAPL"`, `range: "1D"`, `interval: "5m"`, `source` attributed as one of `"Yahoo Finance"`, `"Alpha Vantage"`, or `"London Strategic Edge"`, plus `fetchedAt`, `dataAsOf`, `stale`, `prevClose`, and `bars` whose `time` values are distinct UTC epoch seconds
 
 #### Scenario: Provider outage degrades, not crashes
 

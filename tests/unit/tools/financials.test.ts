@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Cache } from "../../../src/infra/cache.js";
 import { getFinancials } from "../../../src/providers/alpha-vantage.js";
 import { getLseFinancials } from "../../../src/providers/lse.js";
+import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import { financialsTool } from "../../../src/tools/fundamentals/financials.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
@@ -69,6 +71,55 @@ describe("get_financials tool", () => {
     expect(result.details).toEqual([statement]);
     expect(getFinancials).toHaveBeenCalledWith("AAPL", "av-test-key");
     expect(textContent(result.content[0])).toContain("Source: Alpha Vantage");
+  });
+
+  it("prefers fresh Alpha Vantage financials over stale LSE statements", async () => {
+    const staleCache = new Cache();
+    staleCache.set("lse-financials", [statement], 60_000);
+    const freshStatement = { ...statement, fiscalDate: "2026-09-26", revenue: 500_000_000_000 };
+    vi.mocked(getLseFinancials).mockImplementation(
+      async () => staleCache.getStale<FinancialStatement[]>("lse-financials", 86_400_000)!.value,
+    );
+    vi.mocked(getFinancials).mockResolvedValue([freshStatement]);
+
+    const result = await financialsTool.execute("call-stale-lse", { symbol: "AAPL" });
+
+    expect(result.details).toEqual([freshStatement]);
+    expect(getFinancials).toHaveBeenCalledWith("AAPL", "av-test-key");
+    expect(textContent(result.content[0])).toContain("Source: Alpha Vantage");
+  });
+
+  it("labels stale LSE financials when no fresh fallback is configured", async () => {
+    configMock.alphaVantageApiKey = undefined;
+    const staleCache = new Cache();
+    staleCache.set("lse-financials", [statement], 60_000);
+    vi.mocked(getLseFinancials).mockImplementation(
+      async () => staleCache.getStale<FinancialStatement[]>("lse-financials", 86_400_000)!.value,
+    );
+
+    const result = await financialsTool.execute("call-stale-only", { symbol: "AAPL" });
+
+    expect(result.details).toEqual([statement]);
+    expect(textContent(result.content[0])).toContain("Source: London Strategic Edge");
+    expect(textContent(result.content[0])).toMatch(/stale cache/i);
+    expect(getFinancials).not.toHaveBeenCalled();
+  });
+
+  it("keeps usable stale LSE financials when Alpha Vantage rejects its credential", async () => {
+    const staleCache = new Cache();
+    staleCache.set("lse-financials", [statement], 60_000);
+    vi.mocked(getLseFinancials).mockImplementation(
+      async () => staleCache.getStale<FinancialStatement[]>("lse-financials", 86_400_000)!.value,
+    );
+    vi.mocked(getFinancials).mockRejectedValue(
+      new ProviderCredentialError("alpha_vantage", "stale", 401),
+    );
+
+    const result = await financialsTool.execute("call-stale-auth-fallback", { symbol: "AAPL" });
+
+    expect(result.details).toEqual([statement]);
+    expect(textContent(result.content[0])).toContain("Source: London Strategic Edge");
+    expect(textContent(result.content[0])).toMatch(/stale cache/i);
   });
 
   it.each([

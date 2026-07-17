@@ -2,6 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { formatAsOfLine } from "../../../src/infra/freshness.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { TOOL_BUNDLE_TOOLS } from "../../../src/routing/route-manifest.js";
 import { getAllTools } from "../../../src/tools/index.js";
 import { priceComparisonTool } from "../../../src/tools/market/price-comparison.js";
@@ -27,6 +28,8 @@ describe("get_price_comparison tool", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    rateLimiter.configure("yahoo", 5, 5);
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -60,6 +63,32 @@ describe("get_price_comparison tool", () => {
         series.bars.map((bar) => (bar.close / series.bars[0]!.close) * 100),
       );
     }
+  });
+
+  it("aligns intraday series only on common epoch-second timestamps", async () => {
+    const firstTimes = [1711632600, 1711632900, 1711633200];
+    const secondTimes = [1711632600, 1711633200, 1711633500];
+    globalThis.fetch = vi.fn(async (input) =>
+      Response.json(
+        String(input).includes("MSFT")
+          ? yahooHistoryFixture("MSFT", secondTimes)
+          : yahooHistoryFixture("AAPL", firstTimes),
+      ),
+    );
+
+    const result = await priceComparisonTool.execute("call-intraday", {
+      symbols: ["AAPL", "MSFT"],
+      range: "1d",
+      interval: "5m",
+    });
+
+    expect(result.details.series).toHaveLength(2);
+    expect(result.details.series[0]?.bars.map((bar) => bar.timestamp)).toEqual([
+      1711632600, 1711633200,
+    ]);
+    expect(result.details.series[1]?.bars.map((bar) => bar.timestamp)).toEqual([
+      1711632600, 1711633200,
+    ]);
   });
 
   it("reports two non-overlapping series as unavailable", async () => {
@@ -282,6 +311,44 @@ describe("get_price_comparison tool", () => {
     ]);
     expect(lines.at(-1)).toBe(formatAsOfLine(result.details.freshness));
     expect(result.details.freshness.providerDataDate).toBe("2024-03-31");
+  });
+
+  it("preserves and discloses stale provider metadata per comparison series", async () => {
+    rateLimiter.configure("yahoo", 100, 100);
+    globalThis.fetch = vi.fn(async (input) =>
+      Response.json(String(input).includes("MSFT") ? msftHistoryFixture : aaplHistoryFixture),
+    );
+    await priceComparisonTool.execute("call-warm-cache", {
+      symbols: ["AAPL", "MSFT"],
+      range: "1y",
+    });
+
+    vi.useFakeTimers({ now: Date.now() + 3_600_001 });
+    rateLimiter.configure("yahoo", 100, 100);
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({ chart: { result: null, error: { description: "provider down" } } }),
+    );
+    const result = await priceComparisonTool.execute("call-stale", {
+      symbols: ["AAPL", "MSFT"],
+      range: "1y",
+    });
+
+    expect(result.details.series).toEqual([
+      expect.objectContaining({
+        symbol: "AAPL",
+        provider: "yahoo",
+        providerTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        stale: true,
+      }),
+      expect.objectContaining({
+        symbol: "MSFT",
+        provider: "yahoo",
+        providerTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        stale: true,
+      }),
+    ]);
+    expect(textContent(result.content[0])).toContain("Stale series: AAPL (yahoo), MSFT (yahoo)");
+    expect(result.details.freshness.cacheStatus).toBe("stale");
   });
 
   it("is registered and allowed by the core market bundle", () => {

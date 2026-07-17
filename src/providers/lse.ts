@@ -136,6 +136,9 @@ export async function getLseCandles(
   try {
     await rateLimiter.acquire("lse");
     const rows = await lseGet<LseCandle[]>("/candles", params);
+    if (!isValidLseCandlePayload(rows)) {
+      throw new Error("LSE candles response did not contain valid candle rows");
+    }
     cache.set(cacheKey, rows, TTL.CANDLES);
     return rows;
   } catch (error) {
@@ -144,6 +147,35 @@ export async function getLseCandles(
     if (stale) return stale.value;
     throw error;
   }
+}
+
+function isValidLseCandlePayload(value: unknown): value is LseCandle[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((row) => {
+      if (typeof row !== "object" || row === null) return false;
+      const candle = row as Partial<LseCandle>;
+      const timestamp =
+        typeof candle.ts === "string"
+          ? Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(candle.ts) ? candle.ts : `${candle.ts}Z`)
+          : Number.NaN;
+      const prices = [candle.open, candle.high, candle.low, candle.close];
+      return (
+        Number.isFinite(timestamp) &&
+        prices.every((price) => typeof price === "number" && Number.isFinite(price) && price > 0) &&
+        (candle.high ?? 0) >= Math.max(candle.open ?? 0, candle.close ?? 0) &&
+        (candle.low ?? Number.POSITIVE_INFINITY) <=
+          Math.min(
+            candle.open ?? Number.POSITIVE_INFINITY,
+            candle.close ?? Number.POSITIVE_INFINITY,
+          ) &&
+        typeof candle.volume === "number" &&
+        Number.isFinite(candle.volume) &&
+        candle.volume >= 0
+      );
+    })
+  );
 }
 
 export async function getLseFinancialReports(

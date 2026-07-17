@@ -15,14 +15,23 @@ export function PortfolioSummaryStrip({
   const loading = portfolios.length > 0 && quoteSnapshot == null;
   const summaries = quoteSnapshot?.portfolioSummaries ?? [];
   const totals = sumPortfolioSummaries(summaries, quoteSnapshot?.portfolioSummary?.baseCurrency);
-  const dayMove = derivePortfolioDayMove(
-    (quoteSnapshot?.portfolioQuotes ?? []).filter(
+  const selectedPortfolioQuotes = (quoteSnapshot?.portfolioQuotes ?? []).filter(
+    (quote) =>
+      (totals.portfolioIds.length <= 1 && quote.portfolioId == null) ||
+      totals.portfolioIds.includes(quote.portfolioId),
+  );
+  const selectedQuotes = selectedPortfolioQuotes.filter(
+    (quote) => quote.includedInTotals !== false,
+  );
+  const valuationAvailable =
+    selectedPortfolioQuotes.length === 0 ||
+    selectedPortfolioQuotes.every(
       (quote) =>
         quote.includedInTotals !== false &&
-        ((totals.portfolioIds.length === 1 && quote.portfolioId == null) ||
-          totals.portfolioIds.includes(quote.portfolioId)),
-    ),
-  );
+        quote.status !== "unavailable" &&
+        Number.isFinite(quote.marketValue),
+    );
+  const dayMove = derivePortfolioDayMove(selectedQuotes);
   const freshness = quoteSnapshot
     ? degradedQuoteBadge(quoteSnapshot.portfolioQuotes ?? [], nowMs)
     : null;
@@ -56,6 +65,10 @@ export function PortfolioSummaryStrip({
         ) : portfolios.length === 0 ? (
           <div className="flex min-h-[152px] items-center px-4 py-6 text-sm text-muted-foreground">
             No portfolios tracked yet.
+          </div>
+        ) : !valuationAvailable ? (
+          <div className="flex min-h-[152px] items-center px-4 py-6 text-sm text-muted-foreground">
+            Portfolio valuation unavailable
           </div>
         ) : (
           <div className="grid min-h-[152px] grid-cols-1 gap-3 p-4 sm:grid-cols-3">

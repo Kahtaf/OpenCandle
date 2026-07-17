@@ -6,11 +6,18 @@ import { fetchHistoryWithFallback, HISTORY_INTERVALS, HISTORY_RANGES } from "./s
 
 type HistoryRange = (typeof HISTORY_RANGES)[number];
 type HistoryInterval = (typeof HISTORY_INTERVALS)[number];
+type AlignmentKey = string | number;
+
+const DATE_ALIGNED_INTERVALS = new Set<HistoryInterval>(["1d", "1wk", "1mo"]);
 
 export interface PriceComparisonSeries {
   symbol: string;
   bars: OHLCV[];
   indexed: number[];
+  provider?: string;
+  providerTimestamp: string;
+  cached: boolean;
+  stale: boolean;
 }
 
 export interface PriceComparisonDetails {
@@ -57,7 +64,18 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       })),
     );
     const available = fetched.flatMap(({ symbol, result }) =>
-      result.status === "ok" && result.data.length > 0 ? [{ symbol, bars: result.data }] : [],
+      result.status === "ok" && result.data.length > 0
+        ? [
+            {
+              symbol,
+              bars: result.data,
+              provider: result.provider,
+              providerTimestamp: result.timestamp,
+              cached: result.cached === true,
+              stale: result.stale === true,
+            },
+          ]
+        : [],
     );
     let unavailableSymbols = fetched.flatMap(({ symbol, result }) =>
       result.status === "unavailable" || result.data.length === 0 ? [symbol] : [],
@@ -87,10 +105,13 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       };
     }
     let survivingAvailable = available;
-    let commonDates = intersectDates(survivingAvailable);
-    while (survivingAvailable.length >= 2 && commonDates.size > 0) {
+    let commonKeys = intersectAlignmentKeys(survivingAvailable, interval);
+    while (survivingAvailable.length >= 2 && commonKeys.size > 0) {
       const invalidBaselineSymbols = survivingAvailable.flatMap(({ symbol, bars }) => {
-        const baseClose = bars.find((bar) => commonDates.has(bar.date))?.close;
+        const baseClose = bars.find((bar) => {
+          const key = alignmentKey(bar, interval);
+          return key !== undefined && commonKeys.has(key);
+        })?.close;
         return typeof baseClose !== "number" || !Number.isFinite(baseClose) || baseClose <= 0
           ? [symbol]
           : [];
@@ -99,29 +120,44 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       unavailableSymbols = [...new Set([...unavailableSymbols, ...invalidBaselineSymbols])];
       const invalid = new Set(invalidBaselineSymbols);
       survivingAvailable = survivingAvailable.filter(({ symbol }) => !invalid.has(symbol));
-      commonDates = intersectDates(survivingAvailable);
+      commonKeys = intersectAlignmentKeys(survivingAvailable, interval);
     }
     if (survivingAvailable.length < 2) {
       return unavailableComparison(args.range, interval, unavailableSymbols);
     }
-    if (commonDates.size === 0) {
+    if (commonKeys.size === 0) {
       unavailableSymbols = [
         ...new Set([...unavailableSymbols, ...survivingAvailable.map(({ symbol }) => symbol)]),
       ];
       return unavailableComparison(args.range, interval, unavailableSymbols);
     }
-    const series = survivingAvailable.map(({ symbol, bars }) => {
-      const alignedBars = bars.filter((bar) => commonDates.has(bar.date));
-      const baseClose = alignedBars[0].close;
-      return {
-        symbol,
-        bars: alignedBars,
-        indexed: alignedBars.map((bar) => (bar.close / baseClose) * 100),
-      };
-    });
+    const series = survivingAvailable.map(
+      ({ symbol, bars, provider, providerTimestamp, cached, stale }) => {
+        const alignedBars = bars.filter((bar) => {
+          const key = alignmentKey(bar, interval);
+          return key !== undefined && commonKeys.has(key);
+        });
+        const baseClose = alignedBars[0].close;
+        return {
+          symbol,
+          bars: alignedBars,
+          indexed: alignedBars.map((bar) => (bar.close / baseClose) * 100),
+          provider,
+          providerTimestamp,
+          cached,
+          stale,
+        };
+      },
+    );
     const baseDate = series[0]?.bars[0]?.date ?? "";
     const latestDate = series[0]?.bars.at(-1)?.date;
-    const freshness = buildFreshnessStamp({ asOf: latestDate });
+    const staleSeries = series.filter((item) => item.stale);
+    const freshness = buildFreshnessStamp({
+      asOf: latestDate,
+      cached: series.some((item) => item.cached),
+      stale: staleSeries.length > 0,
+      cachedAt: staleSeries.map((item) => item.providerTimestamp).sort()[0],
+    });
     const rows = series.map(({ symbol, bars, indexed }) => {
       const first = bars[0]?.close ?? 0;
       const last = bars.at(-1)?.close ?? 0;
@@ -129,7 +165,7 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       return `${symbol} | ${first.toFixed(2)} | ${last.toFixed(2)} | ${change.toFixed(2)}%`;
     });
     const alignmentLosses = survivingAvailable.flatMap(({ symbol, bars }) => {
-      const dropped = bars.length - commonDates.size;
+      const dropped = bars.length - commonKeys.size;
       return dropped / bars.length > 0.3
         ? [`${symbol} (${dropped}/${bars.length} dates dropped)`]
         : [];
@@ -141,14 +177,26 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       unavailableSymbols.length > 0
         ? [`Unavailable symbols: ${unavailableSymbols.join(", ")}`]
         : [];
+    const staleLine =
+      staleSeries.length > 0
+        ? [
+            `Stale series: ${staleSeries
+              .map((item) => `${item.symbol} (${item.provider ?? "unknown provider"})`)
+              .join(", ")}`,
+          ]
+        : [];
 
     return {
       content: [
         {
           type: "text",
-          text: [...rows, ...alignmentLine, ...unavailableLine, formatAsOfLine(freshness)].join(
-            "\n",
-          ),
+          text: [
+            ...rows,
+            ...alignmentLine,
+            ...unavailableLine,
+            ...staleLine,
+            formatAsOfLine(freshness),
+          ].join("\n"),
         },
       ],
       details: {
@@ -163,15 +211,33 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
   },
 };
 
-function intersectDates(series: Array<{ bars: OHLCV[] }>): Set<string> {
-  const commonDates = new Set(series[0]?.bars.map((bar) => bar.date) ?? []);
+function intersectAlignmentKeys(
+  series: Array<{ bars: OHLCV[] }>,
+  interval: HistoryInterval,
+): Set<AlignmentKey> {
+  const commonKeys = new Set(
+    series[0]?.bars.flatMap((bar) => {
+      const key = alignmentKey(bar, interval);
+      return key === undefined ? [] : [key];
+    }) ?? [],
+  );
   for (const candidate of series.slice(1)) {
-    const candidateDates = new Set(candidate.bars.map((bar) => bar.date));
-    for (const date of commonDates) {
-      if (!candidateDates.has(date)) commonDates.delete(date);
+    const candidateKeys = new Set(
+      candidate.bars.flatMap((bar) => {
+        const key = alignmentKey(bar, interval);
+        return key === undefined ? [] : [key];
+      }),
+    );
+    for (const key of commonKeys) {
+      if (!candidateKeys.has(key)) commonKeys.delete(key);
     }
   }
-  return commonDates;
+  return commonKeys;
+}
+
+function alignmentKey(bar: OHLCV, interval: HistoryInterval): AlignmentKey | undefined {
+  if (DATE_ALIGNED_INTERVALS.has(interval)) return bar.date;
+  return Number.isFinite(bar.timestamp) ? bar.timestamp : undefined;
 }
 
 function unavailableComparison(

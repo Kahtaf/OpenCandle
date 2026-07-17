@@ -45,7 +45,8 @@ New widget components live under a new `gui/web/src/features/home/` directory.
 
 - [x] 5.1 `npm test`, `npx tsc --noEmit`, and `npx biome ci .` green.
 - [x] 5.2 React Doctor clean (no error-level diagnostics) on all changed GUI files.
-- [ ] 5.3 GUI screenshots at 1440x960 and 390x844 for the PR: (a) populated dashboard (seeded watchlist + portfolio + alert), (b) new-user empty state, (c) `needsSetup` state showing ModelSetupCard precedence.
+- [x] 5.3 GUI screenshots at 1440x960 and 390x844 for the PR: (a) populated dashboard (seeded watchlist + portfolio + alert), (b) new-user empty state, (c) `needsSetup` state showing ModelSetupCard precedence.
+  - Evidence: `scratch/autoreview-round2-dashboard-{1440x960,390x844}.png`, `scratch/autoreview-round2-dashboard-new-user-{1440x960,390x844}.png`, and `scratch/autoreview-round2-dashboard-needs-setup-{1440x960,390x844}.png`; headless Chromium measured `scrollWidth` 390px at a 390px viewport in every mobile state.
 - [x] 5.4 Live smoke: run `npm run gui`, open `/`, confirm the indices strip shows real values (or gracefully hides, per the 1.1 spike findings), submit a prompt from the dashboard, and confirm navigation to `/sessions/$id` with a normal transcript.
 - [x] 5.5 CHANGELOG `[Unreleased]` Added entry for the home market dashboard (widgets + indices endpoint), per the changelog-automation skill.
 - [x] 5.6 `graphify update .`; then `npx openspec validate home-market-dashboard --strict` (verify the command exists first; if it does not, run `npx openspec status --change home-market-dashboard` and confirm all artifacts are done).

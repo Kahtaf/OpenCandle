@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Cache } from "../../../src/infra/cache.js";
 import { getDailyHistory } from "../../../src/providers/alpha-vantage.js";
 import { getLseCandles } from "../../../src/providers/lse.js";
 import { getHistory } from "../../../src/providers/yahoo-finance.js";
@@ -159,5 +160,38 @@ describe("get_stock_history tool", () => {
     });
 
     expect(getLseCandles).toHaveBeenLastCalledWith("AAPL", "1h", { order: "asc" });
+  });
+
+  it("discloses stale history in text and structured freshness details", async () => {
+    const bars = candlesFixture.map((row) => ({
+      date: row.ts.slice(0, 10),
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      volume: row.volume,
+    }));
+    const staleCache = new Cache();
+    staleCache.set("history", bars, 60_000);
+    vi.mocked(getHistory).mockImplementation(
+      async () => staleCache.getStale<typeof bars>("history", 86_400_000)!.value,
+    );
+
+    const result = await stockHistoryTool.execute("call-stale", {
+      symbol: "AAPL",
+      range: "1y",
+      interval: "1d",
+    });
+
+    expect(result.details).toMatchObject({
+      bars,
+      provider: "yahoo",
+      stale: true,
+      providerTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      freshness: { cacheStatus: "stale" },
+    });
+    expect(result.content[0]).toMatchObject({ type: "text" });
+    if (result.content[0].type !== "text") throw new Error("expected text content");
+    expect(result.content[0].text).toMatch(/stale cache/i);
   });
 });

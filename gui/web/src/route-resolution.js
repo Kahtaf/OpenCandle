@@ -1,4 +1,4 @@
-const TICKER_SEGMENT = /^[A-Z0-9^.-]+$/;
+const TICKER_SEGMENT = /^[A-Z0-9^.=-]+$/;
 
 export function tickerFromPath(pathname) {
   const match = pathname.match(/^\/symbol\/([^/]+)$/);

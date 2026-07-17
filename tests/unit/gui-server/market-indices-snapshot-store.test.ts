@@ -93,4 +93,76 @@ describe("MarketIndicesSnapshotStore", () => {
     expect(stale.indices[0]).toMatchObject({ status: "ok", stale: true });
     expect((await store.get()).indices[0]).toMatchObject({ status: "ok", stale: true });
   });
+
+  it("keeps the last valid snapshot when a background refresh degrades", async () => {
+    let builds = 0;
+    let nowMs = 0;
+    const store = new MarketIndicesSnapshotStore(
+      async () => {
+        builds += 1;
+        if (builds === 1) return snapshot("initial");
+        return {
+          generatedAt: "degraded",
+          indices: [{ symbol: "^GSPC", status: "unavailable", reason: "provider outage" }],
+        };
+      },
+      60_000,
+      () => nowMs,
+    );
+
+    await store.get();
+    nowMs = 60_001;
+    const stale = await store.get();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(stale).toMatchObject({
+      generatedAt: "initial",
+      indices: [{ symbol: "^GSPC", status: "ok", price: 6000, stale: true }],
+    });
+    expect(await store.get()).toMatchObject({
+      generatedAt: "initial",
+      indices: [{ symbol: "^GSPC", status: "ok", price: 6000, stale: true }],
+    });
+  });
+
+  it("installs fresh index entries while retaining degraded constituents as stale", async () => {
+    let builds = 0;
+    let nowMs = 0;
+    const store = new MarketIndicesSnapshotStore(
+      async () => {
+        builds += 1;
+        if (builds === 1) {
+          return {
+            generatedAt: "initial",
+            indices: [
+              { symbol: "^GSPC", status: "ok", price: 6000, stale: false },
+              { symbol: "BTC-USD", status: "ok", price: 100_000, stale: false },
+            ],
+          };
+        }
+        return {
+          generatedAt: "partial-refresh",
+          indices: [
+            { symbol: "^GSPC", status: "ok", price: 6100, stale: false },
+            { symbol: "BTC-USD", status: "unavailable", reason: "provider outage" },
+          ],
+        };
+      },
+      60_000,
+      () => nowMs,
+    );
+
+    await store.get();
+    nowMs = 60_001;
+    await store.get();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await store.get()).toMatchObject({
+      generatedAt: "partial-refresh",
+      indices: [
+        { symbol: "^GSPC", status: "ok", price: 6100, stale: false },
+        { symbol: "BTC-USD", status: "ok", price: 100_000, stale: true },
+      ],
+    });
+  });
 });

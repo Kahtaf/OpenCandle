@@ -803,6 +803,9 @@ function refreshInstrumentOverview(
   if (entry.inFlight) return entry.inFlight;
   const inFlight = loadInstrumentOverviewSnapshot(normalized)
     .then((snapshot) => {
+      if (entry.snapshot?.status === "ok" && snapshot.status === "unavailable") {
+        return entry.snapshot;
+      }
       entry.snapshot = snapshot;
       entry.fetchedAtMs = Date.now();
       return snapshot;

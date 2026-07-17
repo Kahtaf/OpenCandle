@@ -154,7 +154,6 @@ describe("home dashboard widgets", () => {
           ],
           portfolioQuotes: [
             { portfolioId: 1, marketValue: 11_000, changePercent: 10, includedInTotals: true },
-            { portfolioId: 1, marketValue: 99_000, changePercent: 10, includedInTotals: false },
             { portfolioId: 2, marketValue: 5_500, changePercent: 10, includedInTotals: true },
           ],
         },
@@ -189,7 +188,15 @@ describe("home dashboard widgets", () => {
               totalPnl: 2_000,
             },
           ],
-          portfolioQuotes: [],
+          portfolioQuotes: [
+            {
+              portfolioId: 2,
+              status: "ok",
+              includedInTotals: true,
+              marketValue: 20_000,
+              changePercent: 0,
+            },
+          ],
         },
       }),
     );
@@ -197,6 +204,98 @@ describe("home dashboard widgets", () => {
     expect(html).toContain("$20,000.00");
     expect(html).not.toContain("1,000,000.00");
     expect(html).toContain("JPY portfolios excluded");
+  });
+
+  it("renders portfolio valuation unavailable when no selected quote is usable", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioSummaryStrip, {
+        portfolios: [{ id: 1 }],
+        quoteSnapshot: {
+          portfolioSummary: { baseCurrency: "USD" },
+          portfolioSummaries: [
+            {
+              portfolioId: 1,
+              baseCurrency: "USD",
+              totalValue: 0,
+              totalCost: 0,
+              totalPnl: 0,
+            },
+          ],
+          portfolioQuotes: [
+            {
+              portfolioId: 1,
+              status: "unavailable",
+              includedInTotals: false,
+              reason: "quote unavailable",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Portfolio valuation unavailable");
+    expect(html).not.toContain("$0.00");
+  });
+
+  it("does not present a partially valued portfolio as a complete total", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioSummaryStrip, {
+        portfolios: [{ id: 1 }],
+        quoteSnapshot: {
+          portfolioSummary: { portfolioId: 1, baseCurrency: "USD" },
+          portfolioSummaries: [
+            {
+              portfolioId: 1,
+              baseCurrency: "USD",
+              totalValue: 1000,
+              totalCost: 900,
+              totalPnl: 100,
+            },
+          ],
+          portfolioQuotes: [
+            {
+              portfolioId: 1,
+              status: "ok",
+              includedInTotals: true,
+              marketValue: 1000,
+            },
+            {
+              portfolioId: 1,
+              status: "unavailable",
+              includedInTotals: false,
+              reason: "quote unavailable",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Portfolio valuation unavailable");
+    expect(html).not.toContain("$1,000.00");
+  });
+
+  it("renders a tracked empty portfolio as a valid zero valuation", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioSummaryStrip, {
+        portfolios: [{ id: 1 }],
+        quoteSnapshot: {
+          portfolioSummary: { portfolioId: 1, baseCurrency: "USD" },
+          portfolioSummaries: [
+            {
+              portfolioId: 1,
+              baseCurrency: "USD",
+              totalValue: 0,
+              totalCost: 0,
+              totalPnl: 0,
+            },
+          ],
+          portfolioQuotes: [],
+        },
+      }),
+    );
+
+    expect(html).toContain("$0.00");
+    expect(html).not.toContain("Portfolio valuation unavailable");
   });
 
   it("excludes invalid day-move denominators and non-finite totals", () => {

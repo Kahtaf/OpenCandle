@@ -319,7 +319,7 @@ describe("market-state API helpers", () => {
     expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
   });
 
-  it("marks expired overview data stale when the background refresh fails", async () => {
+  it("keeps expired overview data stale when the background refresh degrades", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T14:00:00.000Z"));
     vi.mocked(getYahooCompanyOverview).mockResolvedValueOnce(companyOverview("AAPL"));
@@ -331,6 +331,14 @@ describe("market-state API helpers", () => {
     await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
       symbol: "AAPL",
       status: "ok",
+      name: "Apple Inc.",
+      stale: true,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      name: "Apple Inc.",
       stale: true,
     });
   });

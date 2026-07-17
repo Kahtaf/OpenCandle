@@ -27,6 +27,23 @@ export class MarketIndicesSnapshotStore {
     if (this.inFlight) return this.inFlight;
     const inFlight = this.build()
       .then((snapshot) => {
+        if (this.snapshot && snapshot.indices.some((entry) => entry.status === "unavailable")) {
+          const validRefreshCount = snapshot.indices.filter(
+            (entry) => entry.status === "ok",
+          ).length;
+          if (validRefreshCount === 0) return this.snapshot;
+          const priorBySymbol = new Map(
+            this.snapshot.indices.map((entry) => [entry.symbol, entry]),
+          );
+          snapshot = {
+            ...snapshot,
+            indices: snapshot.indices.map((entry) => {
+              if (entry.status === "ok") return entry;
+              const prior = priorBySymbol.get(entry.symbol);
+              return prior?.status === "ok" ? { ...prior, stale: true } : entry;
+            }),
+          };
+        }
         this.snapshot = snapshot;
         this.fetchedAtMs = this.now();
         return snapshot;
