@@ -342,20 +342,25 @@ export function ChatPanel({
             </div>
           )}
         </section>
-        {transcript.showJumpToLatest ? (
+      </div>
+      {transcript.showJumpToLatest ? (
+        <div
+          data-slot="jump-to-latest"
+          className="z-10 flex h-12 shrink-0 items-center justify-center"
+        >
           <Button
             type="button"
             size="sm"
             rounded="full"
-            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 gap-1.5 shadow-subtle-md"
+            className="min-h-10 gap-1.5 shadow-md"
             onClick={transcript.jumpToLatest}
             aria-label="Jump to latest"
           >
             <ArrowDown className="h-4 w-4" />
             Latest
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <EntityPopover
         open={Boolean(selectedSymbol)}
         onOpenChange={(open) => {
@@ -831,6 +836,7 @@ function MessageRowContent({
       <CustomMessage
         customType={entry.customType}
         content={entry.content}
+        details={entry.details}
         onRetry={() => onRetryFailedRun?.(entry.details?.prompt)}
         onFixModelKey={onFixModelKey}
       />

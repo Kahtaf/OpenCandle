@@ -5,7 +5,7 @@ export function textContent(content) {
 }
 
 export function renderRichText(markdown, options = {}) {
-  const lines = String(markdown || "").split(/\r?\n/);
+  const lines = promoteWorkflowSections(markdown).split(/\r?\n/);
   const html = [];
   let paragraph = [];
   let list = [];
@@ -86,6 +86,13 @@ export function renderRichText(markdown, options = {}) {
   }
   flushAll();
   return html.join("");
+}
+
+function promoteWorkflowSections(markdown) {
+  return String(markdown || "").replace(
+    /\*\*(BULL THESIS|BEAR THESIS|VERDICT|CORRECTIONS(?: NEEDED)?)(?::\*\*|\*\*:)[ \t]*/gi,
+    (_match, label) => `\n\n### ${String(label).toUpperCase()}\n\n`,
+  );
 }
 
 function splitTableRow(line) {

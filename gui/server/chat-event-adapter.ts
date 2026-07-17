@@ -25,6 +25,7 @@ export function sessionEntriesToChatEvents(
   let pendingOriginalAttachments: Array<{ kind: string; label: string }> = [];
   let lastEntryWasUserMessage = false;
   let lastUserCompletedEventIndex: number | null = null;
+  const workflowSteps = workflowStepMetadata(entries);
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
   events.push({
@@ -72,26 +73,42 @@ export function sessionEntriesToChatEvents(
     const messageId = entry.id;
 
     if (message.role === "user") {
-      events.push({
-        type: "message.created",
-        sessionId: options.sessionId,
-        messageId,
-        role: "user",
-        seq: seq++,
-      });
-      const completedEvent: ChatEvent = {
-        type: "message.completed",
-        sessionId: options.sessionId,
-        messageId,
-        content: userMessageContent(message.content, pendingOriginalInput),
-        ...(pendingOriginalAttachments.length > 0
-          ? { attachments: pendingOriginalAttachments }
-          : {}),
-        seq: seq++,
-      };
-      events.push(completedEvent);
-      lastUserCompletedEventIndex = events.length - 1;
-      lastEntryWasUserMessage = true;
+      const workflowStep = workflowSteps.get(messageId);
+      if (!workflowStep || workflowStep.preserveUserTurn) {
+        events.push({
+          type: "message.created",
+          sessionId: options.sessionId,
+          messageId,
+          role: "user",
+          seq: seq++,
+        });
+        const completedEvent: ChatEvent = {
+          type: "message.completed",
+          sessionId: options.sessionId,
+          messageId,
+          content: userMessageContent(message.content, pendingOriginalInput),
+          ...(pendingOriginalAttachments.length > 0
+            ? { attachments: pendingOriginalAttachments }
+            : {}),
+          seq: seq++,
+        };
+        events.push(completedEvent);
+        lastUserCompletedEventIndex = events.length - 1;
+        lastEntryWasUserMessage = true;
+      } else {
+        lastEntryWasUserMessage = false;
+      }
+      if (workflowStep) {
+        events.push({
+          type: "custom.message",
+          sessionId: options.sessionId,
+          messageId: `workflow-step-${messageId}`,
+          customType: "opencandle-workflow-step",
+          content: userMessageContent(message.content, null),
+          details: workflowStep,
+          seq: seq++,
+        });
+      }
       pendingOriginalInput = null;
       pendingOriginalAttachments = [];
       continue;
@@ -187,6 +204,121 @@ export function sessionEntriesToChatEvents(
   }
 
   return events;
+}
+
+interface WorkflowStepDetails {
+  label: string;
+  stage: string;
+  step: number;
+  total: number;
+  preserveUserTurn: boolean;
+}
+
+interface WorkflowStepCandidate {
+  messageId: string;
+  stage?: string;
+  label?: string;
+  preserveUserTurn: boolean;
+}
+
+function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStepDetails> {
+  const groups: WorkflowStepCandidate[][] = [];
+  let activeGroup: WorkflowStepCandidate[] | null = null;
+  let pendingOriginalInput = false;
+
+  for (const entry of entries) {
+    if (isCustomEntry(entry, "opencandle-workflow")) {
+      activeGroup = [];
+      groups.push(activeGroup);
+      pendingOriginalInput = false;
+      continue;
+    }
+    if (isOriginalInputEntry(entry)) {
+      if (activeGroup) pendingOriginalInput = true;
+      continue;
+    }
+    if (entry.type === "message" && (entry.message as Message).role === "user") {
+      if (activeGroup) {
+        activeGroup.push({
+          messageId: entry.id,
+          preserveUserTurn: pendingOriginalInput,
+        });
+      }
+      pendingOriginalInput = false;
+      continue;
+    }
+    if (isCustomEntry(entry, "opencandle-analyst-step")) {
+      const data = customEntryData(entry);
+      const stage = stringField(data, "stage") ?? "analysis";
+      assignPendingWorkflowSteps(activeGroup, stage, workflowStepLabel(stage, data));
+      continue;
+    }
+    if (isCustomEntry(entry, "opencandle-validation")) {
+      assignPendingWorkflowSteps(activeGroup, "validation", "Validation and synthesis");
+      activeGroup = null;
+      pendingOriginalInput = false;
+    }
+  }
+
+  const metadata = new Map<string, WorkflowStepDetails>();
+  for (const group of groups) {
+    const classified = group.filter(
+      (candidate) => candidate.preserveUserTurn || candidate.stage !== undefined,
+    );
+    classified.forEach((candidate, index) => {
+      metadata.set(candidate.messageId, {
+        label: candidate.label ?? "Workflow step",
+        stage: candidate.stage ?? "workflow",
+        step: index + 1,
+        total: classified.length,
+        preserveUserTurn: candidate.preserveUserTurn,
+      });
+    });
+  }
+  return metadata;
+}
+
+function assignPendingWorkflowSteps(
+  group: WorkflowStepCandidate[] | null,
+  stage: string,
+  label: string,
+): void {
+  if (!group) return;
+  for (const candidate of group) {
+    if (candidate.stage) continue;
+    candidate.stage = stage;
+    candidate.label = label;
+  }
+}
+
+function workflowStepLabel(stage: string, data: Record<string, unknown>): string {
+  const role = stringField(data, "role");
+  if (stage.startsWith("analyst_")) {
+    return `${sentenceCase(role ?? stage.slice("analyst_".length))} analyst`;
+  }
+  if (stage === "debate_bull") return "Bull researcher";
+  if (stage === "debate_bear") return "Bear researcher";
+  if (stage === "debate_rebuttal") return "Debate rebuttal";
+  return sentenceCase(stage.replaceAll("_", " "));
+}
+
+function sentenceCase(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  return normalized ? `${normalized[0].toUpperCase()}${normalized.slice(1)}` : "Workflow step";
+}
+
+function isCustomEntry(entry: SessionEntry, customType: string): boolean {
+  return entry.type === "custom" && (entry as { customType?: unknown }).customType === customType;
+}
+
+function customEntryData(entry: SessionEntry): Record<string, unknown> {
+  const data = (entry as { data?: unknown }).data;
+  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+}
+
+function stringField(data: Record<string, unknown>, field: string): string | undefined {
+  const value = data[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function applyOriginalInput(

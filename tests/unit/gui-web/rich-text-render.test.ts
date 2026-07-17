@@ -12,6 +12,16 @@ describe("rich text rendering", () => {
     expect(renderRichText("First\n\n---\n\nSecond")).toBe("<p>First</p><hr><p>Second</p>");
   });
 
+  it("promotes workflow synthesis labels into spaced markdown sections", () => {
+    const html = renderRichText(
+      "**BULL THESIS:** Demand remains strong. **BEAR THESIS:** Valuation is elevated. **VERDICT:** Hold. **CORRECTIONS NEEDED:** None.",
+    );
+
+    expect(html).toBe(
+      "<h3>BULL THESIS</h3><p>Demand remains strong.</p><h3>BEAR THESIS</h3><p>Valuation is elevated.</p><h3>VERDICT</h3><p>Hold.</p><h3>CORRECTIONS NEEDED</h3><p>None.</p>",
+    );
+  });
+
   it("marks numeric markdown-table columns for right-aligned tabular styling", () => {
     const html = renderRichText(
       "| Symbol | Price | Change | Note |\n| --- | ---: | ---: | --- |\n| NVDA | $1,234.50 | +2.50% | Strong |\n| AMD | $165.25 | −1.20% | Watch |",

@@ -1,8 +1,13 @@
 import { textContent } from "../../rendering/text.js";
 import { Badge } from "../ui/badge.jsx";
 import { Button } from "../ui/button.jsx";
+import { WorkflowStepCard } from "./workflow-step-card.jsx";
 
-export function CustomMessage({ customType, content, onFixModelKey, onRetry }) {
+export function CustomMessage({ customType, content, details, onFixModelKey, onRetry }) {
+  if (customType === "opencandle-workflow-step") {
+    return <WorkflowStepCard content={content} details={details} />;
+  }
+
   if (customType === "opencandle-model-run-failed") {
     return (
       <div className="max-w-[760px] rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">

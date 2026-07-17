@@ -17,6 +17,8 @@ export interface LiveChatEventAdapterOptions {
    * message with an expanded prompt; the live view renders this instead.
    */
   originalPrompt?: string;
+  /** Prompt sent to Pi before any workflow input transform. */
+  dispatchedPrompt?: string;
   originalAttachments?: MessageAttachmentChip[];
 }
 
@@ -74,22 +76,41 @@ export function createLiveChatEventAdapter(
           const message = event.message as Message;
           if (message.role === "user") {
             const messageId = `${options.runId}-user-${++userCount}`;
+            const promptText = messageText(message.content);
             const text =
-              userCount === 1 && options.originalPrompt
-                ? options.originalPrompt
-                : messageText(message.content);
-            emit({ type: "message.created", runId: options.runId, messageId, role: "user" });
-            emit({
-              type: "message.completed",
-              runId: options.runId,
-              messageId,
-              content: userMessageContent(message.content, text),
-              ...(userCount === 1 &&
-              options.originalAttachments &&
-              options.originalAttachments.length > 0
-                ? { attachments: options.originalAttachments }
-                : {}),
-            });
+              userCount === 1 && options.originalPrompt ? options.originalPrompt : promptText;
+            const transformedFirstPrompt =
+              userCount === 1 &&
+              options.dispatchedPrompt !== undefined &&
+              promptText.trim() !== options.dispatchedPrompt.trim();
+            const workflowStep = transformedFirstPrompt || userCount > 1;
+            if (userCount === 1 || !workflowStep) {
+              emit({ type: "message.created", runId: options.runId, messageId, role: "user" });
+              emit({
+                type: "message.completed",
+                runId: options.runId,
+                messageId,
+                content: userMessageContent(message.content, text),
+                ...(userCount === 1 &&
+                options.originalAttachments &&
+                options.originalAttachments.length > 0
+                  ? { attachments: options.originalAttachments }
+                  : {}),
+              });
+            }
+            if (workflowStep) {
+              emit({
+                type: "custom.message",
+                messageId: `${options.runId}-workflow-step-${userCount}`,
+                customType: "opencandle-workflow-step",
+                content: [{ type: "text", text: promptText }],
+                details: {
+                  label: "Workflow step",
+                  stage: "workflow",
+                  step: userCount,
+                },
+              });
+            }
             return;
           }
           if (message.role === "assistant") {

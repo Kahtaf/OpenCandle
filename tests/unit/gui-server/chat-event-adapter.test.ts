@@ -91,6 +91,135 @@ describe("sessionEntriesToChatEvents", () => {
     expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
   });
 
+  it("adapts persisted workflow prompts into steps while preserving genuine user turns", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+          analystsTotal: 1,
+        }),
+        customEntry("original", "opencandle-user-input", {
+          original: "Analyze NVDA",
+        }),
+        messageEntry("workflow-user-1", {
+          role: "user",
+          content: "Full valuation analyst prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-1", assistantMessage("Valuation output")),
+        customEntry("analyst-1", "opencandle-analyst-step", {
+          stage: "analyst_valuation",
+          role: "valuation",
+          parsed: true,
+        }),
+        messageEntry("workflow-user-2", {
+          role: "user",
+          content: "Full bear researcher prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-2", assistantMessage("Bear output")),
+        customEntry("analyst-2", "opencandle-analyst-step", {
+          stage: "debate_bear",
+          side: "bear",
+          parsed: true,
+        }),
+        messageEntry("workflow-user-3", {
+          role: "user",
+          content: "Full validation and synthesis prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-3", assistantMessage("Final synthesis")),
+        customEntry("validation", "opencandle-validation", {
+          passed: true,
+          mismatches: [],
+        }),
+        messageEntry("genuine-user", {
+          role: "user",
+          content: "What is the biggest risk?",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const userMessages = events.filter(
+      (event) => event.type === "message.completed" && event.messageId.includes("user"),
+    );
+    expect(userMessages).toMatchObject([
+      { content: [{ type: "text", text: "Analyze NVDA" }] },
+      { content: [{ type: "text", text: "What is the biggest risk?" }] },
+    ]);
+
+    const workflowSteps = events.filter(
+      (event) => event.type === "custom.message" && event.customType === "opencandle-workflow-step",
+    );
+    expect(workflowSteps).toMatchObject([
+      {
+        messageId: "workflow-step-workflow-user-1",
+        content: [{ type: "text", text: "Full valuation analyst prompt" }],
+        details: { label: "Valuation analyst", stage: "analyst_valuation", step: 1, total: 3 },
+      },
+      {
+        messageId: "workflow-step-workflow-user-2",
+        content: [{ type: "text", text: "Full bear researcher prompt" }],
+        details: { label: "Bear researcher", stage: "debate_bear", step: 2, total: 3 },
+      },
+      {
+        messageId: "workflow-step-workflow-user-3",
+        content: [{ type: "text", text: "Full validation and synthesis prompt" }],
+        details: { label: "Validation and synthesis", stage: "validation", step: 3, total: 3 },
+      },
+    ]);
+  });
+
+  it("keeps workflow format-retry prompts out of user bubbles", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+        }),
+        customEntry("original", "opencandle-user-input", { original: "Analyze NVDA" }),
+        messageEntry("workflow-user-1", {
+          role: "user",
+          content: "Full valuation analyst prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-1", assistantMessage("Incomplete output")),
+        messageEntry("workflow-user-retry-1", {
+          role: "user",
+          content: "Return the exact required format",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-2", assistantMessage("Still incomplete")),
+        messageEntry("workflow-user-retry-2", {
+          role: "user",
+          content: "Revise the prior response without new tools",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-3", assistantMessage("Structured output")),
+        customEntry("analyst", "opencandle-analyst-step", {
+          stage: "analyst_valuation",
+          role: "valuation",
+          parsed: true,
+        }),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "message.completed" && event.messageId.startsWith("workflow-user"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-workflow-step",
+      ),
+    ).toHaveLength(3);
+  });
+
   it("surfaces original-input attachments beside the typed user text", () => {
     const events = sessionEntriesToChatEvents(
       [
@@ -444,6 +573,30 @@ function messageEntry(id: string, message: Message): SessionEntry {
     timestamp: new Date().toISOString(),
     message,
   } as SessionEntry;
+}
+
+function customEntry(id: string, customType: string, data: Record<string, unknown>): SessionEntry {
+  return {
+    type: "custom",
+    id,
+    parentId: null,
+    timestamp: new Date().toISOString(),
+    customType,
+    data,
+  } as unknown as SessionEntry;
+}
+
+function assistantMessage(text: string): Message {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "openai-responses",
+    provider: "openai",
+    model: "test",
+    usage: usage(),
+    stopReason: "stop",
+    timestamp: Date.now(),
+  } as Message;
 }
 
 function usage() {
