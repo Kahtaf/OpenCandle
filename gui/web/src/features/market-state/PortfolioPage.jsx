@@ -1,8 +1,9 @@
-import { BriefcaseBusiness, ChevronRight, Plus } from "lucide-react";
+import { BriefcaseBusiness, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { AllocationDonut } from "../../components/allocation-donut.jsx";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
-import { SERIES_COLORS } from "../../lib/series-colors.js";
+import { formatNumber, formatPercent } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
@@ -145,18 +146,32 @@ export function PortfolioPage({
           onRename={(portfolio) => openPanel("portfolio-rename", { portfolio })}
         />,
       )}
+      {!loading && lotCount > 0 ? (
+        <ValueHeader summary={summary} holdings={holdings} quoteBadge={quoteBadge} />
+      ) : null}
       <Panel
+        title="Holdings"
+        meta={
+          lotCount > 0
+            ? `${holdings.length} ${holdings.length === 1 ? "symbol" : "symbols"} · ${lotCount} ${lotCount === 1 ? "lot" : "lots"}`
+            : undefined
+        }
         actions={
-          <Button
-            type="button"
-            variant="bordered"
-            size="sm"
-            prefixIcon={Plus}
-            disabled={readOnly}
-            onClick={addHolding}
-          >
-            Add holding
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {lotCount > 0 ? (
+              <PanelSearch label="Search holdings" filter={filter} setFilter={setFilter} />
+            ) : null}
+            <Button
+              type="button"
+              variant="bordered"
+              size="sm"
+              prefixIcon={Plus}
+              disabled={readOnly}
+              onClick={addHolding}
+            >
+              Add holding
+            </Button>
+          </div>
         }
       >
         {loading ? <PortfolioSkeleton /> : null}
@@ -167,18 +182,8 @@ export function PortfolioPage({
             action="Add a holding when you are ready, or keep using watchlists without a portfolio."
           />
         ) : null}
-      </Panel>
-
-      {!loading && lotCount > 0 ? (
-        <ValueHeader summary={summary} holdings={holdings} quoteBadge={quoteBadge} />
-      ) : null}
-      {!loading && lotCount > 0 ? (
-        <Panel
-          title="Holdings"
-          meta={`${holdings.length} ${holdings.length === 1 ? "symbol" : "symbols"} · ${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
-          actions={<PanelSearch label="Search holdings" filter={filter} setFilter={setFilter} />}
-        >
-          {rows.length === 0 ? (
+        {!loading && lotCount > 0 ? (
+          rows.length === 0 ? (
             <EmptyState
               icon={BriefcaseBusiness}
               title="No holdings match this search"
@@ -198,10 +203,25 @@ export function PortfolioPage({
                 navigate={navigate}
               />
               <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[920px] table-fixed border-collapse text-left text-sm">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-32" />
+                    <col className="w-28" />
+                    <col className="w-24" />
+                    <col className="w-32" />
+                    <col className="w-20" />
+                    <col className="w-36" />
+                    <col className="w-24" />
+                    <col className="hidden w-20 2xl:table-column" />
+                    <col className="hidden w-28 2xl:table-column" />
+                    <col className="w-24" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
-                      <th className="w-8 px-2 py-2" aria-label="Expand" />
+                      <th className="px-2 py-2">
+                        <span className="sr-only">Expand</span>
+                      </th>
                       <th className="px-2 py-2 font-medium">Symbol</th>
                       <th className="px-2 py-2 text-right font-medium">Price</th>
                       <th className="px-2 py-2 text-right font-medium">Value</th>
@@ -209,8 +229,13 @@ export function PortfolioPage({
                       <th className="px-2 py-2 text-right font-medium">Change</th>
                       <th className="px-2 py-2 text-right font-medium">Total Gain/Loss</th>
                       <th className="px-2 py-2 text-right font-medium">% of Portfolio</th>
-                      <th className="px-2 py-2 text-right font-medium">Quantity</th>
-                      <th className="px-2 py-2 pr-4 text-right font-medium">Avg. Cost Basis</th>
+                      <th className="hidden px-2 py-2 text-right font-medium 2xl:table-cell">
+                        Quantity
+                      </th>
+                      <th className="hidden px-2 py-2 text-right font-medium 2xl:table-cell">
+                        Avg. Cost Basis
+                      </th>
+                      <th className="px-2 py-2 text-right font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -218,17 +243,16 @@ export function PortfolioPage({
                       <Fragment key={row.symbol}>
                         <tr
                           className={cn(
-                            "cursor-pointer border-b border-border/70 last:border-0 hover:bg-secondary/60",
+                            "border-b border-border/70 last:border-0 hover:bg-secondary/60",
                             quoteFlashClass(quoteFlashes.get(row.symbol)),
                           )}
-                          onClick={() => toggleExpanded(row.symbol)}
                         >
                           <td className="px-2 py-2.5">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              className="size-10 md:size-8"
+                              className="size-10"
                               aria-expanded={expanded.has(row.symbol)}
                               aria-label={`${expanded.has(row.symbol) ? "Collapse" : "Expand"} ${row.symbol} lots`}
                               onClick={(event) => {
@@ -274,106 +298,93 @@ export function PortfolioPage({
                           </td>
                           <td className="px-2 py-2.5 text-right tabular-nums">
                             {typeof row.allocationPercent === "number"
-                              ? `${row.allocationPercent.toFixed(1)}%`
+                              ? formatPercent(row.allocationPercent, { decimals: 1 })
                               : "—"}
                           </td>
-                          <td className="px-2 py-2.5 text-right tabular-nums">
-                            {row.totalQuantity.toLocaleString()}
+                          <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
+                            {formatNumber(row.totalQuantity)}
                           </td>
                           <td
                             data-slot="avg-cost-basis"
-                            className="px-2 py-2.5 pr-4 text-right tabular-nums"
+                            className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell"
                           >
                             {moneyOrDash(row.blendedCost, row.currency)}
                           </td>
+                          <td aria-label={`${row.symbol} lot actions`} />
                         </tr>
-                        <tr inert={!expanded.has(row.symbol)}>
-                          <td colSpan={10} className="p-0">
-                            <div
-                              data-slot="portfolio-lot-reveal"
-                              className={`grid transition-[grid-template-rows] duration-150 ease-out ${
-                                expanded.has(row.symbol) ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                              }`}
-                            >
-                              <div className="min-h-0 overflow-hidden">
-                                {row.lots.map((lot) => (
-                                  <div
-                                    key={lot.id}
-                                    className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-x-2 border-b border-border/70 bg-secondary/60 px-2 py-2 text-[13px] md:grid-cols-[2rem_minmax(0,1fr)_5rem_7rem_7rem_4rem_9rem_auto]"
-                                  >
-                                    <div />
-                                    <div>
-                                      <div className="font-mono text-xs text-muted-foreground">
-                                        Lot · {shortDateLabel(lot.openedAt) || "—"}
-                                        {lot.notes ? ` · ${lot.notes}` : ""}
-                                      </div>
-                                      <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
-                                        {lot.quantity.toLocaleString()} @{" "}
-                                        {money(lot.avgCost, lot.currency)}
-                                      </div>
-                                      <div className="mt-1 flex gap-1 md:hidden">
-                                        <LotActions
-                                          lot={lot}
-                                          portfolio={activePortfolio}
-                                          readOnly={readOnly || !expanded.has(row.symbol)}
-                                          openPanel={openPanel}
-                                          invokeTool={invokeTool}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="hidden text-right tabular-nums md:block">
-                                      {lot.quantity.toLocaleString()}
-                                    </div>
-                                    <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
-                                      cost {money(lot.avgCost, lot.currency)}
-                                    </div>
-                                    <div className="text-right tabular-nums">
-                                      {moneyOrDash(lot.quote?.marketValue, lot.currency)}
-                                    </div>
-                                    <div className="hidden md:block" />
-                                    <div className="hidden text-right sm:block">
-                                      {lot.quote?.status === "ok" ? (
-                                        <SignedMoney
-                                          value={lot.quote.pnl}
-                                          percent={lot.quote.pnlPercent}
-                                          currency={lot.currency}
-                                        />
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground">
-                                          {lot.quote?.reason ?? "Awaiting quote"}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="hidden justify-end gap-1 md:flex">
-                                      <LotActions
-                                        lot={lot}
-                                        portfolio={activePortfolio}
-                                        readOnly={readOnly || !expanded.has(row.symbol)}
-                                        openPanel={openPanel}
-                                        invokeTool={invokeTool}
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
+                        {row.lots.map((lot) => (
+                          <tr
+                            key={lot.id}
+                            data-slot="portfolio-lot-row"
+                            className={cn(
+                              "border-b border-border/70 bg-secondary/60 text-[13px]",
+                              !expanded.has(row.symbol) && "hidden",
+                            )}
+                          >
+                            <td />
+                            <td className="px-2 py-2.5 text-xs text-muted-foreground">
+                              <div>
+                                Lot · {shortDateLabel(lot.openedAt) || "—"}
+                                {lot.notes ? ` · ${lot.notes}` : ""}
                               </div>
-                            </div>
-                          </td>
-                        </tr>
+                              <div className="mt-1 tabular-nums 2xl:hidden">
+                                {formatNumber(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
+                              </div>
+                            </td>
+                            <td />
+                            <td className="px-2 py-2.5 text-right tabular-nums">
+                              {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                            </td>
+                            <td />
+                            <td />
+                            <td className="px-2 py-2.5 text-right">
+                              {lot.quote?.status === "ok" ? (
+                                <SignedMoney
+                                  value={lot.quote.pnl}
+                                  percent={lot.quote.pnlPercent}
+                                  currency={lot.currency}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  {lot.quote?.reason ?? "Awaiting quote"}
+                                </span>
+                              )}
+                            </td>
+                            <td />
+                            <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
+                              {formatNumber(lot.quantity)}
+                            </td>
+                            <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
+                              {money(lot.avgCost, lot.currency)}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex justify-end gap-1">
+                                <LotActions
+                                  lot={lot}
+                                  portfolio={activePortfolio}
+                                  readOnly={readOnly || !expanded.has(row.symbol)}
+                                  openPanel={openPanel}
+                                  invokeTool={invokeTool}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
             </>
-          )}
-          {summary?.excludedFromTotals?.length ? (
-            <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-              Excluded from totals:{" "}
-              {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
-            </p>
-          ) : null}
-        </Panel>
-      ) : null}
+          )
+        ) : null}
+        {!loading && summary?.excludedFromTotals?.length ? (
+          <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+            Excluded from totals:{" "}
+            {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
+          </p>
+        ) : null}
+      </Panel>
     </div>
   );
 }
@@ -439,11 +450,11 @@ function MobileHoldingRows({
                     label="% of Portfolio"
                     value={
                       typeof row.allocationPercent === "number"
-                        ? `${row.allocationPercent.toFixed(1)}%`
+                        ? formatPercent(row.allocationPercent, { decimals: 1 })
                         : "—"
                     }
                   />
-                  <MobileMetric label="Quantity" value={row.totalQuantity.toLocaleString()} />
+                  <MobileMetric label="Quantity" value={formatNumber(row.totalQuantity)} />
                   <MobileMetric
                     label="Avg. Cost Basis"
                     value={moneyOrDash(row.blendedCost, row.currency)}
@@ -453,9 +464,9 @@ function MobileHoldingRows({
                   {row.lots.map((lot) => (
                     <div key={lot.id} className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0 text-xs text-muted-foreground">
-                        <div className="font-mono">Lot · {shortDateLabel(lot.openedAt) || "—"}</div>
+                        <div>Lot · {shortDateLabel(lot.openedAt) || "—"}</div>
                         <div className="mt-1 tabular-nums">
-                          {lot.quantity.toLocaleString()} @ {money(lot.avgCost, lot.currency)}
+                          {formatNumber(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -548,15 +559,20 @@ function LotActions({ lot, portfolio, readOnly, openPanel, invokeTool }) {
       <Button
         type="button"
         variant="ghost"
-        size="xs"
+        size="sm"
+        icon={Pencil}
+        aria-label={`Edit ${lot.symbol} lot`}
+        className="min-h-10 min-w-10 px-2"
         disabled={readOnly}
         onClick={() => openPanel("holding-edit", { lot, portfolio })}
-      >
-        Edit
-      </Button>
+      />
       <ConfirmButton
-        label="Remove"
+        label="Remove lot"
         confirmLabel="Remove lot?"
+        icon={Trash2}
+        ariaLabel={`Remove ${lot.symbol} lot`}
+        size="sm"
+        className="min-h-10 min-w-10 px-2"
         disabled={readOnly}
         onConfirm={() => invokeTool("track_portfolio", { action: "remove", lot_id: lot.id })}
       />
@@ -569,10 +585,10 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
 
   const segments = holdings
     .filter((row) => typeof row.allocationPercent === "number" && row.allocationPercent > 0)
-    .map((row, index) => ({
+    .map((row) => ({
       symbol: row.symbol,
       percent: row.allocationPercent,
-      color: SERIES_COLORS[index % SERIES_COLORS.length],
+      value: row.marketValue,
     }));
 
   return (
@@ -583,60 +599,48 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
         </div>
         {quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
       </div>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px]">
+      <dl
+        data-slot="portfolio-summary-deltas"
+        className="mt-2 grid gap-2 text-[13px] sm:grid-cols-2"
+      >
         {todayPnl != null && summary ? (
-          <>
-            <SignedMoney
-              value={todayPnl}
-              percent={
-                summary.totalValue - todayPnl > 0
-                  ? (todayPnl / (summary.totalValue - todayPnl)) * 100
-                  : null
-              }
-              currency={summary.baseCurrency}
-            />
-            <span className="text-muted-foreground">today ·</span>
-          </>
+          <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-md bg-secondary px-3 py-2">
+            <dt className="shrink-0 text-muted-foreground">Today</dt>
+            <dd className="min-w-0 text-right">
+              <SignedMoney
+                value={todayPnl}
+                percent={
+                  summary.totalValue - todayPnl > 0
+                    ? (todayPnl / (summary.totalValue - todayPnl)) * 100
+                    : null
+                }
+                currency={summary.baseCurrency}
+              />
+            </dd>
+          </div>
         ) : null}
         {summary ? (
-          <SignedMoney
-            value={summary.totalPnl}
-            percent={summary.totalPnlPercent}
-            currency={summary.baseCurrency}
-          />
-        ) : (
-          <span className="text-muted-foreground">Totals appear once quotes load.</span>
-        )}
-        {summary ? <span className="text-muted-foreground">all time</span> : null}
-      </div>
-      {segments.length > 0 ? (
-        <>
-          <div
-            data-slot="portfolio-allocation"
-            className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full"
-            aria-hidden="true"
-          >
-            {segments.map((segment) => (
-              <div
-                key={segment.symbol}
-                className="rounded-sm"
-                style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
+          <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-md bg-secondary px-3 py-2">
+            <dt className="shrink-0 text-muted-foreground">All time</dt>
+            <dd className="min-w-0 text-right">
+              <SignedMoney
+                value={summary.totalPnl}
+                percent={summary.totalPnlPercent}
+                currency={summary.baseCurrency}
               />
-            ))}
+            </dd>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {segments.map((segment) => (
-              <span key={segment.symbol} className="inline-flex items-center gap-1.5">
-                <i
-                  className="size-2 rounded-sm"
-                  style={{ backgroundColor: segment.color }}
-                  aria-hidden="true"
-                />
-                {segment.symbol} {segment.percent.toFixed(1)}%
-              </span>
-            ))}
-          </div>
-        </>
+        ) : (
+          <div className="text-muted-foreground">Totals appear once quotes load.</div>
+        )}
+      </dl>
+      {segments.length > 0 ? (
+        <AllocationDonut
+          className="mt-4 max-w-md"
+          segments={segments}
+          totalValue={summary?.totalValue}
+          currency={summary?.baseCurrency}
+        />
       ) : null}
     </section>
   );

@@ -1,4 +1,4 @@
-import { ExternalLink, ListPlus, MoreHorizontal, Plus } from "lucide-react";
+import { Bell, ExternalLink, ListPlus, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import {
@@ -12,12 +12,14 @@ import {
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { Card } from "../../components/ui/card.jsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu.jsx";
+import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import {
   Table,
   TableBody,
@@ -26,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table.jsx";
+import { formatCompactNumber, formatNumber } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
@@ -36,7 +39,6 @@ import {
   EmptyState,
   ExtendedHoursQuote,
   filterItems,
-  formatNumber,
   groupBy,
   groupByOne,
   InspectorSection,
@@ -52,6 +54,23 @@ import {
   Sym,
   useQuoteChangeFlash,
 } from "./shared.jsx";
+
+const WIDE_INSPECTOR_QUERY = "(min-width: 1280px)";
+
+function useWideInspector() {
+  const [wide, setWide] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(WIDE_INSPECTOR_QUERY).matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const media = window.matchMedia(WIDE_INSPECTOR_QUERY);
+    const onChange = (event) => setWide(event.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
 
 export function WatchlistPage({
   state,
@@ -74,6 +93,7 @@ export function WatchlistPage({
     watchlists.find((watchlist) => watchlist.id === activeWatchlistId) ?? watchlists[0] ?? null;
   const [selectedId, setSelectedId] = useState(null);
   const [pendingRemoval, setPendingRemoval] = useState(null);
+  const wideInspector = useWideInspector();
 
   useEffect(() => {
     if (!activeWatchlist) return;
@@ -107,7 +127,8 @@ export function WatchlistPage({
     () => filterItems(watchlistItems, filter, ["symbol", "name"]),
     [watchlistItems, filter],
   );
-  const selected = rows.find((item) => item.id === selectedId) ?? rows[0] ?? null;
+  const selected = rows.find((item) => item.id === selectedId) ?? null;
+  const desktopSelected = selected ?? rows[0] ?? null;
 
   const selectWatchlist = (watchlistId) => {
     if (watchlistId === activeWatchlistId) return;
@@ -133,6 +154,7 @@ export function WatchlistPage({
           items={watchlists}
           activeItem={activeWatchlist}
           counts={countItemsByWatchlist(state.watchlist ?? [])}
+          compactSingle
           readOnly={readOnly}
           renameLabel="Rename watchlist"
           onSelect={selectWatchlist}
@@ -142,7 +164,7 @@ export function WatchlistPage({
       <div
         className={cn(
           "grid min-w-0 grid-cols-1 items-start gap-3",
-          selected && "xl:grid-cols-[minmax(0,1fr)_350px]",
+          desktopSelected && "xl:grid-cols-[minmax(0,1fr)_350px]",
         )}
       >
         <Panel
@@ -198,19 +220,42 @@ export function WatchlistPage({
           )}
         </Panel>
 
-        {selected ? (
+        {desktopSelected ? (
           <SymbolInspector
-            key={selected.id}
-            item={selected}
-            quote={quotesByItem.get(selected.id)}
+            key={desktopSelected.id}
+            className="hidden xl:sticky xl:top-4 xl:block"
+            item={desktopSelected}
+            quote={quotesByItem.get(desktopSelected.id)}
             state={state}
             readOnly={readOnly}
-            onRemove={() => setPendingRemoval(selected)}
-            onCreateAlert={() => openPanel("alert-create", { symbol: selected.symbol })}
+            onRemove={() => setPendingRemoval(desktopSelected)}
+            onCreateAlert={() => openPanel("alert-create", { symbol: desktopSelected.symbol })}
             navigate={navigate}
           />
         ) : null}
       </div>
+
+      <Sheet
+        open={Boolean(selected) && !wideInspector}
+        onOpenChange={(open) => !open && setSelectedId(null)}
+      >
+        <SheetContent width="sm" handleLabel="Symbol details" className="bg-card p-0">
+          <div data-slot="watchlist-inspector-sheet" className="min-h-0 overflow-y-auto">
+            {selected ? (
+              <SymbolInspector
+                item={selected}
+                quote={quotesByItem.get(selected.id)}
+                state={state}
+                readOnly={readOnly}
+                onRemove={() => setPendingRemoval(selected)}
+                onCreateAlert={() => openPanel("alert-create", { symbol: selected.symbol })}
+                navigate={navigate}
+                className="border-0 shadow-none"
+              />
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={Boolean(pendingRemoval)}
@@ -253,8 +298,105 @@ function QuoteBoard({
   onCreateAlert,
   navigate,
 }) {
+  const props = {
+    rows,
+    selected,
+    quotesByItem,
+    alertsByInstrument,
+    quoteFlashes,
+    readOnly,
+    onSelect,
+    onRemove,
+    onCreateAlert,
+    navigate,
+  };
   return (
-    <Table className="sm:min-w-[760px]">
+    <>
+      <MobileQuoteList {...props} />
+      <div className="hidden sm:block">
+        <DesktopQuoteTable {...props} />
+      </div>
+    </>
+  );
+}
+
+function MobileQuoteList({
+  rows,
+  selected,
+  quotesByItem,
+  alertsByInstrument,
+  quoteFlashes,
+  onSelect,
+}) {
+  return (
+    <ul className="divide-y divide-border sm:hidden" aria-label="Watchlist quotes">
+      {rows.map((item) => {
+        const quote = quotesByItem.get(item.id);
+        const currency = quote?.currency ?? item.currency;
+        return (
+          <li key={item.id}>
+            <button
+              type="button"
+              data-slot="mobile-watchlist-row"
+              aria-haspopup="dialog"
+              aria-label={`View ${item.symbol} details`}
+              aria-pressed={selected?.id === item.id}
+              className={cn(
+                "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_5rem_8rem] items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                quoteFlashClass(quoteFlashes.get(item.symbol)),
+                selected?.id === item.id && "bg-secondary",
+              )}
+              onClick={() => onSelect(item.id)}
+            >
+              <span className="flex min-w-0 items-start gap-1.5">
+                <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
+                <AlertChip
+                  alerts={alertsByInstrument.get(item.instrumentId)}
+                  symbol={item.symbol}
+                />
+              </span>
+              <span className="min-w-0 overflow-hidden">
+                <MarketSparkline
+                  symbol={item.symbol}
+                  sparkline={quote?.sparkline}
+                  className="max-w-full"
+                />
+              </span>
+              <span className="flex min-w-0 flex-col items-end tabular-nums">
+                <span>{quote?.status === "ok" ? money(quote.price, currency) : "—"}</span>
+                <span className="mt-0.5">
+                  <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />
+                </span>
+                {quote?.status === "ok" ? (
+                  <ExtendedHoursQuote
+                    quote={quote}
+                    currency={currency}
+                    className="overflow-hidden"
+                  />
+                ) : null}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function DesktopQuoteTable({
+  rows,
+  selected,
+  quotesByItem,
+  alertsByInstrument,
+  quoteFlashes,
+  readOnly,
+  onSelect,
+  onRemove,
+  onCreateAlert,
+  navigate,
+}) {
+  return (
+    <Table className="min-w-[680px]">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Symbol</TableHead>
@@ -264,8 +406,9 @@ function QuoteBoard({
           <TableHead className="text-right">Price</TableHead>
           <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
           <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
-          <TableHead className="hidden sm:table-cell">Signals</TableHead>
-          <TableHead className="w-10" aria-label="Actions" />
+          <TableHead className="w-10">
+            <span className="sr-only">Actions</span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -277,25 +420,38 @@ function QuoteBoard({
               key={item.id}
               aria-selected={isSelected}
               className={cn(
-                "cursor-pointer",
+                "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 quoteFlashClass(quoteFlashes.get(item.symbol)),
                 isSelected && "bg-secondary",
               )}
+              tabIndex={0}
               onClick={() => onSelect(item.id)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onSelect(item.id);
+              }}
             >
               <TableCell className="w-[88px] max-w-[88px] px-2 py-2.5 sm:w-auto sm:max-w-none sm:px-3">
-                <a
-                  href={symbolPageHref(item.symbol)}
-                  className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (!navigate) return;
-                    event.preventDefault();
-                    void navigate({ to: symbolPageHref(item.symbol) });
-                  }}
-                >
-                  <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
-                </a>
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <a
+                    href={symbolPageHref(item.symbol)}
+                    className="block min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!navigate) return;
+                      event.preventDefault();
+                      void navigate({ to: symbolPageHref(item.symbol) });
+                    }}
+                  >
+                    <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
+                  </a>
+                  <AlertChip
+                    alerts={alertsByInstrument.get(item.instrumentId)}
+                    symbol={item.symbol}
+                  />
+                </div>
               </TableCell>
               <TableCell className="px-1 py-1.5 sm:px-3">
                 <MarketSparkline symbol={item.symbol} sparkline={quote?.sparkline} />
@@ -304,9 +460,6 @@ function QuoteBoard({
                 {quote?.status === "ok" ? (
                   <div className="flex flex-col items-end">
                     <span>{money(quote.price, quote.currency ?? item.currency)}</span>
-                    <span data-slot="mobile-price-change" className="mt-0.5 sm:hidden">
-                      <SignedPercent value={quote.changePercent} />
-                    </span>
                     <ExtendedHoursQuote quote={quote} currency={quote.currency ?? item.currency} />
                   </div>
                 ) : (
@@ -323,10 +476,7 @@ function QuoteBoard({
                 </div>
               </TableCell>
               <TableCell className="hidden py-2.5 text-right tabular-nums lg:table-cell">
-                {quote?.status === "ok" ? formatNumber(quote.volume) : "—"}
-              </TableCell>
-              <TableCell className="hidden py-2.5 sm:table-cell">
-                <SignalBadge alerts={alertsByInstrument.get(item.instrumentId)} quote={quote} />
+                {quote?.status === "ok" ? formatCompactNumber(quote.volume) : "—"}
               </TableCell>
               <TableCell className="py-2.5 text-right" onClick={(event) => event.stopPropagation()}>
                 <RowActions
@@ -356,7 +506,6 @@ function QuoteBoardSkeleton() {
           <TableHead className="text-right">Price</TableHead>
           <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
           <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
-          <TableHead className="hidden sm:table-cell">Signals</TableHead>
           <TableHead className="w-10" />
         </TableRow>
       </TableHeader>
@@ -377,9 +526,6 @@ function QuoteBoardSkeleton() {
             </TableCell>
             <TableCell className="hidden py-2.5 lg:table-cell">
               <Skeleton className="ml-auto h-4 w-16" />
-            </TableCell>
-            <TableCell className="hidden py-2.5 sm:table-cell">
-              <Skeleton className="h-5 w-14" />
             </TableCell>
             <TableCell className="py-2.5">
               <Skeleton className="ml-auto size-7" />
@@ -403,6 +549,7 @@ function RowActions({ item, disabled, onRemove, onCreateAlert }) {
           type="button"
           variant="ghost"
           size="icon-xs"
+          className="size-10"
           aria-label={`Actions for ${item.symbol}`}
         >
           <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -428,14 +575,33 @@ function countItemsByWatchlist(items) {
   return counts;
 }
 
-function SignalBadge({ alerts, quote }) {
-  if (quote && quote.status !== "ok") return <Badge tone="warn">Quote unavailable</Badge>;
+function AlertChip({ alerts, symbol }) {
   const active = (alerts ?? []).filter((alert) => alert.enabled !== false);
-  if (active.length === 0) return <Badge>No alerts</Badge>;
-  return <Badge tone="ok">{active.length}</Badge>;
+  if (active.length === 0) return null;
+  const label = `${formatNumber(active.length)} active ${active.length === 1 ? "alert" : "alerts"} for ${symbol}`;
+  return (
+    <Badge
+      tone="ok"
+      className="h-5 shrink-0 gap-1 px-1.5"
+      data-slot="watchlist-alert-chip"
+      aria-label={label}
+    >
+      <Bell className="size-3" aria-hidden="true" />
+      <span className="tabular-nums">{formatNumber(active.length)}</span>
+    </Badge>
+  );
 }
 
-function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert, navigate }) {
+function SymbolInspector({
+  item,
+  quote,
+  state,
+  readOnly,
+  onRemove,
+  onCreateAlert,
+  navigate,
+  className,
+}) {
   const positionRow = useMemo(() => {
     const rows = buildHoldingRows(
       (state.portfolio ?? []).filter((lot) => lot.symbol === item.symbol),
@@ -454,10 +620,12 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
   );
   const currency = quote?.currency ?? item.currency;
   return (
-    <aside
-      className="rounded-xl border border-border bg-card shadow-subtle-xs xl:sticky xl:top-4"
+    <Card
+      role="complementary"
+      className={cn("overflow-hidden shadow-subtle-xs", className)}
       aria-label={`${item.symbol} details`}
     >
+      <h2 className="sr-only">{item.symbol} details</h2>
       <div className="border-b border-border p-4">
         <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
         <div className="mt-2 text-[28px] font-semibold leading-tight tabular-nums text-foreground">
@@ -479,7 +647,7 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
         <InspectorSection title="Position">
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-muted-foreground">
-              {positionRow.totalQuantity.toLocaleString()} shares @{" "}
+              {formatNumber(positionRow.totalQuantity)} shares @{" "}
               {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
             </span>
             <span className="tabular-nums">
@@ -514,8 +682,8 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
         )}
       </InspectorSection>
 
-      <div className="flex flex-wrap gap-2 p-4">
-        <Button asChild variant="bordered" size="sm">
+      <div className="grid grid-cols-2 gap-2 p-4">
+        <Button asChild variant="brand" size="sm" className="col-span-2 min-h-10 w-full">
           <a
             href={symbolPageHref(item.symbol)}
             onClick={(event) => {
@@ -532,16 +700,25 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
           type="button"
           variant="bordered"
           size="sm"
+          className="min-h-10 w-full"
           disabled={readOnly}
           onClick={onCreateAlert}
         >
           Create alert
         </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={onRemove}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          prefixIcon={Trash2}
+          className="min-h-10 w-full border border-destructive/40 bg-destructive/10 text-foreground hover:bg-destructive/15"
+          disabled={readOnly}
+          onClick={onRemove}
+        >
           Remove
         </Button>
       </div>
-    </aside>
+    </Card>
   );
 }
 

@@ -15,6 +15,8 @@ import { quoteChangeDirections } from "./format.js";
 export function ConfirmButton({
   label,
   confirmLabel = "Confirm?",
+  icon,
+  ariaLabel,
   disabled,
   onConfirm,
   variant = "ghost",
@@ -34,6 +36,8 @@ export function ConfirmButton({
       type="button"
       variant={armed ? "bordered" : variant}
       size={size}
+      icon={armed ? undefined : icon}
+      aria-label={armed ? confirmLabel : ariaLabel}
       className={cn(armed && "border-destructive/40 text-destructive", className)}
       disabled={disabled}
       onClick={() => {
@@ -45,7 +49,7 @@ export function ConfirmButton({
         }
       }}
     >
-      {armed ? confirmLabel : label}
+      <span className={cn(icon && !armed && "sr-only")}>{armed ? confirmLabel : label}</span>
     </Button>
   );
 }
@@ -204,22 +208,36 @@ export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
     return null;
   }
   const isPreMarket = quote.marketState === "PRE";
+  const hasChange =
+    Number.isFinite(quote.extendedChangePercent) || Number.isFinite(quote.extendedChange);
   return (
     <div
       data-slot="extended-hours-quote"
-      className={cn("mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px]", className)}
+      className={cn(
+        "mt-1 flex max-w-full items-center justify-end gap-1 whitespace-nowrap text-[11px] leading-4",
+        className,
+      )}
     >
-      <Badge tone={isPreMarket ? "warn" : "info"} className="h-[18px] px-1.5 text-[10px]">
-        {isPreMarket ? "Pre-market" : "After hours"}
-      </Badge>
-      <span className="tabular-nums text-muted-foreground">
-        {money(quote.extendedPrice, currency)}
-      </span>
-      <ExtendedHoursChange
-        change={quote.extendedChange}
-        changePercent={quote.extendedChangePercent}
-        currency={currency}
+      <span
+        data-slot="extended-session-dot"
+        className={cn("size-1.5 shrink-0 rounded-full", isPreMarket ? "bg-warning" : "bg-info")}
+        aria-hidden="true"
       />
+      <span className="truncate text-muted-foreground">
+        {isPreMarket ? "Pre-market" : "After hours"} {money(quote.extendedPrice, currency)}
+      </span>
+      {hasChange ? (
+        <span className="text-muted-foreground" aria-hidden="true">
+          ·
+        </span>
+      ) : null}
+      {hasChange ? (
+        <ExtendedHoursChange
+          change={quote.extendedChange}
+          changePercent={quote.extendedChangePercent}
+          currency={currency}
+        />
+      ) : null}
     </div>
   );
 }
@@ -235,11 +253,9 @@ function ExtendedHoursChange({ change, changePercent, currency }) {
         : "text-muted-foreground";
   return (
     <span className={cn("tabular-nums font-medium", tone)}>
-      {Number.isFinite(change) ? formatSignedMoney(change, currency) : null}
-      {Number.isFinite(change) && Number.isFinite(changePercent) ? " " : null}
       {Number.isFinite(changePercent)
-        ? `(${formatPercent(changePercent, { decimals: 2, signed: true })})`
-        : null}
+        ? formatPercent(changePercent, { decimals: 2, signed: true })
+        : formatSignedMoney(change, currency)}
     </span>
   );
 }
@@ -259,9 +275,10 @@ export function StatusDot({ tone, label }) {
   );
 }
 
-export function Badge({ tone = "neutral", children, className }) {
+export function Badge({ tone = "neutral", children, className, ...props }) {
   return (
     <span
+      {...props}
       className={cn(
         "inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11px] font-medium",
         tone === "warn"
@@ -314,8 +331,10 @@ export function StateTabs({
   renameLabel,
   onSelect,
   onRename,
+  compactSingle = false,
 }) {
   const tabRefs = useRef(new Map());
+  const singleItem = compactSingle && items.length === 1;
 
   const onTabKeyDown = (event, index) => {
     const nextIndex = nextStateTabIndex(index, items.length, event.key);
@@ -329,7 +348,8 @@ export function StateTabs({
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
       <div
-        className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        data-slot={singleItem ? "single-state-tab" : "state-tabs"}
+        className={cn("flex min-w-0 gap-1 overflow-x-auto", singleItem ? "flex-none" : "flex-1")}
         role="tablist"
         aria-orientation="horizontal"
       >
@@ -354,9 +374,11 @@ export function StateTabs({
               onKeyDown={(event) => onTabKeyDown(event, index)}
             >
               <span>{item.name}</span>
-              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                {counts.get(item.id) ?? 0}
-              </span>
+              {!singleItem ? (
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {counts.get(item.id) ?? 0}
+                </span>
+              ) : null}
             </button>
           );
         })}

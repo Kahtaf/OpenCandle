@@ -179,17 +179,23 @@ describe("MarketStatePage rendering", () => {
     );
     expect(html).toContain('data-source="Yahoo Finance"');
     expect(html).toContain("Yahoo · 2026-06-12");
-    expect(html).toContain('data-slot="mobile-price-change"');
+    expect(html).toContain('data-slot="mobile-watchlist-row"');
+    expect(html).toContain('data-slot="watchlist-inspector-sheet"');
     expect(html).not.toContain("ticker-line.com");
     expect(html).toContain("Price");
     expect(html).toContain("Change");
     expect(html).toContain("Volume");
+    expect(html).not.toContain("Signals");
+    expect(html).not.toContain("No alerts");
+    expect(html).toContain('data-slot="watchlist-alert-chip"');
+    expect(html).toContain('aria-label="1 active alert for AAPL"');
     expect(html).toContain("1.25");
     expect(html).toContain("+0.66%");
     expect(html).toContain("After hours");
     expect(html).toContain("$83.02");
-    expect(html).toContain("−$0.53");
     expect(html).toContain("−0.64%");
+    expect(html).not.toContain("−$0.53");
+    expect(html).toContain('data-slot="extended-session-dot"');
     const extendedHoursQuoteClasses = html.match(
       /data-slot="extended-hours-quote" class="([^"]+)"/,
     )?.[1];
@@ -198,6 +204,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("52-week range");
     expect(html).toContain("Create alert");
     expect(html).toContain('aria-label="Actions for AAPL"');
+    expect(html).toContain("bg-brand text-brand-foreground");
+    expect(html).toContain("border-destructive/40 bg-destructive/10 text-foreground");
   });
 
   it("keeps the quote-board skeleton visible while watchlist data loads", () => {
@@ -270,7 +278,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('aria-label="Expand ^GSPC lots"');
   });
 
-  it("renders portfolio allocation as categorical proportional segments", () => {
+  it("renders portfolio allocation with the shared donut", () => {
     const html = renderToStaticMarkup(
       React.createElement(PortfolioPage, {
         loading: false,
@@ -354,12 +362,18 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain('data-slot="portfolio-allocation"');
-    expect(html).toContain("oklch(");
-    expect(html).toContain("AAPL 60.0%");
-    expect(html).toContain("NVDA 40.0%");
+    expect(html).toContain('data-slot="allocation-donut"');
+    expect(html).toContain("hsl(var(--tw-info))");
+    expect(html).toContain("AAPL");
+    expect(html).toContain("60.0%");
+    expect(html).toContain("NVDA");
+    expect(html).toContain("40.0%");
+    expect(html.indexOf("Holdings")).toBeLessThan(html.indexOf("Add holding"));
+    expect(html).toContain('data-slot="portfolio-summary-deltas"');
+    expect(html).toContain("Today");
+    expect(html).toContain("All time");
     expect(html).toContain("+$0.95 (+0.2%)");
-    expect(html).toContain("today ·");
+    expect(html).not.toContain("today ·");
     expect(html).toContain("Price");
     expect(html).toContain("Value");
     expect(html).toContain("24 hr sparkline");
@@ -368,6 +382,14 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("% of Portfolio");
     expect(html).toContain("Quantity");
     expect(html).toContain("Avg. Cost Basis");
+    expect(html).toContain("Actions");
+    expect(html).toContain("min-w-[920px]");
+    expect(html).not.toContain("min-w-[1180px]");
+    expect(html).toContain('data-slot="portfolio-lot-row"');
+    expect(html).toContain('aria-label="Edit AAPL lot"');
+    expect(html).toContain('aria-label="Remove AAPL lot"');
+    expect(html).toContain("min-h-10 min-w-10");
+    expect(html).not.toContain("font-mono");
     expect(html).toContain(
       'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
     );
@@ -379,10 +401,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("NVIDIA Corporation quote name");
     expect(html).toContain("Pre-market");
     expect(html).toContain("$151.25");
-    expect(html).toContain("+$1.25");
     expect(html).toContain("+0.83%");
     expect(html).toContain("transition-transform duration-150");
-    expect(html).toContain('data-slot="portfolio-lot-reveal"');
     expect(html).toContain("transition-[grid-template-rows] duration-150");
   });
 
@@ -455,6 +475,26 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('tabindex="-1"');
     expect(html).toContain('aria-label="Rename watchlist MAG7"');
     expect(html).toContain("size-10");
+  });
+
+  it("keeps a single watchlist tab and its rename action together without a count badge", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StateTabs, {
+        items: [{ id: 1, name: "Default" }],
+        activeItem: { id: 1, name: "Default" },
+        counts: new Map([[1, 1]]),
+        compactSingle: true,
+        readOnly: false,
+        renameLabel: "Rename watchlist",
+        onSelect: () => undefined,
+        onRename: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('data-slot="single-state-tab"');
+    expect(html).toContain("flex-none");
+    expect(html).not.toContain(">1</span>");
+    expect(html).toContain('aria-label="Rename watchlist Default"');
   });
 
   it("moves StateTabs with arrow keys using roving tabindex", () => {
