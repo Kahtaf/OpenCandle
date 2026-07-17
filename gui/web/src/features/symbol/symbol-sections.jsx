@@ -7,6 +7,7 @@ import {
   formatMoney,
   formatNumber,
   formatPercent,
+  formatQuantity,
 } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
@@ -162,7 +163,7 @@ export function PositionCard({ ticker, positionRows = [] }) {
         {row ? (
           <dl className="divide-y divide-border/70 px-4 text-sm">
             <ContextMetric
-              label={`${formatNumber(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
+              label={`${formatQuantity(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
               value={formatMoney(row.marketValue, row.currency)}
             />
             <ContextMetric

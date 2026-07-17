@@ -1,5 +1,6 @@
 import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
+import { formatQuantity } from "../../../lib/financial-format.js";
 import { DeltaChip, MoneyTile, PlainOutput, ToolCard } from "./_shared.jsx";
 import {
   extractDetails,
@@ -53,7 +54,7 @@ export function PortfolioCard({ message, header, text }) {
                 <div className="grid">
                   <span className="font-mono text-sm font-medium text-foreground">{p.symbol}</span>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {p.shares} @ {formatPrice(p.avgCost)}
+                    {formatQuantity(p.shares)} @ {formatPrice(p.avgCost)}
                   </span>
                 </div>
                 <span className="text-right text-sm tabular-nums text-foreground">
@@ -177,7 +178,7 @@ export function CorrelationCard({ message, header, text }) {
             {symbols.map((rowSym) => (
               <tr key={rowSym}>
                 <th
-                  scope="col"
+                  scope="row"
                   className="border-b border-border px-2 py-1.5 text-left font-mono text-[11px] font-medium text-foreground"
                 >
                   {rowSym}

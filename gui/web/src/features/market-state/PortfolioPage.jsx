@@ -1,9 +1,8 @@
 import { BriefcaseBusiness, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { AllocationDonut } from "../../components/allocation-donut.jsx";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
-import { formatNumber, formatPercent } from "../../lib/financial-format.js";
+import { formatPercent, formatQuantity } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
@@ -25,6 +24,8 @@ import {
   Sym,
   useQuoteChangeFlash,
 } from "./shared.jsx";
+
+const AllocationDonut = lazy(() => import("../../components/allocation-donut.jsx"));
 
 function usePortfolioPageState(state, filter) {
   const portfolios = useMemo(() => {
@@ -324,7 +325,7 @@ export function PortfolioPage({
                               : "—"}
                           </td>
                           <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
-                            {formatNumber(row.totalQuantity)}
+                            {formatQuantity(row.totalQuantity)}
                           </td>
                           <td
                             data-slot="avg-cost-basis"
@@ -350,7 +351,7 @@ export function PortfolioPage({
                                 {lot.notes ? ` · ${lot.notes}` : ""}
                               </div>
                               <div className="mt-1 tabular-nums 2xl:hidden">
-                                {formatNumber(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
+                                {formatQuantity(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
                               </div>
                             </td>
                             <td />
@@ -374,7 +375,7 @@ export function PortfolioPage({
                             </td>
                             <td />
                             <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
-                              {formatNumber(lot.quantity)}
+                              {formatQuantity(lot.quantity)}
                             </td>
                             <td className="hidden px-2 py-2.5 text-right tabular-nums 2xl:table-cell">
                               {money(lot.avgCost, lot.currency)}
@@ -476,7 +477,7 @@ function MobileHoldingRows({
                         : "—"
                     }
                   />
-                  <MobileMetric label="Quantity" value={formatNumber(row.totalQuantity)} />
+                  <MobileMetric label="Quantity" value={formatQuantity(row.totalQuantity)} />
                   <MobileMetric
                     label="Avg. Cost Basis"
                     value={moneyOrDash(row.blendedCost, row.currency)}
@@ -488,7 +489,7 @@ function MobileHoldingRows({
                       <div className="min-w-0 text-xs text-muted-foreground">
                         <div>Lot · {shortDateLabel(lot.openedAt) || "—"}</div>
                         <div className="mt-1 tabular-nums">
-                          {formatNumber(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
+                          {formatQuantity(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -658,12 +659,23 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
           )}
         </dl>
         {segments.length > 0 ? (
-          <AllocationDonut
-            className="mt-4 max-w-md"
-            segments={segments}
-            totalValue={summary?.totalValue}
-            currency={summary?.baseCurrency}
-          />
+          <Suspense
+            fallback={
+              <div
+                data-slot="allocation-donut-loading"
+                className="mt-4 h-44 max-w-md animate-pulse rounded-lg bg-secondary motion-reduce:animate-none"
+                aria-label="Loading portfolio allocation"
+                role="status"
+              />
+            }
+          >
+            <AllocationDonut
+              className="mt-4 max-w-md"
+              segments={segments}
+              totalValue={summary?.totalValue}
+              currency={summary?.baseCurrency}
+            />
+          </Suspense>
         ) : null}
       </div>
     </Panel>

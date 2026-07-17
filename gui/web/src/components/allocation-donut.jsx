@@ -31,7 +31,7 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
-export function AllocationDonut({ segments, totalValue, currency = "USD", className }) {
+export default function AllocationDonut({ segments, totalValue, currency = "USD", className }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const data = useMemo(
     () =>

@@ -363,14 +363,11 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain('data-slot="allocation-donut"');
+    expect(html).toContain('data-slot="allocation-donut-loading"');
     expect(html).toContain(">Portfolio value</h2>");
     expect(html.indexOf("Portfolio value")).toBeLessThan(
       html.indexOf('data-slot="portfolio-summary-deltas"'),
     );
-    expect(html).toContain("hsl(var(--tw-info))");
-    expect(html).toContain("AAPL");
-    expect(html).toContain("60.0%");
     expect(html).toContain("NVDA");
     expect(html).toContain("40.0%");
     expect(html.indexOf("Holdings")).toBeLessThan(html.indexOf("Add holding"));

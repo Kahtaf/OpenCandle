@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Persisted GUI workflow transcripts now retain the final validation prompt as a structured step, label only the marker-bounded analyst prompt with its analyst stage, lazy-load portfolio allocation charts, preserve fractional holding quantities, clear stale range data during history refreshes, and expose correlation matrix row headers to assistive technology.
 - GUI financial values now share currency-aware formatting across dashboard and symbol surfaces; symbol charts keep range controls outside the plot, preserve keyboard focus during same-symbol refreshes, reserve space for volume, axes, and attribution, and present responsive key statistics with explicit non-equity availability notes.
 - Autoreview follow-ups now preserve LSE intraday timestamps, reject incomplete financials and invalid comparison baselines, isolate symbol/range loading state, keep portfolio totals currency-honest, refresh chart labels with the viewport, mark expired SWR data stale, avoid assumed USD comparison labels, and distinguish invalid symbols from provider outages.
 - Round-two autoreview fixes now retain valid SWR snapshots through degraded refreshes, route alerts through explicit threshold entry, render unavailable valuations honestly, align intraday comparisons by timestamp, disclose stale provider data, format symbol metrics in their native currency, and reject invalid LSE candle payloads.

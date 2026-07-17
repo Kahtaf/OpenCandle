@@ -225,24 +225,39 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
   const groups: WorkflowStepCandidate[][] = [];
   let activeGroup: WorkflowStepCandidate[] | null = null;
   let pendingOriginalInput = false;
+  let awaitingValidationPrompt = false;
 
   for (const entry of entries) {
     if (isCustomEntry(entry, "opencandle-workflow")) {
       activeGroup = [];
       groups.push(activeGroup);
       pendingOriginalInput = false;
+      awaitingValidationPrompt = false;
       continue;
     }
     if (isOriginalInputEntry(entry)) {
+      if (awaitingValidationPrompt) {
+        activeGroup = null;
+        awaitingValidationPrompt = false;
+      }
       if (activeGroup) pendingOriginalInput = true;
       continue;
     }
     if (entry.type === "message" && (entry.message as Message).role === "user") {
       if (activeGroup) {
-        activeGroup.push({
+        const candidate: WorkflowStepCandidate = {
           messageId: entry.id,
           preserveUserTurn: pendingOriginalInput,
-        });
+        };
+        if (awaitingValidationPrompt) {
+          candidate.stage = "validation";
+          candidate.label = "Validation and synthesis";
+        }
+        activeGroup.push(candidate);
+        if (awaitingValidationPrompt) {
+          activeGroup = null;
+          awaitingValidationPrompt = false;
+        }
       }
       pendingOriginalInput = false;
       continue;
@@ -255,22 +270,19 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
     }
     if (isCustomEntry(entry, "opencandle-validation")) {
       assignPendingWorkflowSteps(activeGroup, "validation", "Validation and synthesis");
-      activeGroup = null;
+      awaitingValidationPrompt = activeGroup !== null;
       pendingOriginalInput = false;
     }
   }
 
   const metadata = new Map<string, WorkflowStepDetails>();
   for (const group of groups) {
-    const classified = group.filter(
-      (candidate) => candidate.preserveUserTurn || candidate.stage !== undefined,
-    );
-    classified.forEach((candidate, index) => {
+    group.forEach((candidate, index) => {
       metadata.set(candidate.messageId, {
         label: candidate.label ?? "Workflow step",
         stage: candidate.stage ?? "workflow",
         step: index + 1,
-        total: classified.length,
+        total: group.length,
         preserveUserTurn: candidate.preserveUserTurn,
       });
     });
@@ -284,10 +296,12 @@ function assignPendingWorkflowSteps(
   label: string,
 ): void {
   if (!group) return;
-  for (const candidate of group) {
+  for (let index = group.length - 1; index >= 0; index -= 1) {
+    const candidate = group[index];
     if (candidate.stage) continue;
     candidate.stage = stage;
     candidate.label = label;
+    return;
   }
 }
 

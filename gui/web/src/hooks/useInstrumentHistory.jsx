@@ -4,7 +4,6 @@ export function useInstrumentHistory(symbol, range) {
   const requestKey = `${symbol}:${range}`;
   const [state, setState] = useState({
     key: requestKey,
-    symbol,
     snapshot: null,
     loading: true,
     error: null,
@@ -14,13 +13,12 @@ export function useInstrumentHistory(symbol, range) {
     let disposed = false;
 
     const run = async () => {
-      setState((previous) => ({
+      setState({
         key: requestKey,
-        symbol,
-        snapshot: previous.symbol === symbol ? previous.snapshot : null,
+        snapshot: null,
         loading: true,
         error: null,
-      }));
+      });
       try {
         const response = await fetch(
           `/api/instruments/history?symbol=${encodeURIComponent(symbol)}&range=${range}`,
@@ -30,13 +28,12 @@ export function useInstrumentHistory(symbol, range) {
         }
         const data = await response.json();
         if (!disposed) {
-          setState({ key: requestKey, symbol, snapshot: data, loading: false, error: null });
+          setState({ key: requestKey, snapshot: data, loading: false, error: null });
         }
       } catch (err) {
         if (!disposed) {
           setState({
             key: requestKey,
-            symbol,
             snapshot: null,
             loading: false,
             error: err instanceof Error ? err.message : String(err),
@@ -54,9 +51,5 @@ export function useInstrumentHistory(symbol, range) {
   if (state.key === requestKey) {
     return { snapshot: state.snapshot, loading: state.loading, error: state.error };
   }
-  return {
-    snapshot: state.symbol === symbol ? state.snapshot : null,
-    loading: true,
-    error: null,
-  };
+  return { snapshot: null, loading: true, error: null };
 }

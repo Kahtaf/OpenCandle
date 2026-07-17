@@ -133,6 +133,9 @@ describe("sessionEntriesToChatEvents", () => {
           passed: true,
           mismatches: [],
         }),
+        customEntry("genuine-original", "opencandle-user-input", {
+          original: "What is the biggest risk?",
+        }),
         messageEntry("genuine-user", {
           role: "user",
           content: "What is the biggest risk?",
@@ -218,6 +221,96 @@ describe("sessionEntriesToChatEvents", () => {
           event.type === "custom.message" && event.customType === "opencandle-workflow-step",
       ),
     ).toHaveLength(3);
+  });
+
+  it("keeps the final validation prompt in its workflow group", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+        }),
+        customEntry("original", "opencandle-user-input", { original: "Analyze NVDA" }),
+        messageEntry("workflow-user-synthesis", {
+          role: "user",
+          content: "Synthesis prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-synthesis", assistantMessage("Synthesis output")),
+        customEntry("validation", "opencandle-validation", { passed: true, mismatches: [] }),
+        messageEntry("workflow-user-validation", {
+          role: "user",
+          content: "[Validation Check] Verify the synthesis evidence.",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "message.completed" && event.messageId === "workflow-user-validation",
+      ),
+    ).toHaveLength(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "workflow-step-workflow-user-validation",
+        customType: "opencandle-workflow-step",
+        details: expect.objectContaining({
+          label: "Validation and synthesis",
+          stage: "validation",
+        }),
+      }),
+    );
+  });
+
+  it("does not apply an analyst stage to earlier unclassified workflow prompts", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+        }),
+        customEntry("original", "opencandle-user-input", { original: "Analyze NVDA" }),
+        messageEntry("workflow-user-fetch", {
+          role: "user",
+          content: "Initial fetch prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-fetch", assistantMessage("Fetched facts")),
+        messageEntry("workflow-user-analyst", {
+          role: "user",
+          content: "Valuation analyst prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-analyst", assistantMessage("Analyst output")),
+        customEntry("analyst", "opencandle-analyst-step", {
+          stage: "analyst_valuation",
+          role: "valuation",
+          parsed: true,
+        }),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const workflowSteps = events.filter(
+      (event) => event.type === "custom.message" && event.customType === "opencandle-workflow-step",
+    );
+    expect(workflowSteps).toContainEqual(
+      expect.objectContaining({
+        messageId: "workflow-step-workflow-user-fetch",
+        details: expect.objectContaining({ label: "Workflow step", stage: "workflow" }),
+      }),
+    );
+    expect(workflowSteps).toContainEqual(
+      expect.objectContaining({
+        messageId: "workflow-step-workflow-user-analyst",
+        details: expect.objectContaining({
+          label: "Valuation analyst",
+          stage: "analyst_valuation",
+        }),
+      }),
+    );
   });
 
   it("surfaces original-input attachments beside the typed user text", () => {

@@ -82,7 +82,7 @@ describe("useInstrumentHistory", () => {
     expect(latestResult).toEqual({ snapshot: body, loading: false, error: null });
   });
 
-  it("keeps same-symbol history mounted while a new range loads", async () => {
+  it("clears same-symbol history while a new range loads", async () => {
     const oneDay = deferred<Response>();
     const oneYear = deferred<Response>();
     globalThis.fetch = vi
@@ -100,7 +100,7 @@ describe("useInstrumentHistory", () => {
       "/api/instruments/history?symbol=AAPL&range=1Y",
     );
     expect(latestResult?.loading).toBe(true);
-    expect(latestResult?.snapshot).toBe(oneDayBody);
+    expect(latestResult?.snapshot).toBeNull();
 
     const body = { symbol: "AAPL", range: "1Y", bars: [] };
     await act(async () => oneYear.resolve(response(body)));

@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table.jsx";
-import { formatCompactNumber, formatNumber } from "../../lib/financial-format.js";
+import { formatCompactNumber, formatNumber, formatQuantity } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
@@ -647,7 +647,7 @@ function SymbolInspector({
         <InspectorSection title="Position">
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-muted-foreground">
-              {formatNumber(positionRow.totalQuantity)} shares @{" "}
+              {formatQuantity(positionRow.totalQuantity)} shares @{" "}
               {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
             </span>
             <span className="tabular-nums">

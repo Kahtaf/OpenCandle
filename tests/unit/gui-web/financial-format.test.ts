@@ -5,6 +5,7 @@ import {
   formatCompactNumber,
   formatMoney,
   formatPrice,
+  formatQuantity,
   formatSignedMoneyChange,
 } from "../../../gui/web/src/lib/financial-format.js";
 
@@ -31,6 +32,12 @@ describe("shared financial formatting", () => {
     expect(formatChartPrice(63_086.42)).toBe("63,086");
     expect(formatChartPrice(216)).toBe("216.00");
     expect(formatChartPrice(216.3)).toBe("216.30");
+  });
+
+  it("preserves fractional holding quantities", () => {
+    expect(formatQuantity(0.001)).toBe("0.001");
+    expect(formatQuantity(0.00000001)).toBe("0.00000001");
+    expect(formatQuantity(12.5)).toBe("12.5");
   });
 
   it("returns a dash for unavailable numeric values", () => {

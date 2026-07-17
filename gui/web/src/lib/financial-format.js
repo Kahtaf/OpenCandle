@@ -75,6 +75,10 @@ export function formatNumber(value, options = {}) {
   }).format(value);
 }
 
+export function formatQuantity(value) {
+  return formatNumber(value, { maximumFractionDigits: 8 });
+}
+
 export function formatCompactNumber(value) {
   if (!isFiniteNumber(value)) return DASH;
   return getFormatter({ notation: "compact", maximumFractionDigits: 1 }).format(value);

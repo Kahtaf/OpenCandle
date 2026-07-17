@@ -31,7 +31,7 @@ vi.mock("recharts", () => ({
   Sector: (props: React.SVGProps<SVGPathElement>) => React.createElement("path", props),
 }));
 
-import { AllocationDonut } from "../../../gui/web/src/components/allocation-donut.jsx";
+import AllocationDonut from "../../../gui/web/src/components/allocation-donut.jsx";
 
 afterEach(() => {
   vi.unstubAllGlobals();
