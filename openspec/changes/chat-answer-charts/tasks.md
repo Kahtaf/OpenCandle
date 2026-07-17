@@ -34,7 +34,7 @@ Follow AGENTS.md (TDD, fixtures, no live API calls in unit tests, CHANGELOG, `gr
 
 ## 6. Verification
 
-- [ ] 6.1 `npm test`, `npx tsc --noEmit`, `npx biome ci .` all green; React Doctor clean on the changed GUI files (`market.jsx`, `index.jsx`, `price-comparison.jsx`).
+- [x] 6.1 `npm test`, `npx tsc --noEmit`, `npx biome ci .` all green; React Doctor clean on the changed GUI files (`market.jsx`, `index.jsx`, `price-comparison.jsx`).
 - [ ] 6.2 Live GUI evidence: run `npm run gui`, drive one `get_stock_history` prompt and one compare prompt that triggers `get_price_comparison`; screenshot both cards at 1440x960 and 390x844, confirming chart heights (220px / 180px) and that the 390px transcript has no horizontal scroll; reload the session and confirm both cards render identically from persisted entries (spec: live/reload parity). Confirm the TUI (`npm start`) shows the comparison tool's plain-text table.
-- [ ] 6.3 Add CHANGELOG `[Unreleased]` entries (history card on shared MarketChart; new `get_price_comparison` tool + comparison chart card + compare-workflow wiring).
-- [ ] 6.4 `graphify update .`; validate the change with `npx openspec validate chat-answer-charts --strict` (if that command is unavailable in the installed openspec version, run `npx openspec status --change chat-answer-charts --json` and confirm completeness).
+- [x] 6.3 Add CHANGELOG `[Unreleased]` entries (history card on shared MarketChart; new `get_price_comparison` tool + comparison chart card + compare-workflow wiring).
+- [x] 6.4 `graphify update .`; validate the change with `npx openspec validate chat-answer-charts --strict` (if that command is unavailable in the installed openspec version, run `npx openspec status --change chat-answer-charts --json` and confirm completeness).

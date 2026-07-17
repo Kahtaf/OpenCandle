@@ -4,6 +4,7 @@
 
 ### Added
 
+- A new `get_price_comparison` tool fetches per-symbol history with Yahoo→Alpha Vantage fallback, date-aligns the surviving series, indexes each to 100 at the first common date, and discloses unavailable symbols, reduced-alignment windows, and an as-of freshness line in a plain-text table; the compare workflow now requests an indexed price comparison, and GUI chat answers render the result as a multi-series indexed chart card with a per-symbol legend, end-of-line labels, and unavailable-symbol warnings.
 - The local GUI gained a reusable `MarketChart` component (self-hosted TradingView lightweight-charts v5) with area/candlestick/indexed modes, a keyboard-operable range selector, previous-close line, volume histogram, crosshair tooltip, and design-token theming, backed by a new guarded read-only `GET /api/instruments/history` endpoint with server-side range/interval validation, request coalescing, and additive intraday epoch-second timestamps on history bars.
 - Watchlist and portfolio rows now include locally rendered intraday Yahoo Finance sparklines with source and freshness context; portfolio tables also expose price, value, daily change, total gain/loss, allocation, quantity, and average cost basis in a responsive desktop table and expandable mobile summary, while mobile watchlist rows retain active pre-/post-market quotes.
 - A non-gating nightly GitHub Actions drift canary now runs live provider checks and, when `GEMINI_API_KEY` is configured, deterministic and advisory live-router evals.
@@ -12,6 +13,7 @@
 
 ### Changed
 
+- GUI chat history cards (`get_stock_history` / `get_crypto_history`) now render through the shared `MarketChart` component in a bounded-height area chart with a stated first→last bar window, replacing the bespoke SVG price chart; no in-card range switching or fetching was added.
 - The nightly drift canary now reports Gemini-backed agent evals as advisory, keeping provider and deterministic test gates blocking while surfacing live-model wording drift and slow workflow traces in the run summary.
 - CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.
 - The packed-install smoke now verifies the packed CLI version, help usage, and blocked JSON doctor report in a fresh consumer home.
