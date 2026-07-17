@@ -1,6 +1,6 @@
 # Contributing to OpenCandle
 
-OpenCandle is a financial data analysis agent built with [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), and [Pi](https://github.com/earendil-works/pi). Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
+OpenCandle is an open source financial investigator built with [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), and [Pi](https://github.com/earendil-works/pi). Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
 
 ## Before You Start
 
@@ -38,7 +38,7 @@ Before opening a release-facing PR, run the CI-equivalent local gate:
 npm run release:check
 ```
 
-That gate runs typecheck, `test:scripts:typecheck`, [Biome](https://biomejs.dev) CI, unit tests, `test:gui:release-smoke`, docs build, package-content validation, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. Before version or tag mutation, the release script asks you to confirm that `npm run eval -- release` was run and acceptable; `--skip-eval-confirm` is an emergency bypass.
+See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke requires `npx playwright-core install chromium` locally. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. Before version or tag mutation, the release script asks you to confirm that `npm run eval -- release` was run and acceptable; `--skip-eval-confirm` is an emergency bypass.
 
 ## Contribution Rules
 
@@ -84,7 +84,7 @@ For non-trivial work, link the issue or design discussion that established scope
 
 OpenCandle follows Pi's release style where possible: manual semver bump scripts, a maintained `CHANGELOG.md` with an `Unreleased` section, and explicit release commands.
 
-Prefer clear prefixes such as:
+Prefer clear commit-message prefixes such as:
 
 - `feat:`
 - `fix:`

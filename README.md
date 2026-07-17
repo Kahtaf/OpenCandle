@@ -2,7 +2,7 @@
 
 OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
 
-Requires Node.js 22.19+ or 24–26. macOS and Linux are fully supported; Windows is best-effort (WSL recommended).
+Requires Node.js 22.19+ (22.x) or 24–26. macOS and Linux are fully supported; Windows is best-effort (WSL recommended).
 
 ```bash
 npx opencandle
@@ -18,7 +18,7 @@ npx opencandle gui
 
 ## See It Work
 
-The 67-second launch video: a real market question through the browser workbench, the evidence trail behind the answer, and the same workflow in the terminal.
+Watch the launch video: a real market question in the browser workbench, the evidence behind the answer, and the same workflow in the terminal.
 
 https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29
 
@@ -42,20 +42,24 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 | Capability | What it gives you |
 | --- | --- |
-| Terminal agent | Fast keyboard-driven research inside the bundled [Pi](https://github.com/earendil-works/pi) local TUI, with sessions, slash commands, model setup, and saved transcripts. Pi is the bundled agent runtime; no separate Pi install is needed. |
+| Terminal agent | Fast keyboard-driven research inside the bundled [Pi](https://github.com/earendil-works/pi) local TUI, with sessions, slash commands, model setup, and saved transcripts. |
 | Local browser GUI | Chat with financial result cards and interactive charts, a market dashboard home, per-ticker symbol pages, watchlists and portfolios with sparklines and extended-hours quotes, session history, provider setup, and tool discovery at `http://127.0.0.1:14567`. |
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
-| Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
+| Finance routing | Each question type gets a purpose-built research path — quotes, comparisons, portfolio reviews, options, filings, macro, sentiment, and education are handled differently instead of one generic answer. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
-| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set; durable market state is stored in SQLite at `~/.opencandle/state.db` (or `$OPENCANDLE_HOME/state.db`). |
+| Local state | Everything stays on your machine under `~/.opencandle/` — watchlists, portfolios, alerts, sessions. See [Configuration](https://opencandle.app/docs/configuration.html). |
 | Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
 | Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
 
 ## Quick Start
 
-On first run, OpenCandle walks you through model setup. [Pi](https://github.com/earendil-works/pi) is the bundled agent runtime that handles model setup, the terminal shell, and saved sessions; no separate Pi install is needed. In the terminal, you can use Pi sign-in when available or provide a model API key. In the GUI, use the API-key setup panel or complete terminal `/setup` first and refresh the browser. Data-provider keys are separate and optional.
+On first run, OpenCandle walks you through model setup. [Pi](https://github.com/earendil-works/pi) is the bundled agent runtime that handles model setup, the terminal shell, and saved sessions; no separate Pi install is needed. In the terminal, you can use Pi sign-in (if the setup prompt offers it) or provide a model API key. In the GUI, use the API-key setup panel or complete terminal `/setup` first and refresh the browser. Data-provider keys are separate and optional.
 
-Start the GUI instead:
+```bash
+npx opencandle
+```
+
+Or start the GUI:
 
 ```bash
 npx opencandle gui
@@ -92,9 +96,6 @@ Health diagnostics run from your shell:
 ```bash
 npx opencandle doctor
 npx opencandle doctor --json
-npx opencandle doctor --sessions
-npx opencandle doctor --full
-npx opencandle doctor --enable twitter
 ```
 
 The GUI also has a Diagnostics page at `/diagnostics` with the same health report, provider setup links, model setup actions, and an explicit browser-session check for Reddit and Twitter/X.
@@ -254,7 +255,7 @@ See [tests/harness/README.md](https://github.com/Kahtaf/OpenCandle/blob/main/tes
 - [Configuration](https://opencandle.app/docs/configuration.html)
 - [System Architecture](https://opencandle.app/docs/system-architecture.html)
 - [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html)
-- [Comparisons](https://opencandle.app/docs/comparisons.html)
+- [Why OpenCandle](https://opencandle.app/docs/comparisons.html)
 
 ## License
 

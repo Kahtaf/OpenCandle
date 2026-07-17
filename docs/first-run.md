@@ -26,11 +26,13 @@ npm install
 npm start
 ```
 
+The first launch needs network access; Pi downloads two small helper binaries into `~/.pi/agent/bin`.
+
 2. Connect an AI model when the setup prompt opens.
 
-In the terminal, choose Pi sign-in when available or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
+In the terminal, choose Pi sign-in (if the setup prompt offers it) or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
 
-If you start with `opencandle gui`, the browser setup panel currently supports model API keys. Users who prefer Pi sign-in should complete terminal `/setup` first, then refresh the GUI.
+If you started with `opencandle gui`: the browser setup panel takes model API keys only. To use Pi sign-in, run `/setup` in the terminal first, then refresh the GUI.
 
 3. Start with a keyless market-data prompt.
 
@@ -40,7 +42,7 @@ Compare BTC and ETH over the last month
 What is the latest SEC filing for AAPL?
 ```
 
-[Yahoo Finance](https://finance.yahoo.com), [TradingView](https://www.tradingview.com) scanner, [Polymarket](https://polymarket.com) Gamma API, [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) plus your normal x.com browser session. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the canonical keyless-source list and caveats.
+Yahoo Finance, CoinGecko, SEC EDGAR, and several other sources work without provider keys; Reddit and Twitter/X sentiment use the `rdt-cli` and `twitter-cli` tools with your normal browser sessions. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the full list and caveats.
 
 4. Add provider keys only when needed.
 
@@ -62,7 +64,7 @@ OpenCandle is research software, not a financial advisor. Treat warnings, stale-
 
 ## Model Setup Expectations
 
-OpenCandle uses Pi for model credentials and model selection. In the terminal/TUI, you can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. In the GUI, use the API-key setup panel, or complete terminal `/setup` for sign-in based setup and refresh the browser. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
+OpenCandle uses Pi for model credentials and model selection. In the terminal/TUI, you can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
 
 Use `/setup` later if you want to reconnect auth or choose a different model setup path. Use `/model` when you only want to switch among models that are already available.
 
@@ -81,9 +83,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 
 OpenCandle stores local state with [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
 
-1. Use a supported Node.js version: 22.19+ or 24–26.
+1. Use a supported Node.js version: 22.19+ (22.x) or 24–26.
 2. Retry a clean install.
 3. Run `npm rebuild better-sqlite3` after switching Node versions.
 4. Install platform build tools if npm has to compile native modules locally.
-
-On first launch, Pi downloads its `fd` and `ripgrep` helper binaries into `~/.pi/agent/bin`; that first launch needs network access.

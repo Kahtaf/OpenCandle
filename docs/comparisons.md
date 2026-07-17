@@ -5,7 +5,7 @@ description: Compare OpenCandle with general chatbots, finance websites, spreads
 
 # Comparisons
 
-OpenCandle is best compared with the tools people already use for market research: a general chatbot, a browser full of finance sites, a spreadsheet, or custom scripts. OpenCandle is different because it gathers provider-backed evidence through explicit finance tools, preserves provider gaps, and then asks the model to synthesize from the evidence trail.
+OpenCandle is best compared with the tools people already use for market research: a general chatbot, a browser full of finance sites, a spreadsheet, or custom scripts. OpenCandle is different because it gathers provider-backed evidence through explicit finance tools, tells you when a data source was missing, stale, or degraded, and then asks the model to synthesize from the evidence trail.
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
@@ -13,12 +13,12 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 A general chatbot can explain concepts, organize a thesis, and help write analysis, but it does not automatically call finance tools, track local portfolio state, or show a provider-by-provider evidence trail unless you build that workflow yourself.
 
-OpenCandle uses model providers for synthesis, but the finance workflow starts with explicit tools for quotes, options, filings, macro data, sentiment, fundamentals, crypto data, and portfolio context. A quote answer can show the provider and timestamp; a filing answer can point to [SEC EDGAR](https://www.sec.gov/edgar/search/) results; an options answer can preserve per-share versus per-contract context; a macro answer can name the [FRED](https://fred.stlouisfed.org) series; and a portfolio answer can separate saved local holdings from new user input.
+OpenCandle uses model providers for synthesis, but the finance workflow starts with explicit tools for quotes, options, filings, macro data, sentiment, fundamentals, crypto data, and portfolio context. Quote answers show the provider and timestamp. Filing answers link to [SEC EDGAR](https://www.sec.gov/edgar/search/) results, options answers preserve per-share versus per-contract context, macro answers name the [FRED](https://fred.stlouisfed.org) series, and portfolio answers separate saved local holdings from new input.
 
 | Capability | OpenCandle | General chatbot |
 | --- | --- | --- |
 | Finance tools | Built-in tool calls for market, macro, options, filings, sentiment, fundamentals, crypto, and portfolio workflows | Depends on plan, connectors, browsing mode, or custom setup |
-| Provider gaps | Preserved in the session and answer context | Usually manual unless a custom workflow records them |
+| Missing/stale data disclosure | Preserved in the session and answer context | Usually manual unless a custom workflow records them |
 | Local portfolio state | Supported through OpenCandle state | Requires a separate file, spreadsheet, or connector |
 | Local terminal agent and GUI | Yes | No |
 
@@ -37,8 +37,8 @@ Spreadsheets are excellent for owned models, repeatable calculations, and portfo
 | Capability | OpenCandle | Spreadsheet |
 | --- | --- | --- |
 | Evidence gathering | Agent routes prompts to explicit finance tools | Manual imports, formulas, plugins, or pasted data |
-| Provider gaps | Surfaced in the session | Usually tracked manually in notes or formulas |
-| Repeatable models | First-pass research and workflow routing | Best fit for durable valuation, allocation, and scenario models |
+| Missing/stale data disclosure | Surfaced in the session | Usually tracked manually in notes or formulas |
+| Repeatable models | Not the goal — findings feed into your own models | Best fit for durable valuation, allocation, and scenario models |
 
 Use them together: OpenCandle gathers the facts and caveats, then stable assumptions move into a spreadsheet. Discounted cash flow models, position sizing tables, tax lots, and rebalancing plans belong in a workbook where you control every formula.
 
@@ -50,9 +50,9 @@ OpenCandle keeps the script-like benefits of explicit tools while adding a conve
 
 ## Where OpenCandle Should Shine
 
-OpenCandle should outperform a generic no-tool agent when the answer depends on current quote, options, filing, macro, sentiment, or crypto data; on choosing the right investigation path before answering; on combining several evidence types into one decision; or on naming downside scenarios instead of presenting unsupported conviction.
+OpenCandle does its best work when the answer depends on current quote, options, filing, macro, sentiment, or crypto data.
 
-Generic agents may still win when a prompt is purely educational, needs no current data, or rewards a shorter explanation over trace-backed evidence. OpenCandle's [competitive benchmark](./testing-and-evals.md#competitive-benchmarking) is designed to keep that comparison honest.
+Generic agents may still win when a prompt is purely educational, needs no current data, or rewards a shorter explanation over inspectable evidence. OpenCandle's [competitive benchmark](./testing-and-evals.md#competitive-benchmarking) is designed to keep that comparison honest.
 
 ## When OpenCandle Is Not The Right Tool
 

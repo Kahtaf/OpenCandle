@@ -18,7 +18,7 @@ It is read-only research software. It does not place trades, route orders, or pr
 
 [Pi](https://github.com/earendil-works/pi) is the bundled agent runtime (model setup, sessions, terminal shell). OpenCandle adds the finance tools, workflows, providers, and local state on top. No separate Pi install needed.
 
-For a quick feel of the product, watch the [67-second launch video](https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29).
+For a quick feel of the product, watch the [launch video](https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29).
 
 ## Start here
 
@@ -44,10 +44,10 @@ For a quick feel of the product, watch the [67-second launch video](https://gith
 
 | Area | Examples |
 | --- | --- |
-| Market data | Quotes, price history, indexed price comparisons (`get_price_comparison`), ticker lookup, stock screening (`screen_stocks`), crypto price and history |
+| Market data | Quotes, price history, indexed price comparisons, ticker lookup, stock screening, crypto price and history |
 | Options | Option chains, open interest, implied volatility, locally computed Greeks |
 | Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
-| Macro | FRED series, rates, inflation, GDP, unemployment, Polymarket event probabilities (`get_event_probabilities`), crypto Fear & Greed |
+| Macro | FRED series, rates, inflation, GDP, unemployment, Polymarket event probabilities, crypto Fear & Greed |
 | Sentiment | Reddit via `rdt-cli`, Twitter/X via `twitter-cli`, web search, and cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
 | Portfolio | Watchlists, holdings, correlation, risk analysis |
@@ -58,13 +58,12 @@ For a quick feel of the product, watch the [67-second launch video](https://gith
 - Tools fetch and format. The model synthesizes.
 - Provider gaps stay visible: missing keys, stale data, degraded sources.
 - Local state stays local, under `~/.opencandle/`.
-- Contributions stay testable: fixtures and mocked fetch, not live APIs.
 
 ## Try it
 
 ```bash
-opencandle
-opencandle gui
+npx opencandle
+npx opencandle gui
 ```
 
 First prompts:

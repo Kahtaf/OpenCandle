@@ -1,6 +1,6 @@
 ---
 title: GUI Quickstart
-description: Run the local OpenCandle browser workbench and understand local session coordination.
+description: Run the local OpenCandle browser GUI and take your first steps.
 ---
 
 # OpenCandle GUI Quickstart
@@ -10,29 +10,23 @@ description: Run the local OpenCandle browser workbench and understand local ses
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 1. Open `http://127.0.0.1:14567`.
 1. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
-1. Start with a keyless market-data prompt such as `What is AAPL trading at?` or one of the dashboard suggestion cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
+1. Start with a prompt that needs no API keys, such as `What is AAPL trading at?` or one of the dashboard suggestion cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
 1. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 1. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.
 
-The GUI shares Pi sessions with the terminal UI and other local browser windows. OpenCandle coordinates those local surfaces behind the scenes so prompts, follow-up answers, and supported tool actions are forwarded to the active session owner when needed. During startup, session switches, or owner recovery, the UI may briefly report that OpenCandle is reconnecting or syncing the session; retry once the current run settles.
+You can use the terminal and the GUI on the same session at once; OpenCandle keeps them in sync. If a view says it is reconnecting or syncing, wait a moment and retry.
 
-Check the running role with:
+Check that the server is running:
 
 ```bash
 curl http://127.0.0.1:14567/health
 ```
 
-`{"ok":true,...}` means the HTTP server is alive. The `role` field is diagnostic metadata for support logs; normal GUI use should not require choosing between process roles.
+`{"ok":true,...}` means the server is running; you can ignore the other fields.
 
-Other useful local endpoints:
-
-- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
-- `GET /api/sessions` lists saved sessions.
-- `GET /api/session/events` returns the current projected chat events.
-- `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator. The [System Architecture](./system-architecture.md#gui-runtime-and-local-state) page is the canonical local-endpoint list.
-- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
+The full local-endpoint list is in [System Architecture](./system-architecture.md#gui-runtime).
 
 ## Tailscale Access
 
@@ -42,33 +36,33 @@ For remote viewing, keep the local GUI running and expose it with Tailscale Serv
 tailscale serve --bg http://127.0.0.1:14567
 ```
 
-Depending on your Tailscale setup, the shared URL is shown by `tailscale serve status`.
+Get the shared URL with `tailscale serve status`.
 
 If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,...}`.
 
 ## Market Dashboard, Symbol Pages, and Charts
 
-The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt still starts a fresh chat session exactly as before.
+The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt starts a fresh chat session.
 
 Every ticker links to a symbol page at `/symbol/<TICKER>` — reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
 
-<img width="720" alt="AMD symbol page with an interactive five-year range chart" src="https://github.com/user-attachments/assets/c495f5cf-4cd9-4041-bfb9-9042e64cda81" />
+<img width="720" alt="AMD symbol page with an interactive range chart" src="https://github.com/user-attachments/assets/c495f5cf-4cd9-4041-bfb9-9042e64cda81" />
 
 Charts also appear directly in chat: price-history answers render as interactive chart cards, and comparison prompts render a multi-series chart with each symbol indexed to 100 at the first common date, so relative performance is readable at a glance. Watchlist and portfolio rows carry intraday sparklines with source and freshness context.
 
 <img width="720" alt="Portfolio page with allocation donut, holdings table, and sparklines" src="https://github.com/user-attachments/assets/ed4507c5-3f25-4109-8a08-987c4dbb218f" />
 
-These surfaces are backed by guarded read-only endpoints (`GET /api/instruments/overview`, `GET /api/instruments/history`, `GET /api/market-state/indices`) with stale-while-revalidate caching, so reloading or following along from a second window stays cheap.
+Chart and dashboard data is cached locally, so reloading the page or opening a second window stays fast without extra provider calls.
 
 ## Investigator Workflow
 
-The GUI is a local investigation workbench. It keeps the transcript, tool catalog, provider setup, session history, and financial context close together so the user can see what evidence the agent is using.
+The GUI is a local investigation workbench. It keeps the transcript, tool catalog, provider setup, session history, and financial context close together so you can see what evidence the agent is using.
 
 - Chat carries the question, tool calls, and synthesis.
 - Catalog exposes workflows, individual tools, and provider setup without guessing prompt syntax.
 - Session history keeps prior investigations reachable through Pi session state.
 - Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
-- Local session coordination keeps terminal and browser views in sync while one surface applies each action.
+- Terminal and browser views of the same session stay in sync.
 
 ## What You Can Do From The GUI
 

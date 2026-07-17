@@ -3,9 +3,9 @@ title: Build a Tool
 description: Add first-party OpenCandle tools or publish Pi-compatible finance tool packages.
 ---
 
-# Build an OpenCandle Investigation Tool
+# Build an OpenCandle Tool
 
-Add a new data tool to OpenCandle by submitting a PR. A good OpenCandle tool behaves like an investigator's instrument: it fetches evidence, preserves source/freshness context, formats the result clearly, and leaves synthesis to the model.
+There are two ways to add a tool: contribute it to OpenCandle with a PR (this guide's main path), or ship it as a separate npm package (see Add-on Packages below). A good OpenCandle tool behaves like an investigator's instrument: it fetches evidence, preserves source/freshness context, formats the result clearly, and leaves synthesis to the model.
 
 For a working reference, see `src/tools/sentiment/reddit-sentiment.ts`.
 
@@ -95,9 +95,7 @@ export function getAllTools(): AgentTool<any>[] {
 }
 ```
 
-That's it — the tool is now available to the agent.
-
-If the tool should be available in normal OpenCandle conversations, also wire it into active-tool selection:
+The tool is now registered. To make it usable in normal conversations, also wire it into active-tool selection:
 
 - Add the tool name to the relevant bundle in `src/routing/route-manifest.ts` (for example, core market tools belong in `TOOL_BUNDLE_TOOLS.core_market`).
 - Update the tool catalog text in `src/prompts/context-builder.ts` and, when the global prompt mentions the same domain, `src/system-prompt.ts`.
@@ -122,7 +120,7 @@ const posted = await httpPost<MyApiResponse>("https://api.example.com/search", {
 });
 ```
 
-`httpPost` is internal first-party infrastructure at the moment; add-on packages should continue using the currently exported `opencandle/tool-kit` APIs unless that package subpath explicitly exports new HTTP helpers.
+`httpPost` is not part of the public add-on API. Add-on packages should use only `opencandle/tool-kit`; inside the OpenCandle repo, use it freely.
 
 ### Caching
 
