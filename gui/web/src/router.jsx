@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { AppShell } from "./App.jsx";
 
 const rootRoute = createRootRoute({
@@ -21,6 +21,9 @@ const historyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/history",
   validateSearch: validateGuiSearch,
+  beforeLoad: () => {
+    throw redirect({ to: "/" });
+  },
 });
 
 const settingsRoute = createRoute({

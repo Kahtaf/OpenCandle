@@ -23,6 +23,7 @@ import {
   WatchlistRenameForm,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 import { PortfolioPage } from "../../../gui/web/src/features/market-state/PortfolioPage.jsx";
+import { ReportsPage } from "../../../gui/web/src/features/market-state/ReportsPage.jsx";
 import { WatchlistPage } from "../../../gui/web/src/features/market-state/WatchlistPage.jsx";
 
 vi.mock("vaul", async () => {
@@ -806,7 +807,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("Instrument #");
   });
 
-  it("renders edit and delete actions for alert rows", () => {
+  it("renders accessible icon actions and sentence-case badges for alert rows", () => {
     const html = renderToStaticMarkup(
       React.createElement(AlertsPage, {
         state: {
@@ -835,8 +836,90 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain(">Edit<");
-    expect(html).toContain(">Delete<");
+    expect(html).toContain("Recurring");
+    expect(html).not.toContain(">recurring<");
+    expect(html).toContain('aria-label="Pause RKLB alert"');
+    expect(html).toContain('aria-label="Edit RKLB alert"');
+    expect(html).toContain('aria-label="Delete RKLB alert"');
+    expect(html).toContain("min-h-10");
+    expect(html).toContain("text-destructive");
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+    expect(html).toContain('data-slot="alert-row-actions"');
+    expect(html).toContain("col-span-3");
+  });
+
+  it("reserves plus icons for create actions in alert and report headers", () => {
+    const alertHtml = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+    const reportHtml = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "reports",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(alertHtml).toContain("Create alert");
+    expect(alertHtml).toContain("Check alerts");
+    expect(alertHtml).toContain("lucide-refresh-cw");
+    expect(alertHtml).not.toContain("lucide-plus");
+    expect(reportHtml).toContain("Configure report");
+    expect(reportHtml).toContain("lucide-settings");
+    expect(reportHtml).not.toContain("lucide-plus");
+  });
+
+  it("renders reports as humanized rich text with collision-safe notifications", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ReportsPage, {
+        state: {
+          reportTemplates: [],
+          reportRuns: [
+            {
+              id: 1,
+              status: "completed",
+              triggerType: "manual",
+              startedAt: "2026-07-05T22:00:00.000Z",
+              completedAt: "2026-07-05T22:05:31.730Z",
+              summaryJson: {
+                text: "**Daily Watchlist Report**\n\nGenerated at 2026-07-05T22:05:31.730Z\n\nTarget watchlist: Default",
+              },
+            },
+          ],
+          notifications: [
+            {
+              id: 2,
+              sourceType: "report_run",
+              status: "pending",
+              createdAt: "2026-07-05T22:05:31.730Z",
+              title: "Daily watchlist report completed with several market updates",
+            },
+          ],
+          notificationDeliveryAttempts: [],
+        },
+        readOnly: false,
+        invokeTool: () => undefined,
+        timeZone: "UTC",
+      }),
+    );
+
+    expect(html).toContain("<strong>Daily Watchlist Report</strong>");
+    expect(html).not.toContain("**Daily Watchlist Report**");
+    expect(html).not.toContain("2026-07-05T22:05:31.730Z");
+    expect(html).not.toContain("Target watchlist: Default");
+    expect(html).toContain("Target watchlist: My watchlist");
+    expect(html).toContain("Jul 5, 10:05 PM");
+    expect(html).toContain("Done");
+    expect(html).toContain('data-slot="notification-message"');
+    expect(html).toContain('data-slot="notification-channel"');
+    expect(html).toContain("min-w-0");
+    expect(html).toContain("shrink-0");
   });
 
   it("keeps reconnecting market-state pages readable while disabling mutation actions", () => {
@@ -851,6 +934,7 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Saved-state changes are unavailable");
+    expect(html).toContain("Create alert");
     expect(html).toContain("Check alerts");
     expect(html).toContain("disabled");
   });

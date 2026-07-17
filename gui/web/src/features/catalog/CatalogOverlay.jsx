@@ -27,6 +27,7 @@ import {
   CommandList,
 } from "../../components/ui/command.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { Kbd } from "../../components/ui/kbd.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { cn } from "../../lib/utils.js";
 import { FieldRenderer } from "./field-renderer.jsx";
@@ -235,6 +236,18 @@ export function CatalogList({
       <CommandList ref={bodyRef} className="min-h-0 !max-h-none flex-1 overscroll-contain">
         <ListBody tab={tab} query={query} catalog={catalog} onSelect={onSelect} />
       </CommandList>
+      <fieldset
+        className="flex min-h-10 shrink-0 items-center justify-center gap-2 border-t border-border px-3 text-[11px] text-muted-foreground"
+        aria-label="Catalog keyboard shortcuts"
+      >
+        <Kbd>↑↓</Kbd>
+        <span>navigate</span>
+        <span aria-hidden="true">·</span>
+        <Kbd>↵</Kbd>
+        <span>run</span>
+        <span aria-hidden="true">·</span>
+        <Kbd>esc</Kbd>
+      </fieldset>
     </Command>
   );
 }

@@ -3,7 +3,7 @@ import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
-import { degradedQuoteBadge } from "../market-state/format.js";
+import { degradedQuoteBadge, quoteFreshnessTitle } from "../market-state/format.js";
 import {
   Badge,
   money,
@@ -23,6 +23,7 @@ export function WatchlistMovers({
   watchlistItems = EMPTY_ITEMS,
   quoteSnapshot,
   nowMs = Date.now(),
+  timeZone,
 }) {
   const quotes = quoteSnapshot?.watchlistQuotes ?? EMPTY_QUOTES;
   const movers = useMemo(() => orderWatchlistMovers(quotes).slice(0, 5), [quotes]);
@@ -33,6 +34,7 @@ export function WatchlistMovers({
   const quoteFlashes = useQuoteChangeFlash(quotesBySymbol);
   const loading = watchlistItems.length > 0 && quoteSnapshot == null;
   const freshness = quoteSnapshot ? degradedQuoteBadge(quotes, nowMs) : null;
+  const freshnessTitle = quoteFreshnessTitle(quotes, timeZone);
   const actions =
     quotes.length > 5 ? (
       <a
@@ -47,7 +49,13 @@ export function WatchlistMovers({
     <section aria-labelledby={HEADING_ID} data-slot="home-watchlist-movers">
       <Panel
         title={<span id={HEADING_ID}>Watchlist movers</span>}
-        meta={freshness ? <Badge tone="warn">{freshness}</Badge> : null}
+        meta={
+          freshness ? (
+            <Badge tone="warn" title={freshnessTitle}>
+              {freshness}
+            </Badge>
+          ) : null
+        }
         actions={actions}
       >
         {loading ? (

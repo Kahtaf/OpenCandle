@@ -12,31 +12,33 @@ import { WatchlistMovers } from "../../../gui/web/src/features/home/WatchlistMov
 import { derivePortfolioDayMove } from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
 
 describe("home dashboard widgets", () => {
-  it("renders available indices as accessible symbol links and hides when unavailable", () => {
+  it("renders friendly market names with provider symbols as secondary text", () => {
     const html = renderToStaticMarkup(
       React.createElement(IndicesStrip, {
-        quotes: [
-          {
-            symbol: "^GSPC",
-            name: "S&P 500",
+        quotes: ["^GSPC", "^IXIC", "^DJI", "BTC-USD"].map((symbol) => ({
+          symbol,
+          status: "ok",
+          price: 6321.45,
+          changePercent: 1.25,
+          currency: null,
+          sparkline: {
             status: "ok",
-            price: 6321.45,
-            changePercent: 1.25,
-            currency: null,
-            sparkline: {
-              status: "ok",
-              source: "Yahoo Finance",
-              points: [6300, 6310, 6321.45],
-              dataAsOf: "2026-07-17",
-            },
+            source: "Yahoo Finance",
+            points: [6300, 6310, 6321.45],
+            dataAsOf: "2026-07-17",
           },
-        ],
+        })),
       }),
     );
 
     expect(html).toContain("<section");
     expect(html).toContain('aria-labelledby="home-indices-heading"');
     expect(html).toContain('href="/symbol/%5EGSPC"');
+    expect(html).toContain("S&amp;P 500");
+    expect(html).toContain("Nasdaq Composite");
+    expect(html).toContain("Dow Jones");
+    expect(html).toContain("Bitcoin");
+    expect(html).toContain('title="^GSPC"');
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("tabular-nums");
     expect(html).toContain("+1.25%");
@@ -72,6 +74,7 @@ describe("home dashboard widgets", () => {
         watchlistItems: quotes.map(({ symbol }) => ({ symbol })),
         quoteSnapshot: { watchlistQuotes: quotes },
         nowMs: Date.parse("2026-07-17T10:20:00.000Z"),
+        timeZone: "UTC",
       }),
     );
 
@@ -84,6 +87,7 @@ describe("home dashboard widgets", () => {
     expect(html).toContain("↓");
     expect(html).toContain("3.20%");
     expect(html).toContain("Quotes 20m old");
+    expect(html).toMatch(/title="Fetched Jul 17, 10:00 AM"/);
     expect(html).toContain('href="/watchlists"');
     expect(html).toContain("View all");
   });
@@ -423,6 +427,8 @@ describe("home dashboard widgets", () => {
     expect(html).toContain('data-slot="home-watchlist-movers"');
     expect(html).toContain('data-slot="home-portfolio-summary"');
     expect(html).toContain('data-slot="home-alerts-card"');
+    expect(html).toContain('data-slot="home-alerts-grid-cell"');
+    expect(html).toContain("lg:col-span-2");
     expect(html).not.toContain("Add a watchlist");
     expect(html).not.toContain("Track a portfolio");
   });

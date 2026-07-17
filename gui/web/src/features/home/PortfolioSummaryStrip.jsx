@@ -1,6 +1,6 @@
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { formatMoney } from "../../lib/financial-format.js";
-import { degradedQuoteBadge } from "../market-state/format.js";
+import { degradedQuoteBadge, quoteFreshnessTitle } from "../market-state/format.js";
 import { derivePortfolioDayMove } from "../market-state/portfolio-view-model.js";
 import { Badge, Panel, SignedMoney } from "../market-state/shared.jsx";
 
@@ -11,6 +11,7 @@ export function PortfolioSummaryStrip({
   portfolios = EMPTY_PORTFOLIOS,
   quoteSnapshot,
   nowMs = Date.now(),
+  timeZone,
 }) {
   const loading = portfolios.length > 0 && quoteSnapshot == null;
   const summaries = quoteSnapshot?.portfolioSummaries ?? [];
@@ -43,6 +44,7 @@ export function PortfolioSummaryStrip({
   const freshness = quoteSnapshot
     ? degradedQuoteBadge(quoteSnapshot.portfolioQuotes ?? [], nowMs)
     : null;
+  const freshnessTitle = quoteFreshnessTitle(quoteSnapshot?.portfolioQuotes ?? [], timeZone);
 
   return (
     <section aria-labelledby={HEADING_ID} data-slot="home-portfolio-summary">
@@ -51,7 +53,11 @@ export function PortfolioSummaryStrip({
         meta={
           freshness || totals.excludedCurrencies.length > 0 ? (
             <span className="flex flex-wrap gap-2">
-              {freshness ? <Badge tone="warn">{freshness}</Badge> : null}
+              {freshness ? (
+                <Badge tone="warn" title={freshnessTitle}>
+                  {freshness}
+                </Badge>
+              ) : null}
               {totals.excludedCurrencies.length > 0 ? (
                 <Badge tone="warn">
                   {totals.excludedCurrencies.join(", ")} portfolios excluded

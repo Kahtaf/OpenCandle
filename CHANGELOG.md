@@ -17,6 +17,7 @@
 
 ### Changed
 
+- GUI dashboard and market-state polish now uses friendly index names, natural default-watchlist prompts, a balanced home grid with exact stale-fetch tooltips, creation-first alert actions with accessible destructive controls, rich-text reports with humanized timestamps and collision-safe notifications, a home redirect for the legacy desktop history route, and keyboard hints in the command catalog.
 - GUI portfolio allocation now uses an accessible, reduced-motion-aware donut with matching token-colored legend entries; portfolio holdings keep all actions visible by folding secondary lot data into aligned expandable rows, while watchlists use compact extended-session lines, inline alert chips, a simplified single-list tab, and a mobile bottom-sheet inspector.
 - GUI chat history cards (`get_stock_history` / `get_crypto_history`) now render through the shared `MarketChart` component in a bounded-height area chart with a stated first→last bar window, replacing the bespoke SVG price chart; no in-card range switching or fetching was added.
 - The nightly drift canary now reports Gemini-backed agent evals as advisory, keeping provider and deterministic test gates blocking while surfacing live-model wording drift and slow workflow traces in the run summary.

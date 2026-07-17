@@ -1,5 +1,6 @@
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const QUOTE_STALE_MS = 15 * 60_000;
+const humanDateTimeFormatters = new Map();
 
 export function relativeTime(iso, nowMs = Date.now()) {
   const ts = Date.parse(iso ?? "");
@@ -22,27 +23,64 @@ export function shortDateLabel(iso, nowMs = Date.now()) {
     : `${label}, ${date.getUTCFullYear()}`;
 }
 
+export function formatHumanDateTime(iso, timeZone) {
+  const ts = Date.parse(iso ?? "");
+  if (!Number.isFinite(ts)) return "";
+  const key = timeZone || "local";
+  let formatter = humanDateTimeFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      ...(timeZone ? { timeZone } : {}),
+    });
+    humanDateTimeFormatters.set(key, formatter);
+  }
+  return formatter.format(new Date(ts));
+}
+
+export function quoteFreshnessTitle(quotes = [], timeZone) {
+  let fetchedAt;
+  let oldestTimestamp = Number.POSITIVE_INFINITY;
+  for (const quote of quotes) {
+    const timestamp = Date.parse(quote?.fetchedAt ?? "");
+    if (!Number.isFinite(timestamp) || timestamp >= oldestTimestamp) continue;
+    fetchedAt = quote.fetchedAt;
+    oldestTimestamp = timestamp;
+  }
+  const formatted = formatHumanDateTime(fetchedAt, timeZone);
+  return formatted ? `Fetched ${formatted}` : undefined;
+}
+
 export function degradedQuoteBadge(quotes = [], nowMs = Date.now()) {
   if (quotes.some((quote) => quote?.status === "unavailable")) return "Quotes unavailable";
 
-  const fetchedAtMs = quotes
-    .map((quote) => Date.parse(quote?.fetchedAt ?? ""))
-    .filter(Number.isFinite);
+  const fetchedAtMs = parsedQuoteTimes(quotes, "fetchedAt");
   if (fetchedAtMs.length > 0) {
     const ageMs = nowMs - Math.min(...fetchedAtMs);
     if (ageMs > QUOTE_STALE_MS) return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
   }
 
   if (quotes.some((quote) => hasExtendedQuote(quote))) return null;
-  const dataAsOfMs = quotes
-    .map((quote) => Date.parse(quote?.dataAsOf ?? ""))
-    .filter(Number.isFinite);
+  const dataAsOfMs = parsedQuoteTimes(quotes, "dataAsOf");
   if (dataAsOfMs.length === 0) return null;
 
   const oldestMs = Math.min(...dataAsOfMs);
   if (!isPriorCalendarDay(oldestMs, nowMs)) return null;
   const dataAsOf = new Date(oldestMs);
   return `As of ${MONTHS[dataAsOf.getUTCMonth()]} ${dataAsOf.getUTCDate()}`;
+}
+
+function parsedQuoteTimes(quotes, key) {
+  const timestamps = [];
+  for (const quote of quotes) {
+    const timestamp = Date.parse(quote?.[key] ?? "");
+    if (Number.isFinite(timestamp)) timestamps.push(timestamp);
+  }
+  return timestamps;
 }
 
 function hasExtendedQuote(quote) {

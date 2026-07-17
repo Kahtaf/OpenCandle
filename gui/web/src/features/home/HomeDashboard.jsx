@@ -88,12 +88,14 @@ export function HomeDashboard({
             ) : (
               <MarketStateAffordanceCard kind="portfolio" />
             )}
-            <AlertsCard
-              alerts={marketState.alerts}
-              alertEvents={marketState.alertEvents}
-              notifications={marketState.notifications}
-              instruments={marketState.instruments}
-            />
+            <div className="min-w-0 lg:col-span-2" data-slot="home-alerts-grid-cell">
+              <AlertsCard
+                alerts={marketState.alerts}
+                alertEvents={marketState.alertEvents}
+                notifications={marketState.notifications}
+                instruments={marketState.instruments}
+              />
+            </div>
           </>
         )}
       </div>
@@ -104,10 +106,12 @@ export function HomeDashboard({
 function SavedStateSkeletons() {
   return (
     <>
-      {SAVED_STATE_SKELETON_KEYS.map((key) => (
+      {SAVED_STATE_SKELETON_KEYS.map((key, index) => (
         <div
           key={key}
-          className="min-h-[224px] rounded-xl border border-border bg-card p-4 shadow-subtle-xs"
+          className={`min-h-[224px] rounded-xl border border-border bg-card p-4 shadow-subtle-xs ${
+            index === SAVED_STATE_SKELETON_KEYS.length - 1 ? "lg:col-span-2" : ""
+          }`}
           data-slot="home-saved-state-skeleton"
         >
           <Skeleton className="h-full min-h-48 w-full" />

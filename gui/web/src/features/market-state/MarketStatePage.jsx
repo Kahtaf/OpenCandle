@@ -1,4 +1,4 @@
-import { Loader2, Plus, Search, X } from "lucide-react";
+import { BellPlus, Loader2, Plus, RefreshCw, Search, Settings, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -47,11 +47,16 @@ const PAGE_META = {
   },
   alerts: {
     title: "Alerts",
-    primaryLabel: "Check alerts",
+    primaryLabel: "Create alert",
+    primaryIcon: BellPlus,
+    primaryPanel: "alert-create",
+    secondaryLabel: "Check alerts",
+    secondaryIcon: RefreshCw,
   },
   reports: {
     title: "Reports",
     primaryLabel: "Configure report",
+    primaryIcon: Settings,
     primaryPanel: "report-configure",
   },
 };
@@ -155,11 +160,10 @@ export function MarketStatePage({
   };
 
   const primaryAction = () => {
-    if (activeId === "alerts") {
-      invokeTool("manage_alerts", { action: "check" });
-      return;
-    }
     openPanel(active.primaryPanel);
+  };
+  const secondaryAction = () => {
+    if (activeId === "alerts") invokeTool("manage_alerts", { action: "check" });
   };
 
   return (
@@ -174,6 +178,7 @@ export function MarketStatePage({
               loading={loading}
               readOnly={readOnly || mutationPending}
               onPrimary={primaryAction}
+              onSecondary={active.secondaryLabel ? secondaryAction : undefined}
             />
           ) : null}
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
@@ -263,22 +268,39 @@ export function MarketStatePage({
   );
 }
 
-function PageHeader({ meta, loading, readOnly, onPrimary, tabs }) {
+function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
+  const PrimaryIcon = meta.primaryIcon ?? Plus;
+  const SecondaryIcon = meta.secondaryIcon;
   return (
     <header className="flex flex-col gap-2 px-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
-        <Button
-          type="button"
-          variant="brand"
-          size="sm"
-          rounded="full"
-          prefixIcon={Plus}
-          disabled={readOnly || loading}
-          onClick={onPrimary}
-        >
-          {meta.primaryLabel}
-        </Button>
+        <div className="flex items-center gap-2">
+          {meta.secondaryLabel && SecondaryIcon ? (
+            <Button
+              type="button"
+              variant="bordered"
+              size="sm"
+              rounded="full"
+              prefixIcon={SecondaryIcon}
+              disabled={readOnly || loading}
+              onClick={onSecondary}
+            >
+              {meta.secondaryLabel}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="brand"
+            size="sm"
+            rounded="full"
+            prefixIcon={PrimaryIcon}
+            disabled={readOnly || loading}
+            onClick={onPrimary}
+          >
+            {meta.primaryLabel}
+          </Button>
+        </div>
       </div>
       {tabs ? <div className="border-t border-border">{tabs}</div> : null}
     </header>
