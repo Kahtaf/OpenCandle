@@ -37,8 +37,8 @@ Follow AGENTS.md (TDD, CHANGELOG, `graphify update .`). HARD dependency: impleme
 
 ## 5. Verification
 
-- [ ] 5.1 `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; React Doctor clean on changed GUI files (via `npm run review:pr` tooling or direct run).
+- [x] 5.1 `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; React Doctor clean on changed GUI files (via `npm run review:pr` tooling or direct run).
 - [ ] 5.2 Live check: `npm run gui`, open `/symbol/AAPL` (equity, full page), `/symbol/BTC-USD` (no KeyStats), `/symbol/ZZZZZZ` (not-found) as writer; open the same page in a second follower window and confirm disabled-but-labeled affordances with neutral copy and no session creation (session list unchanged). Confirm a writer analyze chip navigates to the new session. At 390px width, confirm single-column section order and no document-level horizontal scrolling.
 - [ ] 5.3 Screenshots at 1440x960 and 390x844 for the PR: equity page, non-equity page, follower read-only state.
 - [x] 5.4 CHANGELOG `[Unreleased]` entries (symbol page + entry points; overview endpoint; marketCap fix) per the changelog-automation skill.
-- [ ] 5.5 `graphify update .`; `npx openspec validate symbol-page --strict` passes.
+- [x] 5.5 `graphify update .`; `npx openspec validate symbol-page --strict` passes.
