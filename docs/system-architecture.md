@@ -116,6 +116,9 @@ Useful local endpoints (canonical list):
 - `GET /api/sessions` lists saved sessions.
 - `GET /api/session/events` returns the current projected chat events.
 - `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator.
+- `GET /api/instruments/overview` returns cached company profile and key stats for one symbol (backs the symbol pages).
+- `GET /api/instruments/history` returns validated range/interval history bars with request coalescing (backs the interactive charts).
+- `GET /api/market-state/indices` returns the cached dashboard indices snapshot with sparkline data.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Local State

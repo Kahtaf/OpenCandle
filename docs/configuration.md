@@ -40,6 +40,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `BRAVE_API_KEY` | unset | Brave search in the web-search cascade. Overrides `providers.brave.apiKey`. |
 | `EXA_API_KEY` | unset | Exa search. Overrides `providers.exa.apiKey`. |
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
+| `LSE_API_KEY` | unset | London Strategic Edge free-tier key for financial statements and intraday/deep-range history fallbacks. Overrides `providers.lse.apiKey`. |
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config and local state. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
@@ -72,7 +73,8 @@ These settings are for debugging request understanding and tool availability. Ke
     "fred": { "apiKey": "..." },
     "brave": { "apiKey": "..." },
     "exa": { "apiKey": "..." },
-    "finnhub": { "apiKey": "..." }
+    "finnhub": { "apiKey": "..." },
+    "lse": { "apiKey": "..." }
   },
   "sentiment": {
     "retentionDays": 30,
@@ -95,6 +97,7 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `onboarding.json` | Provider setup, snooze, never-ask, and welcome state. |
 | `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
+| `lse-byte-budget.json` | Monthly London Strategic Edge free-tier usage meter; LSE drops out of fallback chains at 80% of the allowance. |
 | `logs/` | Reserved OpenCandle log directory. |
 
 Durable market state — watchlists, portfolios, alerts — lives only in `state.db`. There is no JSON-file alternative for that state.

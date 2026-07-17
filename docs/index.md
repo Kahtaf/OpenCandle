@@ -18,6 +18,8 @@ It is read-only research software. It does not place trades, route orders, or pr
 
 [Pi](https://github.com/earendil-works/pi) is the bundled agent runtime (model setup, sessions, terminal shell). OpenCandle adds the finance tools, workflows, providers, and local state on top. No separate Pi install needed.
 
+For a quick feel of the product, watch the [67-second launch video](https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29).
+
 ## Start here
 
 - [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
@@ -42,7 +44,7 @@ It is read-only research software. It does not place trades, route orders, or pr
 
 | Area | Examples |
 | --- | --- |
-| Market data | Quotes, price history, ticker lookup, stock screening (`screen_stocks`), crypto price and history |
+| Market data | Quotes, price history, indexed price comparisons (`get_price_comparison`), ticker lookup, stock screening (`screen_stocks`), crypto price and history |
 | Options | Option chains, open interest, implied volatility, locally computed Greeks |
 | Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
 | Macro | FRED series, rates, inflation, GDP, unemployment, Polymarket event probabilities (`get_event_probabilities`), crypto Fear & Greed |

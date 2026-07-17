@@ -97,6 +97,7 @@ Data-provider keys, from environment variables or `~/.opencandle/config.json`:
 | `BRAVE_API_KEY` | No | Brave web search fallback |
 | `EXA_API_KEY` | No | Exa web search |
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
+| `LSE_API_KEY` | No | London Strategic Edge financial statements and deep intraday/long-range history |
 
 [Yahoo Finance](https://finance.yahoo.com), [TradingView](https://www.tradingview.com) scanner, [Polymarket](https://polymarket.com) Gamma API, [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) do not require keys. Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) plus your normal x.com browser session. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the canonical keyless-source list and caveats.
 
@@ -118,6 +119,9 @@ Example config:
       "apiKey": "..."
     },
     "finnhub": {
+      "apiKey": "..."
+    },
+    "lse": {
       "apiKey": "..."
     }
   }

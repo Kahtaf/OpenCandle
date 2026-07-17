@@ -18,17 +18,11 @@ npx opencandle gui
 
 ## See It Work
 
-### Terminal UI
+The 67-second launch video: a real market question through the browser workbench, the evidence trail behind the answer, and the same workflow in the terminal.
 
-[![OpenCandle terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui.mp4)
+https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29
 
-[Watch the terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
-
-### Local GUI
-
-[![OpenCandle local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui.mp4)
-
-[Watch the local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
+If the inline player does not load, [watch the MP4 directly](https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29).
 
 ## Why OpenCandle
 
@@ -49,7 +43,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 | Capability | What it gives you |
 | --- | --- |
 | Terminal agent | Fast keyboard-driven research inside the bundled [Pi](https://github.com/earendil-works/pi) local TUI, with sessions, slash commands, model setup, and saved transcripts. Pi is the bundled agent runtime; no separate Pi install is needed. |
-| Local browser GUI | Chat, session history, provider setup, tool discovery, workflow launches, and richer financial result cards at `http://127.0.0.1:14567`. |
+| Local browser GUI | Chat with financial result cards and interactive charts, a market dashboard home, per-ticker symbol pages, watchlists and portfolios with sparklines and extended-hours quotes, session history, provider setup, and tool discovery at `http://127.0.0.1:14567`. |
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
 | Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
@@ -109,16 +103,16 @@ The GUI also has a Diagnostics page at `/diagnostics` with the same health repor
 
 | Area | Examples | Source |
 | --- | --- | --- |
-| Market data | Quotes, history, ticker search, screeners, crypto price and history | Yahoo Finance, TradingView scanner, Alpha Vantage fallback when configured, CoinGecko |
+| Market data | Quotes, history, indexed price comparisons, ticker search, screeners, crypto price and history | Yahoo Finance, TradingView scanner, Alpha Vantage and London Strategic Edge fallbacks when configured, CoinGecko |
 | Options | Chains, open interest, IV, locally computed Greeks | Yahoo Finance plus local calculations |
-| Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage |
+| Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage; optional London Strategic Edge for financial statements and DCF, with Yahoo Finance fallbacks |
 | Macro | Rates, CPI, GDP, unemployment, event probabilities, crypto Fear & Greed | FRED, Polymarket Gamma API, alternative.me |
 | Technical | Indicators and strategy backtests | Local calculations over market history |
 | Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | Watchlists, holdings, correlation, risk | Local state plus market data |
 
-Yahoo Finance, TradingView scanner, Polymarket Gamma, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
+Yahoo Finance, TradingView scanner, Polymarket Gamma, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, Finnhub, and London Strategic Edge unlock deeper coverage when configured.
 
 ## Configuration
 
@@ -134,6 +128,7 @@ Model access comes from Pi. Market data provider keys can be set in the environm
 | `BRAVE_API_KEY` | Brave web search fallback |
 | `EXA_API_KEY` | Exa web search |
 | `FINNHUB_API_KEY` | Finnhub company news for sentiment summaries |
+| `LSE_API_KEY` | London Strategic Edge financial statements and deep intraday/long-range price history |
 | `OPENCANDLE_HOME` | Override OpenCandle state directory |
 | `OPENCANDLE_GUI_HOST` | GUI bind host, default `127.0.0.1` |
 | `OPENCANDLE_GUI_PORT` | GUI port, default `14567` |

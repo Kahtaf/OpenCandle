@@ -17,6 +17,7 @@
 
 ### Changed
 
+- The README and public docs were refreshed for the recent chart, symbol-page, dashboard, and provider work: one 67-second launch video (hosted on GitHub's CDN) replaces the two 0.11-era demo clips in the README and is embedded on the docs-site homepage, the GUI quickstart documents the market dashboard home, symbol pages, chat charts, and sparklines with live screenshots, and London Strategic Edge setup and coverage now appear across the README, Data Sources, Configuration, Getting Started, and `/connect` docs. The retired demo MP4/poster assets were removed from the repo tree (release-tag-pinned CDN links keep serving them for old release READMEs).
 - GUI chat history cards (`get_stock_history` / `get_crypto_history`) now render through the shared `MarketChart` component in a bounded-height area chart with a stated first→last bar window, replacing the bespoke SVG price chart; no in-card range switching or fetching was added.
 - The nightly drift canary now reports Gemini-backed agent evals as advisory, keeping provider and deterministic test gates blocking while surfacing live-model wording drift and slow workflow traces in the run summary.
 - CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.

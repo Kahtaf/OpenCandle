@@ -561,7 +561,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "Which data sources does OpenCandle use?",
       answer:
-        "OpenCandle integrates Yahoo Finance, Alpha Vantage, FRED, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
+        "OpenCandle integrates Yahoo Finance, TradingView scanner, Alpha Vantage, London Strategic Edge, FRED, Polymarket, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
     },
   ];
 
@@ -646,6 +646,29 @@ function HomePage({ buildDate, version }) {
           </div>
           <p className="mt-4 text-muted-foreground text-xs">
             Bring your own Anthropic, OpenAI, or Google model key · market data needs no keys
+          </p>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Launch video">
+          <Card className="overflow-hidden shadow-subtle-xs">
+            {/* biome-ignore lint/a11y/useMediaCaption: The launch video's narration is descriptive marketing audio; a transcript lives in the repo at video/VOICEOVER_SCRIPT.txt. */}
+            <video
+              controls
+              preload="metadata"
+              playsInline
+              width="1920"
+              height="1080"
+              className="block aspect-video w-full"
+              src="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29"
+            >
+              <a href="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29">
+                Watch the OpenCandle launch video
+              </a>
+            </video>
+          </Card>
+          <p className="mt-3 text-muted-foreground text-xs">
+            67 seconds: a real market question through the browser workbench, the evidence trail
+            behind the answer, and the same workflow in the terminal.
           </p>
         </section>
 

@@ -10,7 +10,7 @@ description: Run the local OpenCandle browser workbench and understand local ses
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 1. Open `http://127.0.0.1:14567`.
 1. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
-1. Start with a keyless market-data prompt such as `What is AAPL trading at?` or the empty-state action cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
+1. Start with a keyless market-data prompt such as `What is AAPL trading at?` or one of the dashboard suggestion cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
 1. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 1. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
 
@@ -46,6 +46,20 @@ Depending on your Tailscale setup, the shared URL is shown by `tailscale serve s
 
 If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,...}`.
 
+## Market Dashboard, Symbol Pages, and Charts
+
+The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt still starts a fresh chat session exactly as before.
+
+Every ticker links to a symbol page at `/symbol/<TICKER>` — reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
+
+<img width="720" alt="AMD symbol page with an interactive five-year range chart" src="https://github.com/user-attachments/assets/c495f5cf-4cd9-4041-bfb9-9042e64cda81" />
+
+Charts also appear directly in chat: price-history answers render as interactive chart cards, and comparison prompts render a multi-series chart with each symbol indexed to 100 at the first common date, so relative performance is readable at a glance. Watchlist and portfolio rows carry intraday sparklines with source and freshness context.
+
+<img width="720" alt="Portfolio page with allocation donut, holdings table, and sparklines" src="https://github.com/user-attachments/assets/ed4507c5-3f25-4109-8a08-987c4dbb218f" />
+
+These surfaces are backed by guarded read-only endpoints (`GET /api/instruments/overview`, `GET /api/instruments/history`, `GET /api/market-state/indices`) with stale-while-revalidate caching, so reloading or following along from a second window stays cheap.
+
 ## Investigator Workflow
 
 The GUI is a local investigation workbench. It keeps the transcript, tool catalog, provider setup, session history, and financial context close together so the user can see what evidence the agent is using.
@@ -61,6 +75,7 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Ask a normal finance question, such as `Should I add NVDA if I already own AAPL and TSLA?`
 - Launch a workflow from the catalog, such as Comprehensive Analysis, Compare Assets, Portfolio Builder, or Options Screener.
 - Run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
+- Open a symbol page for any ticker to see its chart, key stats, and your saved positions and alerts in one place.
 - Connect provider keys from the Providers tab instead of editing config files.
 - Inspect tool cards and their details to see arguments, results, sources, and warnings.
 - Reopen previous sessions and continue the investigation.
