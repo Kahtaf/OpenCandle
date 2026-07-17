@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
+import { formatLargeNumber } from "../renderers/cards/card-format.js";
 import {
   Badge,
   ExtendedHoursQuote,
@@ -77,7 +78,7 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
 export function KeyStats({ overview, currency = "USD" }) {
   if (overview?.status !== "ok") return null;
   const stats = [
-    ["Market cap", overview.marketCap, (value) => money(value, currency)],
+    ["Market cap", overview.marketCap, (value) => `$${formatLargeNumber(value)}`],
     ["Trailing P/E", overview.pe, formatDecimal],
     ["Forward P/E", overview.forwardPe, formatDecimal],
     ["EPS", overview.eps, (value) => money(value, currency)],
