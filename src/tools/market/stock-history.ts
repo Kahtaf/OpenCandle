@@ -32,9 +32,7 @@ function lseFallbackEligible(interval: (typeof HISTORY_INTERVALS)[number]): bool
   );
 }
 
-export function hasIntradayHistoryFallback(
-  interval: (typeof HISTORY_INTERVALS)[number],
-): boolean {
+export function hasIntradayHistoryFallback(interval: (typeof HISTORY_INTERVALS)[number]): boolean {
   return !DAILY_INTERVALS.has(interval) && lseFallbackEligible(interval);
 }
 

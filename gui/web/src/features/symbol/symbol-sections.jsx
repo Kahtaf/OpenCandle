@@ -2,7 +2,6 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge } from "../market-state/format.js";
-import { formatLargeNumber } from "../renderers/cards/card-format.js";
 import {
   Badge,
   ExtendedHoursQuote,
@@ -13,6 +12,7 @@ import {
   SignedPercent,
   StatusDot,
 } from "../market-state/shared.jsx";
+import { formatLargeNumber } from "../renderers/cards/card-format.js";
 
 export function SymbolHeader({ ticker, quote, overview, flashClass }) {
   const currency = quote?.currency ?? "USD";
