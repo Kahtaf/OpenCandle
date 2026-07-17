@@ -59,7 +59,7 @@ export function IndicesStrip({
                   key={quote.symbol}
                   href={symbolPageHref(quote.symbol)}
                   className={cn(
-                    "flex min-h-24 items-center gap-3 bg-card px-4 py-3 transition-[background-color,transform] duration-150 hover:bg-muted/50 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                    "flex min-h-24 items-center gap-3 bg-card px-4 py-3 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-muted/50 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                     quoteFlashClass(quoteFlashes.get(quote.symbol)),
                   )}
                   aria-label={`View ${displayName}`}

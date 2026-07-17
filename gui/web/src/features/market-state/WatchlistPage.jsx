@@ -342,7 +342,7 @@ function MobileQuoteList({
               aria-label={`View ${item.symbol} details`}
               aria-pressed={selected?.id === item.id}
               className={cn(
-                "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_5rem_8rem] items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_5rem_8rem] items-center gap-2 px-3 py-2 text-left transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 quoteFlashClass(quoteFlashes.get(item.symbol)),
                 selected?.id === item.id && "bg-secondary",
               )}
@@ -420,7 +420,7 @@ function DesktopQuoteTable({
               key={item.id}
               aria-selected={isSelected}
               className={cn(
-                "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                "cursor-pointer transition-[background-color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 quoteFlashClass(quoteFlashes.get(item.symbol)),
                 isSelected && "bg-secondary",
               )}
@@ -437,7 +437,7 @@ function DesktopQuoteTable({
                 <div className="flex min-w-0 items-start gap-1.5">
                   <a
                     href={symbolPageHref(item.symbol)}
-                    className="block min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="flex min-h-10 min-w-0 items-center rounded-sm transition-transform duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     onClick={(event) => {
                       event.stopPropagation();
                       if (!navigate) return;

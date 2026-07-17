@@ -550,7 +550,7 @@ function ContextPanelFrame({ title, onClose, children }) {
         <Button
           type="button"
           variant="ghost"
-          size="xs"
+          size="icon-sm"
           icon={X}
           aria-label="Close panel"
           onClick={onClose}

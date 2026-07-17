@@ -1,6 +1,7 @@
 import { Pencil, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import { Card } from "../../components/ui/card.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import {
   formatNumber as formatFinancialNumber,
@@ -54,31 +55,54 @@ export function ConfirmButton({
   );
 }
 
-export function Panel({ title, count, meta, actions, children }) {
+export function Panel({
+  title,
+  count,
+  meta,
+  actions,
+  children,
+  headingLevel = "h2",
+  headingId,
+  headingClassName,
+}) {
   const hasDetails = title || count !== undefined || meta;
   const hasHeader = hasDetails || actions;
+  const Heading = headingLevel;
 
   return (
-    <section className="rounded-xl border border-border bg-card shadow-subtle-xs">
-      {hasHeader ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-          {hasDetails ? (
-            <div className="flex min-w-0 items-center gap-2">
-              {title ? (
-                <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
-              ) : null}
-              {count !== undefined ? (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                  {count}
-                </span>
-              ) : null}
-              {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
-            </div>
-          ) : null}
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-        </div>
-      ) : null}
-      {children}
+    <section>
+      <Card data-slot="panel-card" className="overflow-hidden rounded-xl shadow-subtle-xs">
+        {hasHeader ? (
+          <div
+            data-slot="panel-header"
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"
+          >
+            {hasDetails ? (
+              <div className="flex min-w-0 items-center gap-2">
+                {title ? (
+                  <Heading
+                    id={headingId}
+                    className={cn(
+                      "text-balance text-sm font-semibold text-foreground",
+                      headingClassName,
+                    )}
+                  >
+                    {title}
+                  </Heading>
+                ) : null}
+                {count !== undefined ? (
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                    {count}
+                  </span>
+                ) : null}
+                {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+              </div>
+            ) : null}
+            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          </div>
+        ) : null}
+        {children}
+      </Card>
     </section>
   );
 }
@@ -318,7 +342,7 @@ export function useQuoteChangeFlash(quotes) {
 export function quoteFlashClass(direction) {
   if (!direction) return "";
   return cn(
-    "transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
+    "number-cross-fade transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
     direction === "up" ? "bg-success/[0.08]" : "bg-destructive/[0.08]",
   );
 }
@@ -367,7 +391,7 @@ export function StateTabs({
                 else tabRefs.current.delete(item.id);
               }}
               className={cn(
-                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] md:min-h-8",
+                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
               )}
               onClick={() => onSelect(item.id)}
@@ -433,6 +457,7 @@ export function RowActionButton({ action, disabled }) {
       type="button"
       variant="ghost"
       size="xs"
+      className="min-h-10"
       disabled={blockedByReadOnly || normalized.disabled}
       onClick={normalized.onClick}
     >

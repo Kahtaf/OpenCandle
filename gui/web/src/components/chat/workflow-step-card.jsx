@@ -16,7 +16,7 @@ export function WorkflowStepCard({ content, details }) {
       </div>
       <Card className="overflow-hidden shadow-subtle-xs">
         <details className="group">
-          <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-left transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
             <span
               aria-hidden="true"
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground"

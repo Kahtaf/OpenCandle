@@ -219,23 +219,45 @@ export function PortfolioPage({
                   </colgroup>
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
-                      <th className="px-2 py-2">
+                      <th scope="col" className="px-2 py-2">
                         <span className="sr-only">Expand</span>
                       </th>
-                      <th className="px-2 py-2 font-medium">Symbol</th>
-                      <th className="px-2 py-2 text-right font-medium">Price</th>
-                      <th className="px-2 py-2 text-right font-medium">Value</th>
-                      <th className="px-2 py-2 font-medium">24 hr sparkline</th>
-                      <th className="px-2 py-2 text-right font-medium">Change</th>
-                      <th className="px-2 py-2 text-right font-medium">Total Gain/Loss</th>
-                      <th className="px-2 py-2 text-right font-medium">% of Portfolio</th>
-                      <th className="hidden px-2 py-2 text-right font-medium 2xl:table-cell">
+                      <th scope="col" className="px-2 py-2 font-medium">
+                        Symbol
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        Price
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        Value
+                      </th>
+                      <th scope="col" className="px-2 py-2 font-medium">
+                        24 hr sparkline
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        Change
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        Total Gain/Loss
+                      </th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        % of Portfolio
+                      </th>
+                      <th
+                        scope="col"
+                        className="hidden px-2 py-2 text-right font-medium 2xl:table-cell"
+                      >
                         Quantity
                       </th>
-                      <th className="hidden px-2 py-2 text-right font-medium 2xl:table-cell">
+                      <th
+                        scope="col"
+                        className="hidden px-2 py-2 text-right font-medium 2xl:table-cell"
+                      >
                         Avg. Cost Basis
                       </th>
-                      <th className="px-2 py-2 text-right font-medium">Actions</th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -408,7 +430,7 @@ function MobileHoldingRows({
             <div className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_6rem_5.25rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60">
               <button
                 type="button"
-                className="-m-3 flex size-10 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="-m-3 flex size-10 items-center justify-center rounded-md transition-transform duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 aria-expanded={isExpanded}
                 aria-label={`${isExpanded ? "Collapse" : "Expand"} ${row.symbol} lots`}
                 onClick={() => toggleExpanded(row.symbol)}
@@ -500,7 +522,7 @@ function SymbolPageLink({ symbol, name, navigate }) {
   return (
     <a
       href={href}
-      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="flex min-h-10 items-center rounded-sm transition-transform duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={(event) => {
         event.stopPropagation();
         if (!navigate) return;
@@ -592,56 +614,58 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
     }));
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-subtle-xs sm:p-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <Panel
+      title="Portfolio value"
+      meta={quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
+    >
+      <div className="p-4 sm:p-5">
         <div className="text-[32px] font-semibold leading-tight tabular-nums text-foreground">
           {summary ? money(summary.totalValue, summary.baseCurrency) : "—"}
         </div>
-        {quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
-      </div>
-      <dl
-        data-slot="portfolio-summary-deltas"
-        className="mt-2 grid gap-2 text-[13px] sm:grid-cols-2"
-      >
-        {todayPnl != null && summary ? (
-          <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-md bg-secondary px-3 py-2">
-            <dt className="shrink-0 text-muted-foreground">Today</dt>
-            <dd className="min-w-0 text-right">
-              <SignedMoney
-                value={todayPnl}
-                percent={
-                  summary.totalValue - todayPnl > 0
-                    ? (todayPnl / (summary.totalValue - todayPnl)) * 100
-                    : null
-                }
-                currency={summary.baseCurrency}
-              />
-            </dd>
-          </div>
+        <dl
+          data-slot="portfolio-summary-deltas"
+          className="mt-2 grid gap-2 text-[13px] sm:grid-cols-2"
+        >
+          {todayPnl != null && summary ? (
+            <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-lg bg-secondary px-3 py-2">
+              <dt className="shrink-0 text-muted-foreground">Today</dt>
+              <dd className="min-w-0 text-right">
+                <SignedMoney
+                  value={todayPnl}
+                  percent={
+                    summary.totalValue - todayPnl > 0
+                      ? (todayPnl / (summary.totalValue - todayPnl)) * 100
+                      : null
+                  }
+                  currency={summary.baseCurrency}
+                />
+              </dd>
+            </div>
+          ) : null}
+          {summary ? (
+            <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-lg bg-secondary px-3 py-2">
+              <dt className="shrink-0 text-muted-foreground">All time</dt>
+              <dd className="min-w-0 text-right">
+                <SignedMoney
+                  value={summary.totalPnl}
+                  percent={summary.totalPnlPercent}
+                  currency={summary.baseCurrency}
+                />
+              </dd>
+            </div>
+          ) : (
+            <div className="text-muted-foreground">Totals appear once quotes load.</div>
+          )}
+        </dl>
+        {segments.length > 0 ? (
+          <AllocationDonut
+            className="mt-4 max-w-md"
+            segments={segments}
+            totalValue={summary?.totalValue}
+            currency={summary?.baseCurrency}
+          />
         ) : null}
-        {summary ? (
-          <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-md bg-secondary px-3 py-2">
-            <dt className="shrink-0 text-muted-foreground">All time</dt>
-            <dd className="min-w-0 text-right">
-              <SignedMoney
-                value={summary.totalPnl}
-                percent={summary.totalPnlPercent}
-                currency={summary.baseCurrency}
-              />
-            </dd>
-          </div>
-        ) : (
-          <div className="text-muted-foreground">Totals appear once quotes load.</div>
-        )}
-      </dl>
-      {segments.length > 0 ? (
-        <AllocationDonut
-          className="mt-4 max-w-md"
-          segments={segments}
-          totalValue={summary?.totalValue}
-          currency={summary?.baseCurrency}
-        />
-      ) : null}
-    </section>
+      </div>
+    </Panel>
   );
 }

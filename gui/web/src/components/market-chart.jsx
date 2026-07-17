@@ -431,7 +431,7 @@ export function MarketChart({
                   key={label}
                   value={label}
                   tabIndex={label === activeRange ? 0 : -1}
-                  className="min-h-10 min-w-10 px-2 text-xs transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.96]"
+                  className="min-h-10 min-w-10 px-2 text-xs transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]"
                 >
                   {label}
                 </TabsTrigger>
@@ -528,7 +528,7 @@ export function MarketChart({
           href="https://www.tradingview.com/"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex min-h-10 items-center rounded-sm px-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-10 items-center rounded-sm px-1 text-[10px] text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Charts by TradingView
         </a>

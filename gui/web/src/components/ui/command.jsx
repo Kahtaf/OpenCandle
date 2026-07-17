@@ -21,7 +21,7 @@ export const CommandInput = forwardRef(function CommandInput({ className, ...pro
   return (
     <div
       data-slot="command-input-wrapper"
-      className="flex h-10 items-center gap-2 border-b border-border px-3"
+      className="flex h-10 items-center gap-2 border-b border-border px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring"
       cmdk-input-wrapper=""
     >
       <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -80,7 +80,7 @@ export const CommandItem = forwardRef(function CommandItem({ className, ...props
       ref={ref}
       data-slot="command-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-2 text-[13px] outline-none data-[selected=true]:bg-secondary data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
+        "relative flex min-h-10 cursor-default select-none items-center gap-2 rounded-md px-2 py-2 text-[13px] outline-none transition-[background-color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-ring data-[selected=true]:bg-secondary data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
         className,
       )}
       {...props}

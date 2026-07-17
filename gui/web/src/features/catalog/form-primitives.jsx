@@ -50,7 +50,7 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex h-9 items-center rounded-md border border-border bg-card p-0.5"
+      className="inline-flex min-h-12 items-center rounded-md border border-border bg-card p-1"
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -58,7 +58,7 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
           <label
             key={option.value}
             className={cn(
-              "inline-flex h-8 min-w-9 cursor-pointer items-center justify-center rounded-[4px] px-2.5 text-xs font-medium tabular-nums transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card",
+              "inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm px-2.5 text-xs font-medium tabular-nums transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card",
               selected
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
@@ -133,7 +133,7 @@ export function NumberWithChips({
               type="button"
               onClick={() => onChange(preset.value)}
               className={cn(
-                "inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium tabular-nums transition-colors",
+                "inline-flex min-h-10 items-center rounded-full border px-2.5 text-xs font-medium tabular-nums transition-[background-color,border-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-card text-muted-foreground hover:border-border hover:text-foreground",
@@ -228,7 +228,7 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
                 onChange(s.symbol);
                 setOpen(false);
               }}
-              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-secondary"
+              className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="font-medium tabular-nums text-foreground">{s.symbol}</span>
               <span className="truncate text-xs text-muted-foreground">{s.name}</span>
@@ -290,14 +290,14 @@ export function SymbolChips({
         {value.map((symbol) => (
           <span
             key={symbol}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-xs font-medium tabular-nums text-foreground"
+            className="inline-flex min-h-10 items-center gap-1 rounded-md border border-border bg-secondary pl-2 text-xs font-medium tabular-nums text-foreground"
           >
             {symbol}
             <button
               type="button"
               aria-label={`Remove ${symbol}`}
               onClick={() => remove(symbol)}
-              className="text-muted-foreground hover:text-foreground"
+              className="inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="h-3 w-3" />
             </button>
@@ -358,7 +358,7 @@ export function MultiSelectChips({ value = [], onChange, options }) {
             type="button"
             onClick={() => toggle(option.value)}
             className={cn(
-              "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors",
+              "inline-flex min-h-10 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-[background-color,border-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selected
                 ? "border-foreground bg-foreground text-background"
                 : "border-border bg-card text-muted-foreground hover:text-foreground",
@@ -543,7 +543,7 @@ export function SuggestionCloud({ suggestions, onPick, label = "Suggestions" }) 
             key={suggestion.value || suggestion.label}
             type="button"
             onClick={() => onPick(suggestion.value || suggestion.label)}
-            className="inline-flex h-7 items-center rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex min-h-10 items-center rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-[background-color,border-color,color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {suggestion.label}
           </button>

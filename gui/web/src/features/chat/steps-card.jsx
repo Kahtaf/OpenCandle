@@ -46,7 +46,7 @@ export function StepsCard({ run, autoOpen = false, onRetry, retryDisabled = fals
           type="button"
           onClick={() => open(run)}
           className={cn(
-            "group flex min-w-0 flex-1 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-subtle-xs transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            "group flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-subtle-xs transition-[background-color,border-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             isOpen && "bg-secondary",
           )}
           aria-expanded={isOpen}

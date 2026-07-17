@@ -39,7 +39,7 @@ export function WatchlistMovers({
     quotes.length > 5 ? (
       <a
         href="/watchlists"
-        className="inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         View all
       </a>
@@ -67,7 +67,7 @@ export function WatchlistMovers({
                 key={quote.symbol}
                 href={symbolPageHref(quote.symbol)}
                 className={cn(
-                  "grid min-h-14 grid-cols-[minmax(4rem,1fr)_auto_auto_auto] items-center gap-3 border-b border-border/70 px-4 py-2 last:border-0 transition-[background-color,transform] duration-150 hover:bg-muted/50 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                  "grid min-h-14 grid-cols-[minmax(4rem,1fr)_auto_auto_auto] items-center gap-3 border-b border-border/70 px-4 py-2 last:border-0 transition-[background-color,transform,scale] duration-150 ease-out hover:bg-muted/50 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                   quoteFlashClass(quoteFlashes.get(quote.symbol)),
                 )}
                 aria-label={`View ${quote.symbol}`}

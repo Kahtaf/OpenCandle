@@ -149,7 +149,7 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
   return (
     <div className="border-b border-border">
       <div className="px-3 pt-2 sm:px-4">
-        <div className="flex w-full items-center gap-0.5 rounded-md bg-secondary p-0.5">
+        <div className="flex min-h-12 w-full items-center gap-0.5 rounded-md bg-secondary p-1">
           {TABS.map((entry) => {
             const Icon = entry.icon;
             const selected = tab === entry.id;
@@ -160,7 +160,7 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
                 onClick={() => setTab(entry.id)}
                 aria-pressed={selected}
                 className={cn(
-                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors",
+                  "inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-sm px-2 text-xs font-medium transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected
                     ? "bg-card text-foreground shadow-subtle-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -582,7 +582,7 @@ function WorkflowBuilder({
   };
 
   return (
-    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+    <div className="grid gap-5 px-4 py-4 sm:px-5">
       <p className="text-sm leading-5 text-muted-foreground">{schema.description}</p>
       <div className="grid gap-3.5">
         {baseFields.map((field) => (
@@ -600,7 +600,7 @@ function WorkflowBuilder({
           <button
             type="button"
             onClick={() => setShowAdvanced((s) => !s)}
-            className="inline-flex w-fit items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-10 w-fit items-center gap-1.5 rounded-md px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span>{showAdvanced ? "Hide" : "Show"} advanced</span>
             <ArrowRight
@@ -691,7 +691,7 @@ function ToolBuilder({
   };
 
   return (
-    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+    <div className="grid gap-5 px-4 py-4 sm:px-5">
       <p className="text-sm leading-5 text-muted-foreground">{tool.description}</p>
       {schema.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-secondary px-3 py-2.5 text-xs text-muted-foreground">
@@ -764,7 +764,7 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
   };
 
   return (
-    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+    <div className="grid gap-5 px-4 py-4 sm:px-5">
       <div className="grid gap-1.5">
         <div className="flex items-center gap-2">
           <ProviderStatusDot status={status} />
@@ -892,7 +892,7 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
   };
 
   return (
-    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+    <div className="grid gap-5 px-4 py-4 sm:px-5">
       <div className="grid gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <ProviderStatusDot status={status} />
@@ -966,7 +966,7 @@ function PublicHttpProviderBuilder({ provider, send, setToast }) {
   };
 
   return (
-    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+    <div className="grid gap-5 px-4 py-4 sm:px-5">
       <div className="grid gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <ProviderStatusDot status={status} />

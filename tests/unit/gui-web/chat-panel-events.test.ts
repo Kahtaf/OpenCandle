@@ -63,6 +63,8 @@ describe("ChatPanel event transcript rendering", () => {
     const html = renderChatPanelHtml({ events });
 
     expect(html).toContain("quickly compare AAPL and MSFT");
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain("Session transcript</h1>");
     expect(html).not.toContain("Current date: 2026-06-12 Compare these assets");
     expect(html).not.toContain('data-slot="home-dashboard"');
   });

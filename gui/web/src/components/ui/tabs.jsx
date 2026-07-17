@@ -10,7 +10,7 @@ export const TabsList = forwardRef(function TabsList({ className, ...props }, re
       ref={ref}
       data-slot="tabs-list"
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-md bg-secondary p-1 text-muted-foreground",
+        "inline-flex min-h-12 items-center justify-center rounded-md bg-secondary p-1 text-muted-foreground",
         className,
       )}
       {...props}
@@ -24,7 +24,7 @@ export const TabsTrigger = forwardRef(function TabsTrigger({ className, ...props
       ref={ref}
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-7 items-center justify-center whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle-xs",
+        "inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle-xs",
         className,
       )}
       {...props}

@@ -136,6 +136,11 @@ describe("symbol page", () => {
     );
 
     expect(html).toContain("<h1");
+    expect(html).toContain('data-slot="panel-card"');
+    expect(html).toContain('data-slot="panel-header"');
+    expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
+      html.indexOf('data-slot="symbol-price-row"'),
+    );
     expect(html).toContain("text-balance");
     expect(html).toContain("Microsoft Corporation");
     expect(html).toContain("MSFT");
@@ -362,7 +367,7 @@ describe("symbol page", () => {
     expect(html).toContain("Available in the writer window");
     expect(html).toContain("min-h-10");
     expect(html).toContain("active:scale-[0.96]");
-    expect(html).toContain("transition-[background-color,color,box-shadow,scale]");
+    expect(html).toContain("transition-[background-color,color,box-shadow,transform,scale]");
     expect(html).not.toContain("transition-all");
   });
 
@@ -493,6 +498,8 @@ describe("symbol page", () => {
     });
 
     expect(html).toContain('data-slot="symbol-header-skeleton"');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain("Loading MSFT</h1>");
     expect(html).toContain('data-slot="symbol-chart-skeleton"');
     expect(html).toContain('data-slot="symbol-stats-skeleton"');
     expect(html).not.toContain("animate-in");

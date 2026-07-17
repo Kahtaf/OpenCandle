@@ -282,6 +282,7 @@ export function ChatPanel({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       data-run-state={runState}
     >
+      {!isEmptyThread ? <h1 className="sr-only">Session transcript</h1> : null}
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="relative min-h-0 flex-1">

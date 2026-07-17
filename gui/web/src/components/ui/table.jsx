@@ -47,11 +47,15 @@ export const TableRow = forwardRef(function TableRow({ className, ...props }, re
   );
 });
 
-export const TableHead = forwardRef(function TableHead({ className, ...props }, ref) {
+export const TableHead = forwardRef(function TableHead(
+  { className, scope = "col", ...props },
+  ref,
+) {
   return (
     <th
       ref={ref}
       data-slot="table-head"
+      scope={scope}
       className={cn(
         "h-10 px-3 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className,

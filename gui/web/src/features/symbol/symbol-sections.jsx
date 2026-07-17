@@ -37,18 +37,19 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
       aria-labelledby="symbol-heading"
       className="m-0 min-w-0 border-0 p-0"
     >
-      <Panel>
+      <Panel
+        headingLevel="h1"
+        headingId="symbol-heading"
+        headingClassName="grid gap-1 text-xl sm:text-2xl"
+        title={
+          <>
+            <span>{overview?.name || quote?.name || ticker}</span>
+            <span className="text-xs font-medium text-muted-foreground">{ticker}</span>
+          </>
+        }
+      >
         <div className="p-4 sm:p-5">
-          <div data-slot="symbol-identity" className="min-w-0">
-            <h1
-              id="symbol-heading"
-              className="text-balance text-xl font-semibold text-foreground sm:text-2xl"
-            >
-              {overview?.name || quote?.name || ticker}
-            </h1>
-            <div className="mt-1 text-xs font-medium text-muted-foreground">{ticker}</div>
-          </div>
-          <div className={cn("mt-5 rounded-md px-1 py-1", flashClass)} data-slot="symbol-price-row">
+          <div className={cn("rounded-lg px-1 py-1", flashClass)} data-slot="symbol-price-row">
             <div className="flex flex-wrap items-end gap-3">
               <span className="text-4xl font-semibold leading-none tabular-nums text-foreground sm:text-5xl">
                 {formatMoney(quote?.price, currency)}
@@ -182,7 +183,7 @@ export function PositionCard({ ticker, positionRows = [] }) {
 export function AlertsCard({ ticker, alertRows = [], createAlertHref, role = "writer" }) {
   const readOnly = role !== "writer";
   const actionClass =
-    "min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,scale]";
+    "min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]";
   return (
     <fieldset aria-label="Alerts" className="m-0 min-w-0 border-0 p-0">
       <Panel
@@ -237,7 +238,7 @@ export function WatchlistMembership({ ticker, memberships = [], role = "writer",
             variant="bordered"
             size="sm"
             disabled={readOnly || memberships.length > 0}
-            className="min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,scale]"
+            className="min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]"
             onClick={onAdd}
           >
             Add to watchlist
@@ -276,7 +277,7 @@ export function AnalyzePanel({ ticker, role = "writer", startChatRun }) {
               variant="bordered"
               size="sm"
               disabled={readOnly}
-              className="min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,scale] duration-150 ease-out"
+              className="min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]"
               onClick={() => startChatRun?.(prompt)}
             >
               {label}

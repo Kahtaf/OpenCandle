@@ -11,7 +11,7 @@ const DialogOverlay = forwardRef(function DialogOverlay({ className, ...props },
     <DialogPrimitive.Overlay
       ref={ref}
       className={cn(
-        "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
         className,
       )}
       {...props}
@@ -29,7 +29,7 @@ export const DialogContent = forwardRef(function DialogContent(
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-[46%] z-50 grid w-[calc(100vw-32px)] max-w-3xl -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "fixed left-1/2 top-[46%] z-50 grid w-[calc(100vw-32px)] max-w-3xl -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
           className,
         )}
         {...props}
@@ -39,8 +39,9 @@ export const DialogContent = forwardRef(function DialogContent(
         </VisuallyHidden.Root>
         {children}
         <DialogPrimitive.Close
+          aria-label="Close dialog"
           className={cn(
-            "absolute right-3 top-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:h-9 md:w-9",
+            "absolute right-3 top-3 z-10 inline-flex size-11 min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-secondary hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:size-10",
             closeButtonClassName,
           )}
         >

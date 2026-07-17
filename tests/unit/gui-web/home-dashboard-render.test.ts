@@ -363,6 +363,8 @@ describe("home dashboard widgets", () => {
 
     expect(watchlistHtml).toContain("Add a watchlist");
     expect(watchlistHtml).toContain('aria-labelledby="home-watchlist-affordance-heading"');
+    expect(watchlistHtml).toContain('data-slot="panel-header"');
+    expect(watchlistHtml).toContain('<h2 id="home-watchlist-affordance-heading"');
     expect(watchlistHtml).toContain('href="/watchlists"');
     expect(watchlistHtml.match(/<a /g)).toHaveLength(1);
     expect(portfolioHtml).toContain("Track a portfolio");

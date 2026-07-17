@@ -86,7 +86,7 @@ export function PortfolioSummaryStrip({
           </div>
         ) : (
           <div className="grid min-h-[152px] grid-cols-1 gap-3 p-4 sm:grid-cols-3">
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 Total value
               </div>
@@ -94,7 +94,7 @@ export function PortfolioSummaryStrip({
                 {formatMoney(totals.totalValue, totals.currency)}
               </div>
             </div>
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 Today&apos;s move
               </div>
@@ -110,7 +110,7 @@ export function PortfolioSummaryStrip({
                 )}
               </div>
             </div>
-            <div className="rounded-md bg-secondary px-3 py-3">
+            <div className="rounded-lg bg-secondary px-3 py-3">
               <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
                 All-time P&amp;L
               </div>
