@@ -6,7 +6,7 @@ import { SERIES_COLORS } from "../../lib/series-colors.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
-import { buildHoldingRows } from "./portfolio-view-model.js";
+import { buildHoldingRows, derivePortfolioDayMove } from "./portfolio-view-model.js";
 import {
   Badge,
   ConfirmButton,
@@ -565,18 +565,7 @@ function LotActions({ lot, portfolio, readOnly, openPanel, invokeTool }) {
 }
 
 function ValueHeader({ summary, holdings, quoteBadge }) {
-  const todayPnl = useMemo(() => {
-    let total = 0;
-    let any = false;
-    for (const row of holdings) {
-      if (typeof row.changePercent === "number" && typeof row.marketValue === "number") {
-        const previous = row.marketValue / (1 + row.changePercent / 100);
-        total += row.marketValue - previous;
-        any = true;
-      }
-    }
-    return any ? total : null;
-  }, [holdings]);
+  const todayPnl = useMemo(() => derivePortfolioDayMove(holdings), [holdings]);
 
   const segments = holdings
     .filter((row) => typeof row.allocationPercent === "number" && row.allocationPercent > 0)

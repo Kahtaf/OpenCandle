@@ -358,6 +358,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("oklch(");
     expect(html).toContain("AAPL 60.0%");
     expect(html).toContain("NVDA 40.0%");
+    expect(html).toContain("+$0.95 (+0.2%)");
+    expect(html).toContain("today ·");
     expect(html).toContain("Price");
     expect(html).toContain("Value");
     expect(html).toContain("24 hr sparkline");

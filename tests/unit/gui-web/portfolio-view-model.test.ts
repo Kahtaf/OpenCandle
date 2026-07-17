@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildHoldingRows } from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
+import {
+  buildHoldingRows,
+  derivePortfolioDayMove,
+} from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
 
 const LOTS = [
   {
@@ -126,5 +129,29 @@ describe("buildHoldingRows", () => {
     expect(aapl.marketValue).toBeCloseTo(14573, 2);
     expect(aapl.excludedLotCount).toBe(1);
     expect(aapl.lots).toHaveLength(2);
+  });
+});
+
+describe("derivePortfolioDayMove", () => {
+  it("sums only lots with finite market values and change percentages", () => {
+    const lots = [
+      { marketValue: 1010, changePercent: 1 },
+      { marketValue: 1960, changePercent: -2 },
+      { marketValue: 500, changePercent: null },
+      { marketValue: null, changePercent: 4 },
+      { marketValue: Number.POSITIVE_INFINITY, changePercent: 3 },
+      { marketValue: 200, changePercent: Number.NaN },
+    ];
+
+    expect(derivePortfolioDayMove(lots)).toBeCloseTo(1010 - 1010 / 1.01 + (1960 - 1960 / 0.98));
+  });
+
+  it("returns null when no lot has usable day-move data", () => {
+    expect(
+      derivePortfolioDayMove([
+        { marketValue: null, changePercent: 1 },
+        { marketValue: 100, changePercent: undefined },
+      ]),
+    ).toBeNull();
   });
 });

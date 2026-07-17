@@ -50,6 +50,11 @@ describe("GUI server route guards", () => {
       guard: 'allowTrustedGuiRequest(req, res, "Diagnostics API", options)',
     },
     {
+      route: 'url.pathname === "/api/market-state/indices"',
+      handler: "await options.indicesSnapshotStore.get()",
+      guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
+    },
+    {
       route: 'url.pathname === "/api/instruments/history"',
       handler: "await getInstrumentHistorySnapshot(",
       guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',

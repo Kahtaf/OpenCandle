@@ -27,6 +27,7 @@ import type {
   SessionActionEnvelope,
   SessionActionResult,
 } from "./local-session-coordinator.js";
+import type { MarketIndicesSnapshotStore } from "./market-indices-snapshot-store.js";
 import {
   buildMarketStateSnapshot,
   getInstrumentHistorySnapshot,
@@ -76,6 +77,7 @@ interface GuiHttpRouteOptions {
   sessionActionsController: SessionActionsController;
   toolInvokeController: ToolInvokeController;
   quoteSnapshotStore: QuoteSnapshotStore;
+  indicesSnapshotStore: MarketIndicesSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
 }
 
@@ -222,6 +224,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await options.quoteSnapshotStore.get());
+      return;
+    }
+
+    if (url.pathname === "/api/market-state/indices" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      writeJson(res, await options.indicesSnapshotStore.get());
       return;
     }
 

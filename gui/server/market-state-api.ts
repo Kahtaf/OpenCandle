@@ -609,7 +609,7 @@ function buildPortfolioQuoteResult({
   };
 }
 
-async function fetchSparklineSnapshot(symbol: string): Promise<MarketSparklineSnapshot> {
+export async function fetchSparklineSnapshot(symbol: string): Promise<MarketSparklineSnapshot> {
   const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
   if (result.status === "unavailable") return unavailableSparkline(result.reason);
 
@@ -827,7 +827,7 @@ export function resetInstrumentOverviewMemoForTests(): void {
   instrumentOverviewMemo.clear();
 }
 
-async function fetchQuoteSnapshot(symbol: string): Promise<
+export async function fetchQuoteSnapshot(symbol: string): Promise<
   | {
       status: "ok";
       name?: string;
