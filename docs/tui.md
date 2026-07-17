@@ -53,9 +53,10 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | Command | Use it for |
 | --- | --- |
 | `/setup` | Re-run AI model setup. Use this when chat cannot start, auth changed, or you want a different setup path. |
-| `/login` | Sign in to a model provider through Pi when supported by your local Pi install. |
+| `/login` | Sign in to a model provider through Pi. If your Pi version doesn't offer sign-in, use `/setup` with an API key instead. |
 | `/model` | Switch between models that are already available through Pi. |
 | `/connect` | Connect OpenCandle data providers. Run it bare for a picker, or pass a provider name or category (below). |
+| `/new` | Start a fresh session. |
 | `/analyze <ticker>` | Run the multi-analyst stock workflow for one ticker, for example `/analyze NVDA`. |
 
 ### `/connect` Targets
@@ -65,6 +66,7 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | Target | Provider(s) | Unlocks |
 | --- | --- | --- |
 | `financials`, `fundamentals`, `alphavantage` | Alpha Vantage | Fundamentals, earnings, financial statements, DCF, comps |
+| `lse`, `london strategic edge` | London Strategic Edge | Free-tier financial statements plus deep split-adjusted intraday history back to 2003 |
 | `economy`, `macro`, `fred` | FRED | Macro series: rates, CPI, GDP, unemployment |
 | `news`, `finnhub` | Finnhub | Company news in sentiment summaries |
 | `search` (category), `brave`, `exa` | Brave Search, Exa | Expanded web search beyond keyless DuckDuckGo |
@@ -73,7 +75,7 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | `tradingview`, `tradingview-scanner`, `screener` | TradingView scanner | Keyless stock screening |
 | `reddit`, `twitter` / `x` | Reddit, X/Twitter | Sentiment via `rdt-cli` / `twitter-cli` browser sessions |
 
-`/setup` and `/model` are about the AI model. `/connect` is about market-data providers. Keeping those separate makes setup easier to debug.
+`/setup` and `/model` are about the AI model. `/connect` is about market-data providers.
 
 ## Sessions
 
@@ -81,7 +83,7 @@ OpenCandle stores session history through Pi and keeps OpenCandle user state und
 
 Running plain `opencandle` resumes the most recent Pi session for the current working directory. To start a fresh session from inside the TUI, run `/new`.
 
-The local GUI reads the same Pi session state as the terminal UI. OpenCandle coordinates local browser and terminal surfaces so prompts and supported session actions are forwarded to the active session owner when needed. If a view is reconnecting or syncing, wait for the current run to settle and retry.
+The local GUI reads the same session state as the terminal UI, so you can use both at once. If a view says it is reconnecting or syncing, wait a moment and retry.
 
 ## CLI vs GUI
 

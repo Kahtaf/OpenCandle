@@ -5,7 +5,7 @@ description: How OpenCandle turns a financial question into evidence, tool outpu
 
 # System Architecture
 
-OpenCandle is a local financial research workbench. You ask a question in the terminal or the browser GUI; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
+OpenCandle is an open source financial investigator. You ask a question in the terminal or the browser GUI; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
 
 It is not an automated trading system and it is not a financial advisor. It is research software built to make the evidence path inspectable.
 
@@ -46,7 +46,7 @@ Produce the answer
 
 OpenCandle has two main surfaces.
 
-The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
+The terminal UI is the fastest way to work from the keyboard. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
 The local GUI is a browser workbench at `http://127.0.0.1:14567`. It shows chat, session history, provider setup, a tool and workflow catalog, a financial context panel, and visual result cards for market data, options, macro, filings, sentiment, and portfolio facts.
 
@@ -105,17 +105,20 @@ Expected behavior:
 
 The model synthesizes after evidence is gathered. It should answer directly, name risks, disclose gaps, and avoid unsupported certainty.
 
-## GUI Runtime And Local State
+## GUI Runtime
 
-The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal surfaces coordinate through authenticated local forwarding, session-scoped action IDs, and stale-lock recovery so supported actions can stay attached to the active session without exposing ownership roles in the UI. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal windows coordinate through the local server, so the same session can be open in several places without conflicting writes. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
 
-Useful local endpoints (canonical list):
+Useful local endpoints:
 
 - `GET /health` returns whether the process is alive plus diagnostic coordination metadata.
 - `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
 - `GET /api/sessions` lists saved sessions.
 - `GET /api/session/events` returns the current projected chat events.
 - `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator.
+- `GET /api/instruments/overview` returns cached company profile and key stats for one symbol (backs the symbol pages).
+- `GET /api/instruments/history` returns validated range/interval history bars with request coalescing (backs the interactive charts).
+- `GET /api/market-state/indices` returns the cached dashboard indices snapshot with sparkline data.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Local State
@@ -128,8 +131,6 @@ Common files:
 - `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, alerts, report runs, and import provenance.
 - `sentinel.db` for sentiment trend state.
 - `onboarding.json` for provider setup, snooze, never-ask, and welcome state.
-
-OpenCandle does not treat `watchlist.json` or `portfolio.json` as supported state sources.
 
 Pi owns its own runtime config and session storage separately. OpenCandle should not depend on repo-local `.pi/extensions/` artifacts.
 

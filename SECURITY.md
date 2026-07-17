@@ -16,7 +16,7 @@ Do not open public GitHub issues for security vulnerabilities.
 
 Do not include API keys, provider tokens, account identifiers, personal holdings screenshots, full `~/.opencandle` state, or unredacted local paths in public reports, screenshots, logs, or traces.
 
-Use [GitHub Security Advisories](https://docs.github.com/en/code-security/security-advisories) or the repository's private vulnerability reporting channel to report suspected vulnerabilities to the maintainers. If GitHub private reporting is unavailable to you, open a minimal public issue that says you need a private security contact without including exploit details or sensitive data.
+Use the repository's private vulnerability reporting ([GitHub Security Advisories](https://docs.github.com/en/code-security/security-advisories)) to report suspected vulnerabilities to the maintainers. If GitHub private reporting is unavailable to you, open a minimal public issue that says you need a private security contact without including exploit details or sensitive data.
 
 When reporting an issue, include:
 

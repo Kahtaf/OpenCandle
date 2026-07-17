@@ -373,7 +373,7 @@ function SiteFooter({ output = "index.html" }) {
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-4 w-4" />
           <span className="font-medium text-foreground">OpenCandle</span>
-          <span>MIT licensed, read-only research software</span>
+          <span>MIT-licensed, read-only research software</span>
         </div>
         <nav className="flex items-center gap-4 text-sm" aria-label="Footer">
           {[
@@ -551,7 +551,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "Which model does it use?",
       answer:
-        "You bring your own model credentials — Anthropic, OpenAI, or Google — through the bundled Pi runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
+        "You bring your own model credentials — Anthropic, OpenAI, or Google — through the bundled Pi agent runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -561,7 +561,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "Which data sources does OpenCandle use?",
       answer:
-        "OpenCandle integrates Yahoo Finance, Alpha Vantage, FRED, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
+        "OpenCandle integrates Yahoo Finance, TradingView scanner, Alpha Vantage, London Strategic Edge, FRED, Polymarket, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
     },
   ];
 
@@ -649,6 +649,29 @@ function HomePage({ buildDate, version }) {
           </p>
         </section>
 
+        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Launch video">
+          <Card className="overflow-hidden shadow-subtle-xs">
+            {/* biome-ignore lint/a11y/useMediaCaption: The launch video's narration is descriptive marketing audio; a transcript lives in the repo at video/VOICEOVER_SCRIPT.txt. */}
+            <video
+              controls
+              preload="metadata"
+              playsInline
+              width="1920"
+              height="1080"
+              className="block aspect-video w-full"
+              src="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29"
+            >
+              <a href="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29">
+                Watch the OpenCandle launch video
+              </a>
+            </video>
+          </Card>
+          <p className="mt-3 text-muted-foreground text-xs">
+            A real market question in the browser workbench: the evidence trail behind the answer,
+            and the same workflow in the terminal.
+          </p>
+        </section>
+
         <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Example answer">
           <Card className="overflow-hidden shadow-subtle-xs">
             <div className="border-border border-b px-4 py-3 sm:px-5">
@@ -696,9 +719,9 @@ function HomePage({ buildDate, version }) {
               <Card className="p-6">
                 <h3 className="font-semibold text-base">A general chatbot</h3>
                 <ul className="mt-4 space-y-3 text-muted-foreground text-sm">
-                  <li>Answers from months-old training data</li>
+                  <li>Answers from training data unless you wire up browsing</li>
                   <li>Invents or omits numbers</li>
-                  <li>No sources to check</li>
+                  <li>Sources only if you add them yourself</li>
                   <li>Confident even when stale</li>
                 </ul>
               </Card>
@@ -804,7 +827,7 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
                   Bring a model key from Anthropic, OpenAI, or Google. Market data needs no keys.
                 </p>
                 <p className="mt-3 text-muted-foreground text-xs">
-                  MIT licensed · Node.js 22.19+ or 24–26 · macOS, Windows, Linux
+                  MIT licensed · Node.js 22.19+ (22.x) or 24–26 · macOS, Windows, Linux
                 </p>
               </div>
               <div className="space-y-2 font-mono text-sm">
@@ -952,7 +975,7 @@ async function copyStaticAssets() {
 function renderLlmsTxt(pages, buildDate) {
   return `# OpenCandle
 
-> Open source financial research agent for quotes, fundamentals, macro data, filings, options, sentiment, and portfolio workflows.
+> Open source financial investigator for quotes, fundamentals, macro data, filings, options, sentiment, and portfolio workflows.
 
 Last updated: ${buildDate}
 

@@ -39,7 +39,7 @@ That command runs typecheck, `test:scripts:typecheck`, Biome CI, unit tests, `te
 Before a public release or broad announcement, exercise the fresh-user path separately from default CI:
 
 1. Set a fresh `OPENCANDLE_HOME`.
-2. Start `opencandle` and complete terminal model setup, including sign-in if that path is part of the release claim.
+2. Start `opencandle` and complete terminal model setup, including sign-in if the release announcement covers that path.
 3. Start `opencandle gui`, open the browser, and verify the model setup state is ready or complete API-key setup in the panel.
 4. Ask one keyless prompt such as `What is AAPL trading at?`.
 5. If release scope touched providers, run one provider-backed prompt with available credentials.
@@ -125,6 +125,8 @@ npm run eval -- product
 
 Useful environment variables:
 
+The `--case`, `--family`, and `--limit` options set these; set the env vars directly only when not going through `npm run eval`.
+
 - `PRODUCT_EVAL_CASE`: run one case by id, such as `compare-assets-aapl-msft-6mo`.
 - `PRODUCT_EVAL_FAMILY`: run one family, such as `portfolio` or `macro`.
 - `PRODUCT_EVAL_LIMIT`: run only the first N selected cases.
@@ -141,7 +143,7 @@ Each run writes a timestamped `*_product-evals.json` report under `tests/evals/r
 
 The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins — generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
 
-Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude, Codex, and Gemini baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 
 ```bash
 npm run eval -- competitive
@@ -164,7 +166,7 @@ Useful knobs (all optional):
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
 - `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
-- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: legacy-named settle window used by the competitive eval runner when it calls the shared OpenCandle harness. The old manual-run harness is gone; this env var remains only to avoid renaming an established benchmark knob.
+- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window (ms) used by the competitive eval runner when it calls the shared harness.
 
 Do not commit raw transcripts or one-off run reports; treat run files as local evidence.
 
@@ -187,7 +189,7 @@ Set `OPENCANDLE_GUI_URL` to target a non-default local URL. GUI smoke testing sh
 For visual or GUI behavior changes, also build the web bundle:
 
 ```bash
-npm --workspace @opencandle/gui-web run build
+npm run gui:web:build
 ```
 
 At minimum, exercise prompts that render stock quotes, quote comparison, options chains, SEC filings, macro/FRED data, and news/search so the matching tool cards and financial context panel render from saved session state.
