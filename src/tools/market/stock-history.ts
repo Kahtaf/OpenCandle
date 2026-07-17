@@ -4,6 +4,7 @@ import { getConfig } from "../../config.js";
 import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
 import { getDailyHistory } from "../../providers/alpha-vantage.js";
 import { getLseCandles, type LseTimeframe, toLseTimeframe } from "../../providers/lse.js";
+import { ProviderCredentialError } from "../../providers/provider-credential-error.js";
 import { withFallback } from "../../providers/with-fallback.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
@@ -45,11 +46,19 @@ export async function fetchHistoryWithFallback(
   const lseTimeframe = toLseTimeframe(interval);
   const lseEligible = lseTimeframe !== undefined && lseFallbackEligible(interval);
   const getLseHistory = async (timeframe: LseTimeframe): Promise<OHLCV[]> => {
-    const start = historyRangeToStart(range);
-    const rows = await getLseCandles(symbol, timeframe, {
-      ...(start === undefined ? {} : { start }),
-      order: "asc",
-    });
+    let rows: Awaited<ReturnType<typeof getLseCandles>>;
+    try {
+      const start = historyRangeToStart(range);
+      rows = await getLseCandles(symbol, timeframe, {
+        ...(start === undefined ? {} : { start }),
+        order: "asc",
+      });
+    } catch (error) {
+      if (error instanceof ProviderCredentialError && error.provider === "lse") {
+        throw new Error(`LSE credential ${error.reason}`);
+      }
+      throw error;
+    }
     return rows.map((row) => ({
       // Verified UTC from a live 2026-07-14 1h capture: naive 08:00–23:00 bars
       // match the 04:00–19:00 ET extended session. OHLCV is date-only here.
@@ -115,7 +124,7 @@ export function historyRangeToStart(range: HistoryRange, now = new Date()): stri
       start.setUTCMonth(start.getUTCMonth() - 6);
       break;
     case "ytd":
-      return new Date(Date.UTC(start.getUTCFullYear(), 0, 1)).toISOString();
+      return `${start.getUTCFullYear()}-01-01`;
     case "1y":
       start.setUTCFullYear(start.getUTCFullYear() - 1);
       break;
@@ -129,7 +138,7 @@ export function historyRangeToStart(range: HistoryRange, now = new Date()): stri
       start.setUTCFullYear(start.getUTCFullYear() - 10);
       break;
   }
-  return start.toISOString();
+  return start.toISOString().slice(0, 10);
 }
 
 const params = Type.Object({

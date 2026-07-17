@@ -21,6 +21,7 @@ describe("wrapProvider", () => {
     if (result.status === "ok") {
       expect(result.data).toEqual({ price: 185 });
       expect(result.timestamp).toBeTruthy();
+      expect(result.provider).toBe("yahoo");
     }
   });
 

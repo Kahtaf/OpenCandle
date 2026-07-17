@@ -43,6 +43,7 @@ export async function wrapProvider<T>(
       status: "ok",
       data,
       timestamp,
+      provider: providerId,
       cached: cache?.status === "cached" ? true : undefined,
       stale: cache?.status === "stale" ? true : undefined,
     };

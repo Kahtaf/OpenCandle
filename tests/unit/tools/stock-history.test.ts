@@ -134,7 +134,7 @@ describe("get_stock_history tool", () => {
     expect(getLseCandles).not.toHaveBeenCalled();
   });
 
-  it("converts deep ranges to an ISO start and omits start for max", async () => {
+  it("converts deep ranges to a date-only LSE start and omits start for max", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T12:34:56.000Z"));
     vi.mocked(getHistory).mockRejectedValue(new Error("Yahoo unavailable"));
@@ -147,7 +147,7 @@ describe("get_stock_history tool", () => {
     });
 
     expect(getLseCandles).toHaveBeenLastCalledWith("AAPL", "1h", {
-      start: "2016-07-16T12:34:56.000Z",
+      start: "2016-07-16",
       order: "asc",
     });
 

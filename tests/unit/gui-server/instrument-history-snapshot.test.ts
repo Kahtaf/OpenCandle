@@ -6,6 +6,13 @@ import {
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
 import { getHistory } from "../../../src/providers/yahoo-finance.js";
+import { fetchHistoryWithFallback } from "../../../src/tools/market/stock-history.js";
+
+vi.mock("../../../src/tools/market/stock-history.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/tools/market/stock-history.js")>();
+  return { ...actual, fetchHistoryWithFallback: vi.fn() };
+});
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getHistory: vi.fn(),
@@ -17,6 +24,22 @@ beforeEach(() => {
   resetInstrumentHistoryMemoForTests();
   vi.clearAllMocks();
   vi.useRealTimers();
+  vi.mocked(fetchHistoryWithFallback).mockImplementation(async (symbol, range, interval) => {
+    try {
+      return {
+        status: "ok",
+        data: await getHistory(symbol, range, interval),
+        timestamp: new Date().toISOString(),
+        provider: "yahoo",
+      };
+    } catch (error) {
+      return {
+        status: "unavailable",
+        reason: error instanceof Error ? error.message : "unknown_error",
+        provider: "yahoo",
+      };
+    }
+  });
 });
 
 describe("resolveHistoryRange", () => {

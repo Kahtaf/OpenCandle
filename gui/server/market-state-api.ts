@@ -3,13 +3,18 @@ import { buildFreshnessStamp } from "../../src/infra/freshness.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../src/market-state/resolve.js";
 import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
+import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
 import {
   getHistory,
   getQuote,
   getYahooCompanyOverview,
 } from "../../src/providers/yahoo-finance.js";
-import { HISTORY_INTERVALS, type HISTORY_RANGES } from "../../src/tools/market/stock-history.js";
+import {
+  fetchHistoryWithFallback,
+  HISTORY_INTERVALS,
+  type HISTORY_RANGES,
+} from "../../src/tools/market/stock-history.js";
 import { HistorySnapshotStore } from "./history-snapshot-store.js";
 
 type HistoryRange = (typeof HISTORY_RANGES)[number];
@@ -40,7 +45,7 @@ export interface InstrumentHistorySnapshotOk {
   symbol: string;
   range: string;
   interval: HistoryInterval;
-  source: "Yahoo Finance";
+  source: InstrumentHistorySource;
   fetchedAt: string;
   dataAsOf?: string;
   stale: boolean;
@@ -92,6 +97,19 @@ const INTRADAY_DEPTH_CAP_DAYS: Partial<Record<HistoryInterval, number>> = {
 };
 
 const DAILY_OR_LONGER_INTERVALS = new Set<HistoryInterval>(["1d", "1wk", "1mo"]);
+type InstrumentHistorySource = "Yahoo Finance" | "Alpha Vantage" | "London Strategic Edge";
+const HISTORY_PROVIDER_REGISTRY_IDS = {
+  yahoo: "yahoo",
+  alphavantage: "alpha_vantage",
+  lse: "lse",
+} as const satisfies Record<string, ProviderId>;
+
+function historyProviderDisplayName(provider: string | undefined): InstrumentHistorySource | null {
+  if (!(provider && provider in HISTORY_PROVIDER_REGISTRY_IDS)) return null;
+  const providerId =
+    HISTORY_PROVIDER_REGISTRY_IDS[provider as keyof typeof HISTORY_PROVIDER_REGISTRY_IDS];
+  return getProvider(providerId).displayName as InstrumentHistorySource;
+}
 
 export function resolveHistoryRange(
   rangeLabel: string,
@@ -133,11 +151,13 @@ export async function getInstrumentHistorySnapshot(
 
   const key = `${symbol}|${resolved.range}|${resolved.interval}`;
   return instrumentHistorySnapshotStore.get(key, async () => {
-    const result = await wrapProvider("yahoo", () =>
-      getHistory(symbol, resolved.range, resolved.interval),
-    );
+    const result = await fetchHistoryWithFallback(symbol, resolved.range, resolved.interval);
     if (result.status === "unavailable") {
       return { status: "unavailable", reason: result.reason };
+    }
+    const source = historyProviderDisplayName(result.provider);
+    if (source === null) {
+      return { status: "unavailable", reason: "History provider attribution is unavailable" };
     }
 
     const bars = result.data.filter((bar) => Number.isFinite(bar.close));
@@ -179,7 +199,7 @@ export async function getInstrumentHistorySnapshot(
       symbol,
       range: rangeLabel,
       interval: resolved.interval,
-      source: "Yahoo Finance",
+      source,
       fetchedAt: result.timestamp,
       dataAsOf,
       stale: result.stale === true,

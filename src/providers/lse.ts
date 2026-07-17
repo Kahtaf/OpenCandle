@@ -125,7 +125,7 @@ export async function getLseCandles(
   opts: LseCandleOptions = {},
 ): Promise<LseCandle[]> {
   const params: Record<string, string> = { symbol, timeframe };
-  if (opts.start !== undefined) params.start = opts.start;
+  if (opts.start !== undefined) params.start = opts.start.slice(0, 10);
   if (opts.end !== undefined) params.end = opts.end;
   if (opts.order !== undefined) params.order = opts.order;
   if (opts.limit !== undefined) params.limit = String(opts.limit);

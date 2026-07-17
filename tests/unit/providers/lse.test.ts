@@ -69,6 +69,21 @@ describe("LSE provider", () => {
     );
   });
 
+  it("sends candle start dates to LSE as YYYY-MM-DD", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(candlesFixture));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getLseCandles("AAPL", "1d", {
+      start: "2016-07-16T12:34:56.000Z",
+      order: "asc",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&start=2016-07-16&order=asc",
+      expect.objectContaining({ headers: { "x-api-key": "test-lse-key" } }),
+    );
+  });
+
   it.each([
     401, 403,
   ])("throws a stale credential error before serving stale cache on %i", async (status) => {

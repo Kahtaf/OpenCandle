@@ -29,6 +29,7 @@ export interface ProviderResultOk<T> {
   status: "ok";
   data: T;
   timestamp: string;
+  provider?: string;
   cached?: boolean;
   stale?: boolean;
 }
@@ -61,7 +62,7 @@ export function toEvidenceRecord<T>(
       provenance: {
         source: result.stale ? "stale_cache" : "fetched",
         timestamp: result.timestamp,
-        provider: providerId,
+        provider: providerId ?? result.provider,
         confidence: result.stale ? 0.5 : undefined,
       },
     };
