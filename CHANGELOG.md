@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- The public docs external-link check now retries transient network failures and records still-unreachable hosts (DNS/TLS/timeout) as non-blocking skips instead of build failures, so an external outage such as a `polymarket.com` fetch timeout no longer reds CI; a genuine HTTP error status (for example 404) still fails the gate. Retry count and delay are configurable via `OPENCANDLE_LINK_CHECK_ATTEMPTS`/`OPENCANDLE_LINK_CHECK_RETRY_DELAY_MS`.
 - Autoreview follow-ups now preserve LSE intraday timestamps, reject incomplete financials and invalid comparison baselines, isolate symbol/range loading state, keep portfolio totals currency-honest, refresh chart labels with the viewport, mark expired SWR data stale, avoid assumed USD comparison labels, and distinguish invalid symbols from provider outages.
 - Round-two autoreview fixes now retain valid SWR snapshots through degraded refreshes, route alerts through explicit threshold entry, render unavailable valuations honestly, align intraday comparisons by timestamp, disclose stale provider data, format symbol metrics in their native currency, and reject invalid LSE candle payloads.
 - Historical charts now send date-only LSE candle bounds so deep-range fallbacks no longer fail with HTTP 400, degrade rejected optional LSE credentials to an unavailable result instead of throwing, and route the GUI instrument-history endpoint through the full Yahoo → Alpha Vantage → LSE chain with accurate provider attribution.
