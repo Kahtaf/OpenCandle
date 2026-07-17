@@ -400,6 +400,9 @@ describe("buildCompareAssetsPrompt", () => {
     };
     const prompt = buildCompareAssetsPrompt(resolution);
     expect(prompt).toContain("compare_companies");
+    expect(prompt).toContain("Use get_price_comparison with symbols [SPY, QQQ]");
+    expect(prompt).toContain("range that fits the resolved time horizon");
+    expect(prompt).toContain("default comparison range when no time horizon is resolved");
   });
 
   it("tells ETF overlap comparisons to prioritize holdings and concentration over generic metrics", () => {
