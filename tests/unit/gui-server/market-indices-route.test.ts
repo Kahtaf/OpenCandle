@@ -3,8 +3,8 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHttpRequestHandler } from "../../../gui/server/http-routes.js";
 import type { MarketIndicesSnapshotStore } from "../../../gui/server/market-indices-snapshot-store.js";
-import type { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
 import { privateApiCookieHeader } from "../../../gui/server/private-api-access.js";
+import type { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
 
 const privateApiSessionToken = "market-indices-route-token";
 const snapshot = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MarketIndicesSnapshotStore } from "../../../gui/server/market-indices-snapshot-store.js";
 import type { MarketIndicesSnapshot } from "../../../gui/server/market-indices-api.js";
+import { MarketIndicesSnapshotStore } from "../../../gui/server/market-indices-snapshot-store.js";
 
 function snapshot(generatedAt: string): MarketIndicesSnapshot {
   return { generatedAt, indices: [] };

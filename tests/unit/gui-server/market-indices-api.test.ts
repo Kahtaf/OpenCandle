@@ -31,7 +31,8 @@ describe("market indices snapshot", () => {
       const isHistory = url.searchParams.get("interval") === "5m";
       return {
         ok: true,
-        json: async () => yahooChartResponse(quote, isHistory ? closes : [quote.regularMarketPrice]),
+        json: async () =>
+          yahooChartResponse(quote, isHistory ? closes : [quote.regularMarketPrice]),
       } as Response;
     });
   });
