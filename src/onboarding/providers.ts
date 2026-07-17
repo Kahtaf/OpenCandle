@@ -10,7 +10,7 @@
 
 import { getConfig, loadFileConfig } from "../config.js";
 
-export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
+export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa" | "lse";
 export type ExternalToolProviderId = "twitter" | "reddit";
 export type PublicHttpProviderId = "polymarket" | "tradingview" | "yahoo";
 export type ProviderId = ApiKeyProviderId | ExternalToolProviderId | PublicHttpProviderId;
@@ -189,6 +189,26 @@ export const PROVIDERS = [
     instructionsHint: "Paid with free tier, signup opens in your browser",
   },
   {
+    id: "lse",
+    kind: "api-key",
+    displayName: "London Strategic Edge",
+    category: "market",
+    tier: "soft",
+    aliases: ["lse", "london strategic edge", "londonstrategicedge"],
+    signupUrl: "https://londonstrategicedge.com/databank",
+    freeTier: true,
+    envVar: "LSE_API_KEY",
+    configPath: ["providers", "lse", "apiKey"],
+    unlocks: [
+      "financial statements (income, balance sheet, and cash flow)",
+      "deep split-adjusted intraday history back to 2003",
+    ],
+    fallbackDescription:
+      "Market data continues through Yahoo Finance and Alpha Vantage when London Strategic Edge is unavailable",
+    snoozeDurationDays: 7,
+    instructionsHint: "Free, about 30 seconds, signup opens in your browser",
+  },
+  {
     id: "yahoo",
     kind: "public-http",
     displayName: "Yahoo Finance",
@@ -362,6 +382,7 @@ const CONFIG_FIELD_BY_ID: Record<ApiKeyProviderId, keyof ReturnType<typeof getCo
   finnhub: "finnhubApiKey",
   brave: "braveApiKey",
   exa: "exaApiKey",
+  lse: "lseApiKey",
 };
 
 export function hasCredential(id: ProviderId): boolean {

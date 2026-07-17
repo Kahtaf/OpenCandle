@@ -1,7 +1,9 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
+import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
 import { getDailyHistory } from "../../providers/alpha-vantage.js";
+import { getLseCandles, type LseTimeframe, toLseTimeframe } from "../../providers/lse.js";
 import { withFallback } from "../../providers/with-fallback.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
@@ -24,21 +26,112 @@ export const HISTORY_RANGES = [
 ] as const;
 export const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
 
+function lseFallbackEligible(interval: (typeof HISTORY_INTERVALS)[number]): boolean {
+  return (
+    toLseTimeframe(interval) !== undefined && !!getConfig().lseApiKey && !isOverSoftThreshold()
+  );
+}
+
+export function hasIntradayHistoryFallback(
+  interval: (typeof HISTORY_INTERVALS)[number],
+): boolean {
+  return !DAILY_INTERVALS.has(interval) && lseFallbackEligible(interval);
+}
+
 export async function fetchHistoryWithFallback(
   symbol: string,
   range: (typeof HISTORY_RANGES)[number],
   interval: (typeof HISTORY_INTERVALS)[number],
 ): Promise<ProviderResult<OHLCV[]>> {
   const apiKey = getConfig().alphaVantageApiKey;
+  const lseTimeframe = toLseTimeframe(interval);
+  const lseEligible = lseTimeframe !== undefined && lseFallbackEligible(interval);
+  const getLseHistory = async (timeframe: LseTimeframe): Promise<OHLCV[]> => {
+    const start = historyRangeToStart(range);
+    const rows = await getLseCandles(symbol, timeframe, {
+      ...(start === undefined ? {} : { start }),
+      order: "asc",
+    });
+    return rows.map((row) => ({
+      // Verified UTC from a live 2026-07-14 1h capture: naive 08:00–23:00 bars
+      // match the 04:00–19:00 ET extended session. OHLCV is date-only here.
+      date: row.ts.slice(0, 10),
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      volume: row.volume,
+    }));
+  };
 
-  if (DAILY_INTERVALS.has(interval) && apiKey) {
+  if (DAILY_INTERVALS.has(interval)) {
+    const yahooEntry = {
+      provider: "yahoo",
+      fn: () => getHistory(symbol, range, interval),
+    };
+    const entries = [yahooEntry];
+    if (apiKey) {
+      entries.push({
+        provider: "alphavantage",
+        fn: () => getDailyHistory(symbol, apiKey, range),
+      });
+    }
+    if (lseEligible && lseTimeframe !== undefined) {
+      entries.push({ provider: "lse", fn: () => getLseHistory(lseTimeframe) });
+    }
+    return entries.length === 1
+      ? wrapProvider(yahooEntry.provider, yahooEntry.fn)
+      : withFallback(entries);
+  }
+
+  if (lseEligible && lseTimeframe !== undefined) {
     return withFallback([
       { provider: "yahoo", fn: () => getHistory(symbol, range, interval) },
-      { provider: "alphavantage", fn: () => getDailyHistory(symbol, apiKey, range) },
+      { provider: "lse", fn: () => getLseHistory(lseTimeframe) },
     ]);
   }
 
   return wrapProvider("yahoo", () => getHistory(symbol, range, interval));
+}
+
+type HistoryRange = (typeof HISTORY_RANGES)[number];
+
+export function historyRangeToStart(range: HistoryRange, now = new Date()): string | undefined {
+  if (range === "max") return undefined;
+
+  const start = new Date(now);
+  switch (range) {
+    case "1d":
+      start.setUTCDate(start.getUTCDate() - 1);
+      break;
+    case "5d":
+      start.setUTCDate(start.getUTCDate() - 5);
+      break;
+    case "1mo":
+      start.setUTCMonth(start.getUTCMonth() - 1);
+      break;
+    case "3mo":
+      start.setUTCMonth(start.getUTCMonth() - 3);
+      break;
+    case "6mo":
+      start.setUTCMonth(start.getUTCMonth() - 6);
+      break;
+    case "ytd":
+      return new Date(Date.UTC(start.getUTCFullYear(), 0, 1)).toISOString();
+    case "1y":
+      start.setUTCFullYear(start.getUTCFullYear() - 1);
+      break;
+    case "2y":
+      start.setUTCFullYear(start.getUTCFullYear() - 2);
+      break;
+    case "5y":
+      start.setUTCFullYear(start.getUTCFullYear() - 5);
+      break;
+    case "10y":
+      start.setUTCFullYear(start.getUTCFullYear() - 10);
+      break;
+  }
+  return start.toISOString();
 }
 
 const params = Type.Object({
@@ -73,9 +166,10 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
     const result = await fetchHistoryWithFallback(symbol, range, interval);
 
     if (result.status === "unavailable") {
-      const intradayNote = !DAILY_INTERVALS.has(interval)
-        ? ` No alternate source for ${interval} data.`
-        : "";
+      const intradayNote =
+        !DAILY_INTERVALS.has(interval) && !hasIntradayHistoryFallback(interval)
+          ? ` No alternate source for ${interval} data.`
+          : "";
       return {
         content: [
           {

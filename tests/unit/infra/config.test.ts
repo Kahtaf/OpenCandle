@@ -424,6 +424,48 @@ describe("loadConfig", () => {
     expect(config.finnhubApiKey).toBeUndefined();
   });
 
+  it("loads lseApiKey from LSE_API_KEY env var", () => {
+    process.env.LSE_API_KEY = "lse-env-key";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.lseApiKey).toBe("lse-env-key");
+    delete process.env.LSE_API_KEY;
+  });
+
+  it("loads lseApiKey from providers.lse.apiKey in config file", () => {
+    delete process.env.LSE_API_KEY;
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { lse: { apiKey: "lse-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.lseApiKey).toBe("lse-file-key");
+  });
+
+  it("env var LSE_API_KEY overrides file config", () => {
+    process.env.LSE_API_KEY = "lse-env-override";
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { lse: { apiKey: "lse-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.lseApiKey).toBe("lse-env-override");
+    delete process.env.LSE_API_KEY;
+  });
+
   describe("sentiment config", () => {
     it("sentiment defaults when not set", () => {
       delete process.env.OPENCANDLE_DEBATE;

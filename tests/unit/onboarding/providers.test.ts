@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Config } from "../../../src/config.js";
 import * as configModule from "../../../src/config.js";
 import {
   getCredential,
@@ -22,6 +23,7 @@ const ENV_KEYS = [
   "FINNHUB_API_KEY",
   "BRAVE_API_KEY",
   "EXA_API_KEY",
+  "LSE_API_KEY",
 ] as const;
 
 const originalEnv: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
@@ -31,8 +33,11 @@ const DEFAULT_EMPTY_CONFIG = {
   braveApiKey: undefined,
   exaApiKey: undefined,
   finnhubApiKey: undefined,
+  lseApiKey: undefined,
+  routerMode: "llm",
+  toolScopeMode: "observe",
   sentiment: undefined,
-};
+} satisfies Config;
 
 beforeEach(() => {
   for (const k of ENV_KEYS) {
@@ -40,7 +45,7 @@ beforeEach(() => {
     delete process.env[k];
   }
   // Default: empty config so hasCredential returns false unless a test overrides.
-  vi.spyOn(configModule, "getConfig").mockReturnValue(DEFAULT_EMPTY_CONFIG as any);
+  vi.spyOn(configModule, "getConfig").mockReturnValue(DEFAULT_EMPTY_CONFIG);
 });
 
 afterEach(() => {
@@ -62,6 +67,7 @@ describe("provider registry — shape", () => {
         "exa",
         "finnhub",
         "fred",
+        "lse",
         "polymarket",
         "reddit",
         "tradingview",
@@ -121,7 +127,7 @@ describe("provider registry — shape", () => {
   it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
     expect(soft.map((p) => p.id).sort()).toEqual(
-      ["brave", "exa", "finnhub", "reddit", "tradingview", "twitter"].sort(),
+      ["brave", "exa", "finnhub", "lse", "reddit", "tradingview", "twitter"].sort(),
     );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();
@@ -195,11 +201,11 @@ describe("provider registry — shape", () => {
     expect("configPath" in descriptor).toBe(false);
   });
 
-  it("every alias is lowercase kebab-case-friendly", () => {
+  it("every alias is lowercase and argument-friendly", () => {
     for (const p of PROVIDERS) {
       for (const alias of p.aliases) {
         expect(alias).toBe(alias.toLowerCase());
-        expect(alias).toMatch(/^[a-z0-9][a-z0-9-]*$/);
+        expect(alias).toMatch(/^[a-z0-9][a-z0-9 -]*$/);
       }
     }
   });
@@ -227,6 +233,16 @@ describe("provider registry — lookup helpers", () => {
     expect(p.displayName).toBe("Finnhub");
   });
 
+  it("getProvider returns the London Strategic Edge descriptor", () => {
+    const provider = getProvider("lse");
+
+    expect(provider).toMatchObject({
+      id: "lse",
+      kind: "api-key",
+      displayName: "London Strategic Edge",
+    });
+  });
+
   it("getProvider throws for an unknown id", () => {
     expect(() => getProvider("not_a_provider" as ProviderId)).toThrow(/not_a_provider/);
   });
@@ -249,7 +265,7 @@ describe("provider registry — lookup helpers", () => {
     const ids = getProvidersByTier("soft")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["brave", "exa", "finnhub", "reddit", "tradingview", "twitter"]);
+    expect(ids).toEqual(["brave", "exa", "finnhub", "lse", "reddit", "tradingview", "twitter"]);
   });
 
   it("getProvidersByCategory returns sentiment providers", () => {
@@ -270,6 +286,18 @@ describe("provider registry — credential helpers", () => {
   it("hasCredential returns false when getConfig has no value for the provider", () => {
     // DEFAULT_EMPTY_CONFIG is in place from beforeEach.
     expect(hasCredential("finnhub")).toBe(false);
+  });
+
+  it("hasCredential reflects the resolved London Strategic Edge API key", () => {
+    vi.mocked(configModule.getConfig).mockReturnValue({
+      ...DEFAULT_EMPTY_CONFIG,
+      lseApiKey: "test-key-lse",
+    });
+
+    expect(hasCredential("lse")).toBe(true);
+
+    vi.mocked(configModule.getConfig).mockReturnValue(DEFAULT_EMPTY_CONFIG);
+    expect(hasCredential("lse")).toBe(false);
   });
 
   it("getCredentialSource returns 'env' when the process env var is set", () => {
@@ -364,7 +392,7 @@ describe("provider registry — import safety", () => {
     const loadFileConfigMock = configModule.loadFileConfig as ReturnType<typeof vi.fn>;
     // Freshly import the registry after the mock is in place.
     const providersModule = await import("../../../src/onboarding/providers.js");
-    expect(providersModule.PROVIDERS.length).toBe(10);
+    expect(providersModule.PROVIDERS.length).toBe(11);
     // Module evaluation must not trigger loadFileConfig.
     expect(loadFileConfigMock).not.toHaveBeenCalled();
     // Calling a credential helper SHOULD invoke loadFileConfig (lazy, on demand).
