@@ -16,12 +16,14 @@ import {
   SECFilingsCard,
   WatchlistCard,
 } from "./portfolio.jsx";
+import { PriceComparisonCard } from "./price-comparison.jsx";
 import { TechnicalIndicatorsCard } from "./technical.jsx";
 
 const RENDERERS = new Map([
   ["get_stock_quote", { category: "Stock quote", Component: StockQuoteCard }],
   ["get_crypto_price", { category: "Crypto price", Component: CryptoPriceCard }],
   ["compare_companies", { category: "Comparison", Component: CompareCard }],
+  ["get_price_comparison", { category: "Comparison", Component: PriceComparisonCard }],
   ["get_stock_history", { category: "Price history", Component: HistoryCard }],
   ["get_crypto_history", { category: "Price history", Component: HistoryCard }],
 

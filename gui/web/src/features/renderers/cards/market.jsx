@@ -1,9 +1,13 @@
-// biome-ignore-all lint/a11y/noStaticElementInteractions: chart hover handlers expose read-only pointer detail on a presentation surface.
-
-import { useRef, useState } from "react";
+import { lazy, Suspense } from "react";
 import { enrichStockQuoteDetails } from "../../chat/session-market-facts.js";
 import { DeltaChip, MoneyTile, PlainOutput, RangeBar, ToolCard } from "./_shared.jsx";
 import { extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./card-format.js";
+
+const MarketChart = lazy(() =>
+  import("../../../components/market-chart.jsx").then(({ MarketChart: Component }) => ({
+    default: Component,
+  })),
+);
 
 export function StockQuoteCard({ message, header, sessionMarketFacts }) {
   const d = enrichStockQuoteDetails(extractDetails(message), sessionMarketFacts);
@@ -127,6 +131,11 @@ export function HistoryCard({ message, header }) {
   const changePct = first.close ? (change / first.close) * 100 : 0;
   const volumes = bars.map((b) => b.volume).filter(Number.isFinite);
   const avgVolume = volumes.length ? volumes.reduce((a, b) => a + b, 0) / volumes.length : 0;
+  const symbol = message?.details?.args?.symbol ?? raw?.symbol ?? "Price";
+  const chartBars = bars.map((bar) => ({
+    ...bar,
+    time: Number.isFinite(bar.timestamp) ? bar.timestamp : utcMidnightEpochSeconds(bar.date),
+  }));
   return (
     <ToolCard>
       {header}
@@ -137,7 +146,21 @@ export function HistoryCard({ message, header }) {
         <DeltaChip value={change} percent={changePct} />
         <span className="text-xs text-muted-foreground">over {bars.length} bars</span>
       </div>
-      <PriceChart bars={bars} change={change} />
+      <div className="text-xs tabular-nums text-muted-foreground">
+        <time dateTime={epochSecondsToIso(chartBars[0].time)}>{first.date}</time>
+        {" → "}
+        <time dateTime={epochSecondsToIso(chartBars.at(-1).time)}>{last.date}</time>
+      </div>
+      <div className="h-[180px] overflow-hidden sm:h-[220px]">
+        <Suspense fallback={null}>
+          <MarketChart
+            className="h-full w-full"
+            height="100%"
+            mode="area"
+            series={[{ symbol, bars: chartBars }]}
+          />
+        </Suspense>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <MoneyTile label="Period high" value={formatPrice(high)} />
         <MoneyTile label="Period low" value={formatPrice(low)} />
@@ -148,227 +171,13 @@ export function HistoryCard({ message, header }) {
   );
 }
 
-// Interactive price chart with axis labels, gridlines, and hover crosshair.
-// Computed in viewBox units (600 × 200) so the SVG scales fluidly while the
-// stroke widths remain crisp via vector-effect:non-scaling-stroke.
-function PriceChart({ bars, change }) {
-  const [hoverIndex, setHoverIndex] = useState(null);
-  const wrapRef = useRef(null);
-
-  const closes = bars.map((b) => b.close);
-  const numeric = closes.filter(Number.isFinite);
-  if (numeric.length < 2) return null;
-
-  const VB_W = 600;
-  const VB_H = 200;
-  const PAD_L = 48; // y-axis label gutter
-  const PAD_R = 12;
-  const PAD_T = 8;
-  const PAD_B = 22; // x-axis label gutter
-  const innerW = VB_W - PAD_L - PAD_R;
-  const innerH = VB_H - PAD_T - PAD_B;
-
-  const vmin = Math.min(...numeric);
-  const vmax = Math.max(...numeric);
-  const span = vmax - vmin || 1;
-  // Round y-axis bounds outward to "nice" numbers so labels read cleanly.
-  const niceMin = niceFloor(vmin, span);
-  const niceMax = niceCeil(vmax, span);
-  const niceSpan = niceMax - niceMin || 1;
-  const yTicks = buildTicks(niceMin, niceMax, 4);
-
-  const xCoord = (i) => PAD_L + (i / (closes.length - 1 || 1)) * innerW;
-  const yCoord = (v) => PAD_T + innerH - ((v - niceMin) / niceSpan) * innerH;
-
-  const path = closes
-    .map((v, i) =>
-      Number.isFinite(v)
-        ? `${i === 0 ? "M" : "L"}${xCoord(i).toFixed(1)},${yCoord(v).toFixed(1)}`
-        : "",
-    )
-    .filter(Boolean)
-    .join(" ");
-  const area = `${path} L${xCoord(closes.length - 1).toFixed(1)},${(PAD_T + innerH).toFixed(1)} L${PAD_L.toFixed(1)},${(PAD_T + innerH).toFixed(1)} Z`;
-  const positive = change >= 0;
-  const stroke = positive ? "hsl(var(--tw-success))" : "hsl(var(--tw-destructive))";
-  const fill = positive ? "hsl(var(--tw-success) / 0.08)" : "hsl(var(--tw-destructive) / 0.08)";
-
-  // X-axis tick positions: 4 evenly spaced bars, including first and last.
-  const xTickIndices = pickTickIndices(closes.length, 4);
-
-  const onMove = (event) => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const rect = wrap.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * VB_W;
-    const i = Math.max(
-      0,
-      Math.min(closes.length - 1, Math.round(((x - PAD_L) / innerW) * (closes.length - 1))),
-    );
-    setHoverIndex(i);
-  };
-  const onLeave = () => setHoverIndex(null);
-
-  const hoverBar = hoverIndex != null ? bars[hoverIndex] : null;
-  const hoverX = hoverBar ? xCoord(hoverIndex) : null;
-  const hoverY = hoverBar ? yCoord(hoverBar.close) : null;
-
-  return (
-    <div
-      ref={wrapRef}
-      className="relative -mx-1 select-none"
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
-      onTouchEnd={onLeave}
-    >
-      <svg
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
-        preserveAspectRatio="none"
-        className="block h-44 w-full"
-        role="img"
-        aria-label="Price history chart"
-      >
-        {/* horizontal gridlines + y-axis labels */}
-        {yTicks.map((t) => {
-          const y = yCoord(t);
-          return (
-            <g key={`y-${t}`}>
-              <line
-                x1={PAD_L}
-                y1={y}
-                x2={VB_W - PAD_R}
-                y2={y}
-                stroke="hsl(var(--tw-border))"
-                strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray="2 4"
-              />
-              <text
-                x={PAD_L - 6}
-                y={y + 3}
-                textAnchor="end"
-                className="fill-muted-foreground"
-                style={{ fontSize: 10, fontVariantNumeric: "tabular-nums" }}
-              >
-                {formatTick(t, niceSpan)}
-              </text>
-            </g>
-          );
-        })}
-        {/* x-axis labels */}
-        {xTickIndices.map((i) => (
-          <text
-            key={`x-${i}`}
-            x={xCoord(i)}
-            y={VB_H - 6}
-            textAnchor={i === 0 ? "start" : i === closes.length - 1 ? "end" : "middle"}
-            className="fill-muted-foreground"
-            style={{ fontSize: 10 }}
-          >
-            {formatDateShort(bars[i].date)}
-          </text>
-        ))}
-        {/* area + line */}
-        <path d={area} fill={fill} stroke="none" />
-        <path
-          d={path}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-        {/* hover crosshair */}
-        {hoverBar ? (
-          <g>
-            <line
-              x1={hoverX}
-              y1={PAD_T}
-              x2={hoverX}
-              y2={PAD_T + innerH}
-              stroke="hsl(var(--tw-foreground) / 0.35)"
-              strokeWidth="1"
-              strokeDasharray="2 3"
-              vectorEffect="non-scaling-stroke"
-            />
-            <circle
-              cx={hoverX}
-              cy={hoverY}
-              r="3"
-              fill="hsl(var(--tw-card))"
-              stroke={stroke}
-              strokeWidth="1.5"
-              vectorEffect="non-scaling-stroke"
-            />
-          </g>
-        ) : null}
-      </svg>
-      {hoverBar ? <HoverTooltip bar={hoverBar} index={hoverIndex} bars={bars} /> : null}
-    </div>
-  );
+function utcMidnightEpochSeconds(date) {
+  const dateOnly = String(date ?? "").slice(0, 10);
+  return Date.parse(`${dateOnly}T00:00:00.000Z`) / 1000;
 }
 
-function HoverTooltip({ bar, index, bars }) {
-  const x = bars.length > 1 ? (index / (bars.length - 1)) * 100 : 50;
-  // Flip alignment past the midpoint so the tooltip stays on-card.
-  const flip = x > 60;
-  return (
-    <div
-      className="pointer-events-none absolute top-1 -translate-x-1/2 rounded-md border border-border bg-card px-2 py-1.5 text-[11px] tabular-nums shadow-subtle-xs"
-      style={{
-        left: `${x}%`,
-        transform: `translateX(${flip ? "-100%" : "0%"})`,
-        marginLeft: flip ? -8 : 8,
-      }}
-      aria-hidden="true"
-    >
-      <div className="font-medium text-foreground">{formatPrice(bar.close)}</div>
-      <div className="text-muted-foreground">{formatDateLong(bar.date)}</div>
-      {Number.isFinite(bar.high) && Number.isFinite(bar.low) ? (
-        <div className="mt-0.5 text-muted-foreground/80">
-          H {formatPrice(bar.high)} · L {formatPrice(bar.low)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function niceFloor(v, span) {
-  const step = 10 ** Math.floor(Math.log10(span / 4 || 1));
-  return Math.floor(v / step) * step;
-}
-function niceCeil(v, span) {
-  const step = 10 ** Math.floor(Math.log10(span / 4 || 1));
-  return Math.ceil(v / step) * step;
-}
-function buildTicks(min, max, count) {
-  const span = max - min;
-  if (span <= 0) return [min];
-  const step = span / (count - 1);
-  return Array.from({ length: count }, (_, i) => min + step * i);
-}
-function pickTickIndices(length, count) {
-  if (length <= count) return Array.from({ length }, (_, i) => i);
-  const step = (length - 1) / (count - 1);
-  return Array.from({ length: count }, (_, i) => Math.round(step * i));
-}
-function formatTick(value, span) {
-  if (span >= 100) return `$${Math.round(value)}`;
-  if (span >= 10) return `$${value.toFixed(1)}`;
-  return `$${value.toFixed(2)}`;
-}
-function formatDateLong(date) {
-  if (!date) return "";
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return String(date);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function epochSecondsToIso(time) {
+  return Number.isFinite(time) ? new Date(time * 1000).toISOString() : undefined;
 }
 
 export function CompareCard({ message, header, text }) {
