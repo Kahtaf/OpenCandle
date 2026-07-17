@@ -41,7 +41,7 @@ Follow AGENTS.md (TDD mandatory — failing test first; `.js` extensions on rela
 
 ## 7. Attribution surface
 
-- [ ] 7.1 Add the two-line NOTICE attribution ("TradingView Lightweight Charts™" / "Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") to the GUI Diagnostics page (or an about section if one exists — implementer's choice per design Open Questions), with a unit assertion in the corresponding render test that the text is present.
+- [x] 7.1 Add the two-line NOTICE attribution ("TradingView Lightweight Charts™" / "Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") to the GUI Diagnostics page (or an about section if one exists — implementer's choice per design Open Questions), with a unit assertion in the corresponding render test that the text is present.
 
 ## 8. Verification
 

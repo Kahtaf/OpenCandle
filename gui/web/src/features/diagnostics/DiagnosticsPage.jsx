@@ -234,6 +234,21 @@ export function DiagnosticsPage({
               ))}
             </div>
           )}
+
+          <footer className="border-t border-border px-1 pt-3 text-xs leading-5 text-muted-foreground">
+            <p className="m-0">TradingView Lightweight Charts™</p>
+            <p className="m-0">
+              Copyright (c) 2025 TradingView, Inc.{" "}
+              <a
+                className="underline underline-offset-2 hover:text-foreground"
+                href="https://www.tradingview.com/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                https://www.tradingview.com/
+              </a>
+            </p>
+          </footer>
         </div>
       </main>
       <SessionCheckDialog
