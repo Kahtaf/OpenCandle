@@ -304,7 +304,11 @@ describe("market-state API helpers", () => {
         }),
     );
 
-    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toBe(initial);
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      stale: true,
+    });
     expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
 
     resolveRefresh?.(companyOverview("AAPL", { name: "Apple refreshed" }));
@@ -313,6 +317,22 @@ describe("market-state API helpers", () => {
       name: "Apple refreshed",
     });
     expect(getYahooCompanyOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks expired overview data stale when the background refresh fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-16T14:00:00.000Z"));
+    vi.mocked(getYahooCompanyOverview).mockResolvedValueOnce(companyOverview("AAPL"));
+    await getInstrumentOverviewSnapshot("AAPL");
+
+    vi.setSystemTime(new Date("2026-07-16T14:05:00.001Z"));
+    vi.mocked(getYahooCompanyOverview).mockRejectedValueOnce(new Error("provider unavailable"));
+
+    await expect(getInstrumentOverviewSnapshot("AAPL")).resolves.toMatchObject({
+      symbol: "AAPL",
+      status: "ok",
+      stale: true,
+    });
   });
 
   it("keeps overview memo entries independent by symbol", async () => {

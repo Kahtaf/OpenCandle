@@ -96,7 +96,11 @@ export function SymbolPageView({
 }) {
   const quoteUnavailable = data.quote?.status === "unavailable";
   const overviewUnavailable = data.overview?.status === "unavailable";
-  const notFound = quoteUnavailable && overviewUnavailable;
+  const notFound =
+    quoteUnavailable &&
+    overviewUnavailable &&
+    isInvalidSymbolReason(data.quote.reason) &&
+    isInvalidSymbolReason(data.overview.reason);
   const showEquitySections = !isNonEquitySymbol(ticker) && data.overview?.status === "ok";
 
   return (
@@ -197,6 +201,12 @@ export function SymbolPageView({
 export function isNonEquitySymbol(ticker) {
   const symbol = ticker.trim().toUpperCase();
   return symbol.startsWith("^") || symbol.endsWith("-USD");
+}
+
+function isInvalidSymbolReason(reason) {
+  return /(?:unknown|invalid) symbol|symbol (?:was )?not found|no company fundamentals returned/i.test(
+    String(reason ?? ""),
+  );
 }
 
 function HeaderSkeleton() {

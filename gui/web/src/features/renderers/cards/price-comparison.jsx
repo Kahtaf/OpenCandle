@@ -4,6 +4,7 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { SERIES_COLORS } from "../../../lib/series-colors.js";
 import { PlainOutput, ToolCard, WarningRow } from "./_shared.jsx";
 import { extractDetails } from "./card-format.js";
+import { formatRawClose } from "./price-comparison-format.js";
 
 const MarketChart = lazy(() =>
   import("../../../components/market-chart.jsx").then(({ MarketChart: Component }) => ({
@@ -230,8 +231,4 @@ function tooltipAt(series, index) {
     date: primaryBar.date ?? new Date(primaryBar.time * 1000).toISOString().slice(0, 10),
     rows,
   };
-}
-
-function formatRawClose(close) {
-  return `$${close.toFixed(2)}`;
 }

@@ -62,6 +62,64 @@ describe("get_price_comparison tool", () => {
     }
   });
 
+  it("reports two non-overlapping series as unavailable", async () => {
+    const older = yahooHistoryFixture("OLD", [Date.UTC(2020, 0, 2) / 1_000]);
+    const newer = yahooHistoryFixture("NEW", [Date.UTC(2026, 0, 2) / 1_000]);
+    globalThis.fetch = vi.fn(async (input) =>
+      Response.json(String(input).includes("OLD") ? older : newer),
+    );
+
+    const result = await priceComparisonTool.execute("call-no-overlap", {
+      symbols: ["OLD", "NEW"],
+      range: "10y",
+    });
+
+    expect(result.details.series).toEqual([]);
+    expect(result.details.unavailableSymbols).toEqual(["OLD", "NEW"]);
+    expect(textContent(result.content[0])).toMatch(/comparison unavailable/i);
+  });
+
+  it("rejects a series whose first aligned close is zero", async () => {
+    const zero = yahooHistoryFixture("ZERO", [1711584000, 1711670400]);
+    zero.chart.result[0].indicators.quote[0].close[0] = 0;
+    const valid = yahooHistoryFixture("VALID", [1711584000, 1711670400]);
+    globalThis.fetch = vi.fn(async (input) =>
+      Response.json(String(input).includes("ZERO") ? zero : valid),
+    );
+
+    const result = await priceComparisonTool.execute("call-zero-base", {
+      symbols: ["ZERO", "VALID"],
+      range: "1y",
+    });
+
+    expect(result.details.series).toEqual([]);
+    expect(result.details.unavailableSymbols).toEqual(["ZERO"]);
+    expect(result.details.series.flatMap((series) => series.indexed).every(Number.isFinite)).toBe(
+      true,
+    );
+  });
+
+  it("recomputes alignment after dropping a series with an invalid common-date baseline", async () => {
+    const dates = [1711584000, 1711670400, 1711756800];
+    const first = yahooHistoryFixture("FIRST", dates);
+    const second = yahooHistoryFixture("SECOND", dates);
+    const zero = yahooHistoryFixture("ZERO", [dates[0]]);
+    zero.chart.result[0].indicators.quote[0].close[0] = 0;
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      return Response.json(url.includes("FIRST") ? first : url.includes("SECOND") ? second : zero);
+    });
+
+    const result = await priceComparisonTool.execute("call-realign", {
+      symbols: ["FIRST", "ZERO", "SECOND"],
+      range: "1y",
+    });
+
+    expect(result.details.series.map((item) => item.symbol)).toEqual(["FIRST", "SECOND"]);
+    expect(result.details.series.every((item) => item.bars.length === 3)).toBe(true);
+    expect(result.details.unavailableSymbols).toContain("ZERO");
+  });
+
   it("bounds symbol count and accepts only supported history ranges", () => {
     expect(Value.Check(priceComparisonTool.parameters, { symbols: ["AAPL"], range: "1y" })).toBe(
       false,

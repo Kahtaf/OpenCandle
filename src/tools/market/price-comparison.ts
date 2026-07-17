@@ -59,7 +59,7 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
     const available = fetched.flatMap(({ symbol, result }) =>
       result.status === "ok" && result.data.length > 0 ? [{ symbol, bars: result.data }] : [],
     );
-    const unavailableSymbols = fetched.flatMap(({ symbol, result }) =>
+    let unavailableSymbols = fetched.flatMap(({ symbol, result }) =>
       result.status === "unavailable" || result.data.length === 0 ? [symbol] : [],
     );
     if (available.length < 2) {
@@ -86,16 +86,33 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
         },
       };
     }
-    const commonDates = new Set(available[0]?.bars.map((bar) => bar.date) ?? []);
-    for (const candidate of available.slice(1)) {
-      const candidateDates = new Set(candidate.bars.map((bar) => bar.date));
-      for (const date of commonDates) {
-        if (!candidateDates.has(date)) commonDates.delete(date);
-      }
+    let survivingAvailable = available;
+    let commonDates = intersectDates(survivingAvailable);
+    while (survivingAvailable.length >= 2 && commonDates.size > 0) {
+      const invalidBaselineSymbols = survivingAvailable.flatMap(({ symbol, bars }) => {
+        const baseClose = bars.find((bar) => commonDates.has(bar.date))?.close;
+        return typeof baseClose !== "number" || !Number.isFinite(baseClose) || baseClose <= 0
+          ? [symbol]
+          : [];
+      });
+      if (invalidBaselineSymbols.length === 0) break;
+      unavailableSymbols = [...new Set([...unavailableSymbols, ...invalidBaselineSymbols])];
+      const invalid = new Set(invalidBaselineSymbols);
+      survivingAvailable = survivingAvailable.filter(({ symbol }) => !invalid.has(symbol));
+      commonDates = intersectDates(survivingAvailable);
     }
-    const series = available.map(({ symbol, bars }) => {
+    if (survivingAvailable.length < 2) {
+      return unavailableComparison(args.range, interval, unavailableSymbols);
+    }
+    if (commonDates.size === 0) {
+      unavailableSymbols = [
+        ...new Set([...unavailableSymbols, ...survivingAvailable.map(({ symbol }) => symbol)]),
+      ];
+      return unavailableComparison(args.range, interval, unavailableSymbols);
+    }
+    const series = survivingAvailable.map(({ symbol, bars }) => {
       const alignedBars = bars.filter((bar) => commonDates.has(bar.date));
-      const baseClose = alignedBars[0]?.close ?? 0;
+      const baseClose = alignedBars[0].close;
       return {
         symbol,
         bars: alignedBars,
@@ -111,7 +128,7 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
       const change = (indexed.at(-1) ?? 100) - 100;
       return `${symbol} | ${first.toFixed(2)} | ${last.toFixed(2)} | ${change.toFixed(2)}%`;
     });
-    const alignmentLosses = available.flatMap(({ symbol, bars }) => {
+    const alignmentLosses = survivingAvailable.flatMap(({ symbol, bars }) => {
       const dropped = bars.length - commonDates.size;
       return dropped / bars.length > 0.3
         ? [`${symbol} (${dropped}/${bars.length} dates dropped)`]
@@ -145,3 +162,35 @@ export const priceComparisonTool: AgentTool<typeof params, PriceComparisonDetail
     };
   },
 };
+
+function intersectDates(series: Array<{ bars: OHLCV[] }>): Set<string> {
+  const commonDates = new Set(series[0]?.bars.map((bar) => bar.date) ?? []);
+  for (const candidate of series.slice(1)) {
+    const candidateDates = new Set(candidate.bars.map((bar) => bar.date));
+    for (const date of commonDates) {
+      if (!candidateDates.has(date)) commonDates.delete(date);
+    }
+  }
+  return commonDates;
+}
+
+function unavailableComparison(
+  range: HistoryRange,
+  interval: HistoryInterval,
+  unavailableSymbols: string[],
+) {
+  const freshness = buildFreshnessStamp({});
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: [
+          "Price comparison unavailable: fewer than 2 usable aligned series.",
+          `Unavailable symbols: ${unavailableSymbols.join(", ")}`,
+          formatAsOfLine(freshness),
+        ].join("\n"),
+      },
+    ],
+    details: { range, interval, baseDate: "", series: [], unavailableSymbols, freshness },
+  };
+}

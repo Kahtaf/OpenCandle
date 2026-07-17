@@ -786,7 +786,9 @@ export async function getInstrumentOverviewSnapshot(
   }
   if (existing?.snapshot) {
     if (!existing.inFlight) refreshInstrumentOverview(normalized, existing).catch(() => {});
-    return existing.snapshot;
+    return existing.snapshot.status === "ok"
+      ? { ...existing.snapshot, stale: true }
+      : existing.snapshot;
   }
   if (existing?.inFlight) return existing.inFlight;
 

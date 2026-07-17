@@ -66,34 +66,44 @@ export function useSymbolData(ticker, range = "1M") {
   };
 }
 
-function useSymbolEndpoint(endpoint, symbol) {
-  const [snapshot, setSnapshot] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export function useSymbolEndpoint(endpoint, symbol) {
+  const requestKey = `${endpoint}:${symbol}`;
+  const [state, setState] = useState({
+    key: requestKey,
+    snapshot: null,
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     let disposed = false;
     const run = async () => {
-      setLoading(true);
-      setError(null);
+      setState({ key: requestKey, snapshot: null, loading: true, error: null });
       try {
         const response = await fetch(
           `/api/instruments/${endpoint}?symbol=${encodeURIComponent(symbol)}`,
         );
         if (!response.ok) throw new Error(response.statusText || `Failed to load ${endpoint}`);
         const data = await response.json();
-        if (!disposed) setSnapshot(data);
+        if (!disposed) setState({ key: requestKey, snapshot: data, loading: false, error: null });
       } catch (err) {
-        if (!disposed) setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!disposed) setLoading(false);
+        if (!disposed) {
+          setState({
+            key: requestKey,
+            snapshot: null,
+            loading: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     };
     void run();
     return () => {
       disposed = true;
     };
-  }, [endpoint, symbol]);
+  }, [endpoint, symbol, requestKey]);
 
-  return { snapshot, loading, error };
+  return state.key === requestKey
+    ? { snapshot: state.snapshot, loading: state.loading, error: state.error }
+    : { snapshot: null, loading: true, error: null };
 }

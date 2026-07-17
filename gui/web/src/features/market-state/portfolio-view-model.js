@@ -3,7 +3,12 @@ export function derivePortfolioDayMove(lots = []) {
   let qualifyingLots = 0;
   for (const lot of lots) {
     if (!Number.isFinite(lot?.marketValue) || !Number.isFinite(lot?.changePercent)) continue;
-    total += lot.marketValue - lot.marketValue / (1 + lot.changePercent / 100);
+    const denominator = 1 + lot.changePercent / 100;
+    if (!Number.isFinite(denominator) || denominator <= 0) continue;
+    const move = lot.marketValue - lot.marketValue / denominator;
+    if (!Number.isFinite(move)) continue;
+    total += move;
+    if (!Number.isFinite(total)) return null;
     qualifyingLots += 1;
   }
   return qualifyingLots > 0 ? total : null;

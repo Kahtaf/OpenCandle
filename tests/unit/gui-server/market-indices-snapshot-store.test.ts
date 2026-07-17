@@ -3,7 +3,10 @@ import type { MarketIndicesSnapshot } from "../../../gui/server/market-indices-a
 import { MarketIndicesSnapshotStore } from "../../../gui/server/market-indices-snapshot-store.js";
 
 function snapshot(generatedAt: string): MarketIndicesSnapshot {
-  return { generatedAt, indices: [] };
+  return {
+    generatedAt,
+    indices: [{ symbol: "^GSPC", status: "ok", price: 6000, stale: false }],
+  };
 }
 
 describe("MarketIndicesSnapshotStore", () => {
@@ -59,11 +62,35 @@ describe("MarketIndicesSnapshotStore", () => {
     const stale = await store.get();
 
     expect(stale.generatedAt).toBe("build-1");
+    expect(stale.indices[0]?.stale).toBe(true);
     expect(builds).toBe(2);
 
     releaseRefresh();
     await new Promise((resolve) => setTimeout(resolve, 0));
     const refreshed = await store.get();
     expect(refreshed.generatedAt).toBe("build-2");
+    expect(refreshed.indices[0]?.stale).toBe(false);
+  });
+
+  it("keeps an expired snapshot marked stale when background refresh fails", async () => {
+    let builds = 0;
+    let nowMs = 0;
+    const store = new MarketIndicesSnapshotStore(
+      async () => {
+        builds += 1;
+        if (builds > 1) throw new Error("provider unavailable");
+        return snapshot("initial");
+      },
+      60_000,
+      () => nowMs,
+    );
+
+    await store.get();
+    nowMs = 60_001;
+    const stale = await store.get();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(stale.indices[0]).toMatchObject({ status: "ok", stale: true });
+    expect((await store.get()).indices[0]).toMatchObject({ status: "ok", stale: true });
   });
 });

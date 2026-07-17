@@ -9,6 +9,7 @@ import { IndicesStrip } from "../../../gui/web/src/features/home/IndicesStrip.js
 import { MarketStateAffordanceCard } from "../../../gui/web/src/features/home/MarketStateAffordanceCard.jsx";
 import { PortfolioSummaryStrip } from "../../../gui/web/src/features/home/PortfolioSummaryStrip.jsx";
 import { WatchlistMovers } from "../../../gui/web/src/features/home/WatchlistMovers.jsx";
+import { derivePortfolioDayMove } from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
 
 describe("home dashboard widgets", () => {
   it("renders available indices as accessible symbol links and hides when unavailable", () => {
@@ -99,7 +100,7 @@ describe("home dashboard widgets", () => {
               totalCost: 10000,
               totalPnl: 2500,
               totalPnlPercent: 25,
-              currency: "USD",
+              baseCurrency: "USD",
             },
           ],
           portfolioQuotes: [{ marketValue: 1100, changePercent: 10 }],
@@ -127,6 +128,91 @@ describe("home dashboard widgets", () => {
     );
     expect(unavailableHtml).toContain("Unavailable");
     expect(unavailableHtml).not.toContain("Today&#x27;s move</div><div>$0.00");
+  });
+
+  it("shows only the largest portfolio currency group and names excluded currencies", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioSummaryStrip, {
+        portfolios: [{ id: 1 }, { id: 2 }],
+        quoteSnapshot: {
+          portfolioSummary: { baseCurrency: "CAD" },
+          portfolioSummaries: [
+            {
+              portfolioId: 1,
+              baseCurrency: "CAD",
+              totalValue: 20_000,
+              totalCost: 18_000,
+              totalPnl: 2_000,
+            },
+            {
+              portfolioId: 2,
+              baseCurrency: "USD",
+              totalValue: 5_000,
+              totalCost: 4_000,
+              totalPnl: 1_000,
+            },
+          ],
+          portfolioQuotes: [
+            { portfolioId: 1, marketValue: 11_000, changePercent: 10, includedInTotals: true },
+            { portfolioId: 1, marketValue: 99_000, changePercent: 10, includedInTotals: false },
+            { portfolioId: 2, marketValue: 5_500, changePercent: 10, includedInTotals: true },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("CAD 20,000.00");
+    expect(html).not.toContain("25,000.00");
+    expect(html).toContain("USD portfolios excluded");
+    expect(html).toContain("CAD 1000.00");
+  });
+
+  it("uses the canonical primary currency instead of ranking unconverted nominal totals", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioSummaryStrip, {
+        portfolios: [{ id: 1 }, { id: 2 }],
+        quoteSnapshot: {
+          portfolioSummary: { baseCurrency: "USD" },
+          portfolioSummaries: [
+            {
+              portfolioId: 1,
+              baseCurrency: "JPY",
+              totalValue: 1_000_000,
+              totalCost: 900_000,
+              totalPnl: 100_000,
+            },
+            {
+              portfolioId: 2,
+              baseCurrency: "USD",
+              totalValue: 20_000,
+              totalCost: 18_000,
+              totalPnl: 2_000,
+            },
+          ],
+          portfolioQuotes: [],
+        },
+      }),
+    );
+
+    expect(html).toContain("$20,000.00");
+    expect(html).not.toContain("1,000,000.00");
+    expect(html).toContain("JPY portfolios excluded");
+  });
+
+  it("excludes invalid day-move denominators and non-finite totals", () => {
+    expect(
+      derivePortfolioDayMove([
+        { marketValue: 100, changePercent: -100 },
+        { marketValue: 110, changePercent: 10 },
+      ]),
+    ).toBeCloseTo(10);
+    expect(
+      derivePortfolioDayMove([
+        { marketValue: Number.MAX_VALUE, changePercent: 100 },
+        { marketValue: Number.MAX_VALUE, changePercent: 100 },
+        { marketValue: Number.MAX_VALUE, changePercent: 100 },
+      ]),
+    ).toBeNull();
   });
 
   it("renders read-only alert state with icons, sentences, notifications, and navigation", () => {

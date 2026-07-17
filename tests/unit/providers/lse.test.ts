@@ -278,7 +278,7 @@ describe("LSE provider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("skips invalid JSON rows and derives missing free cash flow from signed capex", async () => {
+  it("rejects sparse financial reports instead of manufacturing zero-valued fields", async () => {
     const reports = {
       income: [
         { date: "2025-12-31", data: '{"revenue":"100","weightedAverageShsOut":"10"}' },
@@ -302,17 +302,51 @@ describe("LSE provider", () => {
       }),
     );
 
-    const statements = await getLseFinancials("EDGE");
+    await expect(getLseFinancials("EDGE")).rejects.toThrow(/complete financial statements/i);
+  });
 
-    expect(statements).toHaveLength(1);
-    expect(statements[0]).toMatchObject({
-      fiscalDate: "2025-12-31",
-      revenue: 100,
-      totalAssets: 200,
-      operatingCashFlow: 100,
-      freeCashFlow: 75,
-      sharesOutstanding: 10,
-    });
+  it("rejects blank required numeric fields instead of coercing them to zero", async () => {
+    const reports = {
+      income: [
+        {
+          date: "2025-12-31",
+          data: JSON.stringify({
+            revenue: "   ",
+            grossProfit: "50",
+            operatingIncome: "25",
+            netIncome: "20",
+            eps: "2",
+          }),
+        },
+      ],
+      balance: [
+        {
+          date: "2025-12-31",
+          data: JSON.stringify({
+            totalAssets: "200",
+            totalLiabilities: "100",
+            totalEquity: "100",
+          }),
+        },
+      ],
+      cashflow: [
+        {
+          date: "2025-12-31",
+          data: JSON.stringify({ operatingCashFlow: "30", freeCashFlow: "20" }),
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const reportType = new URL(String(input)).searchParams.get(
+          "report_type",
+        ) as keyof typeof reports;
+        return Promise.resolve(jsonResponse(reports[reportType]));
+      }),
+    );
+
+    await expect(getLseFinancials("BLANK")).rejects.toThrow(/complete financial statements/i);
   });
 
   it.each([

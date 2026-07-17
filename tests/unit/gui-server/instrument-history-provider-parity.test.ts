@@ -68,4 +68,40 @@ describe("instrument history provider parity", () => {
       interval: "1d",
     });
   });
+
+  it("preserves finite epoch-second timestamps through the LSE intraday fallback", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const url = new URL(input instanceof Request ? input.url : String(input));
+        if (url.hostname.includes("yahoo")) {
+          return Promise.resolve(new Response("{}", { status: 404 }));
+        }
+        if (url.hostname === "api.londonstrategicedge.com") {
+          return Promise.resolve(
+            Response.json([
+              {
+                ts: "2026-07-16T14:35:00",
+                open: 210,
+                high: 212,
+                low: 209,
+                close: 211,
+                volume: 12_345,
+              },
+            ]),
+          );
+        }
+        throw new Error(`Unexpected provider host: ${url.hostname}`);
+      }),
+    );
+
+    const snapshot = await getInstrumentHistorySnapshot("AAPL", "1D");
+
+    expect(snapshot).toMatchObject({ status: "ok", source: "London Strategic Edge" });
+    if (snapshot.status !== "ok") throw new Error("expected available history");
+    expect(snapshot.bars[0]).toMatchObject({
+      time: Date.UTC(2026, 6, 16, 14, 35) / 1_000,
+    });
+    expect(Number.isFinite(snapshot.bars[0]?.time)).toBe(true);
+  });
 });

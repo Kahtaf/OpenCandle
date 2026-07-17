@@ -19,6 +19,7 @@ type MockChartApi = {
   addedSeries: MockSeriesApi[];
   scaleOptions: Map<string, ReturnType<typeof vi.fn>>;
   crosshairCallback: ((param: unknown) => void) | undefined;
+  visibleRangeCallback: (() => void) | undefined;
   addSeries: ReturnType<typeof vi.fn>;
   removeSeries: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
@@ -42,6 +43,7 @@ const mocks = vi.hoisted(() => {
       addedSeries,
       scaleOptions,
       crosshairCallback: undefined as ((param: unknown) => void) | undefined,
+      visibleRangeCallback: undefined as (() => void) | undefined,
       addSeries: vi.fn((definition: unknown, options: Record<string, unknown>) => {
         const priceLine = { id: Symbol("price-line") };
         const api = {
@@ -66,6 +68,10 @@ const mocks = vi.hoisted(() => {
       timeScale: vi.fn(() => ({
         timeToCoordinate: vi.fn(() => 480),
         fitContent: vi.fn(),
+        subscribeVisibleTimeRangeChange: vi.fn((callback: () => void) => {
+          chart.visibleRangeCallback = callback;
+        }),
+        unsubscribeVisibleTimeRangeChange: vi.fn(),
       })),
       subscribeCrosshairMove: vi.fn((callback: (param: unknown) => void) => {
         chart.crosshairCallback = callback;
@@ -291,6 +297,22 @@ describe("MarketChart chart behavior", () => {
     expect(labels.map((label) => label.textContent)).toEqual(
       Array.from({ length: count }, (_, index) => `SYM${index}`),
     );
+  });
+
+  it("repositions direct labels when the visible time range changes", async () => {
+    const view = await mount(
+      chartElement({ mode: "indexed", series: [makeSeries("AAPL"), makeSeries("MSFT")] }),
+    );
+    mounted.push(view);
+    const chart = latestChart();
+    const labels = [...view.container.querySelectorAll('[data-slot="market-chart-line-label"]')];
+    expect(chart.visibleRangeCallback).toBeTypeOf("function");
+    expect((labels[0] as HTMLElement).style.top).not.toBe("");
+
+    addedByDefinition(chart, mocks.LineSeries)[0].priceToCoordinate.mockReturnValue(42);
+    await act(async () => chart.visibleRangeCallback?.());
+
+    expect((labels[0] as HTMLElement).style.top).toBe("42px");
   });
 
   it.each([5, 6])("omits direct line-end labels for %i indexed series", async (count) => {

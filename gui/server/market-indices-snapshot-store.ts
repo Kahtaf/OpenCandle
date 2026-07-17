@@ -15,6 +15,10 @@ export class MarketIndicesSnapshotStore {
     if (this.snapshot == null) return this.refresh();
     if (this.now() - this.fetchedAtMs >= this.maxAgeMs) {
       this.refresh().catch(() => {});
+      return {
+        ...this.snapshot,
+        indices: this.snapshot.indices.map((entry) => ({ ...entry, stale: true })),
+      };
     }
     return this.snapshot;
   }

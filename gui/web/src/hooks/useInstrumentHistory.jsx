@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 
 export function useInstrumentHistory(symbol, range) {
-  const [snapshot, setSnapshot] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const requestKey = `${symbol}:${range}`;
+  const [state, setState] = useState({
+    key: requestKey,
+    snapshot: null,
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     let disposed = false;
 
     const run = async () => {
-      setLoading(true);
-      setError(null);
+      setState({ key: requestKey, snapshot: null, loading: true, error: null });
       try {
         const response = await fetch(
           `/api/instruments/history?symbol=${encodeURIComponent(symbol)}&range=${range}`,
@@ -19,11 +22,16 @@ export function useInstrumentHistory(symbol, range) {
           throw new Error(response.statusText || "Failed to load instrument history");
         }
         const data = await response.json();
-        if (!disposed) setSnapshot(data);
+        if (!disposed) setState({ key: requestKey, snapshot: data, loading: false, error: null });
       } catch (err) {
-        if (!disposed) setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!disposed) setLoading(false);
+        if (!disposed) {
+          setState({
+            key: requestKey,
+            snapshot: null,
+            loading: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     };
 
@@ -31,7 +39,9 @@ export function useInstrumentHistory(symbol, range) {
     return () => {
       disposed = true;
     };
-  }, [symbol, range]);
+  }, [symbol, range, requestKey]);
 
-  return { snapshot, loading, error };
+  return state.key === requestKey
+    ? { snapshot: state.snapshot, loading: state.loading, error: state.error }
+    : { snapshot: null, loading: true, error: null };
 }

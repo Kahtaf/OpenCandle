@@ -163,16 +163,49 @@ export function MarketChart({
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const tokensRef = useRef(null);
-  const priceSeriesRef = useRef(new Map());
+  const priceSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
   const modeRef = useRef(null);
-  const colorBySymbolRef = useRef(new Map());
+  const colorBySymbolRef = useRef(null);
+  const lineLabelElementsRef = useRef(null);
+  const updateLineLabelsRef = useRef(() => {});
   const rangeButtonRefs = useRef([]);
   const propsRef = useRef({ mode, renderedSeries });
   const [tooltip, setTooltip] = useState(null);
-  const [lineLabels, setLineLabels] = useState([]);
+
+  priceSeriesRef.current ??= new Map();
+  colorBySymbolRef.current ??= new Map();
+  lineLabelElementsRef.current ??= new Map();
 
   propsRef.current = { mode, renderedSeries };
+  updateLineLabelsRef.current = () => {
+    const chart = chartRef.current;
+    const current = propsRef.current;
+    const showLabels =
+      current.mode === "indexed" &&
+      current.renderedSeries.length >= 2 &&
+      current.renderedSeries.length <= 4;
+    if (!chart || !showLabels) return;
+    const timeScale = chart.timeScale();
+    const positions = [];
+    for (const item of current.renderedSeries) {
+      const element = lineLabelElementsRef.current.get(item.symbol);
+      const record = priceSeriesRef.current.get(item.symbol);
+      const last = toIndexedData(item).at(-1);
+      if (!element || !record || !last) continue;
+      const top = record.api.priceToCoordinate(last.value);
+      const left = timeScale.timeToCoordinate(last.time);
+      if (top == null || left == null) {
+        positions.push({ element, top: null, left: null });
+        continue;
+      }
+      positions.push({ element, top, left });
+    }
+    for (const { element, top, left } of positions) {
+      element.hidden = top == null || left == null;
+      if (!element.hidden) element.style.cssText = `top: ${top}px; left: ${left}px;`;
+    }
+  };
   if (mode === "indexed") {
     const usedColors = new Set(
       renderedSeries.flatMap((item) => {
@@ -236,6 +269,12 @@ export function MarketChart({
     };
 
     chart.subscribeCrosshairMove(onCrosshairMove);
+    const timeScale = chart.timeScale();
+    const onViewportChange = () => updateLineLabelsRef.current();
+    timeScale.subscribeVisibleTimeRangeChange(onViewportChange);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onViewportChange);
+    resizeObserver?.observe(container);
     const observer = new MutationObserver(() => {
       const nextTokens = readTokens();
       tokensRef.current = nextTokens;
@@ -258,6 +297,8 @@ export function MarketChart({
 
     return () => {
       observer.disconnect();
+      resizeObserver?.disconnect();
+      timeScale.unsubscribeVisibleTimeRangeChange(onViewportChange);
       chart.unsubscribeCrosshairMove(onCrosshairMove);
       chart.remove();
       if (chartRef.current === chart) chartRef.current = null;
@@ -347,24 +388,7 @@ export function MarketChart({
 
     chart.timeScale().fitContent();
 
-    if (mode === "indexed" && renderedSeries.length >= 2 && renderedSeries.length <= 4) {
-      const timeScale = chart.timeScale();
-      const labels = renderedSeries.flatMap((item) => {
-        const record = priceSeriesRef.current.get(item.symbol);
-        const data = toIndexedData(item);
-        const last = data.at(-1);
-        if (!record || !last) return [];
-        const top = record.api.priceToCoordinate(last.value);
-        const left = timeScale.timeToCoordinate(last.time);
-        if (top == null || left == null) return [];
-        return [
-          { symbol: item.symbol, color: colorBySymbolRef.current.get(item.symbol), top, left },
-        ];
-      });
-      setLineLabels(labels);
-    } else {
-      setLineLabels([]);
-    }
+    updateLineLabelsRef.current();
   }, [mode, prevClose, renderedSeries, showVolume]);
 
   const ariaLabel = makeAriaLabel(renderedSeries, range);
@@ -402,17 +426,23 @@ export function MarketChart({
         </div>
       ) : null}
 
-      {lineLabels.length > 0 ? (
+      {mode === "indexed" && renderedSeries.length >= 2 && renderedSeries.length <= 4 ? (
         <div className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
-          {lineLabels.map((label) => (
+          {renderedSeries.map((item) => (
             <div
-              key={label.symbol}
+              key={item.symbol}
+              ref={(element) => {
+                if (element) lineLabelElementsRef.current.set(item.symbol, element);
+                else lineLabelElementsRef.current.delete(item.symbol);
+              }}
               data-slot="market-chart-line-label"
               className="absolute inline-flex -translate-y-1/2 items-center gap-1 rounded bg-card/90 px-1.5 py-0.5 text-[11px] tabular-nums text-foreground"
-              style={{ left: label.left, top: label.top }}
             >
-              <span className="size-1.5 rounded-full" style={{ backgroundColor: label.color }} />
-              <span>{label.symbol}</span>
+              <span
+                className="size-1.5 rounded-full"
+                style={{ backgroundColor: colorBySymbolRef.current.get(item.symbol) }}
+              />
+              <span>{item.symbol}</span>
             </div>
           ))}
         </div>

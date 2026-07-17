@@ -76,7 +76,9 @@ export const financialsTool: AgentTool<
       provider: "lse",
       fn: async () => {
         try {
-          return await getLseFinancials(symbol);
+          const statements = await getLseFinancials(symbol);
+          if (statements.length === 0) throw new Error("no financial statements returned");
+          return statements;
         } catch (error) {
           if (error instanceof ProviderCredentialError) {
             throw new Error(`London Strategic Edge credential ${error.reason}`);

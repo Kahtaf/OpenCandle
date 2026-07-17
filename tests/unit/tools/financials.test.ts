@@ -61,6 +61,16 @@ describe("get_financials tool", () => {
     expect(result.content[0].text).toContain("Source: London Strategic Edge");
   });
 
+  it("falls back to Alpha Vantage when LSE returns no statements", async () => {
+    vi.mocked(getLseFinancials).mockResolvedValue([]);
+
+    const result = await financialsTool.execute("call-empty", { symbol: "AAPL" });
+
+    expect(result.details).toEqual([statement]);
+    expect(getFinancials).toHaveBeenCalledWith("AAPL", "av-test-key");
+    expect(textContent(result.content[0])).toContain("Source: Alpha Vantage");
+  });
+
   it.each([
     ["provider failure", "configured", false],
     ["missing key", "missing", false],
@@ -110,3 +120,8 @@ describe("get_financials tool", () => {
     expect(getFinancials).not.toHaveBeenCalled();
   });
 });
+
+function textContent(content: { type: string; text?: string }): string {
+  if (content.type !== "text" || content.text === undefined) throw new Error("expected text");
+  return content.text;
+}

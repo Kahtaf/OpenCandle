@@ -59,16 +59,21 @@ export async function fetchHistoryWithFallback(
       }
       throw error;
     }
-    return rows.map((row) => ({
+    return rows.map((row) => {
       // Verified UTC from a live 2026-07-14 1h capture: naive 08:00–23:00 bars
-      // match the 04:00–19:00 ET extended session. OHLCV is date-only here.
-      date: row.ts.slice(0, 10),
-      open: row.open,
-      high: row.high,
-      low: row.low,
-      close: row.close,
-      volume: row.volume,
-    }));
+      // match the 04:00–19:00 ET extended session. Treat naive values as UTC.
+      const utcTimestamp = /(?:Z|[+-]\d{2}:\d{2})$/i.test(row.ts) ? row.ts : `${row.ts}Z`;
+      const timestamp = Date.parse(utcTimestamp) / 1_000;
+      return {
+        date: row.ts.slice(0, 10),
+        ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+        volume: row.volume,
+      };
+    });
   };
 
   if (DAILY_INTERVALS.has(interval)) {

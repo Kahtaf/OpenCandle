@@ -284,6 +284,17 @@ describe("compute_dcf tool guards", () => {
     expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
   });
 
+  it("falls through an empty LSE statement set to Alpha Vantage", async () => {
+    configMock.lseApiKey = "lse-test-key";
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getLseFinancials).mockResolvedValue([]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(getFinancials).toHaveBeenCalledOnce();
+    expect(result.content[0].text).toContain("Financial statements source: Alpha Vantage");
+  });
+
   it("refuses the existing stale-only statements path after stale LSE", async () => {
     configMock.lseApiKey = "lse-test-key";
     vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });

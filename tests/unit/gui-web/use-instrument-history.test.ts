@@ -99,11 +99,27 @@ describe("useInstrumentHistory", () => {
       "/api/instruments/history?symbol=AAPL&range=1Y",
     );
     expect(latestResult?.loading).toBe(true);
+    expect(latestResult?.snapshot).toBeNull();
 
     const body = { symbol: "AAPL", range: "1Y", bars: [] };
     await act(async () => oneYear.resolve(response(body)));
 
     expect(latestResult).toEqual({ snapshot: body, loading: false, error: null });
+  });
+
+  it("does not expose the previous symbol after a replacement request fails", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response({ symbol: "AAPL", range: "1D", bars: [{ time: 1 }] }))
+      .mockResolvedValueOnce(response({}, { ok: false, statusText: "provider unavailable" }));
+
+    await renderProbe("AAPL", "1D");
+    expect(latestResult?.snapshot).toMatchObject({ symbol: "AAPL" });
+
+    await renderProbe("MSFT", "1D");
+
+    expect(latestResult).toMatchObject({ snapshot: null, loading: false });
+    expect(latestResult?.error).toContain("provider unavailable");
   });
 
   it("discards a superseded response that resolves out of order", async () => {

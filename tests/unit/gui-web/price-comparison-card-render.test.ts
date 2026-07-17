@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PriceComparisonCard } from "../../../gui/web/src/features/renderers/cards/price-comparison.jsx";
+import { formatRawClose } from "../../../gui/web/src/features/renderers/cards/price-comparison-format.js";
 import { ToolResultCard } from "../../../gui/web/src/features/renderers/ToolResultCard.jsx";
 import { SERIES_COLORS } from "../../../gui/web/src/lib/series-colors.js";
 
@@ -107,6 +108,10 @@ describe("PriceComparisonCard", () => {
 
     expect(html).toContain("tabular-nums");
     expect(`${subtitle}${legend}${endLabels}`).not.toContain("$");
+  });
+
+  it("formats raw comparison closes without assuming US dollars", () => {
+    expect(formatRawClose(123.456)).toBe("123.46");
   });
 
   it("reads details through the details.value wrapper", async () => {

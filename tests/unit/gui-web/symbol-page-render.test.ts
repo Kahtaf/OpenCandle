@@ -374,6 +374,43 @@ describe("symbol page", () => {
     expect(html).toContain("<main");
   });
 
+  it("recognizes Yahoo's no-fundamentals reason as an unknown symbol", () => {
+    const html = renderSymbolPage({
+      ticker: "ZZZZZZ",
+      data: {
+        ...okSymbolData("ZZZZZZ"),
+        quote: {
+          symbol: "ZZZZZZ",
+          status: "unavailable",
+          reason: "Invalid symbol ZZZZZZ for yahoo",
+        },
+        overview: {
+          symbol: "ZZZZZZ",
+          status: "unavailable",
+          reason: "Yahoo Finance: no company fundamentals returned for ZZZZZZ",
+        },
+      },
+    });
+
+    expect(html).toContain("ZZZZZZ was not found");
+  });
+
+  it("shows generic provider unavailability as an error instead of not-found", () => {
+    const html = renderSymbolPage({
+      ticker: "AAPL",
+      data: {
+        ...okSymbolData("AAPL"),
+        quote: { symbol: "AAPL", status: "unavailable", reason: "provider rate limited" },
+        overview: { symbol: "AAPL", status: "unavailable", reason: "network unavailable" },
+        error: "Market data providers are unavailable",
+      },
+    });
+
+    expect(html).not.toContain("AAPL was not found");
+    expect(html).toContain("Market data providers are unavailable");
+    expect(html).toContain('data-slot="test-chart"');
+  });
+
   it("assembles one-main, one-heading equity sections in the fixed order", () => {
     const context = deriveSymbolContext(STATE, "MSFT");
     const html = renderSymbolPage({

@@ -242,7 +242,10 @@ export const dcfTool: AgentTool<typeof params> = {
         }
       }
     }
-    const lseIsFresh = lseFinancialsResult?.status === "ok" && !lseFinancialsResult.stale;
+    const lseIsFresh =
+      lseFinancialsResult?.status === "ok" &&
+      lseFinancialsResult.data.length > 0 &&
+      !lseFinancialsResult.stale;
     const alphaVantageFinancialsResult = lseIsFresh
       ? undefined
       : await optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey));

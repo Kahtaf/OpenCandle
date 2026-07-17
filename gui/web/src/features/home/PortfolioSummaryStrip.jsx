@@ -14,8 +14,15 @@ export function PortfolioSummaryStrip({
 }) {
   const loading = portfolios.length > 0 && quoteSnapshot == null;
   const summaries = quoteSnapshot?.portfolioSummaries ?? [];
-  const totals = sumPortfolioSummaries(summaries);
-  const dayMove = derivePortfolioDayMove(quoteSnapshot?.portfolioQuotes ?? []);
+  const totals = sumPortfolioSummaries(summaries, quoteSnapshot?.portfolioSummary?.baseCurrency);
+  const dayMove = derivePortfolioDayMove(
+    (quoteSnapshot?.portfolioQuotes ?? []).filter(
+      (quote) =>
+        quote.includedInTotals !== false &&
+        ((totals.portfolioIds.length === 1 && quote.portfolioId == null) ||
+          totals.portfolioIds.includes(quote.portfolioId)),
+    ),
+  );
   const freshness = quoteSnapshot
     ? degradedQuoteBadge(quoteSnapshot.portfolioQuotes ?? [], nowMs)
     : null;
@@ -24,7 +31,18 @@ export function PortfolioSummaryStrip({
     <section aria-labelledby={HEADING_ID} data-slot="home-portfolio-summary">
       <Panel
         title={<span id={HEADING_ID}>Portfolio</span>}
-        meta={freshness ? <Badge tone="warn">{freshness}</Badge> : null}
+        meta={
+          freshness || totals.excludedCurrencies.length > 0 ? (
+            <span className="flex flex-wrap gap-2">
+              {freshness ? <Badge tone="warn">{freshness}</Badge> : null}
+              {totals.excludedCurrencies.length > 0 ? (
+                <Badge tone="warn">
+                  {totals.excludedCurrencies.join(", ")} portfolios excluded
+                </Badge>
+              ) : null}
+            </span>
+          ) : null
+        }
       >
         {loading ? (
           <div
@@ -57,7 +75,11 @@ export function PortfolioSummaryStrip({
                 {dayMove == null ? (
                   <span className="text-sm font-medium text-muted-foreground">Unavailable</span>
                 ) : (
-                  <DeltaChip value={dayMove} prefix="$" size="lg" />
+                  <DeltaChip
+                    value={dayMove}
+                    prefix={totals.currency === "USD" ? "$" : `${totals.currency} `}
+                    size="lg"
+                  />
                 )}
               </div>
             </div>
@@ -69,7 +91,7 @@ export function PortfolioSummaryStrip({
                 <DeltaChip
                   value={totals.totalPnl}
                   percent={totals.totalPnlPercent}
-                  prefix="$"
+                  prefix={totals.currency === "USD" ? "$" : `${totals.currency} `}
                   size="lg"
                 />
               </div>
@@ -81,14 +103,24 @@ export function PortfolioSummaryStrip({
   );
 }
 
-function sumPortfolioSummaries(summaries) {
+function sumPortfolioSummaries(summaries, primaryCurrency) {
+  const groups = new Map();
+  for (const summary of summaries) {
+    const currency = summary?.baseCurrency ?? "USD";
+    const group = groups.get(currency) ?? [];
+    group.push(summary);
+    groups.set(currency, group);
+  }
+  const fallbackCurrency = groups.keys().next().value ?? "USD";
+  const currency = groups.has(primaryCurrency) ? primaryCurrency : fallbackCurrency;
+  const selected = groups.get(currency) ?? [];
   let totalValue = 0;
   let totalCost = 0;
   let totalPnl = 0;
   let hasValue = false;
   let hasCost = false;
   let hasPnl = false;
-  for (const summary of summaries) {
+  for (const summary of selected) {
     if (Number.isFinite(summary?.totalValue)) {
       totalValue += summary.totalValue;
       hasValue = true;
@@ -107,6 +139,10 @@ function sumPortfolioSummaries(summaries) {
     totalValue: hasValue ? totalValue : null,
     totalPnl: hasPnl ? totalPnl : null,
     totalPnlPercent: basis > 0 && hasPnl ? (totalPnl / basis) * 100 : null,
-    currency: summaries.find((summary) => summary?.currency)?.currency ?? "USD",
+    currency,
+    portfolioIds: selected.flatMap((summary) =>
+      summary?.portfolioId == null ? [] : [summary.portfolioId],
+    ),
+    excludedCurrencies: [...groups.keys()].filter((candidate) => candidate !== currency),
   };
 }

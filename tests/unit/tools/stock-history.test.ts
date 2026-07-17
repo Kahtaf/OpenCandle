@@ -52,6 +52,7 @@ describe("get_stock_history tool", () => {
 
     expect(result.details[0]).toEqual({
       date: candlesFixture[0].ts.slice(0, 10),
+      timestamp: Date.parse(`${candlesFixture[0].ts}Z`) / 1_000,
       open: candlesFixture[0].open,
       high: candlesFixture[0].high,
       low: candlesFixture[0].low,

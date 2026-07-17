@@ -174,10 +174,11 @@ export async function getLseFinancialReports(
   }
 }
 
-function parseNum(value: unknown): number {
-  if (typeof value !== "number" && typeof value !== "string") return 0;
+function parseNum(value: unknown): number | undefined {
+  if (typeof value !== "number" && typeof value !== "string") return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function parseReportData(row: LseFinancialReportRow): Record<string, unknown> | undefined {
@@ -211,40 +212,74 @@ export async function getLseFinancials(symbol: string): Promise<FinancialStateme
   const balanceByDate = indexReportData(balanceRows);
   const cashflowByDate = indexReportData(cashflowRows);
 
-  return incomeRows
+  const statements = incomeRows
     .flatMap((row) => {
       if (typeof row.date !== "string") return [];
       const income = parseReportData(row);
       return income ? [{ date: row.date, income }] : [];
     })
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 4)
-    .map(({ date, income }) => {
-      const balance = balanceByDate.get(date) ?? {};
-      const cashflow = cashflowByDate.get(date) ?? {};
+    .flatMap(({ date, income }) => {
+      const balance = balanceByDate.get(date);
+      const cashflow = cashflowByDate.get(date);
+      if (!balance || !cashflow) return [];
+      const revenue = parseNum(income.revenue);
+      const grossProfit = parseNum(income.grossProfit);
+      const operatingIncome = parseNum(income.operatingIncome);
+      const netIncome = parseNum(income.netIncome);
+      const eps = parseNum(income.eps);
+      const totalAssets = parseNum(balance.totalAssets);
+      const totalLiabilities = parseNum(balance.totalLiabilities);
+      const totalEquity = parseNum(balance.totalEquity);
       const operatingCashFlow = parseNum(cashflow.operatingCashFlow);
-      const freeCashFlow = Object.hasOwn(cashflow, "freeCashFlow")
-        ? parseNum(cashflow.freeCashFlow)
-        : // LSE capex is negative; subtract its magnitude to match AV's positive-capex semantics.
-          operatingCashFlow - Math.abs(parseNum(cashflow.capitalExpenditure));
+      const reportedFreeCashFlow = parseNum(cashflow.freeCashFlow);
+      const capitalExpenditure = parseNum(cashflow.capitalExpenditure);
+      const freeCashFlow =
+        reportedFreeCashFlow ??
+        (operatingCashFlow !== undefined && capitalExpenditure !== undefined
+          ? // LSE capex is negative; subtract its magnitude to match AV's positive-capex semantics.
+            operatingCashFlow - Math.abs(capitalExpenditure)
+          : undefined);
 
-      return {
-        fiscalDate: date,
-        revenue: parseNum(income.revenue),
-        grossProfit: parseNum(income.grossProfit),
-        operatingIncome: parseNum(income.operatingIncome),
-        netIncome: parseNum(income.netIncome),
-        eps: parseNum(income.eps),
-        totalAssets: parseNum(balance.totalAssets),
-        totalLiabilities: parseNum(balance.totalLiabilities),
-        totalEquity: parseNum(balance.totalEquity),
-        operatingCashFlow,
-        freeCashFlow,
-        totalDebt: parseNum(balance.totalDebt) || undefined,
-        cashAndEquivalents: parseNum(balance.cashAndCashEquivalents) || undefined,
-        sharesOutstanding: parseNum(income.weightedAverageShsOut) || undefined,
-      };
-    });
+      if (
+        revenue === undefined ||
+        grossProfit === undefined ||
+        operatingIncome === undefined ||
+        netIncome === undefined ||
+        eps === undefined ||
+        totalAssets === undefined ||
+        totalLiabilities === undefined ||
+        totalEquity === undefined ||
+        operatingCashFlow === undefined ||
+        freeCashFlow === undefined
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          fiscalDate: date,
+          revenue,
+          grossProfit,
+          operatingIncome,
+          netIncome,
+          eps,
+          totalAssets,
+          totalLiabilities,
+          totalEquity,
+          operatingCashFlow,
+          freeCashFlow,
+          totalDebt: parseNum(balance.totalDebt),
+          cashAndEquivalents: parseNum(balance.cashAndCashEquivalents),
+          sharesOutstanding: parseNum(income.weightedAverageShsOut),
+        },
+      ];
+    })
+    .slice(0, 4);
+  if (statements.length === 0) {
+    throw new Error(`LSE returned no complete financial statements for ${symbol}`);
+  }
+  return statements;
 }
 
 export function toLseTimeframe(interval: string): LseTimeframe | undefined {
