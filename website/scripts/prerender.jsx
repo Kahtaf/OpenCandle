@@ -667,8 +667,8 @@ function HomePage({ buildDate, version }) {
             </video>
           </Card>
           <p className="mt-3 text-muted-foreground text-xs">
-            A real market question in the browser workbench: the evidence trail
-            behind the answer, and the same workflow in the terminal.
+            A real market question in the browser workbench: the evidence trail behind the answer,
+            and the same workflow in the terminal.
           </p>
         </section>
 
