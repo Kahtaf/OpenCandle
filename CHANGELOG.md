@@ -4,6 +4,7 @@
 
 ### Added
 
+- The local GUI now renders a follower-safe per-ticker symbol page with quote and extended-hours context, an interactive range chart, filtered fundamentals, saved positions and alerts, watchlist membership, writer-only analysis actions, non-equity degradation, and quote loading/freshness feedback.
 - The local GUI now resolves normalized, URL-encoded `/symbol/$ticker` routes and exposes a guarded read-only `GET /api/instruments/overview` endpoint with per-symbol stale-while-revalidate caching for company profile and key-stat data.
 - The local GUI gained a reusable `MarketChart` component (self-hosted TradingView lightweight-charts v5) with area/candlestick/indexed modes, a keyboard-operable range selector, previous-close line, volume histogram, crosshair tooltip, and design-token theming, backed by a new guarded read-only `GET /api/instruments/history` endpoint with server-side range/interval validation, request coalescing, and additive intraday epoch-second timestamps on history bars.
 - Watchlist and portfolio rows now include locally rendered intraday Yahoo Finance sparklines with source and freshness context; portfolio tables also expose price, value, daily change, total gain/loss, allocation, quantity, and average cost basis in a responsive desktop table and expandable mobile summary, while mobile watchlist rows retain active pre-/post-market quotes.
