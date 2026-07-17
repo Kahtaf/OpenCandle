@@ -4,8 +4,10 @@ Follow AGENTS.md (TDD mandatory — failing test first for every code task; `.js
 
 ## 1. Milestone 0 — ToS review (STOP gate)
 
-- [ ] 1.1 HUMAN TASK (cannot be done by a coding agent — request it and wait): open https://londonstrategicedge.com in a real browser (pages are JS-rendered; curl returns nothing useful), locate the Terms of Service / fair-use terms, and read the clauses on (a) caching/local persistence of API data, (b) redistribution, (c) commercial use. Record the verdict verbatim, with date and URL, in the PR description.
-- [ ] 1.2 DECISION POINT — STOP GATE: if caching or local persistence of LSE data is disallowed, STOP all remaining tasks, report the finding, and close this change without merging. Only proceed to section 2 after an explicit "caching permitted" verdict is recorded.
+- [x] 1.1 HUMAN TASK (cannot be done by a coding agent — request it and wait): open https://londonstrategicedge.com in a real browser (pages are JS-rendered; curl returns nothing useful), locate the Terms of Service / fair-use terms, and read the clauses on (a) caching/local persistence of API data, (b) redistribution, (c) commercial use. Record the verdict verbatim, with date and URL, in the PR description.
+- [x] 1.2 DECISION POINT — STOP GATE: if caching or local persistence of LSE data is disallowed, STOP all remaining tasks, report the finding, and close this change without merging. Only proceed to section 2 after an explicit "caching permitted" verdict is recorded.
+
+**ToS verdict (recorded 2026-07-16, https://londonstrategicedge.com/terms/, last updated 19 January 2026; signed off by the repo owner):** caching permitted — no clause prohibits local, per-user caching or persistence; the Acceptable Use restriction covers "Scrape, harvest, or extract data without permission" (a keyed API is the permission mechanism). Redistribution/resale and commercial exploitation of LSE data are prohibited ("Redistribute, resell, or commercially exploit our data or services") — compatible with OpenCandle's bring-your-own-key model: each user fetches with their own free key for personal analysis and OpenCandle never ships or re-serves LSE data. Data is provided "as is" without warranty. Gate cleared; merge unblocked.
 
 ## 2. Fixtures
 
