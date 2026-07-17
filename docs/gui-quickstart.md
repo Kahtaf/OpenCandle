@@ -46,11 +46,11 @@ The home screen is a market dashboard. Below the composer you get an indices str
 
 Every ticker links to a symbol page at `/symbol/<TICKER>` — reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
 
-<img width="720" alt="AMD symbol page with an interactive range chart" src="https://github.com/user-attachments/assets/c495f5cf-4cd9-4041-bfb9-9042e64cda81" />
+![AMD symbol page with an interactive range chart](https://github.com/user-attachments/assets/c495f5cf-4cd9-4041-bfb9-9042e64cda81)
 
 Charts also appear directly in chat: price-history answers render as interactive chart cards, and comparison prompts render a multi-series chart with each symbol indexed to 100 at the first common date, so relative performance is readable at a glance. Watchlist and portfolio rows carry intraday sparklines with source and freshness context.
 
-<img width="720" alt="Portfolio page with allocation donut, holdings table, and sparklines" src="https://github.com/user-attachments/assets/ed4507c5-3f25-4109-8a08-987c4dbb218f" />
+![Portfolio page with allocation donut, holdings table, and sparklines](https://github.com/user-attachments/assets/ed4507c5-3f25-4109-8a08-987c4dbb218f)
 
 Chart and dashboard data is cached locally, so reloading the page or opening a second window stays fast without extra provider calls.
 

@@ -47,7 +47,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
 | Finance routing | Each question type gets a purpose-built research path — quotes, comparisons, portfolio reviews, options, filings, macro, sentiment, and education are handled differently instead of one generic answer. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
-| Local state | Everything stays on your machine under `~/.opencandle/` — watchlists, portfolios, alerts, sessions. See [Configuration](https://opencandle.app/docs/configuration.html). |
+| Local state | Everything stays on your machine — watchlists, portfolios, and alerts under `~/.opencandle/`, sessions in Pi's own local storage. See [Configuration](https://opencandle.app/docs/configuration.html). |
 | Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
 | Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
 
