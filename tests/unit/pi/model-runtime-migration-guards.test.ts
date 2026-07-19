@@ -30,11 +30,14 @@ describe("Pi model runtime migration guards", () => {
     expect(source).toContain('await publishStatus("success"');
   });
 
-  it("requires a submitted Codex review rather than any reaction", () => {
+  it("requires a clean reaction to follow acknowledgement on the SHA-stamped request", () => {
     const source = readFileSync(resolve(".github/workflows/codex-review-gate.yml"), "utf-8");
 
     expect(source).toContain("github.rest.pulls.listReviews");
-    expect(source).not.toContain("listForIssueComment");
-    expect(source).not.toContain("cleanCompletion");
+    expect(source).toContain('reaction.content === "eyes"');
+    expect(source).toContain('reaction.content === "+1"');
+    expect(source).toContain(
+      "Date.parse(reaction.created_at) > Date.parse(acknowledgement.created_at)",
+    );
   });
 });
