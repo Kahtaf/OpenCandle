@@ -31,11 +31,11 @@ Implementation notes for the delegated agent: TDD throughout — write the faili
 
 ## 6. Proof (delegated agent)
 
-- [ ] 6.1 `npm run test:agent-tools` — the guard test is fully green.
-- [ ] 6.2 `npm run gates` — full battery green; paste tail output in the final report.
-- [ ] 6.3 `npm run bootstrap:agent -- --dry-run` in the repo root — exits 0; paste the report block.
-- [ ] 6.4 `npm run package:contents:check` — confirm no new file leaks into the published package.
-- [ ] 6.5 `openspec validate --strict` for this change passes; mark completed tasks `[x]` here truthfully.
+- [x] 6.1 `npm run test:agent-tools` — the guard test is fully green.
+- [x] 6.2 `npm run gates` — full battery green; paste tail output in the final report.
+- [x] 6.3 `npm run bootstrap:agent -- --dry-run` in the repo root — exits 0; paste the report block.
+- [x] 6.4 `npm run package:contents:check` — confirm no new file leaks into the published package.
+- [x] 6.5 `openspec validate --strict` for this change passes; mark completed tasks `[x]` here truthfully.
 
 ## 7. Verification (orchestrator-owned — NOT for the delegated agent)
 
