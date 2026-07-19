@@ -1,8 +1,9 @@
-import type { Api, Model, OAuthProviderId } from "@earendil-works/pi-ai";
+import type { Api, AuthEvent, AuthPrompt, Model } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
   type ExtensionContext,
   LoginDialogComponent,
+  type ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { validateModelKey } from "../onboarding/validate-model-key.js";
 
@@ -107,8 +108,11 @@ async function selectProviderForLogin(
   }
 }
 
-async function selectAdvancedOAuthProvider(ctx: ExtensionContext): Promise<string | undefined> {
-  const providers = ctx.modelRegistry.authStorage.getOAuthProviders();
+async function selectAdvancedOAuthProvider(
+  ctx: ExtensionContext,
+  modelRuntime: ModelRuntime,
+): Promise<string | undefined> {
+  const providers = modelRuntime.getProviders().filter((provider) => provider.auth.oauth?.login);
   if (providers.length === 0) {
     ctx.ui.notify("No sign-in providers are available.", "warning");
     return undefined;
@@ -118,12 +122,13 @@ async function selectAdvancedOAuthProvider(ctx: ExtensionContext): Promise<strin
   return providers.find((provider) => provider.name === choice)?.id;
 }
 
-async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promise<boolean> {
-  const provider = ctx.modelRegistry.authStorage
-    .getOAuthProviders()
-    .find((item) => item.id === providerId);
+async function runLoginDialog(
+  ctx: ExtensionContext,
+  providerId: string,
+  modelRuntime: ModelRuntime,
+): Promise<boolean> {
+  const provider = modelRuntime.getProvider(providerId);
   const providerName = provider?.name ?? providerId;
-  const usesCallbackServer = provider?.usesCallbackServer ?? false;
 
   const success = await ctx.ui.custom<boolean>((tui, _theme, _keybindings, done) => {
     let finished = false;
@@ -137,55 +142,36 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
       finish(completed);
     });
 
-    let manualCodeResolve: ((value: string) => void) | undefined;
-    let manualCodeReject: ((error: Error) => void) | undefined;
-    const manualCodePromise = new Promise<string>((resolve, reject) => {
-      manualCodeResolve = resolve;
-      manualCodeReject = reject;
-    });
+    const prompt = async (request: AuthPrompt): Promise<string> => {
+      if (request.type === "select") {
+        const options = request.options
+          .map((option, index) => `${index + 1}. ${option.label}`)
+          .join("\n");
+        const answer = await dialog.showPrompt(
+          `${request.message}\n\n${options}`,
+          "Enter a number",
+        );
+        const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
+        return request.options[selectedIndex]?.id ?? "";
+      }
+      return dialog.showPrompt(request.message, request.placeholder);
+    };
+    const notify = (event: AuthEvent): void => {
+      if (event.type === "auth_url") dialog.showAuth(event.url, event.instructions);
+      else if (event.type === "device_code") {
+        dialog.showDeviceCode({
+          userCode: event.userCode,
+          verificationUri: event.verificationUri,
+        });
+        dialog.showWaiting("Waiting for authentication...");
+      } else if (event.type === "progress" || event.type === "info")
+        dialog.showProgress(event.message);
+    };
 
-    // Cast required: advanced providers return dynamic IDs outside the SDK's static union type
-    void ctx.modelRegistry.authStorage
-      .login(providerId as OAuthProviderId, {
-        onAuth: (info) => {
-          dialog.showAuth(info.url, info.instructions);
-          if (usesCallbackServer) {
-            void dialog
-              .showManualInput("Paste redirect URL below, or complete login in your browser:")
-              .then((value) => {
-                if (value && manualCodeResolve) {
-                  manualCodeResolve(value);
-                  manualCodeResolve = undefined;
-                }
-              })
-              .catch(() => {
-                if (manualCodeReject) {
-                  manualCodeReject(new Error("Login cancelled"));
-                  manualCodeReject = undefined;
-                }
-              });
-          } else if (providerId === "github-copilot") {
-            dialog.showWaiting("Waiting for browser authentication...");
-          }
-        },
-        onDeviceCode: (info) => {
-          dialog.showDeviceCode(info);
-          dialog.showWaiting("Waiting for authentication...");
-        },
-        onPrompt: async (prompt) => dialog.showPrompt(prompt.message, prompt.placeholder),
-        onProgress: (message) => dialog.showProgress(message),
-        onSelect: async (prompt) => {
-          const options = prompt.options
-            .map((option, index) => `${index + 1}. ${option.label}`)
-            .join("\n");
-          const answer = await dialog.showPrompt(
-            `${prompt.message}\n\n${options}`,
-            "Enter a number",
-          );
-          const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
-          return prompt.options[selectedIndex]?.id;
-        },
-        onManualCodeInput: () => manualCodePromise,
+    void modelRuntime
+      .login(providerId, "oauth", {
+        prompt,
+        notify,
         signal: dialog.signal,
       })
       .then(() => finish(true))
@@ -212,6 +198,7 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
 export async function runApiKeySetup(
   ctx: ExtensionContext,
   provider: ApiKeyProviderId,
+  modelRuntime: ModelRuntime,
 ): Promise<boolean> {
   const label = API_KEY_PROVIDER_LABELS[provider];
   ctx.ui.notify(
@@ -232,8 +219,11 @@ export async function runApiKeySetup(
     );
     return false;
   }
-  ctx.modelRegistry.authStorage.set(provider, { type: "api_key", key: trimmed });
-  ctx.modelRegistry.refresh();
+  await modelRuntime.login(provider, "api_key", {
+    prompt: async () => trimmed,
+    notify: () => {},
+  });
+  await ctx.modelRegistry.refresh();
   ctx.ui.notify(
     validation.status === "transient"
       ? `Saved — couldn't verify (network issue). ${label} API key saved to OpenCandle.`
@@ -315,6 +305,7 @@ async function runLlmSetup(
   api: ExtensionAPI,
   ctx: ExtensionContext,
   mode: SetupMode,
+  modelRuntime?: ModelRuntime,
 ): Promise<SetupResult> {
   while (true) {
     const requirement = getLlmSetupRequirement(ctx);
@@ -354,18 +345,24 @@ async function runLlmSetup(
     }
 
     if (choice === "Sign in with browser") {
+      if (!modelRuntime) {
+        ctx.ui.notify("Model authentication is unavailable in this session.", "error");
+        return "cancelled";
+      }
       const providerChoice = await selectProviderForLogin(ctx);
       if (!providerChoice) {
         continue;
       }
 
       const providerId =
-        providerChoice === "advanced" ? await selectAdvancedOAuthProvider(ctx) : providerChoice;
+        providerChoice === "advanced"
+          ? await selectAdvancedOAuthProvider(ctx, modelRuntime)
+          : providerChoice;
       if (!providerId) {
         continue;
       }
 
-      const loggedIn = await runLoginDialog(ctx, providerId);
+      const loggedIn = await runLoginDialog(ctx, providerId, modelRuntime);
       if (!loggedIn) {
         continue;
       }
@@ -387,7 +384,11 @@ async function runLlmSetup(
       continue;
     }
 
-    const saved = await runApiKeySetup(ctx, provider);
+    if (!modelRuntime) {
+      ctx.ui.notify("Model authentication is unavailable in this session.", "error");
+      return "cancelled";
+    }
+    const saved = await runApiKeySetup(ctx, provider, modelRuntime);
     if (!saved) {
       continue;
     }
@@ -407,10 +408,11 @@ export async function runOpenCandleSetup(
   api: ExtensionAPI,
   ctx: ExtensionContext,
   options: { mode: SetupMode } = { mode: "startup" },
+  modelRuntime?: ModelRuntime,
 ): Promise<SetupResult> {
   const initialRequirement = getLlmSetupRequirement(ctx);
   if (initialRequirement !== "ready" || options.mode === "manual") {
-    return runLlmSetup(api, ctx, options.mode);
+    return runLlmSetup(api, ctx, options.mode, modelRuntime);
   }
   return "ready";
 }

@@ -1,8 +1,0 @@
-{
-  "ok": true,
-  "schema_version": "1",
-  "data": {
-    "authenticated": true,
-    "source": "browser:subprocess"
-  }
-}

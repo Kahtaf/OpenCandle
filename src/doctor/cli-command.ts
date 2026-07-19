@@ -1,4 +1,4 @@
-import { AuthStorage, ModelRegistry, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { ModelRegistry, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getProvider, type ProviderId } from "../onboarding/providers.js";
 import {
   clearProviderOnboardingEntry,
@@ -35,8 +35,11 @@ export async function handleDoctorCommand(
     if (!json) console.log(`Re-enabled ${providerId}.`);
   }
 
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
+  const modelRuntime = await ModelRuntime.create({
+    authPath: `${agentDir}/auth.json`,
+    modelsPath: `${agentDir}/models.json`,
+  });
+  const modelRegistry = new ModelRegistry(modelRuntime);
   const settingsManager = SettingsManager.create(cwd, agentDir);
   const includeSessions = args.includes("--sessions");
   if (includeSessions) {
@@ -60,7 +63,7 @@ function buildCliModelSetupState(
   modelRegistry: ModelRegistry,
   settingsManager: SettingsManager,
 ): DoctorModelSetupState {
-  modelRegistry.refresh();
+  void modelRegistry.refresh();
   const provider = settingsManager.getDefaultProvider();
   const modelId = settingsManager.getDefaultModel();
   const activeModel = provider && modelId ? modelRegistry.find(provider, modelId) : undefined;

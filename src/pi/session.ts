@@ -1,10 +1,9 @@
 import {
-  type AuthStorage,
   type CreateAgentSessionResult,
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
-  type ModelRegistry,
+  type ModelRuntime,
   type SessionManager,
   type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -16,8 +15,7 @@ import openCandleExtension from "./opencandle-extension.js";
 export interface CreateOpenCandleSessionOptions {
   cwd?: string;
   agentDir?: string;
-  authStorage?: AuthStorage;
-  modelRegistry?: ModelRegistry;
+  modelRuntime?: ModelRuntime;
   settingsManager?: SettingsManager;
   sessionManager?: SessionManager;
   useInlineExtension?: boolean;
@@ -40,7 +38,11 @@ export async function createOpenCandleSession(
         agentDir,
         settingsManager: options.settingsManager,
         extensionFactories: [
-          (pi) => openCandleExtension(pi, { askUserHandler: options.askUserHandler }),
+          (pi) =>
+            openCandleExtension(pi, {
+              askUserHandler: options.askUserHandler,
+              modelRuntime: options.modelRuntime,
+            }),
         ],
       })
     : undefined;
@@ -52,8 +54,7 @@ export async function createOpenCandleSession(
   const result = await createAgentSession({
     cwd,
     agentDir,
-    authStorage: options.authStorage,
-    modelRegistry: options.modelRegistry,
+    modelRuntime: options.modelRuntime,
     sessionManager: options.sessionManager,
     settingsManager: options.settingsManager,
     resourceLoader,
@@ -74,8 +75,9 @@ async function applySavedDefaultModel(result: CreateAgentSessionResult): Promise
   const modelId = result.session.settingsManager.getDefaultModel();
   if (!provider || !modelId) return;
 
-  const savedDefault = result.session.modelRegistry.find(provider, modelId);
-  if (!savedDefault || !result.session.modelRegistry.hasConfiguredAuth(savedDefault)) return;
+  const savedDefault = result.session.modelRuntime.getModel(provider, modelId);
+  if (!savedDefault || !result.session.modelRuntime.hasConfiguredAuth(savedDefault.provider))
+    return;
 
   const current = result.session.model;
   if (current?.provider === savedDefault.provider && current.id === savedDefault.id) return;

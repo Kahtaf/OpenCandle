@@ -1,5 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
   buildComprehensiveAnalysisDefinition,
   isAnalysisRequest,
@@ -51,6 +51,7 @@ import {
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 
 export interface OpenCandleExtensionOptions {
+  modelRuntime?: ModelRuntime;
   askUserHandler?: AskUserHandler;
   /**
    * Optional router LLM client. When provided, this instance is used instead
@@ -143,7 +144,7 @@ export default function openCandleExtension(
   pi.registerCommand("setup", {
     description: "Reconfigure the OpenCandle AI model (sign-in or API key)",
     handler: async (_args, ctx) => {
-      const result = await coordinator.runSetup(pi, ctx, { mode: "manual" });
+      const result = await coordinator.runSetup(pi, ctx, { mode: "manual" }, options?.modelRuntime);
       if (result === "ready") {
         ctx.ui.notify("OpenCandle setup complete.", "info");
       }
@@ -251,7 +252,7 @@ export default function openCandleExtension(
     // reinjects as a `role:"user"` message every turn).
     ctx.ui.setStatus("opencandle-disclaimer", DISCLAIMER_TEXT);
 
-    const result = await coordinator.runSetup(pi, ctx, { mode: "startup" });
+    const result = await coordinator.runSetup(pi, ctx, { mode: "startup" }, options?.modelRuntime);
     if (result === "shutdown") {
       return;
     }

@@ -1,7 +1,7 @@
 import { createReadStream, existsSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, resolve } from "node:path";
-import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { type AgentSession, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import { buildDoctorReport } from "../../src/doctor/report.js";
 import { MarketStateService } from "../../src/market-state/service.js";
 import {
@@ -173,9 +173,10 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
 
     if (url.pathname === "/api/model-setup/refresh" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
-      options.getSession().modelRegistry.refresh();
-      options.wsHub.broadcastModelSetup();
-      writeJson(res, await options.wsHub.buildBootstrapPayload());
+      await handleTrustedGuiMutation(req, res, options, async () => {
+        await options.getSession().modelRuntime.refresh();
+        options.wsHub.broadcastModelSetup();
+      });
       return;
     }
 
@@ -249,7 +250,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
             reachable: true,
             healthEndpoint: `http://${options.host}:${options.port}/health`,
           },
-          modelSetup: buildModelSetupState(session.modelRegistry, session.model),
+          modelSetup: buildModelSetupState(new ModelRegistry(session.modelRuntime), session.model),
         }),
       );
       return;
@@ -766,7 +767,10 @@ async function streamAcceptedSseChatRun({
 
   try {
     recordPendingSessionAction(runSessionManager, actionId);
-    const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
+    const modelSetup = buildModelSetupState(
+      new ModelRegistry(runSession.modelRuntime),
+      runSession.model,
+    );
     if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
       runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
       recordAcceptedAction();

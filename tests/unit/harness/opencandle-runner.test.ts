@@ -1,4 +1,4 @@
-import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainOpenCandleCustomEntries,
@@ -6,6 +6,7 @@ import {
   toEvalTrace,
 } from "../../harness/opencandle-runner.js";
 import type { AgentTrace } from "../../harness/types.js";
+import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 const { createOpenCandleSessionMock } = vi.hoisted(() => ({
   createOpenCandleSessionMock: vi.fn(),
@@ -139,15 +140,13 @@ describe("runOpenCandleSession", () => {
     };
     createOpenCandleSessionMock.mockResolvedValue({ session });
 
-    const authStorage = AuthStorage.inMemory({
+    const { modelRuntime } = await createTestModelRuntime({
       google: { type: "api_key", key: "test-key" },
     });
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
 
     await runOpenCandleSession({
       prompt: "What is AAPL trading at?",
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       defaultProvider: "google",
       defaultModel: "gemini-2.5-flash",
       settleGraceMs: 0,
@@ -155,8 +154,7 @@ describe("runOpenCandleSession", () => {
     });
 
     const options = createOpenCandleSessionMock.mock.calls[0]?.[0];
-    expect(options.authStorage).toBe(authStorage);
-    expect(options.modelRegistry).toBe(modelRegistry);
+    expect(options.modelRuntime).toBe(modelRuntime);
     expect(options.useInlineExtension).toBe(true);
     expect(options.settingsManager.getDefaultProvider()).toBe("google");
     expect(options.settingsManager.getDefaultModel()).toBe("gemini-2.5-flash");

@@ -3,8 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
-  type AuthStorage,
-  type ModelRegistry,
+  type ModelRuntime,
   SessionManager as PiSessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -58,8 +57,7 @@ export interface RunOpenCandleSessionOptions {
   jsonlPath?: string;
   defaultProvider?: string;
   defaultModel?: string;
-  authStorage?: AuthStorage;
-  modelRegistry?: ModelRegistry;
+  modelRuntime?: ModelRuntime;
 }
 
 export interface RunOpenCandleSessionResult {
@@ -91,8 +89,7 @@ export async function runOpenCandleSession(
 
     const created = await createOpenCandleSession({
       cwd: options.cwd ?? process.cwd(),
-      authStorage: options.authStorage,
-      modelRegistry: options.modelRegistry,
+      modelRuntime: options.modelRuntime,
       sessionManager: PiSessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory({
         defaultProvider: options.defaultProvider ?? "google",

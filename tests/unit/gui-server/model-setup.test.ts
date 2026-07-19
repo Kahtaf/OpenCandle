@@ -92,16 +92,21 @@ describe("GUI model setup", () => {
     const entries: unknown[] = [];
     const selectedModels: Model<Api>[] = [];
     const auth = new Map<string, unknown>();
-    const session = {
-      modelRegistry: {
-        ...registry([preferred]),
-        authStorage: {
-          set(provider: string, credential: unknown) {
-            auth.set(provider, credential);
-          },
-        },
-        find: () => preferred,
+    const modelRuntime = {
+      login: async (
+        provider: string,
+        _type: string,
+        interaction: { prompt(input: unknown): Promise<string> },
+      ) => {
+        auth.set(provider, { type: "api_key", key: await interaction.prompt({}) });
       },
+      getAvailableSnapshot: () => [preferred],
+      hasConfiguredAuth: () => true,
+      getModel: () => preferred,
+      refresh: async () => {},
+    };
+    const session = {
+      modelRuntime,
       setModel: async (selected: Model<Api>) => {
         selectedModels.push(selected);
       },
@@ -139,12 +144,12 @@ describe("GUI model setup", () => {
     ) as unknown as typeof fetch;
     const auth = new Map<string, unknown>();
     const session = {
-      modelRegistry: {
-        ...registry([model("openai", "gpt-5-mini")]),
-        authStorage: {
-          set: (provider: string, credential: unknown) => auth.set(provider, credential),
-        },
-        find: () => model("openai", "gpt-5-mini"),
+      modelRuntime: {
+        login: async () => {},
+        getAvailableSnapshot: () => [model("openai", "gpt-5-mini")],
+        hasConfiguredAuth: () => true,
+        getModel: () => model("openai", "gpt-5-mini"),
+        refresh: async () => {},
       },
       setModel: async () => {},
       settingsManager: { flush: async () => {} },
@@ -167,11 +172,14 @@ describe("GUI model setup", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     const entries: unknown[] = [];
+    const anthropic = model("anthropic", "claude-haiku-4-5");
     const session = {
-      modelRegistry: {
-        ...registry([model("anthropic", "claude-haiku-4-5")]),
-        authStorage: { set: () => {} },
-        find: () => model("anthropic", "claude-haiku-4-5"),
+      modelRuntime: {
+        login: async () => {},
+        getAvailableSnapshot: () => [anthropic],
+        hasConfiguredAuth: () => true,
+        getModel: () => anthropic,
+        refresh: async () => {},
       },
       setModel: async () => {},
       settingsManager: { flush: async () => {} },

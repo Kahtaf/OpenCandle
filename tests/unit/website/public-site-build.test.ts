@@ -25,13 +25,8 @@ describe("public site build contract", () => {
     await expect(access(join(root, "packages/ui/package.json"))).resolves.toBeUndefined();
   });
 
-  it("removes the old hand-written markdown renderer helpers", async () => {
-    const buildSource = await readFile(join(root, "website/build.mjs"), "utf8");
-
-    expect(buildSource).not.toContain("function stripFrontmatter");
-    expect(buildSource).not.toContain("function inlineMarkdown");
-    expect(buildSource).not.toContain("function renderTable");
-    expect(buildSource).not.toContain("function renderMarkdown");
+  it("removes the old hand-written build script entirely", async () => {
+    await expect(access(join(root, "website/build.mjs"))).rejects.toThrow();
   });
 
   it("keeps generated docs readable in raw HTML", async () => {
@@ -66,21 +61,25 @@ describe("public site build contract", () => {
   });
 
   it("copies docs images into the site and references them from docs pages", async () => {
-    await expect(
-      access(join(root, "website/dist/docs/images/gui-workbench.png")),
-    ).resolves.toBeUndefined();
+    for (const image of [
+      "website/dist/docs/images/gui-chat-research.png",
+      "website/dist/docs/images/gui-symbol-page.png",
+      "website/dist/docs/images/gui-portfolio.png",
+    ]) {
+      await expect(access(join(root, image)), `${image} should be copied`).resolves.toBeUndefined();
+    }
 
     const guiQuickstartHtml = await readFile(
       join(root, "website/dist/docs/gui-quickstart.html"),
       "utf8",
     );
-    expect(guiQuickstartHtml).toContain("images/gui-workbench.png");
+    expect(guiQuickstartHtml).toContain("images/gui-chat-research.png");
 
     const guiQuickstartMd = await readFile(
       join(root, "website/dist/docs/gui-quickstart.md"),
       "utf8",
     );
-    expect(guiQuickstartMd).toContain("https://opencandle.app/docs/images/gui-workbench.png");
+    expect(guiQuickstartMd).toContain("https://opencandle.app/docs/images/gui-chat-research.png");
   });
 
   it("renders GitHub-flavored Markdown features through the parser pipeline", async () => {

@@ -107,25 +107,26 @@ describe("LSE provider", () => {
     );
   });
 
-  it.each([
-    401, 403,
-  ])("throws a stale credential error before serving stale cache on %i", async (status) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-16T12:00:00Z"));
-    rateLimiter.configure("lse", 100, 1.66);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(candlesFixture))
-      .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, status));
-    vi.stubGlobal("fetch", fetchMock);
+  it.each([401, 403])(
+    "throws a stale credential error before serving stale cache on %i",
+    async (status) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-16T12:00:00Z"));
+      rateLimiter.configure("lse", 100, 1.66);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(candlesFixture))
+        .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, status));
+      vi.stubGlobal("fetch", fetchMock);
 
-    await getLseCandles("AAPL", "1d");
-    vi.setSystemTime(new Date("2026-07-16T13:00:00.001Z"));
+      await getLseCandles("AAPL", "1d");
+      vi.setSystemTime(new Date("2026-07-16T13:00:00.001Z"));
 
-    const error = await getLseCandles("AAPL", "1d").catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ProviderCredentialError);
-    expect(error).toMatchObject({ provider: "lse", reason: "stale", httpStatus: status });
-  });
+      const error = await getLseCandles("AAPL", "1d").catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ProviderCredentialError);
+      expect(error).toMatchObject({ provider: "lse", reason: "stale", httpStatus: status });
+    },
+  );
 
   it("fails before fetching when the API key is missing", async () => {
     mockedGetConfig.mockReturnValue({});

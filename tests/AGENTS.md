@@ -16,27 +16,15 @@ npm run test:e2e:providers     # e2e provider tests (hits live APIs)
 ## STRUCTURE
 ```
 tests/
-├── unit/
-│   ├── tools/        # One test per tool
-│   ├── providers/    # One test per API client
-│   ├── infra/        # Cache, rate-limiter, HTTP, browser, paths, config
-│   ├── memory/       # SQLite storage, sessions, preferences, retrieval
-│   ├── routing/      # Intent classification, entity extraction, slots
-│   ├── workflows/    # Workflow builders
-│   ├── pi/           # Pi extension, setup, session, tool adapter
-│   ├── prompts/      # Workflow prompt templates
-│   └── onboarding/   # Setup flow
-├── agent-tools/      # Repo-maintainer/agent helper tests, not default unit coverage
-├── harness/          # Agent test harness (file-based IPC) → see tests/harness/README.md
-├── evals/            # Agent/session eval cases, scoring, and report helpers
-├── scripts/          # Eval front door and long-running opt-in eval runners
-├── e2e/              # End-to-end workflow + CLI tests
-├── integration/      # Cross-module integration tests
-└── fixtures/         # Mock JSON responses
-    ├── alphavantage/  # Income, balance sheet, cash flow
-    ├── coingecko/     # Crypto prices, fear & greed
-    ├── fred/          # Economic indicators
-    └── yahoo/         # Quotes, history, options, reddit
+├── unit/         # Mirrors src/ (tests/unit/<module>/ ↔ src/<module>/), plus gui-server/, gui-web/, website/
+├── agent-tools/  # Repo-maintainer/agent helper tests, not default unit coverage
+├── harness/      # Agent test harness (file-based IPC) → see tests/harness/README.md
+├── evals/        # Agent/session eval cases, scoring, and report helpers
+├── scripts/      # Eval front door and long-running opt-in eval runners
+├── e2e/          # End-to-end workflow, CLI, and GUI browser tests
+├── integration/  # Cross-module integration tests
+├── screenshots/  # GUI screenshot capture harness (npx tsx tests/screenshots/capture.ts)
+└── fixtures/     # Mock JSON responses, one directory per provider (yahoo/, alphavantage/, fred/, lse/, polymarket/, …)
 ```
 
 ## TEST PATTERN

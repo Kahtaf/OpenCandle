@@ -26,7 +26,7 @@ describe("GUI server route guards", () => {
     },
     {
       route: 'url.pathname === "/api/model-setup/refresh"',
-      handler: "options.getSession().modelRegistry.refresh();",
+      handler: "options.getSession().modelRuntime.refresh();",
       guard: 'allowTrustedGuiRequest(req, res, "Model setup API", options)',
     },
     {
@@ -191,15 +191,18 @@ describe("GUI server route guards", () => {
       'url.pathname === "/api/local-coordinator/tool-invoke"',
       'url.pathname === "/api/local-coordinator/ask-user"',
     ],
-  ])("returns an error response when $route reports a failed tool invocation", (route, nextRoute) => {
-    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
-    const routeStart = source.indexOf(route);
-    const routeEnd = source.indexOf(nextRoute, routeStart + route.length);
-    const routeSource = source.slice(routeStart, routeEnd);
+  ])(
+    "returns an error response when $route reports a failed tool invocation",
+    (route, nextRoute) => {
+      const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+      const routeStart = source.indexOf(route);
+      const routeEnd = source.indexOf(nextRoute, routeStart + route.length);
+      const routeSource = source.slice(routeStart, routeEnd);
 
-    expect(routeSource).toContain("const result = asRecord(message.result);");
-    expect(routeSource).toContain("if (message.ok === true && result.toolCallId)");
-  });
+      expect(routeSource).toContain("const result = asRecord(message.result);");
+      expect(routeSource).toContain("if (message.ok === true && result.toolCallId)");
+    },
+  );
 
   it("requires local coordinator authorization before accepting proxied ask_user actions", () => {
     const routeBlock = routeBlockBefore(
@@ -260,6 +263,45 @@ describe("GUI server route guards", () => {
     expect(factoryEnd).toBeGreaterThan(factoryStart);
     expect(source.slice(factoryStart, factoryEnd)).toContain(
       "askUserBridge.askForSession(targetSessionManager.getSessionId())",
+    );
+  });
+
+  it("reuses the shared model runtime for saved GUI sessions", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const factoryStart = source.indexOf("createSessionForManager:");
+    const factoryEnd = source.indexOf("wsHub,", factoryStart);
+    const factorySource = source.slice(factoryStart, factoryEnd);
+
+    expect(factorySource).toContain("modelRuntime,");
+    expect(factorySource).not.toContain("authStorage,");
+    expect(factorySource).not.toContain("modelRegistry,");
+  });
+
+  it("waits for a model refresh before broadcasting its result", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/model-setup/refresh"');
+    const routeEnd = source.indexOf('url.pathname === "/api/model-setup/api-key"', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain(
+      "await handleTrustedGuiMutation(req, res, options, async () => {",
+    );
+    expect(routeSource).toContain("await options.getSession().modelRuntime.refresh();");
+    expect(routeSource.indexOf("await options.getSession().modelRuntime.refresh();")).toBeLessThan(
+      routeSource.indexOf("options.wsHub.broadcastModelSetup();"),
+    );
+    expect(routeSource).not.toContain("writeJson(res,");
+  });
+
+  it("waits for WebSocket model refreshes before broadcasting their result", () => {
+    const source = readFileSync(resolve("gui/server/ws-hub.ts"), "utf-8");
+    const routeStart = source.indexOf('case "model.setup.refresh"');
+    const routeEnd = source.indexOf('case "model.setup.save_api_key"', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("await getSession().modelRuntime.refresh();");
+    expect(routeSource.indexOf("await getSession().modelRuntime.refresh();")).toBeLessThan(
+      routeSource.indexOf("broadcastModelSetup();"),
     );
   });
 

@@ -21,7 +21,7 @@ import {
   type Model,
   registerBuiltInApiProviders,
 } from "@earendil-works/pi-ai/compat";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
@@ -125,8 +125,8 @@ process.on("exit", () => {
 mkdirSync(competitorCwd, { recursive: true });
 
 registerBuiltInApiProviders();
-const authStorage = AuthStorage.create();
-const modelRegistry = ModelRegistry.create(authStorage);
+const modelRuntime = await ModelRuntime.create();
+const modelRegistry = new ModelRegistry(modelRuntime);
 const competitorAnswerCache = loadCompetitiveReportCache();
 const judgeModel = await resolveModelWithAuth(
   requestedProvider,
@@ -416,8 +416,7 @@ async function runOpenCandle(prompt: string): Promise<EvalTrace> {
   const parsedSettleGraceMs = Number(settleGraceMs);
   const result = await runOpenCandleSession({
     prompt,
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     defaultProvider: judgeModel.model.provider,
     defaultModel: judgeModel.model.id,
     openCandleHome,
@@ -764,7 +763,7 @@ async function resolveModelWithAuth(
     resolveRequestAuth: () => modelRegistry.getApiKeyAndHeaders(model),
     getEnvApiKey: (modelProvider) => getEnvApiKey(modelProvider),
     setRuntimeApiKey: (modelProvider, apiKey) =>
-      authStorage.setRuntimeApiKey(modelProvider, apiKey),
+      modelRuntime.setRuntimeApiKey(modelProvider, apiKey),
   });
   if (!requestAuth.ok) {
     throw new Error(`${requestAuth.error}\n${missingAuthMessage}`);
@@ -788,7 +787,7 @@ function resolveModel(provider: string | undefined, modelId: string | undefined)
     return getModel(provider as never, modelId as never) as Model<Api>;
   }
 
-  if (!provider && authStorage.hasAuth("google")) {
+  if (!provider && modelRuntime.getProviderAuthStatus("google").configured) {
     return getModel("google", "gemini-2.5-flash") as Model<Api>;
   }
 

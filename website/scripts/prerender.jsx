@@ -757,9 +757,9 @@ function HomePage({ buildDate, version }) {
           <Card className="mt-6 overflow-hidden">
             <img
               src="assets/gui-screenshot.png"
-              alt="OpenCandle local GUI showing an evidence-backed market research response"
+              alt="OpenCandle local GUI answering a market question with a quote table, cited sources, and the research steps panel"
               width="1440"
-              height="1000"
+              height="960"
               className="block w-full"
               fetchPriority="high"
             />
