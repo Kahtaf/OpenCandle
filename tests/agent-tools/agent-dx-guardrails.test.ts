@@ -155,6 +155,20 @@ describe("agent developer guardrails", () => {
       expect(bootstrapSource).toContain("EEXIST");
     });
 
+    it("skips dependency installation under an unsupported Node version", () => {
+      // An unsupported runtime cannot be simulated from the test process, so
+      // pin the guard at the source level: deps must not install when the
+      // Node check already failed (native builds under the wrong Node leave a
+      // worktree that needs rebuilding).
+      const bootstrapSource = readFileSync(repoPath("scripts/agent-bootstrap.mjs"), "utf8");
+
+      expect(bootstrapSource).toContain("skipped (unsupported node)");
+      expect(bootstrapSource.indexOf("nodeError")).toBeGreaterThan(-1);
+      expect(bootstrapSource.indexOf("nodeError")).toBeLessThan(
+        bootstrapSource.indexOf("prepareDependencies(roots.currentRoot"),
+      );
+    });
+
     it("treats a missing source env as a warning", () => {
       const { from, to } = makeFixtureRoots();
 

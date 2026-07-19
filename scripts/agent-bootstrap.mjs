@@ -154,7 +154,11 @@ if (options && roots) {
   } catch {
     envStatus = "copy-failed";
   }
-  const depsStatus = prepareDependencies(roots.currentRoot, options);
+  // Never install under an unsupported runtime: native deps built with the
+  // wrong Node leave a worktree that must be rebuilt after switching versions.
+  const depsStatus = nodeError
+    ? "skipped (unsupported node)"
+    : prepareDependencies(roots.currentRoot, options);
 
   console.log(`branch: ${getBranch(roots.currentRoot)}`);
   console.log(
