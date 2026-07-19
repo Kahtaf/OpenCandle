@@ -92,6 +92,7 @@
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "gates": "npm run typecheck && npx biome ci . && npm test && npm run test:agent-tools",
+    "bootstrap:agent": "node scripts/agent-bootstrap.mjs",
     "pretest": "npm run check:node",
     "test": "vitest run",
     "test:watch": "vitest",

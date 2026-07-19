@@ -75,9 +75,7 @@ describe("agent developer guardrails", () => {
     expect(packageJson.scripts.gates).toBe(
       "npm run typecheck && npx biome ci . && npm test && npm run test:agent-tools",
     );
-    expect(packageJson.scripts["bootstrap:agent"]).toBe(
-      "node scripts/agent-bootstrap.mjs",
-    );
+    expect(packageJson.scripts["bootstrap:agent"]).toBe("node scripts/agent-bootstrap.mjs");
     expect(packageJson.scripts["review:pr"]).toContain("npm run gates");
   });
 
@@ -161,14 +159,7 @@ describe("agent developer guardrails", () => {
       const { from, to } = makeFixtureRoots();
       writeFileSync(join(from, ".env"), "SECRET=value1\n");
 
-      const result = runBootstrap([
-        "--from",
-        from,
-        "--to",
-        to,
-        "--skip-install",
-        "--dry-run",
-      ]);
+      const result = runBootstrap(["--from", from, "--to", to, "--skip-install", "--dry-run"]);
 
       expect(result.status, result.stderr).toBe(0);
       expect(result.stdout).toContain("env: copied (planned, dry-run)");
