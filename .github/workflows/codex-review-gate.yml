@@ -78,13 +78,15 @@ jobs:
                 issue_number: pull_number,
                 per_page: 100,
               });
-              const reviewedHeadMarker = `Reviewed commit:** \`${headSha.slice(0, 10)}\``;
+              const reviewedHeadPattern = new RegExp(
+                "(?:\\*\\*)?Reviewed commit:(?:\\*\\*)?\\s+`" + headSha.slice(0, 10) + "`",
+              );
               const cleanCompletion = issueComments.find(
                 (comment) =>
                   comment.user?.login === botLogin &&
                   Date.parse(comment.created_at) >= requestedAt &&
                   comment.body?.includes("Codex Review: Didn't find any major issues") &&
-                  comment.body.includes(reviewedHeadMarker),
+                  reviewedHeadPattern.test(comment.body),
               );
               if (cleanCompletion) {
                 await publishStatus("success", "Codex completed a clean review of the current PR head");

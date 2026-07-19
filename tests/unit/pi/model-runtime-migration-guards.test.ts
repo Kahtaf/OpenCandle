@@ -36,7 +36,8 @@ describe("Pi model runtime migration guards", () => {
     expect(source).toContain("github.rest.pulls.listReviews");
     expect(source).toContain("github.rest.issues.listComments");
     expect(source).toContain("Codex Review: Didn't find any major issues");
-    expect(source).toContain("comment.body.includes(reviewedHeadMarker)");
+    expect(source).toContain("(?:\\\\*\\\\*)?Reviewed commit:(?:\\\\*\\\\*)?\\\\s+`");
+    expect(source).toContain("reviewedHeadPattern.test(comment.body)");
     expect(source).not.toContain("listForIssueComment");
   });
 });
