@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-19
+
 ### Added
 
 - Agent-developer guardrails now provide canonical `typecheck` and `gates` scripts, a safe worktree bootstrap command, and checked-in delegation and resume contracts.
