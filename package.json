@@ -123,9 +123,9 @@
     "node": "^22.19.0 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": ">=0.80.2 <0.80.8",
-    "@earendil-works/pi-ai": ">=0.80.2 <0.80.8",
-    "@earendil-works/pi-coding-agent": ">=0.80.2 <0.80.8",
+    "@earendil-works/pi-agent-core": ">=0.80.2 <0.80.11",
+    "@earendil-works/pi-ai": ">=0.80.2 <0.80.11",
+    "@earendil-works/pi-coding-agent": ">=0.80.2 <0.80.11",
     "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
     "yahoo-finance2": "^3.15.3"
