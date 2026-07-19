@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-19
+
 ### Added
 
 - The GUI home empty state is now a market dashboard: a fixed indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines served by a new guarded read-only `GET /api/market-state/indices` endpoint with stale-while-revalidate caching, watchlist top movers, a portfolio summary stat row with a derived intraday move, an alerts status card, and new-user affordance cards — all rendered below the composer, which keeps its fresh-session run flow and model-setup gating unchanged.
