@@ -46,7 +46,7 @@ jobs:
 
             await publishStatus("pending", "Waiting for Codex to review the current PR head");
 
-            await github.rest.issues.createComment({
+            const request = await github.rest.issues.createComment({
               owner,
               repo,
               issue_number: pull_number,
@@ -68,6 +68,31 @@ jobs:
               if (currentReview) {
                 await publishStatus("success", "Codex reviewed the current PR head");
                 core.notice(`Codex reviewed current head ${headSha} with state ${currentReview.state}.`);
+                return;
+              }
+
+              const reactions = await github.paginate(
+                github.rest.reactions.listForIssueComment,
+                {
+                  owner,
+                  repo,
+                  comment_id: request.data.id,
+                  per_page: 100,
+                },
+              );
+              const acknowledgement = reactions.find(
+                (reaction) => reaction.user?.login === botLogin && reaction.content === "eyes",
+              );
+              const cleanCompletion = reactions.find(
+                (reaction) =>
+                  reaction.user?.login === botLogin &&
+                  reaction.content === "+1" &&
+                  acknowledgement &&
+                  Date.parse(reaction.created_at) > Date.parse(acknowledgement.created_at),
+              );
+              if (cleanCompletion) {
+                await publishStatus("success", "Codex completed a clean review of the current PR head");
+                core.notice(`Codex returned a clean review for current head ${headSha}.`);
                 return;
               }
 
