@@ -38,8 +38,10 @@ describe("Pi model runtime migration guards", () => {
     expect(source).toContain("Codex Review: Didn't find any major issues");
     expect(source).toContain("(?:\\\\*\\\\*)?Reviewed commit:(?:\\\\*\\\\*)?\\\\s+`");
     expect(source).toContain("reviewedHeadPattern.test(comment.body)");
+    expect(source).not.toContain("github.rest.issues.createComment");
     expect(source).toContain("github.rest.reactions.listForIssueComment");
     expect(source).toContain('reaction.content === "+1"');
+    expect(source).toContain("comment.body?.includes(headSha.slice(0, 8))");
     expect(source).not.toContain('reaction.content === "eyes"');
   });
 });
