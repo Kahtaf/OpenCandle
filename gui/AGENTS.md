@@ -7,6 +7,7 @@ Local browser workbench for OpenCandle. `gui/server/` owns the Pi session writer
 npm run gui                    # run the GUI server on 127.0.0.1:14567
 npm run gui:web:build          # rebuild gui/web/dist after editing gui/web/src
 npm run test:gui:browser       # Playwright smoke for the live GUI server
+npm run gates                  # full agent handoff proof battery
 npx tsx tests/screenshots/capture.ts <phase> [--viewport=...]  # screenshot harness using gui/web/dist
 ```
 

@@ -5,6 +5,7 @@ Unit + e2e tests for all OpenCandle modules. Fixtures prevent live API calls in 
 ## COMMANDS
 ```bash
 npm test                       # vitest run (unit only)
+npm run gates                  # full agent handoff proof battery
 npm run test:watch             # vitest watch mode
 npm run test:agent-tools       # maintainer/agent helper tests
 npm run test:scripts:typecheck # type-check opt-in eval/front-door scripts
