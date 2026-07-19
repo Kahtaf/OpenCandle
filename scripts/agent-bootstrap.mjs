@@ -76,7 +76,15 @@ function prepareEnv(mainRoot, currentRoot, dryRun) {
   if (!existsSync(source)) return "missing-source";
   if (dryRun) return "copied (planned, dry-run)";
 
-  copyFileSync(source, destination);
+  try {
+    // COPYFILE_EXCL makes the non-overwrite guarantee atomic: a .env created
+    // between the existence check above and this copy fails with EEXIST
+    // instead of being overwritten.
+    copyFileSync(source, destination, constants.COPYFILE_EXCL);
+  } catch (error) {
+    if (error && error.code === "EEXIST") return "present";
+    throw error;
+  }
   chmodSync(destination, 0o600);
   return "copied";
 }

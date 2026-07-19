@@ -146,6 +146,15 @@ describe("agent developer guardrails", () => {
       expect(result.stdout).toContain("env: present");
     });
 
+    it("copies the env file with an atomically exclusive write", () => {
+      // The check-then-copy race cannot be triggered deterministically from the
+      // CLI, so pin the exclusive-copy implementation at the source level.
+      const bootstrapSource = readFileSync(repoPath("scripts/agent-bootstrap.mjs"), "utf8");
+
+      expect(bootstrapSource).toContain("COPYFILE_EXCL");
+      expect(bootstrapSource).toContain("EEXIST");
+    });
+
     it("treats a missing source env as a warning", () => {
       const { from, to } = makeFixtureRoots();
 
