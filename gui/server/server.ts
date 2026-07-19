@@ -4,11 +4,10 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  AuthStorage,
   createAgentSessionRuntime,
   createAgentSessionServices,
   getAgentDir,
-  ModelRegistry,
+  ModelRuntime,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
@@ -60,8 +59,10 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolveGuiWebDist(__dirname);
 
 const agentDir = getAgentDir();
-const authStorage = AuthStorage.create();
-const modelRegistry = ModelRegistry.create(authStorage);
+const modelRuntime = await ModelRuntime.create({
+  authPath: resolve(agentDir, "auth.json"),
+  modelsPath: resolve(agentDir, "models.json"),
+});
 const settingsManager = SettingsManager.create(cwd, agentDir);
 const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
@@ -84,15 +85,13 @@ const runtime = await createAgentSessionRuntime(
     const services = await createAgentSessionServices({
       cwd: opts.cwd,
       agentDir: opts.agentDir,
-      authStorage,
       settingsManager,
-      modelRegistry,
+      modelRuntime,
     });
     const result = await createOpenCandleSession({
       cwd: opts.cwd,
       agentDir: opts.agentDir,
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       settingsManager,
       sessionManager: opts.sessionManager,
       askUserHandler: askUserBridge.ask,

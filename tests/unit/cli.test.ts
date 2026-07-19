@@ -60,16 +60,22 @@ vi.mock("@earendil-works/pi-coding-agent", () => {
     };
   }
 
+  function ModelRegistryMock() {
+    return {
+      find: vi.fn(),
+      getAvailable: vi.fn(() => []),
+      hasConfiguredAuth: vi.fn(() => false),
+      refresh: vi.fn(),
+    };
+  }
+
   return {
-    AuthStorage: { create: vi.fn() },
     DefaultPackageManager: vi.fn(DefaultPackageManagerMock),
     InteractiveMode: piMocks.InteractiveMode,
-    ModelRegistry: {
-      create: vi.fn(() => ({
-        find: vi.fn(),
-        getAvailable: vi.fn(() => []),
+    ModelRegistry: vi.fn(ModelRegistryMock),
+    ModelRuntime: {
+      create: vi.fn(async () => ({
         hasConfiguredAuth: vi.fn(() => false),
-        refresh: vi.fn(),
       })),
     },
     SettingsManager: {

@@ -138,7 +138,7 @@ export function createWsHub({
           client.send({ type: "catalog", catalog: buildCatalog() });
           break;
         case "model.setup.refresh":
-          getSession().modelRegistry.refresh();
+          void getSession().modelRuntime.refresh();
           broadcastModelSetup();
           break;
         case "model.setup.save_api_key":

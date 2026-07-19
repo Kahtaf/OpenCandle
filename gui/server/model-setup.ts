@@ -1,4 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
 import {
   getCredentialSource,
@@ -35,17 +36,8 @@ export interface ModelSetupRegistry {
   hasConfiguredAuth(model: Model<Api>): boolean;
 }
 
-interface ModelSetupAuthStorage {
-  set(provider: string, credential: { type: "api_key"; key: string }): void;
-}
-
-interface MutableModelSetupRegistry extends ModelSetupRegistry {
-  authStorage: ModelSetupAuthStorage;
-  find(provider: string, modelId: string): Model<Api> | undefined;
-}
-
 interface ModelSetupSession {
-  modelRegistry: MutableModelSetupRegistry;
+  modelRuntime: ModelRuntime;
   model?: Model<Api>;
   setModel(model: Model<Api>): Promise<void>;
   settingsManager: {
@@ -167,7 +159,7 @@ export function createModelSetupController({
 
   function buildCurrentModelSetupState(): ModelSetupState {
     const session = getSession();
-    return buildModelSetupState(session.modelRegistry, session.model);
+    return buildModelSetupState(new ModelRegistry(session.modelRuntime), session.model);
   }
 
   async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -187,10 +179,13 @@ export function createModelSetupController({
     }
 
     const session = getSession();
-    session.modelRegistry.authStorage.set(provider.id, { type: "api_key", key: trimmed });
-    session.modelRegistry.refresh();
+    await session.modelRuntime.login(provider.id, "api_key", {
+      prompt: async () => trimmed,
+      notify: () => {},
+    });
+    const modelRegistry = new ModelRegistry(session.modelRuntime);
 
-    const model = findPreferredModel(session.modelRegistry, provider);
+    const model = findPreferredModel(modelRegistry, provider);
     if (!model) {
       throw new Error(
         `Saved the ${provider.label} key, but no ${provider.label} models are available yet.`,
@@ -256,8 +251,8 @@ export function createModelSetupController({
   async function handleSelectModel(provider: string, modelId: string): Promise<void> {
     ensureWriter();
     const session = getSession();
-    session.modelRegistry.refresh();
-    const model = session.modelRegistry.find(provider, modelId);
+    await session.modelRuntime.refresh();
+    const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
     await session.setModel(model);
     await session.settingsManager.flush();

@@ -123,9 +123,9 @@
     "node": "^22.19.0 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": ">=0.80.2 <0.80.11",
-    "@earendil-works/pi-ai": ">=0.80.2 <0.80.11",
-    "@earendil-works/pi-coding-agent": ">=0.80.2 <0.80.11",
+    "@earendil-works/pi-agent-core": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
     "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
     "yahoo-finance2": "^4.0.0"
@@ -135,17 +135,17 @@
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.59.0",
-    "@agentclientprotocol/codex-acp": "^1.0.1",
-    "@biomejs/biome": "^2.5.1",
-    "@sinclair/typebox": "^0.34.49",
+    "@agentclientprotocol/codex-acp": "^1.1.4",
+    "@biomejs/biome": "^2.5.4",
+    "@sinclair/typebox": "^0.34.52",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.1",
     "acpx": "^0.12.0",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.61.1",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2",
-    "vite": "^8.1.0",
-    "vitest": "^4.1.9"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
   }
 }

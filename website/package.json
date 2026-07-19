@@ -26,8 +26,8 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
     "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.16",
-    "tailwindcss": "^4.3.1",
+    "postcss": "^8.5.20",
+    "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7"
   }
 }

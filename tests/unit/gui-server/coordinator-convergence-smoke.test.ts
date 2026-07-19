@@ -138,10 +138,12 @@ function fakeSession(sessionManager: SessionManager): AgentSession {
   return {
     sessionManager,
     model,
-    modelRegistry: {
-      refresh: vi.fn(),
-      getAvailable: () => [model],
+    modelRuntime: {
+      refresh: vi.fn(async () => {}),
+      reloadConfig: vi.fn(async () => {}),
+      getAvailableSnapshot: () => [model],
       hasConfiguredAuth: () => true,
+      getModel: () => model,
     },
     isStreaming: false,
     pendingMessageCount: 0,

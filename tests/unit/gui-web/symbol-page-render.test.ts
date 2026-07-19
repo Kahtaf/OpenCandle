@@ -117,42 +117,45 @@ describe("symbol page", () => {
   it.each([
     [2.5, 0.6, "up", "+$2.50", "+0.60%"],
     [-3.25, -0.75, "down", "−$3.25", "−0.75%"],
-  ])("renders a signed, icon-labeled %s header change", (change, percent, direction, money, pct) => {
-    const html = renderToStaticMarkup(
-      React.createElement(SymbolHeader, {
-        ticker: "MSFT",
-        overview: { status: "ok", name: "Microsoft Corporation" },
-        quote: {
-          status: "ok",
-          symbol: "MSFT",
-          price: 420.5,
-          change,
-          changePercent: percent,
-          currency: "USD",
-          marketState: "REGULAR",
-          fetchedAt: new Date().toISOString(),
-        },
-      }),
-    );
+  ])(
+    "renders a signed, icon-labeled %s header change",
+    (change, percent, direction, money, pct) => {
+      const html = renderToStaticMarkup(
+        React.createElement(SymbolHeader, {
+          ticker: "MSFT",
+          overview: { status: "ok", name: "Microsoft Corporation" },
+          quote: {
+            status: "ok",
+            symbol: "MSFT",
+            price: 420.5,
+            change,
+            changePercent: percent,
+            currency: "USD",
+            marketState: "REGULAR",
+            fetchedAt: new Date().toISOString(),
+          },
+        }),
+      );
 
-    expect(html).toContain("<h1");
-    expect(html).toContain('data-slot="panel-card"');
-    expect(html).toContain('data-slot="panel-header"');
-    expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
-      html.indexOf('data-slot="symbol-price-row"'),
-    );
-    expect(html).toContain("text-balance");
-    expect(html).toContain("Microsoft Corporation");
-    expect(html).toContain("MSFT");
-    expect(html).toContain("$420.50");
-    expect(html).toContain("tabular-nums");
-    expect(html).toContain(`Price moved ${direction}:`);
-    expect(html).toContain(money);
-    expect(html).toContain(pct);
-    expect(html).toContain("USD");
-    expect(html).toContain("Regular market");
-    expect(html).not.toContain('data-slot="extended-hours-quote"');
-  });
+      expect(html).toContain("<h1");
+      expect(html).toContain('data-slot="panel-card"');
+      expect(html).toContain('data-slot="panel-header"');
+      expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
+        html.indexOf('data-slot="symbol-price-row"'),
+      );
+      expect(html).toContain("text-balance");
+      expect(html).toContain("Microsoft Corporation");
+      expect(html).toContain("MSFT");
+      expect(html).toContain("$420.50");
+      expect(html).toContain("tabular-nums");
+      expect(html).toContain(`Price moved ${direction}:`);
+      expect(html).toContain(money);
+      expect(html).toContain(pct);
+      expect(html).toContain("USD");
+      expect(html).toContain("Regular market");
+      expect(html).not.toContain('data-slot="extended-hours-quote"');
+    },
+  );
 
   it("reuses ExtendedHoursQuote for pre-market quotes", () => {
     const html = renderToStaticMarkup(

@@ -6,7 +6,6 @@ import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
-  AuthStorage,
   createAgentSessionRuntime,
   createAgentSessionServices,
   DefaultPackageManager,
@@ -14,6 +13,7 @@ import {
   InteractiveMode,
   initTheme,
   ModelRegistry,
+  ModelRuntime,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -202,8 +202,11 @@ async function main(): Promise<void> {
 
   // Default: start the OpenCandle interactive agent
   const settingsManager = SettingsManager.create(cwd, agentDir);
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
+  const modelRuntime = await ModelRuntime.create({
+    authPath: resolve(agentDir, "auth.json"),
+    modelsPath: resolve(agentDir, "models.json"),
+  });
+  const modelRegistry = new ModelRegistry(modelRuntime);
   const shouldSuppressFallbackMessage = modelRegistry.getAvailable().length === 0;
 
   initTheme(settingsManager.getTheme(), true);
@@ -225,7 +228,7 @@ async function main(): Promise<void> {
       if (!model) {
         return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
       }
-      if (!session.modelRegistry.hasConfiguredAuth(model)) {
+      if (!session.modelRuntime.hasConfiguredAuth(model.provider)) {
         return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
       }
       return null;
@@ -271,16 +274,14 @@ async function main(): Promise<void> {
         const services = await createAgentSessionServices({
           cwd: opts.cwd,
           agentDir: opts.agentDir,
-          authStorage,
           settingsManager,
-          modelRegistry,
+          modelRuntime,
         });
         const result = await createOpenCandleSession({
           cwd: opts.cwd,
           agentDir: opts.agentDir,
           settingsManager,
-          authStorage,
-          modelRegistry,
+          modelRuntime,
           sessionManager: opts.sessionManager,
           bindExtensions: false,
         });
