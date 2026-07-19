@@ -17,6 +17,7 @@
 
 ### Changed
 
+- Pull requests now request and await an asynchronous Codex review for every head commit; the head-specific gate is designed to be required alongside CI and unresolved-conversation protection.
 - The README and public docs were refreshed for the recent chart, symbol-page, dashboard, and provider work: one 67-second launch video (hosted on GitHub's CDN) replaces the two 0.11-era demo clips in the README and is embedded on the docs-site homepage, the GUI quickstart documents the market dashboard home, symbol pages, chat charts, and sparklines with live screenshots, and London Strategic Edge setup and coverage now appear across the README, Data Sources, Configuration, Getting Started, and `/connect` docs. The retired demo MP4/poster assets were removed from the repo tree (release-tag-pinned CDN links keep serving them for old release READMEs).
 - The GUI dashboard and saved-market pages now use friendly index names, natural default-watchlist prompts, a balanced home grid, creation-first alert actions, an accessible token-colored portfolio donut, compact watchlist session details, aligned expandable holdings, a simplified watchlist tab, a mobile inspector sheet, human-readable report timestamps, and collision-safe notifications.
 - GUI interaction patterns are now consistent across pages: cards use shared header/divider anatomy and concentric radii; controls have named 40px touch targets, visible keyboard focus, and press feedback; dialogs, sheets, menus, and changing quotes use quick directional motion that respects reduced-motion preferences. Session threads also keep workflow orchestration out of user bubbles while retaining it in compact step cards, with readable synthesis spacing and a non-overlapping Latest control.
@@ -27,6 +28,7 @@
 
 ### Fixed
 
+- Saved GUI sessions and first-run TUI setup now share the migrated Pi model runtime, and GUI model refreshes finish before broadcasting and returning the refreshed setup state.
 - The public docs external-link check now retries transient network failures and records still-unreachable hosts (DNS/TLS/timeout) as non-blocking skips instead of build failures, so an external outage such as a `polymarket.com` fetch timeout no longer reds CI; a genuine HTTP error status (for example 404) still fails the gate. Retry count and delay are configurable via `OPENCANDLE_LINK_CHECK_ATTEMPTS`/`OPENCANDLE_LINK_CHECK_RETRY_DELAY_MS`.
 - GUI alert details now explain edge-triggered price states, Analyzing previews flatten markdown, non-FX instrument searches demote FX crosses, and non-indexed price charts clamp to their data ranges with axis-label breathing room.
 - Persisted GUI workflow transcripts now retain the final validation prompt as a structured step, label only the marker-bounded analyst prompt with its analyst stage, lazy-load portfolio allocation charts, preserve fractional holding quantities, clear stale range data during history refreshes, and expose correlation matrix row headers to assistive technology.

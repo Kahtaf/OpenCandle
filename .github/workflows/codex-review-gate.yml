@@ -1,0 +1,85 @@
+name: Codex review
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  gate:
+    name: Codex review gate
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Request and await a Codex review of the current head
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+            const headSha = context.payload.pull_request.head.sha;
+            const botLogin = "chatgpt-codex-connector[bot]";
+
+            const request = await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: `@codex review\n\nAutomated merge-gate review request for head \`${headSha}\`.`,
+            });
+            const requestedAt = Date.parse(request.data.created_at);
+
+            for (let attempt = 1; attempt <= 50; attempt += 1) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number,
+                per_page: 100,
+              });
+              const currentReview = reviews.find(
+                (review) =>
+                  review.user?.login === botLogin &&
+                  review.commit_id === headSha &&
+                  ["COMMENTED", "APPROVED"].includes(review.state),
+              );
+              if (currentReview) {
+                core.notice(`Codex reviewed current head ${headSha} with state ${currentReview.state}.`);
+                return;
+              }
+
+              const reactions = await github.paginate(
+                github.rest.reactions.listForIssueComment,
+                {
+                  owner,
+                  repo,
+                  comment_id: request.data.id,
+                  per_page: 100,
+                },
+              );
+              const cleanReviewReaction = reactions.find(
+                (reaction) =>
+                  reaction.user?.login === botLogin &&
+                  reaction.content === "+1" &&
+                  Date.parse(reaction.created_at) >= requestedAt,
+              );
+              if (cleanReviewReaction) {
+                core.notice(`Codex returned a clean review for current head ${headSha}.`);
+                return;
+              }
+
+              if (attempt < 50) {
+                await new Promise((resolve) => setTimeout(resolve, 30000));
+              }
+            }
+
+            core.setFailed(`Codex did not review current head ${headSha} within 25 minutes.`);
