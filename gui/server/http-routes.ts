@@ -173,9 +173,10 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
 
     if (url.pathname === "/api/model-setup/refresh" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
-      void options.getSession().modelRuntime.refresh();
-      options.wsHub.broadcastModelSetup();
-      writeJson(res, await options.wsHub.buildBootstrapPayload());
+      await handleTrustedGuiMutation(req, res, options, async () => {
+        await options.getSession().modelRuntime.refresh();
+        options.wsHub.broadcastModelSetup();
+      });
       return;
     }
 

@@ -266,6 +266,45 @@ describe("GUI server route guards", () => {
     );
   });
 
+  it("reuses the shared model runtime for saved GUI sessions", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const factoryStart = source.indexOf("createSessionForManager:");
+    const factoryEnd = source.indexOf("wsHub,", factoryStart);
+    const factorySource = source.slice(factoryStart, factoryEnd);
+
+    expect(factorySource).toContain("modelRuntime,");
+    expect(factorySource).not.toContain("authStorage,");
+    expect(factorySource).not.toContain("modelRegistry,");
+  });
+
+  it("waits for a model refresh before broadcasting its result", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/model-setup/refresh"');
+    const routeEnd = source.indexOf('url.pathname === "/api/model-setup/api-key"', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain(
+      "await handleTrustedGuiMutation(req, res, options, async () => {",
+    );
+    expect(routeSource).toContain("await options.getSession().modelRuntime.refresh();");
+    expect(routeSource.indexOf("await options.getSession().modelRuntime.refresh();")).toBeLessThan(
+      routeSource.indexOf("options.wsHub.broadcastModelSetup();"),
+    );
+    expect(routeSource).not.toContain("writeJson(res,");
+  });
+
+  it("waits for WebSocket model refreshes before broadcasting their result", () => {
+    const source = readFileSync(resolve("gui/server/ws-hub.ts"), "utf-8");
+    const routeStart = source.indexOf('case "model.setup.refresh"');
+    const routeEnd = source.indexOf('case "model.setup.save_api_key"', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("await getSession().modelRuntime.refresh();");
+    expect(routeSource.indexOf("await getSession().modelRuntime.refresh();")).toBeLessThan(
+      routeSource.indexOf("broadcastModelSetup();"),
+    );
+  });
+
   it("migrates current-session writer locks before broadcasting current run snapshots", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const broadcastStart = source.indexOf("function broadcastRunSessionSnapshot");

@@ -234,8 +234,7 @@ const httpRequestHandler = createHttpRequestHandler({
     createOpenCandleSession({
       cwd,
       agentDir,
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       settingsManager,
       sessionManager: targetSessionManager,
       askUserHandler: askUserBridge.askForSession(targetSessionManager.getSessionId()),

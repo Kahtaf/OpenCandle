@@ -252,7 +252,7 @@ export default function openCandleExtension(
     // reinjects as a `role:"user"` message every turn).
     ctx.ui.setStatus("opencandle-disclaimer", DISCLAIMER_TEXT);
 
-    const result = await coordinator.runSetup(pi, ctx, { mode: "startup" });
+    const result = await coordinator.runSetup(pi, ctx, { mode: "startup" }, options?.modelRuntime);
     if (result === "shutdown") {
       return;
     }
