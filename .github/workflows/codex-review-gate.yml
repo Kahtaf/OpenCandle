@@ -12,7 +12,9 @@ concurrency:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  # write: commenting `@codex review` on a PR goes through the issues API,
+  # which requires pull-requests write when the target issue is a PR.
+  pull-requests: write
   statuses: write
 
 jobs:
