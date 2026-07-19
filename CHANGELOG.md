@@ -28,7 +28,7 @@
 
 ### Fixed
 
-- Saved GUI sessions and first-run TUI setup now share the migrated Pi model runtime, and GUI model refreshes finish before broadcasting and returning the refreshed setup state.
+- Saved GUI sessions and first-run TUI setup now share the migrated Pi model runtime, and HTTP and WebSocket model refreshes finish before broadcasting and returning the refreshed setup state.
 - The public docs external-link check now retries transient network failures and records still-unreachable hosts (DNS/TLS/timeout) as non-blocking skips instead of build failures, so an external outage such as a `polymarket.com` fetch timeout no longer reds CI; a genuine HTTP error status (for example 404) still fails the gate. Retry count and delay are configurable via `OPENCANDLE_LINK_CHECK_ATTEMPTS`/`OPENCANDLE_LINK_CHECK_RETRY_DELAY_MS`.
 - GUI alert details now explain edge-triggered price states, Analyzing previews flatten markdown, non-FX instrument searches demote FX crosses, and non-indexed price charts clamp to their data ranges with axis-label breathing room.
 - Persisted GUI workflow transcripts now retain the final validation prompt as a structured step, label only the marker-bounded analyst prompt with its analyst stage, lazy-load portfolio allocation charts, preserve fractional holding quantities, clear stale range data during history refreshes, and expose correlation matrix row headers to assistive technology.

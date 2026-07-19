@@ -20,4 +20,13 @@ describe("Pi model runtime migration guards", () => {
     expect(source).toContain('["COMMENTED", "APPROVED"].includes(review.state)');
     expect(source).not.toContain('review.state !== "PENDING"');
   });
+
+  it("publishes the Codex gate result to the PR head commit", () => {
+    const source = readFileSync(resolve(".github/workflows/codex-review-gate.yml"), "utf-8");
+
+    expect(source).toContain("github.rest.repos.createCommitStatus({");
+    expect(source).toContain("sha: headSha,");
+    expect(source).toContain("context: statusContext,");
+    expect(source).toContain('await publishStatus("success"');
+  });
 });

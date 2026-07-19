@@ -13,6 +13,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  statuses: write
 
 jobs:
   gate:
@@ -30,6 +31,20 @@ jobs:
             const pull_number = context.payload.pull_request.number;
             const headSha = context.payload.pull_request.head.sha;
             const botLogin = "chatgpt-codex-connector[bot]";
+            const statusContext = "Codex review gate";
+            const targetUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const publishStatus = (state, description) =>
+              github.rest.repos.createCommitStatus({
+                owner,
+                repo,
+                sha: headSha,
+                state,
+                context: statusContext,
+                description,
+                target_url: targetUrl,
+              });
+
+            await publishStatus("pending", "Waiting for Codex to review the current PR head");
 
             const request = await github.rest.issues.createComment({
               owner,
@@ -53,6 +68,7 @@ jobs:
                   ["COMMENTED", "APPROVED"].includes(review.state),
               );
               if (currentReview) {
+                await publishStatus("success", "Codex reviewed the current PR head");
                 core.notice(`Codex reviewed current head ${headSha} with state ${currentReview.state}.`);
                 return;
               }
@@ -73,6 +89,7 @@ jobs:
                   Date.parse(reaction.created_at) >= requestedAt,
               );
               if (cleanReviewReaction) {
+                await publishStatus("success", "Codex returned a clean review for the current PR head");
                 core.notice(`Codex returned a clean review for current head ${headSha}.`);
                 return;
               }
@@ -82,4 +99,5 @@ jobs:
               }
             }
 
+            await publishStatus("failure", "Codex review timed out for the current PR head");
             core.setFailed(`Codex did not review current head ${headSha} within 25 minutes.`);
