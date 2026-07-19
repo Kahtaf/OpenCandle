@@ -122,13 +122,12 @@ describe("formatAlertObservedValue", () => {
       value: 50,
       expected: "price $50.00 · below $55.00, waiting for next downward cross",
     },
-  ])("describes the observed edge state for $conditionType at $value", ({
-    conditionType,
-    value,
-    expected,
-  }) => {
-    expect(formatAlertObservedValue(conditionType, { threshold: 55 }, { value })).toBe(expected);
-  });
+  ])(
+    "describes the observed edge state for $conditionType at $value",
+    ({ conditionType, value, expected }) => {
+      expect(formatAlertObservedValue(conditionType, { threshold: 55 }, { value })).toBe(expected);
+    },
+  );
 
   it("uses condition context and human units for every alert condition", () => {
     expect(

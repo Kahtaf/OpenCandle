@@ -4,12 +4,12 @@ vi.mock("../../../src/infra/open-url.js", async () => ({
   openInBrowser: vi.fn(async () => {}),
 }));
 
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
   getLlmSetupRequirement,
   runApiKeySetup,
   runOpenCandleSetup,
 } from "../../../src/pi/setup.js";
+import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 function createUi(overrides: Partial<any> = {}) {
   return {
@@ -46,17 +46,16 @@ describe("OpenCandle setup", () => {
   // tests will land in Task Group 14 (auto-model-select) and Task Group 17 (e2e
   // for the full just-in-time flow).
 
-  it("requires auth when there is no usable model", () => {
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+  it("requires auth when there is no usable model", async () => {
+    const { modelRegistry } = await createTestModelRuntime();
 
     expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("connect_auth");
   });
 
-  it("requires model selection when auth exists but no current model is usable", () => {
-    const authStorage = AuthStorage.inMemory();
-    authStorage.set("anthropic", { type: "api_key", key: "sk-ant-test" });
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+  it("requires model selection when auth exists but no current model is usable", async () => {
+    const { modelRegistry } = await createTestModelRuntime({
+      anthropic: { type: "api_key", key: "sk-ant-test" },
+    });
 
     expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("select_model");
   });
@@ -65,13 +64,13 @@ describe("OpenCandle setup", () => {
     globalThis.fetch = vi.fn(
       async () => new Response("Forbidden", { status: 403 }),
     ) as unknown as typeof fetch;
-    const authStorage = AuthStorage.inMemory();
+    const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi({ input: vi.fn().mockResolvedValue("bad-key") });
-    const ctx = { ui, modelRegistry: ModelRegistry.inMemory(authStorage) };
+    const ctx = { ui, modelRegistry };
 
-    await expect(runApiKeySetup(ctx as any, "openai")).resolves.toBe(false);
+    await expect(runApiKeySetup(ctx as any, "openai", modelRuntime)).resolves.toBe(false);
 
-    expect(authStorage.get("openai")).toBeUndefined();
+    expect(await credentials.read("openai")).toBeUndefined();
     expect(ui.notify).toHaveBeenCalledWith(
       "Key was rejected by OpenAI. Paste a different key.",
       "error",
@@ -82,8 +81,7 @@ describe("OpenCandle setup", () => {
     // 14.1 — with a defaultModelId that's available in getAvailable(), setModel should be
     // called exactly once without the model picker opening. The UI should receive only two
     // `select` calls total (choose entry method, choose provider).
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi();
     ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key");
@@ -97,10 +95,15 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
+      { mode: "manual" },
+      modelRuntime,
+    );
 
     expect(result).toBe("ready");
-    expect(authStorage.get("google")).toEqual({ type: "api_key", key: "test-google-key" });
+    expect(await credentials.read("google")).toEqual({ type: "api_key", key: "test-google-key" });
     expect(setModel).toHaveBeenCalledTimes(1);
     const activated = setModel.mock.calls[0]?.[0];
     expect(activated?.provider).toBe("google");
@@ -113,10 +116,9 @@ describe("OpenCandle setup", () => {
     // 14.2 — if the registry lookup for (provider, defaultModelId) fails, the existing
     // picker path should still open. We force this by registering a fake provider that
     // has no default in our DEFAULT_LLM_MODELS map.
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
     // Register a throwaway provider with a single model whose id is NOT in our defaults.
-    modelRegistry.registerProvider("custom-llm", {
+    modelRuntime.registerProvider("custom-llm", {
       api: "openai-completions",
       baseUrl: "https://example.test/v1",
       apiKey: "fake",
@@ -132,8 +134,8 @@ describe("OpenCandle setup", () => {
         },
       ],
     });
-    authStorage.set("custom-llm" as any, { type: "api_key", key: "fake" });
-    modelRegistry.refresh();
+    await credentials.modify("custom-llm", async () => ({ type: "api_key", key: "fake" }));
+    await modelRuntime.refresh({ allowNetwork: false });
 
     const ui = createUi();
     // Directly invoke the picker path by starting from the "select_model" requirement.
@@ -148,7 +150,12 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "startup" });
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
+      { mode: "startup" },
+      modelRuntime,
+    );
 
     expect(result).toBe("ready");
     expect(setModel).toHaveBeenCalledTimes(1);
@@ -160,8 +167,7 @@ describe("OpenCandle setup", () => {
     // 14.3 — regression guard: after the finance-setup phase was removed, startup with
     // no model configured must not emit any data-provider picker. The first select call
     // must be the LLM entry-method picker.
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi({ select: vi.fn().mockResolvedValue("Exit setup") });
     const ctx = {
       hasUI: true,
@@ -171,7 +177,12 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    await runOpenCandleSetup({ setModel: vi.fn() } as any, ctx as any, { mode: "startup" });
+    await runOpenCandleSetup(
+      { setModel: vi.fn() } as any,
+      ctx as any,
+      { mode: "startup" },
+      modelRuntime,
+    );
 
     // The first select call should be the LLM entry-method question.
     const firstSelectCall = ui.select.mock.calls[0];
@@ -188,9 +199,9 @@ describe("OpenCandle setup", () => {
   it("subsequent startup with LLM already configured shows zero setup screens", async () => {
     // 14.4 — when getLlmSetupRequirement returns "ready" and mode === "startup",
     // runOpenCandleSetup should short-circuit without touching ctx.ui at all.
-    const authStorage = AuthStorage.inMemory();
-    authStorage.set("google", { type: "api_key", key: "pre-existing" });
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime({
+      google: { type: "api_key", key: "pre-existing" },
+    });
     const models = modelRegistry.getAvailable();
     const seeded = models.find((m) => m.provider === "google" && m.id === "gemini-2.5-flash");
     expect(seeded).toBeDefined();
@@ -205,7 +216,12 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "startup" });
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
+      { mode: "startup" },
+      modelRuntime,
+    );
 
     expect(result).toBe("ready");
     expect(ui.select).not.toHaveBeenCalled();
@@ -219,8 +235,7 @@ describe("OpenCandle setup", () => {
     // LoginDialogComponent (which is instantiated inside ctx.ui.custom). The copy
     // surfaced to the user must reference OpenCandle so users understand where
     // the key is stored.
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi();
     ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Anthropic API");
     ui.input.mockResolvedValueOnce("sk-ant-test-abc");
@@ -234,7 +249,12 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
+      { mode: "manual" },
+      modelRuntime,
+    );
 
     expect(result).toBe("ready");
     // 15.1 — LoginDialogComponent is only invoked via ctx.ui.custom. API-key path
@@ -251,8 +271,7 @@ describe("OpenCandle setup", () => {
   it("does not call ctx.ui.setHeader or setStatus anywhere in the setup flow", async () => {
     // 15.5 — renderSetupHeader / setSetupChrome / clearSetupChrome were deleted,
     // so the UI surface should never receive a header or a per-setup status string.
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi();
     ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key-2");
@@ -266,15 +285,14 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
+    await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" }, modelRuntime);
 
     expect(ui.setHeader).not.toHaveBeenCalled();
     expect(ui.setStatus).not.toHaveBeenCalled();
   });
 
   it("exits startup setup cleanly when the user declines LLM setup", async () => {
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime();
     const ui = createUi({ select: vi.fn().mockResolvedValue("Exit setup") });
     const shutdown = vi.fn();
     const ctx = {
@@ -285,9 +303,12 @@ describe("OpenCandle setup", () => {
       shutdown,
     };
 
-    const result = await runOpenCandleSetup({ setModel: vi.fn() } as any, ctx as any, {
-      mode: "startup",
-    });
+    const result = await runOpenCandleSetup(
+      { setModel: vi.fn() } as any,
+      ctx as any,
+      { mode: "startup" },
+      modelRuntime,
+    );
 
     expect(result).toBe("shutdown");
     expect(shutdown).toHaveBeenCalled();

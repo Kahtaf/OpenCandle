@@ -21,15 +21,12 @@ describe("tickerFromPath", () => {
     expect(tickerFromPath(symbolPageHref(symbol))).toBe(symbol);
   });
 
-  it.each([
-    "/symbol/",
-    "/symbol/A/B",
-    "/watchlists",
-    "/",
-    "/symbol/%3Cscript%3E",
-  ])("does not resolve %s", (pathname) => {
-    expect(tickerFromPath(pathname)).toBe("");
-  });
+  it.each(["/symbol/", "/symbol/A/B", "/watchlists", "/", "/symbol/%3Cscript%3E"])(
+    "does not resolve %s",
+    (pathname) => {
+      expect(tickerFromPath(pathname)).toBe("");
+    },
+  );
 });
 
 describe("symbol route", () => {

@@ -124,16 +124,15 @@ describe("instrument search UI helpers", () => {
     ]);
   });
 
-  it.each([
-    "EURUSD",
-    "NOKAMD=X",
-    "EUR/USD",
-  ])("preserves provider order for the FX-looking query %s", (query) => {
-    const mixedCandidates = [
-      { symbol: "EURUSD=X", quoteType: "CURRENCY" },
-      { symbol: "EUR", quoteType: "EQUITY" },
-    ];
+  it.each(["EURUSD", "NOKAMD=X", "EUR/USD"])(
+    "preserves provider order for the FX-looking query %s",
+    (query) => {
+      const mixedCandidates = [
+        { symbol: "EURUSD=X", quoteType: "CURRENCY" },
+        { symbol: "EUR", quoteType: "EQUITY" },
+      ];
 
-    expect(rankInstrumentCandidates(mixedCandidates, query)).toEqual(mixedCandidates);
-  });
+      expect(rankInstrumentCandidates(mixedCandidates, query)).toEqual(mixedCandidates);
+    },
+  );
 });

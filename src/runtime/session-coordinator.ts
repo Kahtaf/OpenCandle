@@ -2,6 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
+  ModelRuntime,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { isAnalystSplit, parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
@@ -195,8 +196,9 @@ export class SessionCoordinator {
     pi: ExtensionAPI,
     ctx: ExtensionContext | ExtensionCommandContext,
     options: { mode: "startup" | "manual" },
+    modelRuntime?: ModelRuntime,
   ): Promise<"ready" | "shutdown" | "cancelled"> {
-    return runOpenCandleSetup(pi, ctx, options);
+    return runOpenCandleSetup(pi, ctx, options, modelRuntime);
   }
 
   /** Extract and persist user preferences from natural language. */

@@ -2,15 +2,11 @@ import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  AuthStorage,
-  ModelRegistry,
-  SessionManager,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createOpenCandleSession } from "../../../src/pi/session.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
+import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 describe("createOpenCandleSession", () => {
   const originalEnv = { ...process.env };
@@ -55,9 +51,8 @@ describe("createOpenCandleSession", () => {
     process.env.OPENAI_API_KEY = "openai-key";
     process.env.ANTHROPIC_API_KEY = "anthropic-key";
 
-    const authStorage = AuthStorage.inMemory();
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const available = await modelRegistry.getAvailable();
+    const { modelRuntime } = await createTestModelRuntime();
+    const available = await modelRuntime.getAvailable();
 
     expect(available.some((model) => model.provider === "google")).toBe(true);
     expect(available.some((model) => model.provider === "openai")).toBe(true);
@@ -89,9 +84,9 @@ describe("createOpenCandleSession", () => {
         timestamp: Date.now(),
       });
 
-      const authStorage = AuthStorage.inMemory();
-      authStorage.set("google", { type: "api_key", key: "test-key" });
-      const modelRegistry = ModelRegistry.inMemory(authStorage);
+      const { modelRuntime } = await createTestModelRuntime({
+        google: { type: "api_key", key: "test-key" },
+      });
       const settingsManager = SettingsManager.inMemory({
         defaultProvider: "google",
         defaultModel: "gemini-3.1-pro-preview",
@@ -99,8 +94,7 @@ describe("createOpenCandleSession", () => {
 
       const result = await createOpenCandleSession({
         cwd,
-        authStorage,
-        modelRegistry,
+        modelRuntime,
         settingsManager,
         sessionManager: SessionManager.continueRecent(cwd, sessionDir),
       });
