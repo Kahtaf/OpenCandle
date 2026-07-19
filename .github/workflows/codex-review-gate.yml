@@ -94,6 +94,27 @@ jobs:
                 return;
               }
 
+              const reactions = await github.paginate(
+                github.rest.reactions.listForIssueComment,
+                {
+                  owner,
+                  repo,
+                  comment_id: request.data.id,
+                  per_page: 100,
+                },
+              );
+              const cleanReaction = reactions.find(
+                (reaction) =>
+                  reaction.user?.login === botLogin &&
+                  reaction.content === "+1" &&
+                  Date.parse(reaction.created_at) >= requestedAt,
+              );
+              if (cleanReaction) {
+                await publishStatus("success", "Codex completed a clean review of the current PR head");
+                core.notice(`Codex returned a clean review reaction for current head ${headSha}.`);
+                return;
+              }
+
               if (attempt < 50) {
                 await new Promise((resolve) => setTimeout(resolve, 30000));
               }
