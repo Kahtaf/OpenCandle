@@ -86,6 +86,33 @@ jobs:
                 return;
               }
 
+              const currentHeadRequests = issueComments.filter(
+                (comment) =>
+                  ["OWNER", "MEMBER", "COLLABORATOR"].includes(comment.author_association) &&
+                  comment.body?.includes("@codex review") &&
+                  comment.body?.includes(headSha.slice(0, 8)),
+              );
+              for (const request of currentHeadRequests) {
+                const reactions = await github.paginate(
+                  github.rest.reactions.listForIssueComment,
+                  {
+                    owner,
+                    repo,
+                    comment_id: request.id,
+                    per_page: 100,
+                  },
+                );
+                const cleanReaction = reactions.find(
+                  (reaction) =>
+                    reaction.user?.login === botLogin && reaction.content === "+1",
+                );
+                if (cleanReaction) {
+                  await publishStatus("success", "Codex completed a clean review of the current PR head");
+                  core.notice(`Codex returned a clean review reaction for current head ${headSha}.`);
+                  return;
+                }
+              }
+
               if (attempt < 50) {
                 await new Promise((resolve) => setTimeout(resolve, 30000));
               }
