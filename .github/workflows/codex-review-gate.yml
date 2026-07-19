@@ -52,6 +52,7 @@ jobs:
               issue_number: pull_number,
               body: `@codex review\n\nAutomated merge-gate review request for head \`${headSha}\`.`,
             });
+            const requestedAt = Date.parse(request.data.created_at);
             for (let attempt = 1; attempt <= 50; attempt += 1) {
               const reviews = await github.paginate(github.rest.pulls.listReviews, {
                 owner,
@@ -71,28 +72,19 @@ jobs:
                 return;
               }
 
-              // In this repository the connector acknowledges with `eyes` and
-              // completes a no-findings review with a later `+1`. Requiring
-              // that ordering on this SHA-stamped request prevents an
-              // acknowledgement alone from satisfying the head status.
-              const reactions = await github.paginate(
-                github.rest.reactions.listForIssueComment,
-                {
-                  owner,
-                  repo,
-                  comment_id: request.data.id,
-                  per_page: 100,
-                },
-              );
-              const acknowledgement = reactions.find(
-                (reaction) => reaction.user?.login === botLogin && reaction.content === "eyes",
-              );
-              const cleanCompletion = reactions.find(
-                (reaction) =>
-                  reaction.user?.login === botLogin &&
-                  reaction.content === "+1" &&
-                  acknowledgement &&
-                  Date.parse(reaction.created_at) > Date.parse(acknowledgement.created_at),
+              const issueComments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: pull_number,
+                per_page: 100,
+              });
+              const reviewedHeadMarker = `Reviewed commit:** \`${headSha.slice(0, 10)}\``;
+              const cleanCompletion = issueComments.find(
+                (comment) =>
+                  comment.user?.login === botLogin &&
+                  Date.parse(comment.created_at) >= requestedAt &&
+                  comment.body?.includes("Codex Review: Didn't find any major issues") &&
+                  comment.body.includes(reviewedHeadMarker),
               );
               if (cleanCompletion) {
                 await publishStatus("success", "Codex completed a clean review of the current PR head");
