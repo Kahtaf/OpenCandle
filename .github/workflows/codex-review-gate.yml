@@ -46,14 +46,12 @@ jobs:
 
             await publishStatus("pending", "Waiting for Codex to review the current PR head");
 
-            const request = await github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               owner,
               repo,
               issue_number: pull_number,
               body: `@codex review\n\nAutomated merge-gate review request for head \`${headSha}\`.`,
             });
-            const requestedAt = Date.parse(request.data.created_at);
-
             for (let attempt = 1; attempt <= 50; attempt += 1) {
               const reviews = await github.paginate(github.rest.pulls.listReviews, {
                 owner,
@@ -70,27 +68,6 @@ jobs:
               if (currentReview) {
                 await publishStatus("success", "Codex reviewed the current PR head");
                 core.notice(`Codex reviewed current head ${headSha} with state ${currentReview.state}.`);
-                return;
-              }
-
-              const reactions = await github.paginate(
-                github.rest.reactions.listForIssueComment,
-                {
-                  owner,
-                  repo,
-                  comment_id: request.data.id,
-                  per_page: 100,
-                },
-              );
-              const cleanReviewReaction = reactions.find(
-                (reaction) =>
-                  reaction.user?.login === botLogin &&
-                  reaction.content === "+1" &&
-                  Date.parse(reaction.created_at) >= requestedAt,
-              );
-              if (cleanReviewReaction) {
-                await publishStatus("success", "Codex returned a clean review for the current PR head");
-                core.notice(`Codex returned a clean review for current head ${headSha}.`);
                 return;
               }
 
