@@ -2,11 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Agent-developer guardrails now provide canonical `typecheck` and `gates` scripts, a safe worktree bootstrap command, and checked-in delegation and resume contracts.
+
 ## [0.13.0] - 2026-07-19
 
 ### Added
 
-- Agent-developer guardrails now provide canonical `typecheck` and `gates` scripts, a safe worktree bootstrap command, and checked-in delegation and resume contracts.
 - The GUI home empty state is now a market dashboard: a fixed indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines served by a new guarded read-only `GET /api/market-state/indices` endpoint with stale-while-revalidate caching, watchlist top movers, a portfolio summary stat row with a derived intraday move, an alerts status card, and new-user affordance cards — all rendered below the composer, which keeps its fresh-session run flow and model-setup gating unchanged.
 - The local GUI now renders a follower-safe per-ticker symbol page with quote and extended-hours context, an interactive range chart, filtered fundamentals, saved positions and alerts, watchlist membership, writer-only analysis actions, non-equity degradation, and quote loading/freshness feedback; encoded entry-point links are available from watchlists, portfolios, ticker popovers, the symbol inspector, and instrument search.
 - The local GUI now resolves normalized, URL-encoded `/symbol/$ticker` routes and exposes a guarded read-only `GET /api/instruments/overview` endpoint with per-symbol stale-while-revalidate caching for company profile and key-stat data.
