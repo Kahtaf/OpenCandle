@@ -1,1 +1,1 @@
-@gui/AGENTS.md
+@AGENTS.md
