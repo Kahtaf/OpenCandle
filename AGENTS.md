@@ -8,7 +8,9 @@ npm start                      # run agent (tsx src/cli.ts)
 npm run gui                    # run local browser GUI at 127.0.0.1:14567
 npm test                       # unit tests — full test menu in tests/AGENTS.md
 npm run lint                   # biome check (CI gates on this)
-npx tsc --noEmit               # typecheck (CI gates on this)
+npm run typecheck              # TypeScript typecheck without emitting files
+npm run gates                  # full agent handoff proof battery
+npm run bootstrap:agent        # prepare a fresh agent worktree
 npm run eval -- <suite>        # eval front door — the only supported eval surface
 npm run review:pr              # repo autoreview + typecheck/lint/test gate
 ```
@@ -48,6 +50,10 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 - Run `npm run review:pr` (autoreview) after every sizable piece of work, before opening or updating a PR.
 - For new atomic features or bug fixes, update the @CHANGELOG.md (use changelog-automation skill).
 
+## DELEGATION
+
+Prepend `.agents/delegation/subagent-contract.md` to delegation prompts and fill its per-run variables. Resume interrupted runs with `.agents/delegation/resume-template.md`.
+
 ## VERIFY LIKE A USER
 Unit tests passing is not done. Exercise the change on the live product before declaring it complete:
 - **Agent/TUI behavior**: drive OpenCandle headlessly with the TUI harness — `runOpenCandleSession()` from `tests/harness/opencandle-runner.ts` for scripted runs, or `npx tsx tests/harness/cli.ts run/wait/answer/trace --ipc <dir>` for interactive ask-user driving → `tests/harness/README.md`.
@@ -58,7 +64,7 @@ When fixing eval or competitive-benchmark regressions, classify the issue into t
 ## BOUNDARIES
 
 **Always (do autonomously):**
-- Run `npm test`, `npm run lint`, and `npx tsc --noEmit` after changes
+- Run `npm run gates` before handing off work (`npm test` alone mid-loop is fine)
 - Follow Pi conventions where possible (sessions, TUI) (https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md)
 - Add fixture JSON in `tests/fixtures/<provider>/` for new API responses
 - Use existing `cache`/`rateLimiter` infra for new providers

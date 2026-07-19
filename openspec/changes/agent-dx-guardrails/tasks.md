@@ -25,9 +25,9 @@ Implementation notes for the delegated agent: TDD throughout — write the faili
 
 ## 5. AGENTS.md and docs wiring
 
-- [ ] 5.1 In root `AGENTS.md`: add `npm run typecheck`, `npm run gates`, and `npm run bootstrap:agent` (with one-line comments) to the COMMANDS block; add a short `## DELEGATION` section stating that delegation prompts prepend `.agents/delegation/subagent-contract.md` and fill its variables, and that interrupted runs resume via `.agents/delegation/resume-template.md`; update the BOUNDARIES "Always" bullet "Run `npm test` after changes" to "Run `npm run gates` before handing off work (`npm test` alone mid-loop is fine)". Keep the file well under 24576 bytes.
-- [ ] 5.2 In `tests/AGENTS.md` COMMANDS block: add `npm run gates`. In `gui/AGENTS.md`: if it lists proof/test commands, reference `npm run gates` for handoff; otherwise leave unchanged.
-- [ ] 5.3 Add a CHANGELOG.md `[Unreleased]` → `### Added` entry describing the canonical `gates`/`typecheck` scripts, the agent bootstrap script, and the checked-in delegation contract (one entry, agent-developer-facing wording).
+- [x] 5.1 In root `AGENTS.md`: add `npm run typecheck`, `npm run gates`, and `npm run bootstrap:agent` (with one-line comments) to the COMMANDS block; add a short `## DELEGATION` section stating that delegation prompts prepend `.agents/delegation/subagent-contract.md` and fill its variables, and that interrupted runs resume via `.agents/delegation/resume-template.md`; update the BOUNDARIES "Always" bullet "Run `npm test` after changes" to "Run `npm run gates` before handing off work (`npm test` alone mid-loop is fine)". Keep the file well under 24576 bytes.
+- [x] 5.2 In `tests/AGENTS.md` COMMANDS block: add `npm run gates`. In `gui/AGENTS.md`: if it lists proof/test commands, reference `npm run gates` for handoff; otherwise leave unchanged.
+- [x] 5.3 Add a CHANGELOG.md `[Unreleased]` → `### Added` entry describing the canonical `gates`/`typecheck` scripts, the agent bootstrap script, and the checked-in delegation contract (one entry, agent-developer-facing wording).
 
 ## 6. Proof (delegated agent)
 
