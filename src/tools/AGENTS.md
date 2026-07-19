@@ -12,6 +12,7 @@ src/tools/
 ├── sentiment/     # Reddit sentiment, news sentiment
 ├── portfolio/     # Tracker, risk analysis, watchlist, correlation
 ├── market/        # Stock quotes, history, crypto, ticker search
+├── interaction/   # ask_user clarification tool
 └── index.ts       # getAllTools() registry — add new tools here
 ```
 
@@ -25,6 +26,7 @@ src/tools/
 | Reddit buzz, news | `sentiment/` |
 | Positions, Sharpe, VaR, watchlist | `portfolio/` |
 | Quotes, OHLCV, crypto, search | `market/` |
+| Clarifying questions (`ask_user`) | `interaction/` |
 
 ## ADDING A TOOL
 1. Create `src/tools/<domain>/my-tool.ts` with Typebox params + `AgentTool` export.

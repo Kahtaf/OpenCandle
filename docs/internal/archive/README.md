@@ -17,3 +17,5 @@ Archived internal docs. Operative docs live one level up. Do not treat anything 
 | Release Readiness Audit - 2026-06-20 | Point-in-time release-readiness audit for 2026-06-20. | 2026-07-05 | point-in-time |
 | Release Readiness Audit - 2026-06-21 | Point-in-time release-readiness audit for 2026-06-21. | 2026-07-05 | point-in-time |
 | Prompt-to-policy baseline snapshot | Historical prompt-to-policy baseline trace snapshot from 2026-05-24. | 2026-07-05 | point-in-time |
+| Release Readiness Audit - 2026-07-10 | Point-in-time release-readiness audit for the 0.12.0 release. | 2026-07-18 | point-in-time |
+| Router Gemini Triage Table | Gemini router live-eval triage decision record; referenced only by archived PR 85 material. | 2026-07-18 | point-in-time |
