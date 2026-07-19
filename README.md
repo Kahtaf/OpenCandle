@@ -18,7 +18,7 @@ npx opencandle gui   # browser UI at http://127.0.0.1:14567
 
 https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29
 
-![OpenCandle GUI workbench showing a chat session with financial result cards alongside the market dashboard.](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/docs/images/gui-workbench.png)
+![OpenCandle GUI answering "How is NVDA doing today?" with a quote table, cited news sources, and the research steps panel open.](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/docs/images/gui-chat-research.png)
 
 ## Why OpenCandle
 
