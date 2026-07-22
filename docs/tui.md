@@ -3,9 +3,9 @@ title: TUI
 description: Use the OpenCandle terminal interface, slash commands, sessions, and the local GUI together.
 ---
 
-# TUI
+# Terminal (TUI)
 
-The terminal UI is the main OpenCandle agent experience. It runs chat, setup, slash commands, tool calls, and session state in one place.
+The TUI is OpenCandle's equally complete terminal interface for users who prefer a keyboard-first workflow. It runs the same finance tools and workflows as the primary GUI, with the same saved sessions, provider-backed evidence, setup, tool calls, and local market state.
 
 OpenCandle runs on [Pi](https://github.com/earendil-works/pi), the local agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle contributes the finance-specific tools, workflows, prompts, and local state.
 
@@ -85,11 +85,9 @@ Running plain `opencandle` resumes the most recent Pi session for the current wo
 
 The local GUI reads the same session state as the terminal UI, so you can use both at once. If a view says it is reconnecting or syncing, wait a moment and retry.
 
-## CLI vs GUI
+## Terminal and GUI
 
-Use the TUI when you want the fastest keyboard-driven agent loop, setup commands, or a plain transcript in your terminal.
-
-Use the GUI when you want a local browser workbench: chat history, tool catalog, provider status, session navigation, and richer cards for market data. Start it with:
+The GUI is the primary path and the best place to inspect charts, research cards, provider status, saved market state, and prior sessions visually. Start it with:
 
 ```bash
 opencandle gui
@@ -102,3 +100,5 @@ npm run gui
 ```
 
 Then open `http://127.0.0.1:14567`. The GUI is local-only and shares the same underlying sessions as the terminal.
+
+Use the TUI when you prefer the fastest keyboard-driven loop, setup and slash commands, or a plain transcript. It remains feature-complete for financial investigations: prompts route through the same tools and workflows, and the results retain the same evidence, provider gaps, watchlists, portfolios, alerts, and reports.

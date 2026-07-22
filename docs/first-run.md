@@ -13,26 +13,26 @@ Model credentials and market-data provider keys are separate. OpenCandle needs a
 
 ## Five-Minute Path
 
-1. Install and start OpenCandle.
+1. Install and start the OpenCandle GUI.
 
 ```bash
-npx opencandle@latest
+npx opencandle@latest gui
 ```
 
 From a source checkout, use:
 
 ```bash
 npm install
-npm start
+npm run gui
 ```
+
+Prefer the terminal? Start the equally complete TUI with `npx opencandle@latest` or `npm start` from a source checkout.
 
 The first launch needs network access; Pi downloads two small helper binaries into `~/.pi/agent/bin`.
 
 2. Connect an AI model when the setup prompt opens.
 
-In the terminal, choose Pi sign-in (if the setup prompt offers it) or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
-
-If you started with `opencandle gui`: the browser setup panel takes model API keys only. To use Pi sign-in, run `/setup` in the terminal first, then refresh the GUI.
+In the GUI, use the browser setup panel to connect an OpenAI, Anthropic, or Google API key. OpenCandle needs a model before chat can start. If you prefer Pi sign-in, run `/setup` in the terminal first, then refresh the GUI. The TUI also supports API-key setup directly.
 
 3. Start with a keyless market-data prompt.
 
@@ -46,7 +46,7 @@ Yahoo Finance, CoinGecko, SEC EDGAR, and several other sources work without prov
 
 4. Add provider keys only when needed.
 
-If an answer says a provider is missing or degraded, follow the suggested `/connect ...` command. Common examples:
+If an answer says a provider is missing or degraded, open Providers in the GUI. Terminal users can follow the suggested `/connect ...` command. Common examples:
 
 ```text
 /connect financials
@@ -64,7 +64,7 @@ OpenCandle is research software, not a financial advisor. Treat warnings, stale-
 
 ## Model Setup Expectations
 
-OpenCandle uses Pi for model credentials and model selection. In the terminal/TUI, you can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
+OpenCandle uses Pi for model credentials and model selection. The GUI setup panel accepts API keys for OpenAI, Anthropic, or Google models. In the equally complete terminal interface, you can use Pi sign-in or an API key. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
 
 Use `/setup` later if you want to reconnect auth or choose a different model setup path. Use `/model` when you only want to switch among models that are already available.
 

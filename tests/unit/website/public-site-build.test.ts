@@ -46,6 +46,20 @@ describe("public site build contract", () => {
       "website/dist/llms-full.txt",
       "website/dist/assets/logo.svg",
       "website/dist/assets/gui-screenshot.png",
+      "website/dist/assets/gui-demo.mp4",
+      "website/dist/assets/tui-demo.mp4",
+      "website/dist/assets/gui-demo-poster.png",
+      "website/dist/assets/tui-demo-poster.png",
+      "website/dist/assets/source-icons/yahoo.svg",
+      "website/dist/assets/source-icons/sec.svg",
+      "website/dist/assets/source-icons/fred.svg",
+      "website/dist/assets/source-icons/tradingview.svg",
+      "website/dist/assets/source-icons/coingecko.png",
+      "website/dist/assets/source-icons/polymarket.ico",
+      "website/dist/assets/source-icons/reddit.svg",
+      "website/dist/assets/source-icons/exa.svg",
+      "website/dist/assets/source-icons/brave.svg",
+      "website/dist/assets/source-icons/alpha-vantage.ico",
       "website/dist/favicon.ico",
       "website/dist/docs/index.md",
     ]) {
@@ -103,11 +117,71 @@ describe("public site build contract", () => {
     }
   });
 
+  it("presents the GUI as primary and the TUI as equally complete across the docs journey", async () => {
+    const overviewHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const gettingStartedHtml = await readFile(
+      join(root, "website/dist/docs/getting-started.html"),
+      "utf8",
+    );
+    const firstRunHtml = await readFile(join(root, "website/dist/docs/first-run.html"), "utf8");
+    const tuiHtml = await readFile(join(root, "website/dist/docs/tui.html"), "utf8");
+
+    expect(overviewHtml).toContain("local browser GUI and an equally complete terminal interface");
+    expect(gettingStartedHtml).toContain("The GUI is the primary path");
+    expect(gettingStartedHtml).not.toContain("The CLI is the primary entry point");
+    expect(firstRunHtml.indexOf("opencandle@latest gui")).toBeLessThan(
+      firstRunHtml.indexOf("opencandle@latest</code>"),
+    );
+    expect(tuiHtml).toContain("equally complete terminal interface");
+    expect(tuiHtml).not.toContain("main OpenCandle agent experience");
+  });
+
   it("does not keep the old decorative landing-page shell in generated output", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
 
     expect(homeHtml).not.toContain("hero-grid");
     expect(homeHtml).not.toContain("float-tile");
-    expect(homeHtml).toContain("Market research that shows its evidence");
+    expect(homeHtml).toContain("Ask the market.");
+    expect(homeHtml).toContain("Inspect the evidence.");
+  });
+
+  it("renders the homepage product journey and switchable product demos", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+
+    expect(homeHtml).toContain("The tools behind every answer");
+    expect(homeHtml).toContain("Ask. Gather. Verify.");
+    expect(homeHtml).toContain("Research in the browser or the terminal");
+    expect(homeHtml).toContain('aria-label="OpenCandle terminal demonstration"');
+    expect(homeHtml).toContain('data-cli-demo=""');
+    expect(homeHtml).toContain('data-surface-demo=""');
+    expect(homeHtml).toContain('role="tablist"');
+    expect(homeHtml).toContain('data-surface-tab="tui"');
+    expect(homeHtml).toContain('data-surface-tab="gui"');
+    expect(homeHtml).toContain('data-surface-video="tui"');
+    expect(homeHtml).toContain('data-surface-video="gui"');
+    expect(homeHtml.match(/controls=""/g)).toHaveLength(2);
+    expect(homeHtml).toContain('data-legacy-cli-demo=""');
+    expect(homeHtml).toContain("Start with the GUI");
+    expect(homeHtml).toContain("Prefer the terminal");
+    expect(homeHtml).toContain("equally complete terminal interface");
+    expect(homeHtml.indexOf('data-surface-tab="gui"')).toBeLessThan(
+      homeHtml.indexOf('data-surface-tab="tui"'),
+    );
+    expect(homeHtml).toMatch(/data-surface-tab="gui"[^>]*>[\s\S]*?Browser/);
+    expect(homeHtml).not.toContain("Research from the terminal or the browser");
+    expect(homeHtml).toContain('class="evidence-branches"');
+    expect(homeHtml).toContain("evidence-branch--mobile");
+    expect(homeHtml).toContain("evidence-row-connector--desktop");
+    expect(homeHtml).toContain("evidence-row-connector--mobile");
+    expect(homeHtml).toContain('class="evidence-source-logo"');
+    expect(homeHtml).toContain('src="assets/source-icons/fred.svg"');
+    expect(homeHtml).not.toMatch(/<img[^>]+src="https?:\/\//);
+    expect(homeHtml).not.toContain("evidence-source-mark");
+    expect(homeHtml).not.toContain("Exa + Brave");
+    expect(homeHtml).toContain(">Exa</strong>");
+    expect(homeHtml).toContain(">Brave</strong>");
+    expect(homeHtml).not.toContain("autoplay");
+    expect(homeHtml).toContain("npx opencandle@latest gui");
+    expect(homeHtml).toContain("Common questions");
   });
 });

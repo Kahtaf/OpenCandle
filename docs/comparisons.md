@@ -20,7 +20,7 @@ OpenCandle uses model providers for synthesis, but the finance workflow starts w
 | Finance tools | Built-in tool calls for market, macro, options, filings, sentiment, fundamentals, crypto, and portfolio workflows | Depends on plan, connectors, browsing mode, or custom setup |
 | Missing/stale data disclosure | Preserved in the session and answer context | Usually manual unless a custom workflow records them |
 | Local portfolio state | Supported through OpenCandle state | Requires a separate file, spreadsheet, or connector |
-| Local terminal agent and GUI | Yes | No |
+| Local browser GUI and equally complete terminal TUI | Yes | No |
 
 Use a general chatbot when the task is mostly writing, education, brainstorming, or turning already-collected facts into a cleaner explanation. Use OpenCandle when the task depends on current or inspectable financial evidence.
 

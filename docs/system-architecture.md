@@ -5,7 +5,7 @@ description: How OpenCandle turns a financial question into evidence, tool outpu
 
 # System Architecture
 
-OpenCandle is an open source financial investigator. You ask a question in the terminal or the browser GUI; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
+OpenCandle is an open source financial investigator. You ask a question in the primary browser GUI or the equally complete terminal interface; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
 
 It is not an automated trading system and it is not a financial advisor. It is research software built to make the evidence path inspectable.
 

@@ -22,7 +22,7 @@ const outDir = join(root, "website/dist");
 const siteUrl = "https://opencandle.app";
 const brandName = "OpenCandle";
 const landingDescription =
-  "OpenCandle is an open source financial investigator that gathers quotes, filings, macro data, options, sentiment, and portfolio context in a local CLI or GUI.";
+  "OpenCandle is an open source financial investigator with a local browser GUI and an equally complete terminal interface for evidence-first market research.";
 const socialImage = `${siteUrl}/assets/gui-screenshot.png`;
 
 // Ordered as a first-time visitor's journey: why and how to start, then daily
@@ -42,8 +42,8 @@ const sourcePages = [
     navLabel: "Why OpenCandle",
   },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
-  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Start here" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
+  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Start here" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
@@ -367,30 +367,72 @@ function SiteHeader({ output = "index.html" }) {
 
 function SiteFooter({ output = "index.html" }) {
   const prefix = rootPrefix(output);
+  const groups = [
+    {
+      label: "Product",
+      links: [
+        ["Overview", `${prefix}index.html`],
+        ["Getting started", `${prefix}docs/getting-started.html`],
+        ["Data sources", `${prefix}docs/data-sources.html`],
+        ["Comparisons", `${prefix}docs/comparisons.html`],
+      ],
+    },
+    {
+      label: "Build",
+      links: [
+        ["System architecture", `${prefix}docs/system-architecture.html`],
+        ["Build a tool", `${prefix}docs/build-a-tool.html`],
+        ["Testing and evals", `${prefix}docs/testing-and-evals.html`],
+        ["Contributing", `${prefix}docs/contributing.html`],
+      ],
+    },
+    {
+      label: "Project",
+      links: [
+        ["GitHub", "https://github.com/Kahtaf/OpenCandle"],
+        ["npm", "https://www.npmjs.com/package/opencandle"],
+        ["Changelog", "https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md"],
+        ["Security", `${prefix}docs/security.html`],
+      ],
+    },
+  ];
   return (
-    <footer className="border-border border-t">
-      <div className="mx-auto flex max-w-[1320px] flex-col gap-3 px-4 py-8 sm:flex-row sm:items-center sm:justify-between lg:px-6">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-4 w-4" />
-          <span className="font-medium text-foreground">OpenCandle</span>
-          <span>MIT-licensed, read-only research software</span>
+    <footer className="site-footer border-border border-t">
+      <div className="mx-auto grid max-w-[1100px] gap-12 px-4 py-14 sm:grid-cols-[1.5fr_2fr] lg:px-6">
+        <div className="max-w-[300px]">
+          <a className="flex items-center gap-2 font-semibold text-sm" href={`${prefix}index.html`}>
+            <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-5 w-5" />
+            <span>OpenCandle</span>
+          </a>
+          <p className="mt-4 text-muted-foreground text-sm leading-relaxed">
+            Local-first financial research that gathers the live record and shows its evidence.
+          </p>
+          <p className="mt-5 font-mono text-muted-foreground text-xs">MIT licensed · read-only</p>
         </div>
-        <nav className="flex items-center gap-4 text-sm" aria-label="Footer">
-          {[
-            ["Docs", `${prefix}docs/index.html`],
-            ["GitHub", "https://github.com/Kahtaf/OpenCandle"],
-            ["npm", "https://www.npmjs.com/package/opencandle"],
-            ["Changelog", "https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md"],
-          ].map(([label, href]) => (
-            <a
-              key={label}
-              href={href}
-              className="rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {label}
-            </a>
+        <nav className="grid grid-cols-2 gap-8 sm:grid-cols-3" aria-label="Footer">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <p className="font-medium text-[11px] text-foreground uppercase tracking-wider">
+                {group.label}
+              </p>
+              <ul className="mt-4 space-y-3 text-sm">
+                {group.links.map(([label, href]) => (
+                  <li key={label}>
+                    <a
+                      href={href}
+                      className="rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </nav>
+      </div>
+      <div className="mx-auto max-w-[1100px] border-border border-t px-4 py-5 text-muted-foreground text-xs lg:px-6">
+        OpenCandle is research software, not financial advice. It does not place trades.
       </div>
     </footer>
   );
@@ -424,6 +466,143 @@ function MenuIcon() {
       <line x1="4" x2="20" y1="12" y2="12" />
       <line x1="4" x2="20" y1="18" y2="18" />
     </LucideIcon>
+  );
+}
+
+function PortfolioIcon() {
+  return (
+    <LucideIcon className="evidence-source-logo">
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M3 12h18" />
+      <path d="M12 12v3" />
+    </LucideIcon>
+  );
+}
+
+// Kept as an inert fallback while the Remotion surface demo is evaluated.
+// Restoring the handcrafted animation only requires rendering this component
+// in place of SurfaceDemo.
+function LegacyCliDemo() {
+  return (
+    <div
+      className="cli-demo"
+      role="img"
+      aria-label="OpenCandle terminal demonstration"
+      data-cli-demo=""
+    >
+      <div className="cli-chrome" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <p>~/research/opencandle</p>
+        <Badge variant="outline">local session</Badge>
+      </div>
+      <div className="cli-screen" aria-hidden="true">
+        <p className="cli-line cli-line-command">
+          <span className="cli-prompt">$</span> npx opencandle@latest
+        </p>
+        <p className="cli-line cli-line-question">
+          <span className="cli-prompt">›</span> Analyze NVDA with filings, options, sentiment, and
+          macro context.
+        </p>
+        <div className="cli-progress">
+          <p className="cli-line">
+            <span className="cli-check">✓</span> Quote and price history{" "}
+            <em>Yahoo Finance · now</em>
+          </p>
+          <p className="cli-line">
+            <span className="cli-check">✓</span> Latest 10-Q and 8-K <em>SEC EDGAR</em>
+          </p>
+          <p className="cli-line">
+            <span className="cli-check">✓</span> Option chain + Greeks <em>local calculation</em>
+          </p>
+          <p className="cli-line">
+            <span className="cli-check">✓</span> Rates and inflation <em>FRED</em>
+          </p>
+        </div>
+        <p className="cli-line cli-answer">
+          Evidence gathered. Writing the answer with sources and visible gaps…
+          <span className="cli-cursor" />
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SurfaceDemo() {
+  return (
+    <div className="surface-demo" data-surface-demo="">
+      <div className="surface-demo-toolbar">
+        <div className="surface-demo-tabs" role="tablist" aria-label="Choose an OpenCandle view">
+          <button
+            id="surface-tab-gui"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="surface-panel-gui"
+            tabIndex="0"
+            data-surface-tab="gui"
+          >
+            Browser
+          </button>
+          <button
+            id="surface-tab-tui"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="surface-panel-tui"
+            tabIndex="-1"
+            data-surface-tab="tui"
+          >
+            Terminal
+          </button>
+        </div>
+        <p>One engine. Two complete interfaces.</p>
+      </div>
+      <div className="surface-demo-stage">
+        <div
+          id="surface-panel-gui"
+          role="tabpanel"
+          aria-labelledby="surface-tab-gui"
+          data-surface-panel="gui"
+        >
+          <video
+            aria-label="OpenCandle browser workflow animation"
+            data-surface-video="gui"
+            src="assets/gui-demo.mp4"
+            poster="assets/gui-demo-poster.png"
+            controls
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          />
+        </div>
+        <div
+          id="surface-panel-tui"
+          role="tabpanel"
+          aria-labelledby="surface-tab-tui"
+          data-surface-panel="tui"
+          hidden
+        >
+          <video
+            aria-label="OpenCandle terminal workflow animation"
+            data-surface-video="tui"
+            data-src="assets/tui-demo.mp4"
+            poster="assets/tui-demo-poster.png"
+            controls
+            muted
+            loop
+            playsInline
+            preload="none"
+          />
+        </div>
+      </div>
+      <p className="surface-demo-caption">
+        Start visually in the GUI. Prefer the terminal? The same complete research path is there.
+      </p>
+    </div>
   );
 }
 
@@ -541,7 +720,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "What is OpenCandle?",
       answer:
-        "OpenCandle is an open source financial investigator that runs as a terminal agent and local browser GUI for evidence-first market research.",
+        "OpenCandle is an open source financial investigator built around a local browser GUI, with an equally complete terminal interface for users who prefer a keyboard-first workflow.",
     },
     {
       question: "How is this different from asking ChatGPT?",
@@ -562,6 +741,77 @@ function HomePage({ buildDate, version }) {
       question: "Which data sources does OpenCandle use?",
       answer:
         "OpenCandle integrates Yahoo Finance, TradingView scanner, Alpha Vantage, London Strategic Edge, FRED, Polymarket, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
+    },
+  ];
+  const dataSources = [
+    {
+      name: "Yahoo Finance",
+      capability: "quotes + options",
+      icons: ["assets/source-icons/yahoo.svg"],
+    },
+    {
+      name: "SEC EDGAR",
+      capability: "company filings",
+      icons: ["assets/source-icons/sec.svg"],
+    },
+    {
+      name: "FRED",
+      capability: "macro series",
+      icons: ["assets/source-icons/fred.svg"],
+      iconClass: "evidence-source-logo--fred",
+    },
+    {
+      name: "TradingView",
+      capability: "market screeners",
+      icons: ["assets/source-icons/tradingview.svg"],
+    },
+    {
+      name: "CoinGecko",
+      capability: "crypto markets",
+      icons: ["assets/source-icons/coingecko.png"],
+    },
+    {
+      name: "Polymarket",
+      capability: "prediction markets",
+      icons: ["assets/source-icons/polymarket.ico"],
+    },
+    {
+      name: "Reddit",
+      capability: "market sentiment",
+      icons: ["assets/source-icons/reddit.svg"],
+    },
+    {
+      name: "Exa",
+      capability: "web research",
+      icons: ["assets/source-icons/exa.svg"],
+    },
+    {
+      name: "Brave",
+      capability: "web search",
+      icons: ["assets/source-icons/brave.svg"],
+    },
+    {
+      name: "Alpha Vantage",
+      capability: "market data",
+      icons: ["assets/source-icons/alpha-vantage.ico"],
+    },
+    { name: "Local portfolio", capability: "your positions", icons: [] },
+  ];
+  const researchSteps = [
+    {
+      mark: "01",
+      title: "Ask in plain English",
+      body: "Start with a company, portfolio, market event, or thesis. OpenCandle turns the question into a research plan.",
+    },
+    {
+      mark: "02",
+      title: "Gather the live record",
+      body: "Typed tools fetch quotes, filings, options, macro series, news, and sentiment before the answer is written.",
+    },
+    {
+      mark: "03",
+      title: "Inspect every claim",
+      body: "Providers, timestamps, tool calls, and missing-data notes stay attached so you can verify the work.",
     },
   ];
 
@@ -618,96 +868,147 @@ function HomePage({ buildDate, version }) {
     >
       <SiteHeader />
       <main>
-        <section className="mx-auto max-w-[1100px] px-4 pt-16 pb-16 sm:pt-24 lg:px-6">
-          <div className="flex items-center gap-2">
+        <section className="landing-hero mx-auto max-w-[1100px] px-4 pt-16 pb-12 text-center sm:pt-24 lg:px-6">
+          <div className="flex items-center justify-center gap-2">
             <Badge variant="outline">Local-first</Badge>
             <Badge variant="outline">
               <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">v{version}</a>
             </Badge>
           </div>
-          <h1 className="mt-5 max-w-[720px] font-semibold text-3xl text-foreground tracking-tight sm:text-4xl">
-            Market research that shows its evidence
+          <h1 className="mx-auto mt-6 max-w-[860px] font-semibold text-4xl text-foreground tracking-[-0.045em] sm:text-6xl lg:text-7xl">
+            Ask the market. <span className="text-accent">Inspect the evidence.</span>
           </h1>
-          <p className="mt-5 max-w-[560px] text-base text-muted-foreground leading-relaxed">
-            A chatbot answers market questions from memory. OpenCandle runs on your machine and
-            fetches live quotes, filings, options, macro data, and sentiment first, then answers
-            with sources attached.
+          <p className="mx-auto mt-6 max-w-[660px] text-base text-muted-foreground leading-relaxed sm:text-lg">
+            OpenCandle is a local-first financial research workspace. Start in the visual GUI to
+            gather live market data, filings, macro context, options, and sentiment—then inspect
+            every source behind the answer.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button asChild variant="brand" rounded="full">
-              <a href="docs/getting-started.html">Install OpenCandle</a>
+              <a href="docs/gui-quickstart.html">Start with the GUI</a>
             </Button>
             <Button asChild variant="bordered">
-              <a href="docs/index.html">Read the docs</a>
+              <a href="docs/tui.html">Prefer the terminal</a>
             </Button>
-            <code className="rounded-md border border-border bg-secondary px-3 py-2 font-mono text-foreground text-sm">
-              npx opencandle@latest
-            </code>
           </div>
           <p className="mt-4 text-muted-foreground text-xs">
-            Bring your own Anthropic, OpenAI, or Google model key · market data needs no keys
+            Open source · read-only · your model key · market data needs no keys
           </p>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Launch video">
-          <Card className="overflow-hidden shadow-subtle-xs">
-            {/* biome-ignore lint/a11y/useMediaCaption: The launch video's narration is descriptive marketing audio; a transcript lives in the repo at video/VOICEOVER_SCRIPT.txt. */}
-            <video
-              controls
-              preload="metadata"
-              playsInline
-              width="1920"
-              height="1080"
-              className="block aspect-video w-full"
-              src="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29"
+        <section
+          className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6"
+          aria-label="OpenCandle in the browser and terminal"
+        >
+          <SurfaceDemo />
+          <template data-legacy-cli-demo="">
+            <LegacyCliDemo />
+          </template>
+
+          <div className="evidence-map">
+            <div className="evidence-map-heading">
+              <p className="landing-eyebrow">Typed tools · live providers</p>
+              <h2>The tools behind every answer</h2>
+              <p>
+                OpenCandle picks the relevant sources for the question and keeps each one attached
+                to the result.
+              </p>
+            </div>
+            <div className="evidence-hub" aria-hidden="true">
+              <span className="evidence-hub-mark">
+                <OpenCandleLogo src="assets/logo.svg" className="h-7 w-7" />
+              </span>
+              <span className="evidence-hub-label">OpenCandle</span>
+            </div>
+            <svg
+              className="evidence-branches"
+              viewBox="0 0 1000 112"
+              preserveAspectRatio="none"
+              aria-hidden="true"
             >
-              <a href="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29">
-                Watch the OpenCandle launch video
+              <defs>
+                <linearGradient id="evidence-branch-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop className="evidence-branch-start" offset="0" />
+                  <stop className="evidence-branch-end" offset="1" />
+                </linearGradient>
+              </defs>
+              <path className="evidence-branch--desktop" d="M500 0 C500 54 100 35 100 112" />
+              <path className="evidence-branch--desktop" d="M500 0 C500 50 300 38 300 112" />
+              <path
+                className="evidence-branch--desktop evidence-branch--center"
+                d="M500 0 L500 112"
+              />
+              <path className="evidence-branch--desktop" d="M500 0 C500 50 700 38 700 112" />
+              <path className="evidence-branch--desktop" d="M500 0 C500 54 900 35 900 112" />
+              <path className="evidence-branch--mobile" d="M500 0 C500 42 250 38 250 112" />
+              <path className="evidence-branch--mobile" d="M500 0 C500 42 750 38 750 112" />
+            </svg>
+            <div className="evidence-grid">
+              {dataSources.map(({ name, capability, icons, iconClass }, index) => (
+                <Card key={name} className="evidence-source-card">
+                  <span className="evidence-source-logos" aria-hidden="true">
+                    {icons.length > 0 ? (
+                      icons.map((src) => (
+                        <img
+                          key={src}
+                          className={`evidence-source-logo${iconClass ? ` ${iconClass}` : ""}`}
+                          src={src}
+                          alt=""
+                          width="30"
+                          height="30"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ))
+                    ) : (
+                      <PortfolioIcon />
+                    )}
+                  </span>
+                  <span>
+                    <strong>{name}</strong>
+                    <small>{capability}</small>
+                  </span>
+                  {index <= 5 ? (
+                    <span
+                      className="evidence-row-connector evidence-row-connector--desktop"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {index <= 8 ? (
+                    <span
+                      className="evidence-row-connector evidence-row-connector--mobile"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </Card>
+              ))}
+              <a className="evidence-source-more" href="docs/data-sources.html">
+                See every data source <span aria-hidden="true">→</span>
               </a>
-            </video>
-          </Card>
-          <p className="mt-3 text-muted-foreground text-xs">
-            A real market question in the browser workbench: the evidence trail behind the answer,
-            and the same workflow in the terminal.
-          </p>
+            </div>
+          </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Example answer">
-          <Card className="overflow-hidden shadow-subtle-xs">
-            <div className="border-border border-b px-4 py-3 sm:px-5">
-              <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
-                Prompt
-              </p>
-              <p className="mt-1 font-medium text-base sm:text-lg">
-                Analyze NVDA with filings, options, sentiment, and macro context.
-              </p>
-            </div>
-            <div className="px-4 py-3 sm:px-5">
-              <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
-                What the answer is built from
-              </p>
-              <ul className="mt-1 divide-y divide-border">
-                {[
-                  ["Quote and price history", "Yahoo Finance · timestamped"],
-                  ["Latest 10-Q and 8-K filings", "SEC EDGAR"],
-                  ["Option chain with computed Greeks", "Yahoo Finance + local math"],
-                  ["Rates and inflation backdrop", "FRED · series named in the answer"],
-                  ["Reddit and news sentiment", "or a visible gap note when unavailable"],
-                ].map(([evidence, source]) => (
-                  <li
-                    key={evidence}
-                    className="flex flex-col gap-x-4 gap-y-0.5 py-3 text-sm sm:flex-row sm:items-baseline sm:justify-between"
-                  >
-                    <span className="font-medium">{evidence}</span>
-                    <span className="font-mono text-muted-foreground text-xs">{source}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="border-border border-t pt-3 text-muted-foreground text-sm">
-                You check the trail instead of trusting the prose.
-              </p>
-            </div>
-          </Card>
+        <section
+          className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6"
+          aria-labelledby="research-flow-title"
+        >
+          <div className="landing-section-heading">
+            <p className="landing-eyebrow">How it works</p>
+            <h2 id="research-flow-title">Ask. Gather. Verify.</h2>
+            <p>The agent does the collection work. You keep the judgment.</p>
+          </div>
+          <div className="research-steps">
+            {researchSteps.map((step) => (
+              <article key={step.mark} className="research-step">
+                <span className="research-step-mark" aria-hidden="true">
+                  {step.mark}
+                </span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section className="border-border border-y bg-secondary/50">
@@ -746,15 +1047,30 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 py-20 lg:px-6">
-          <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
-            A workbench, not a chat window
-          </h2>
-          <p className="mt-3 max-w-[560px] text-muted-foreground text-sm">
-            Tool calls, watchlists, portfolios, alerts, and reports sit next to the chat, sharing
-            sessions with the terminal agent.
-          </p>
-          <Card className="mt-6 overflow-hidden">
+        <section className="mx-auto max-w-[1100px] px-4 py-24 lg:px-6">
+          <div className="landing-section-heading landing-section-heading-left">
+            <p className="landing-eyebrow">One local workspace</p>
+            <h2>Research in the browser or the terminal</h2>
+            <p>
+              The GUI is the primary path. The equally complete terminal interface uses the same
+              sessions, tools, watchlists, portfolios, alerts, reports, and evidence trail.
+            </p>
+          </div>
+          <ul className="surface-tabs" aria-label="OpenCandle interfaces">
+            <li>
+              <strong>Browser workbench</strong>
+              <small>Visual evidence trail</small>
+            </li>
+            <li>
+              <strong>Terminal agent</strong>
+              <small>Complete keyboard-first research</small>
+            </li>
+            <li>
+              <strong>Typed tools</strong>
+              <small>Extensible by design</small>
+            </li>
+          </ul>
+          <Card className="workbench-frame overflow-hidden">
             <img
               src="assets/gui-screenshot.png"
               alt="OpenCandle local GUI answering a market question with a quote table, cited sources, and the research steps panel"
@@ -764,6 +1080,14 @@ function HomePage({ buildDate, version }) {
               fetchPriority="high"
             />
           </Card>
+          <p className="mt-4 text-center text-muted-foreground text-xs">
+            <a
+              className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
+              href="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29"
+            >
+              Watch the full product walkthrough
+            </a>
+          </p>
         </section>
 
         <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="For builders">
@@ -793,7 +1117,7 @@ function HomePage({ buildDate, version }) {
                 ))}
               </ul>
             </div>
-            <pre className="overflow-x-auto rounded-lg border border-border bg-secondary p-4 font-mono text-xs leading-relaxed">
+            <pre className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-secondary p-4 font-mono text-xs leading-relaxed">
               <code>{`import { Type } from "@sinclair/typebox";
 
 const params = Type.Object({
@@ -816,41 +1140,45 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Start locally">
-          <Card className="p-6 sm:p-8">
-            <div className="grid items-start gap-8 md:grid-cols-2">
-              <div>
-                <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
-                  Start locally
-                </h2>
-                <p className="mt-3 text-muted-foreground text-sm">
-                  Bring a model key from Anthropic, OpenAI, or Google. Market data needs no keys.
-                </p>
-                <p className="mt-3 text-muted-foreground text-xs">
-                  MIT licensed · Node.js 22.19+ (22.x) or 24–26 · macOS, Windows, Linux
-                </p>
-              </div>
-              <div className="space-y-2 font-mono text-sm">
-                <div className="rounded-md border border-border bg-secondary px-3 py-2">
-                  npx opencandle@latest
-                </div>
-                <div className="rounded-md border border-border bg-secondary px-3 py-2">
-                  npx opencandle@latest gui
-                </div>
-              </div>
+        <section
+          className="landing-cta border-border border-y bg-secondary/60"
+          aria-label="Start locally"
+        >
+          <div className="mx-auto max-w-[1100px] px-4 py-20 text-center lg:px-6">
+            <p className="landing-eyebrow">One command. Your machine.</p>
+            <h2>Start your first investigation.</h2>
+            <p>Bring an Anthropic, OpenAI, or Google model key. Market data needs no keys.</p>
+            <div className="landing-command">
+              <span aria-hidden="true">$</span>
+              <code>npx opencandle@latest gui</code>
             </div>
-          </Card>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button asChild variant="brand" rounded="full">
+                <a href="docs/getting-started.html">Install OpenCandle</a>
+              </Button>
+              <Button asChild variant="bordered">
+                <a href="docs/first-run.html">See the first run</a>
+              </Button>
+            </div>
+            <p className="mt-5 text-muted-foreground text-xs">
+              MIT licensed · Node.js 22.19+ (22.x) or 24–26 · macOS, Windows, Linux
+            </p>
+          </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6" aria-label="FAQ">
-          <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">FAQ</h2>
-          <div className="mt-3 max-w-[720px] divide-y divide-border">
+        <section className="mx-auto max-w-[860px] px-4 py-24 lg:px-6" aria-label="FAQ">
+          <div className="landing-section-heading">
+            <p className="landing-eyebrow">FAQ</p>
+            <h2>Common questions</h2>
+          </div>
+          <div className="faq-list">
             {faqs.map((faq) => (
-              <details key={faq.question} className="py-4 text-sm">
-                <summary className="cursor-pointer font-medium">{faq.question}</summary>
-                <p className="mt-3 max-w-[640px] text-muted-foreground leading-relaxed">
-                  {faq.answer}
-                </p>
+              <details key={faq.question}>
+                <summary>
+                  {faq.question}
+                  <span aria-hidden="true">+</span>
+                </summary>
+                <p>{faq.answer}</p>
               </details>
             ))}
           </div>
@@ -968,6 +1296,18 @@ async function copyStaticAssets() {
   await copyFile(join(root, "assets/logo.svg"), join(outDir, "assets/logo.svg"));
   await cp(join(root, "website/assets"), join(outDir, "assets"), { recursive: true });
   await cp(join(root, "docs/images"), join(outDir, "docs/images"), { recursive: true });
+  await Promise.all([
+    copyFile(join(root, "video/public/approved/gui.mp4"), join(outDir, "assets/gui-demo.mp4")),
+    copyFile(join(root, "video/public/approved/tui.mp4"), join(outDir, "assets/tui-demo.mp4")),
+    copyFile(
+      join(root, "video/public/approved/gui-start.png"),
+      join(outDir, "assets/gui-demo-poster.png"),
+    ),
+    copyFile(
+      join(root, "video/public/approved/tui-final.png"),
+      join(outDir, "assets/tui-demo-poster.png"),
+    ),
+  ]);
   await copyFile(join(root, "website/assets/favicon.ico"), join(outDir, "favicon.ico"));
   await copyFile(join(root, "AGENTS.md"), join(outDir, "AGENTS.md"));
 }

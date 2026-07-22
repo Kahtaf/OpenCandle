@@ -6,6 +6,11 @@
 
 - Agent-developer guardrails now provide canonical `typecheck` and `gates` scripts, a safe worktree bootstrap command, and checked-in delegation and resume contracts.
 
+### Changed
+
+- The public homepage and docs now present the local browser GUI as OpenCandle's primary path and the terminal as an equally complete keyboard-first interface, backed by the same tools, workflows, evidence, saved sessions, and market state.
+- The homepage product demo can now switch between the approved Remotion browser and terminal walkthroughs, defaulting to the GUI while respecting reduced-motion preferences, lazy-loading and playing only the active surface, serving source logos locally, and preserving the handcrafted CLI animation as an inert fallback.
+
 ## [0.13.0] - 2026-07-19
 
 ### Added

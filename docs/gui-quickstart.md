@@ -16,7 +16,7 @@ description: Run the local OpenCandle browser GUI and take your first steps.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.
 
-You can use the terminal and the GUI on the same session at once; OpenCandle keeps them in sync. If a view says it is reconnecting or syncing, wait a moment and retry.
+You can use the GUI and the equally complete terminal interface on the same session at once; OpenCandle keeps them in sync. If a view says it is reconnecting or syncing, wait a moment and retry.
 
 Check that the server is running:
 
@@ -62,7 +62,7 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Catalog exposes workflows, individual tools, and provider setup without guessing prompt syntax.
 - Session history keeps prior investigations reachable through Pi session state.
 - Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
-- Terminal and browser views of the same session stay in sync.
+- Browser and terminal views of the same session stay in sync.
 
 ## What You Can Do From The GUI
 
@@ -81,8 +81,8 @@ Data-quality warnings and provider gaps are available on the Diagnostics page.
 
 ## When To Use The GUI
 
-Use the GUI when you want to inspect tool output visually, browse prior sessions, run an individual tool from the catalog, or see provider setup status without remembering command syntax.
+Use the GUI as the primary OpenCandle workspace: inspect tool output visually, browse prior sessions, run an individual tool from the catalog, and manage provider setup without remembering command syntax.
 
-Use the TUI when you want the fastest keyboard loop, slash commands, or a plain terminal transcript. See [TUI](./tui.md).
+Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state, with slash commands and a plain terminal transcript. See [Terminal (TUI)](./tui.md).
 
 For GUI internals, see [System Architecture](./system-architecture.md). For GUI validation, see [Testing and Evals](./testing-and-evals.md).
