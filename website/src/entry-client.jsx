@@ -81,6 +81,7 @@ if (surfaceDemo) {
     tab.addEventListener("click", () => activateSurface(tab.dataset.surfaceTab));
     tab.addEventListener("keydown", (event) => {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
       const current = surfaceTabs.indexOf(tab);
       const offset = event.key === "ArrowRight" ? 1 : -1;
       const next = (current + offset + surfaceTabs.length) % surfaceTabs.length;

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const root = process.cwd();
@@ -183,5 +184,67 @@ describe("public site build contract", () => {
     expect(homeHtml).not.toContain("autoplay");
     expect(homeHtml).toContain("npx opencandle@latest gui");
     expect(homeHtml).toContain("Common questions");
+  });
+
+  it("switches product demos with arrow keys without scrolling the page", async () => {
+    const manifest = JSON.parse(
+      await readFile(join(root, "website/dist/.vite/manifest.json"), "utf8"),
+    );
+    const entryClient = await readFile(
+      join(root, "website/dist", manifest["src/entry-client.jsx"].file),
+      "utf8",
+    );
+    const dom = new JSDOM(
+      `<!doctype html>
+      <html>
+        <body>
+          <div data-surface-demo>
+            <div role="tablist">
+              <button data-surface-tab="gui" aria-selected="true" tabindex="0">Browser</button>
+              <button data-surface-tab="tui" aria-selected="false" tabindex="-1">Terminal</button>
+            </div>
+            <div data-surface-panel="gui">
+              <video data-surface-video="gui" src="gui.mp4"></video>
+            </div>
+            <div data-surface-panel="tui" hidden>
+              <video data-surface-video="tui" data-src="tui.mp4"></video>
+            </div>
+          </div>
+        </body>
+      </html>`,
+      { runScripts: "outside-only", url: "https://opencandle.app/" },
+    );
+
+    Object.defineProperty(dom.window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        addEventListener() {},
+      }),
+    });
+    Object.defineProperties(dom.window.HTMLMediaElement.prototype, {
+      load: { configurable: true, value() {} },
+      pause: { configurable: true, value() {} },
+      play: { configurable: true, value: () => Promise.resolve() },
+    });
+
+    dom.window.eval(entryClient);
+    const browserTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-surface-tab="gui"]',
+    );
+    const terminalTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-surface-tab="tui"]',
+    );
+    const event = new dom.window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+    });
+
+    browserTab?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(terminalTab?.getAttribute("aria-selected")).toBe("true");
+    expect(dom.window.document.activeElement).toBe(terminalTab);
   });
 });
