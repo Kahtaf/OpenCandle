@@ -587,6 +587,7 @@ function SurfaceDemo() {
           aria-labelledby="surface-tab-gui"
           data-surface-panel="gui"
         >
+          {/* This labeled product walkthrough is intentionally silent. */}
           <video
             aria-label="OpenCandle browser workflow animation"
             data-surface-video="gui"
@@ -606,6 +607,7 @@ function SurfaceDemo() {
           data-surface-panel="tui"
           hidden
         >
+          {/* This labeled product walkthrough is intentionally silent. */}
           <video
             aria-label="OpenCandle terminal workflow animation"
             data-surface-video="tui"
