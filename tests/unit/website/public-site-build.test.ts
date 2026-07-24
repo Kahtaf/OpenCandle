@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { JSDOM } from "jsdom";
@@ -151,7 +151,7 @@ describe("public site build contract", () => {
 
     expect(homeHtml).toContain("The tools behind every answer");
     expect(homeHtml).toContain("Ask. Gather. Verify.");
-    expect(homeHtml).toContain("Research in the browser or the terminal");
+    expect(homeHtml).toContain("Same question. Different evidence.");
     expect(homeHtml).toContain('aria-label="OpenCandle terminal demonstration"');
     expect(homeHtml).toContain('data-cli-demo=""');
     expect(homeHtml).toContain('data-surface-demo=""');
@@ -184,6 +184,48 @@ describe("public site build contract", () => {
     expect(homeHtml).not.toContain("autoplay");
     expect(homeHtml).toContain("npx opencandle@latest gui");
     expect(homeHtml).toContain("Common questions");
+  });
+
+  it("keeps the homepage focused on product evidence instead of decorative filler", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+
+    expect(homeHtml).not.toContain(">Local-first<");
+    expect(homeHtml).not.toContain("One engine. Two complete interfaces.");
+    expect(homeHtml).not.toContain("Start visually in the GUI.");
+    expect(homeHtml).not.toContain("Typed tools · live providers");
+    expect(homeHtml).not.toContain("How it works");
+    expect(homeHtml).not.toContain("One local workspace");
+    expect(homeHtml).not.toContain("One command. Your machine.");
+    expect(homeHtml).not.toContain('class="landing-eyebrow"');
+    expect(homeHtml).toContain('class="surface-demo-tab-icon"');
+    expect(homeHtml).toContain("Same question. Different evidence.");
+    expect(homeHtml).toContain('data-answer-surface="chatgpt"');
+    expect(homeHtml).toContain('data-answer-surface="claude"');
+    expect(homeHtml).toContain('data-answer-surface="opencandle"');
+    expect(homeHtml).not.toContain("Why not just ask a chatbot?");
+    expect(homeHtml).not.toContain("Research in the browser or the terminal");
+    expect(homeHtml).not.toContain("twitterSentimentTool");
+    expect(homeHtml).toContain('class="extension-path"');
+    expect(homeHtml).not.toContain("See the first run");
+    expect(homeHtml).not.toContain("MIT licensed · Node.js");
+    expect(homeHtml).not.toContain("MIT licensed · read-only");
+  });
+
+  it("uses direct punctuation instead of em dashes across the public site", async () => {
+    const docsFiles = (await readdir(join(root, "website/dist/docs")))
+      .filter((file) => file.endsWith(".html") || file.endsWith(".md"))
+      .map((file) => join(root, "website/dist/docs", file));
+    const publicTextFiles = [
+      join(root, "website/dist/index.html"),
+      join(root, "website/dist/llms.txt"),
+      join(root, "website/dist/llms-full.txt"),
+      ...docsFiles,
+    ];
+
+    for (const file of publicTextFiles) {
+      const contents = await readFile(file, "utf8");
+      expect(contents, `${file} should not contain an em dash`).not.toContain("—");
+    }
   });
 
   it("switches product demos with arrow keys without scrolling the page", async () => {

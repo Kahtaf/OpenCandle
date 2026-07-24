@@ -407,7 +407,7 @@ function SiteFooter({ output = "index.html" }) {
           <p className="mt-4 text-muted-foreground text-sm leading-relaxed">
             Local-first financial research that gathers the live record and shows its evidence.
           </p>
-          <p className="mt-5 font-mono text-muted-foreground text-xs">MIT licensed · read-only</p>
+          <p className="mt-5 font-mono text-muted-foreground text-xs">MIT licensed</p>
         </div>
         <nav className="grid grid-cols-2 gap-8 sm:grid-cols-3" aria-label="Footer">
           {groups.map((group) => (
@@ -480,6 +480,25 @@ function PortfolioIcon() {
   );
 }
 
+function BrowserIcon() {
+  return (
+    <LucideIcon>
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 18v3" />
+    </LucideIcon>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <LucideIcon>
+      <path d="m4 17 6-6-6-6" />
+      <path d="M12 19h8" />
+    </LucideIcon>
+  );
+}
+
 // Kept as an inert fallback while the Remotion surface demo is evaluated.
 // Restoring the handcrafted animation only requires rendering this component
 // in place of SurfaceDemo.
@@ -544,7 +563,10 @@ function SurfaceDemo() {
             tabIndex="0"
             data-surface-tab="gui"
           >
-            Browser
+            <span className="surface-demo-tab-icon">
+              <BrowserIcon />
+            </span>
+            <span>Browser</span>
           </button>
           <button
             id="surface-tab-tui"
@@ -555,10 +577,12 @@ function SurfaceDemo() {
             tabIndex="-1"
             data-surface-tab="tui"
           >
-            Terminal
+            <span className="surface-demo-tab-icon">
+              <TerminalIcon />
+            </span>
+            <span>Terminal</span>
           </button>
         </div>
-        <p>One engine. Two complete interfaces.</p>
       </div>
       <div className="surface-demo-stage">
         <div
@@ -599,9 +623,6 @@ function SurfaceDemo() {
           />
         </div>
       </div>
-      <p className="surface-demo-caption">
-        Start visually in the GUI. Prefer the terminal? The same complete research path is there.
-      </p>
     </div>
   );
 }
@@ -725,12 +746,12 @@ function HomePage({ buildDate, version }) {
     {
       question: "How is this different from asking ChatGPT?",
       answer:
-        "A general chatbot answers from training data unless you wire up browsing and data feeds yourself. OpenCandle calls typed finance tools first — quotes, filings, options chains, macro series, sentiment — and keeps the provider trail, timestamps, and data gaps visible in the answer.",
+        "A general chatbot answers from training data unless you wire up browsing and data feeds yourself. OpenCandle calls typed finance tools first: quotes, filings, options chains, macro series, and sentiment. It keeps the provider trail, timestamps, and data gaps visible in the answer.",
     },
     {
       question: "Which model does it use?",
       answer:
-        "You bring your own model credentials — Anthropic, OpenAI, or Google — through the bundled Pi agent runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
+        "You bring your own Anthropic, OpenAI, or Google model credentials through the bundled Pi agent runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -869,18 +890,12 @@ function HomePage({ buildDate, version }) {
       <SiteHeader />
       <main>
         <section className="landing-hero mx-auto max-w-[1100px] px-4 pt-16 pb-12 text-center sm:pt-24 lg:px-6">
-          <div className="flex items-center justify-center gap-2">
-            <Badge variant="outline">Local-first</Badge>
-            <Badge variant="outline">
-              <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">v{version}</a>
-            </Badge>
-          </div>
-          <h1 className="mx-auto mt-6 max-w-[860px] font-semibold text-4xl text-foreground tracking-[-0.045em] sm:text-6xl lg:text-7xl">
+          <h1 className="mx-auto max-w-[860px] font-semibold text-4xl text-foreground tracking-[-0.045em] sm:text-6xl lg:text-7xl">
             Ask the market. <span className="text-accent">Inspect the evidence.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-[660px] text-base text-muted-foreground leading-relaxed sm:text-lg">
             OpenCandle is a local-first financial research workspace. Start in the visual GUI to
-            gather live market data, filings, macro context, options, and sentiment—then inspect
+            gather live market data, filings, macro context, options, and sentiment, then inspect
             every source behind the answer.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -907,7 +922,6 @@ function HomePage({ buildDate, version }) {
 
           <div className="evidence-map">
             <div className="evidence-map-heading">
-              <p className="landing-eyebrow">Typed tools · live providers</p>
               <h2>The tools behind every answer</h2>
               <p>
                 OpenCandle picks the relevant sources for the question and keeps each one attached
@@ -927,7 +941,14 @@ function HomePage({ buildDate, version }) {
               aria-hidden="true"
             >
               <defs>
-                <linearGradient id="evidence-branch-gradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id="evidence-branch-gradient"
+                  x1="500"
+                  y1="0"
+                  x2="500"
+                  y2="112"
+                  gradientUnits="userSpaceOnUse"
+                >
                   <stop className="evidence-branch-start" offset="0" />
                   <stop className="evidence-branch-end" offset="1" />
                 </linearGradient>
@@ -994,7 +1015,6 @@ function HomePage({ buildDate, version }) {
           aria-labelledby="research-flow-title"
         >
           <div className="landing-section-heading">
-            <p className="landing-eyebrow">How it works</p>
             <h2 id="research-flow-title">Ask. Gather. Verify.</h2>
             <p>The agent does the collection work. You keep the judgment.</p>
           </div>
@@ -1011,32 +1031,67 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section className="border-border border-y bg-secondary/50">
-          <div className="mx-auto max-w-[1100px] px-4 py-16 lg:px-6">
-            <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
-              Why not just ask a chatbot?
-            </h2>
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <Card className="p-6">
-                <h3 className="font-semibold text-base">A general chatbot</h3>
-                <ul className="mt-4 space-y-3 text-muted-foreground text-sm">
-                  <li>Answers from training data unless you wire up browsing</li>
-                  <li>Invents or omits numbers</li>
-                  <li>Sources only if you add them yourself</li>
-                  <li>Confident even when stale</li>
-                </ul>
-              </Card>
-              <Card className="p-6">
-                <h3 className="font-semibold text-base">OpenCandle</h3>
-                <ul className="mt-4 space-y-3 text-muted-foreground text-sm">
-                  <li>Fetches live data before answering</li>
-                  <li>Uses provider numbers as fetched</li>
-                  <li>Names sources and timestamps</li>
-                  <li>States gaps outright</li>
-                </ul>
-              </Card>
+        <section className="answer-comparison border-border border-y bg-secondary/50">
+          <div className="mx-auto max-w-[1100px] px-4 py-20 lg:px-6">
+            <div className="answer-comparison-heading">
+              <h2>Same question. Different evidence.</h2>
+              <p>Ask each assistant the same market question without connecting extra data.</p>
             </div>
-            <p className="mt-6 text-sm">
+            <div className="comparison-prompt">
+              <span>You</span>
+              <p>What changed for Apple after its latest earnings?</p>
+            </div>
+            <div className="answer-surfaces">
+              <article className="answer-surface" data-answer-surface="chatgpt">
+                <header>
+                  <span className="answer-surface-mark" aria-hidden="true">
+                    G
+                  </span>
+                  <strong>ChatGPT</strong>
+                  <small>No market tools</small>
+                </header>
+                <p>
+                  The quarter appears to show resilient demand, with services providing a steadier
+                  counterweight to hardware cycles.
+                </p>
+                <footer>No live market record attached</footer>
+              </article>
+              <article className="answer-surface" data-answer-surface="claude">
+                <header>
+                  <span className="answer-surface-mark" aria-hidden="true">
+                    C
+                  </span>
+                  <strong>Claude</strong>
+                  <small>No market tools</small>
+                </header>
+                <p>
+                  Focus on product demand, services growth, margins, and what management changed in
+                  its outlook.
+                </p>
+                <footer>No filing or price data attached</footer>
+              </article>
+              <article
+                className="answer-surface answer-surface--opencandle"
+                data-answer-surface="opencandle"
+              >
+                <header>
+                  <OpenCandleLogo src="assets/logo.svg" className="answer-surface-logo" />
+                  <strong>OpenCandle</strong>
+                  <small>Live tools connected</small>
+                </header>
+                <p>
+                  I checked the latest filing, current quote context, price history, and options
+                  activity before comparing the result with management guidance.
+                </p>
+                <ul className="answer-evidence" aria-label="Evidence gathered">
+                  <li>SEC filing</li>
+                  <li>Quote history</li>
+                  <li>Options chain</li>
+                </ul>
+                <footer>Sources attached · Freshness shown · Gaps named</footer>
+              </article>
+            </div>
+            <p className="answer-comparison-link">
               <a
                 className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
                 href="docs/comparisons.html"
@@ -1047,97 +1102,45 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 py-24 lg:px-6">
-          <div className="landing-section-heading landing-section-heading-left">
-            <p className="landing-eyebrow">One local workspace</p>
-            <h2>Research in the browser or the terminal</h2>
-            <p>
-              The GUI is the primary path. The equally complete terminal interface uses the same
-              sessions, tools, watchlists, portfolios, alerts, reports, and evidence trail.
-            </p>
-          </div>
-          <ul className="surface-tabs" aria-label="OpenCandle interfaces">
-            <li>
-              <strong>Browser workbench</strong>
-              <small>Visual evidence trail</small>
-            </li>
-            <li>
-              <strong>Terminal agent</strong>
-              <small>Complete keyboard-first research</small>
-            </li>
-            <li>
-              <strong>Typed tools</strong>
-              <small>Extensible by design</small>
-            </li>
-          </ul>
-          <Card className="workbench-frame overflow-hidden">
-            <img
-              src="assets/gui-screenshot.png"
-              alt="OpenCandle local GUI answering a market question with a quote table, cited sources, and the research steps panel"
-              width="1440"
-              height="960"
-              className="block w-full"
-              fetchPriority="high"
-            />
-          </Card>
-          <p className="mt-4 text-center text-muted-foreground text-xs">
-            <a
-              className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
-              href="https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29"
-            >
-              Watch the full product walkthrough
-            </a>
-          </p>
-        </section>
-
-        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="For builders">
-          <div className="grid items-start gap-10 md:grid-cols-2">
+        <section
+          className="builder-section mx-auto max-w-[1100px] px-4 py-24 lg:px-6"
+          aria-label="For builders"
+        >
+          <div className="builder-intro">
             <div>
               <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
                 Built to be extended
               </h2>
               <p className="mt-3 text-muted-foreground text-sm leading-relaxed">
-                Every capability is a typed tool: declared parameters, shared caching, rate limits.
-                Add a data source in one file, or ship it as an npm package.
+                Extend OpenCandle at three layers: connect a provider, wrap it in a typed tool, then
+                expose it to workflows. Shared caching and rate limits come built in; keep the
+                extension local or publish it as an npm package.
               </p>
-              <ul className="mt-5 space-y-3 text-sm">
-                {[
-                  ["Build a tool", "docs/build-a-tool.html"],
-                  ["System architecture", "docs/system-architecture.html"],
-                  ["Testing and evals", "docs/testing-and-evals.html"],
-                ].map(([label, href]) => (
-                  <li key={label}>
-                    <a
-                      className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                      href={href}
-                    >
-                      {label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
             </div>
-            <pre className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-secondary p-4 font-mono text-xs leading-relaxed">
-              <code>{`import { Type } from "@sinclair/typebox";
-
-const params = Type.Object({
-  symbol: Type.String({ description: "Ticker symbol" }),
-});
-
-export const twitterSentimentTool: AgentTool<typeof params> = {
-  name: "get_twitter_sentiment",
-  label: "Twitter Sentiment",
-  parameters: params,
-  async execute(toolCallId, args) {
-    // fetch via provider, return typed evidence
-    return {
-      content: [{ type: "text", text: "Formatted output" }],
-      details: { sentiment: 0.72, volume: 1234 },
-    };
-  },
-};`}</code>
-            </pre>
           </div>
+          <ol className="extension-path">
+            <li>
+              <span>01</span>
+              <div>
+                <a href="docs/system-architecture.html">Connect a provider</a>
+                <p>Normalize one API behind shared caching and rate limits.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <a href="docs/build-a-tool.html">Declare a typed tool</a>
+                <p>Define its inputs and return evidence the agent can inspect.</p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <a href="docs/testing-and-evals.html">Route, test, and ship</a>
+                <p>Expose it to workflows, verify it, then package it if others need it.</p>
+              </div>
+            </li>
+          </ol>
         </section>
 
         <section
@@ -1145,30 +1148,17 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
           aria-label="Start locally"
         >
           <div className="mx-auto max-w-[1100px] px-4 py-20 text-center lg:px-6">
-            <p className="landing-eyebrow">One command. Your machine.</p>
             <h2>Start your first investigation.</h2>
             <p>Bring an Anthropic, OpenAI, or Google model key. Market data needs no keys.</p>
             <div className="landing-command">
               <span aria-hidden="true">$</span>
               <code>npx opencandle@latest gui</code>
             </div>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Button asChild variant="brand" rounded="full">
-                <a href="docs/getting-started.html">Install OpenCandle</a>
-              </Button>
-              <Button asChild variant="bordered">
-                <a href="docs/first-run.html">See the first run</a>
-              </Button>
-            </div>
-            <p className="mt-5 text-muted-foreground text-xs">
-              MIT licensed · Node.js 22.19+ (22.x) or 24–26 · macOS, Windows, Linux
-            </p>
           </div>
         </section>
 
         <section className="mx-auto max-w-[860px] px-4 py-24 lg:px-6" aria-label="FAQ">
           <div className="landing-section-heading">
-            <p className="landing-eyebrow">FAQ</p>
             <h2>Common questions</h2>
           </div>
           <div className="faq-list">

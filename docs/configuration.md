@@ -15,7 +15,7 @@ The default OpenCandle home is `~/.opencandle`. Set `OPENCANDLE_HOME` to move us
 
 ## Precedence
 
-At startup, OpenCandle fills `process.env` from `.env` only for keys not already exported in the shell — conventional dotenv behavior. Environment values are then read before file config values.
+At startup, OpenCandle fills `process.env` from `.env` only for keys not already exported in the shell, which is conventional dotenv behavior. Environment values are then read before file config values.
 
 Effective precedence:
 
@@ -102,7 +102,7 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `lse-byte-budget.json` | Monthly London Strategic Edge free-tier usage meter; LSE drops out of fallback chains at 80% of the allowance. |
 | `logs/` | Log directory (currently unused). |
 
-Durable market state — watchlists, portfolios, alerts — lives only in `state.db`. There is no JSON-file alternative for that state.
+Durable market state, including watchlists, portfolios, and alerts, lives only in `state.db`. There is no JSON-file alternative for that state.
 
 Pi runtime config and sessions remain separate under Pi's own agent directory. OpenCandle does not move Pi state into `$OPENCANDLE_HOME`.
 

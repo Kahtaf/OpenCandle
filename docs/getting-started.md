@@ -40,7 +40,7 @@ On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.exam
 
 On first run, the GUI opens model setup before chat. The terminal interface also supports Pi sign-in and `/setup`.
 
-For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures — including native `better-sqlite3` install errors.
+For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures, including native `better-sqlite3` install errors.
 
 ## Choose Your Interface
 

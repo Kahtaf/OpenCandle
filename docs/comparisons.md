@@ -38,7 +38,7 @@ Spreadsheets are excellent for owned models, repeatable calculations, and portfo
 | --- | --- | --- |
 | Evidence gathering | Agent routes prompts to explicit finance tools | Manual imports, formulas, plugins, or pasted data |
 | Missing/stale data disclosure | Surfaced in the session | Usually tracked manually in notes or formulas |
-| Repeatable models | Not the goal — findings feed into your own models | Best fit for durable valuation, allocation, and scenario models |
+| Repeatable models | Not the goal; findings feed into your own models | Best fit for durable valuation, allocation, and scenario models |
 
 Use them together: OpenCandle gathers the facts and caveats, then stable assumptions move into a spreadsheet. Discounted cash flow models, position sizing tables, tax lots, and rebalancing plans belong in a workbook where you control every formula.
 

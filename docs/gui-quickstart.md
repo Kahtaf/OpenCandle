@@ -10,7 +10,7 @@ description: Run the local OpenCandle browser GUI and take your first steps.
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 1. Open `http://127.0.0.1:14567`.
 1. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
-1. Start with a prompt that needs no API keys, such as `What is AAPL trading at?` or one of the dashboard suggestion cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
+1. Start with a prompt that needs no API keys, such as `What is AAPL trading at?` or one of the dashboard suggestion cards. When you want deep research, run `/analyze NVDA`; the multi-analyst debate takes a few minutes.
 1. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 1. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
 
@@ -44,7 +44,7 @@ If the page returns `502`, the tunnel is up but the local GUI is not listening. 
 
 The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt starts a fresh chat session.
 
-Every ticker links to a symbol page at `/symbol/<TICKER>` — reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
+Every ticker links to a symbol page at `/symbol/<TICKER>`, reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
 
 ![AMD symbol page with an interactive range chart](./images/gui-symbol-page.png)
 
