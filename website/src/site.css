@@ -161,25 +161,10 @@
     outline-offset: 2px;
   }
 
-  .surface-demo-tab-icon {
-    display: grid;
-    width: 28px;
-    height: 28px;
-    place-items: center;
-    border: 1px solid hsl(var(--tw-border));
-    border-radius: 7px;
-    background: hsl(var(--tw-background));
-  }
-
-  .surface-demo-tab-icon svg {
+  .surface-demo-tabs button > svg {
+    flex: 0 0 auto;
     width: 15px;
     height: 15px;
-  }
-
-  .surface-demo-tabs button[aria-selected="true"] .surface-demo-tab-icon {
-    border-color: hsl(var(--tw-foreground));
-    background: hsl(var(--tw-foreground));
-    color: hsl(var(--tw-background));
   }
 
   .surface-demo-stage {

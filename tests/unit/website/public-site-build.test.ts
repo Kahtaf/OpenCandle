@@ -188,6 +188,8 @@ describe("public site build contract", () => {
 
   it("keeps the homepage focused on product evidence instead of decorative filler", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const guiTab = homeDocument.querySelector("#surface-tab-gui");
 
     expect(homeHtml).not.toContain(">Local-first<");
     expect(homeHtml).not.toContain("One engine. Two complete interfaces.");
@@ -197,7 +199,8 @@ describe("public site build contract", () => {
     expect(homeHtml).not.toContain("One local workspace");
     expect(homeHtml).not.toContain("One command. Your machine.");
     expect(homeHtml).not.toContain('class="landing-eyebrow"');
-    expect(homeHtml).toContain('class="surface-demo-tab-icon"');
+    expect(guiTab?.querySelector(".surface-demo-tab-icon")).toBeNull();
+    expect(guiTab?.firstElementChild?.tagName).toBe("svg");
     expect(homeHtml).toContain("Same question. Different evidence.");
     expect(homeHtml).toContain('data-answer-surface="chatgpt"');
     expect(homeHtml).toContain('data-answer-surface="claude"');
@@ -209,6 +212,9 @@ describe("public site build contract", () => {
     expect(homeHtml).not.toContain("See the first run");
     expect(homeHtml).not.toContain("MIT licensed · Node.js");
     expect(homeHtml).not.toContain("MIT licensed · read-only");
+    expect(homeHtml.indexOf('aria-label="FAQ"')).toBeLessThan(
+      homeHtml.indexOf('aria-label="Start locally"'),
+    );
   });
 
   it("uses direct punctuation instead of em dashes across the public site", async () => {

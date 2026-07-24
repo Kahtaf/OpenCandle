@@ -10,7 +10,7 @@
 
 - The public homepage and docs now present the local browser GUI as OpenCandle's primary path and the terminal as an equally complete keyboard-first interface, backed by the same tools, workflows, evidence, saved sessions, and market state.
 - The homepage product demo can now switch between the approved Remotion browser and terminal walkthroughs, defaulting to the GUI while respecting reduced-motion preferences, lazy-loading and playing only the active surface, serving source logos locally, and preserving the handcrafted CLI animation as an inert fallback.
-- The homepage now removes redundant labels and interface copy, uses full-width icon tabs for its GUI and terminal walkthroughs, compares illustrative ChatGPT, Claude, and OpenCandle answers by visible evidence, presents extension as a provider-to-tool-to-workflow path, and uses direct punctuation throughout every published docs page.
+- The homepage now removes redundant labels and interface copy, uses full-width tabs with inline unboxed icons for its GUI and terminal walkthroughs, compares illustrative ChatGPT, Claude, and OpenCandle answers by visible evidence, presents extension as a provider-to-tool-to-workflow path, places the install call to action after common questions, and uses direct punctuation throughout every published docs page.
 
 ### Fixed
 

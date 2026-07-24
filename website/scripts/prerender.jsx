@@ -563,9 +563,7 @@ function SurfaceDemo() {
             tabIndex="0"
             data-surface-tab="gui"
           >
-            <span className="surface-demo-tab-icon">
-              <BrowserIcon />
-            </span>
+            <BrowserIcon />
             <span>Browser</span>
           </button>
           <button
@@ -577,9 +575,7 @@ function SurfaceDemo() {
             tabIndex="-1"
             data-surface-tab="tui"
           >
-            <span className="surface-demo-tab-icon">
-              <TerminalIcon />
-            </span>
+            <TerminalIcon />
             <span>Terminal</span>
           </button>
         </div>
@@ -1143,20 +1139,6 @@ function HomePage({ buildDate, version }) {
           </ol>
         </section>
 
-        <section
-          className="landing-cta border-border border-y bg-secondary/60"
-          aria-label="Start locally"
-        >
-          <div className="mx-auto max-w-[1100px] px-4 py-20 text-center lg:px-6">
-            <h2>Start your first investigation.</h2>
-            <p>Bring an Anthropic, OpenAI, or Google model key. Market data needs no keys.</p>
-            <div className="landing-command">
-              <span aria-hidden="true">$</span>
-              <code>npx opencandle@latest gui</code>
-            </div>
-          </div>
-        </section>
-
         <section className="mx-auto max-w-[860px] px-4 py-24 lg:px-6" aria-label="FAQ">
           <div className="landing-section-heading">
             <h2>Common questions</h2>
@@ -1171,6 +1153,20 @@ function HomePage({ buildDate, version }) {
                 <p>{faq.answer}</p>
               </details>
             ))}
+          </div>
+        </section>
+
+        <section
+          className="landing-cta border-border border-y bg-secondary/60"
+          aria-label="Start locally"
+        >
+          <div className="mx-auto max-w-[1100px] px-4 py-20 text-center lg:px-6">
+            <h2>Start your first investigation.</h2>
+            <p>Bring an Anthropic, OpenAI, or Google model key. Market data needs no keys.</p>
+            <div className="landing-command">
+              <span aria-hidden="true">$</span>
+              <code>npx opencandle@latest gui</code>
+            </div>
           </div>
         </section>
       </main>
