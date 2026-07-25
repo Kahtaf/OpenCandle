@@ -3,6 +3,43 @@ import { dirname, join, normalize, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Badge, Button, Card, OpenCandleLogo } from "@opencandle/ui";
 import matter from "gray-matter";
+import {
+  Archive,
+  ArrowUp,
+  AudioLines,
+  Bell,
+  BriefcaseBusiness,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  ClipboardCheck,
+  ClipboardList,
+  Clock3,
+  Code2,
+  Copy,
+  Download,
+  Ellipsis,
+  Folder,
+  LibraryBig,
+  ListChecks,
+  ListPlus,
+  Menu,
+  MessageCircle,
+  Mic,
+  MoreHorizontal,
+  Palette,
+  PanelLeft,
+  Plus,
+  RotateCcw,
+  Search,
+  Shapes,
+  Share2,
+  SlidersHorizontal,
+  SquarePen,
+  ThumbsDown,
+  ThumbsUp,
+  Volume2,
+} from "lucide-react";
 import { toString as mdastToString } from "mdast-util-to-string";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -21,8 +58,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const outDir = join(root, "website/dist");
 const siteUrl = "https://opencandle.app";
 const brandName = "OpenCandle";
+// Kept under ~160 characters so search results do not truncate it, and led with
+// the words people actually search for rather than the internal category name.
 const landingDescription =
-  "OpenCandle is an open source financial investigator with a local browser GUI and an equally complete terminal interface for evidence-first market research.";
+  "Free, open source stock and market research that runs on your machine. OpenCandle fetches live market data, then shows the source behind every number.";
 const socialImage = `${siteUrl}/assets/gui-screenshot.png`;
 
 // Ordered as a first-time visitor's journey: why and how to start, then daily
@@ -312,8 +351,7 @@ function HtmlDocument({
 // sidebar under it on docs pages).
 function SiteHeader({ output = "index.html" }) {
   const prefix = rootPrefix(output);
-  const onComparisons = output === "docs/comparisons.html";
-  const onDocs = output.startsWith("docs/") && !onComparisons;
+  const onDocs = output.startsWith("docs/");
   const activeClass = "text-foreground";
   return (
     <header className="sticky top-0 z-20 border-border border-b bg-background/95 backdrop-blur">
@@ -338,19 +376,6 @@ function SiteHeader({ output = "index.html" }) {
           <Button asChild variant="ghost" size="sm" className={onDocs ? activeClass : undefined}>
             <a href={`${prefix}docs/index.html`} aria-current={onDocs ? "true" : undefined}>
               Docs
-            </a>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className={`hidden sm:inline-flex ${onComparisons ? activeClass : ""}`}
-          >
-            <a
-              href={`${prefix}docs/comparisons.html`}
-              aria-current={onComparisons ? "true" : undefined}
-            >
-              Comparisons
             </a>
           </Button>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
@@ -499,6 +524,15 @@ function TerminalIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <LucideIcon>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </LucideIcon>
+  );
+}
+
 // Kept as an inert fallback while the Remotion surface demo is evaluated.
 // Restoring the handcrafted animation only requires rendering this component
 // in place of SurfaceDemo.
@@ -553,8 +587,13 @@ function SurfaceDemo() {
   return (
     <div className="surface-demo" data-surface-demo="">
       <div className="surface-demo-toolbar">
-        <div className="surface-demo-tabs" role="tablist" aria-label="Choose an OpenCandle view">
+        <div
+          className="surface-demo-tabs icon-tabs"
+          role="tablist"
+          aria-label="Choose an OpenCandle view"
+        >
           <button
+            className="icon-tab"
             id="surface-tab-gui"
             type="button"
             role="tab"
@@ -567,6 +606,7 @@ function SurfaceDemo() {
             <span>Browser</span>
           </button>
           <button
+            className="icon-tab"
             id="surface-tab-tui"
             type="button"
             role="tab"
@@ -576,7 +616,7 @@ function SurfaceDemo() {
             data-surface-tab="tui"
           >
             <TerminalIcon />
-            <span>Terminal</span>
+            <span>CLI</span>
           </button>
         </div>
       </div>
@@ -734,17 +774,567 @@ function DocsShell({ page, children }) {
   );
 }
 
+const comparisonQuestion =
+  "I own 200 shares of NVDA and I’m worried it could drop next month. Should I hold, sell some, or protect my investment?";
+
+function ChatGptBrandIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-brand-icon="chatgpt"
+      viewBox="146.694 227.042 267.198 266.405"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M249.176 323.434V298.276C249.176 296.158 249.971 294.569 251.825 293.509L302.406 264.381C309.29 260.409 317.5 258.555 325.973 258.555C357.75 258.555 377.877 283.185 377.877 309.399C377.877 311.253 377.877 313.371 377.611 315.49L325.178 284.771C322.001 282.919 318.822 282.919 315.645 284.771L249.176 323.434ZM367.283 421.415V361.301C367.283 357.592 365.694 354.945 362.516 353.092L296.048 314.43L317.763 301.982C319.617 300.925 321.206 300.925 323.058 301.982L373.639 331.112C388.205 339.586 398.003 357.592 398.003 375.069C398.003 395.195 386.087 413.733 367.283 421.412V421.415ZM233.553 368.452L211.838 355.742C209.986 354.684 209.19 353.095 209.19 350.975V292.718C209.19 264.383 230.905 242.932 260.301 242.932C271.423 242.932 281.748 246.641 290.49 253.26L238.321 283.449C235.146 285.303 233.555 287.951 233.555 291.659V368.455L233.553 368.452ZM280.292 395.462L249.176 377.985V340.913L280.292 323.436L311.407 340.913V377.985L280.292 395.462ZM300.286 475.968C289.163 475.968 278.837 472.259 270.097 465.64L322.264 435.449C325.441 433.597 327.03 430.949 327.03 427.239V350.445L349.011 363.155C350.865 364.213 351.66 365.802 351.66 367.922V426.179C351.66 454.514 329.679 475.965 300.286 475.965V475.968ZM237.525 416.915L186.944 387.785C172.378 379.31 162.582 361.305 162.582 343.827C162.582 323.436 174.763 305.164 193.563 297.485V357.861C193.563 361.571 195.154 364.217 198.33 366.071L264.535 404.467L242.82 416.915C240.967 417.972 239.377 417.972 237.525 416.915ZM234.614 460.343C204.689 460.343 182.71 437.833 182.71 410.028C182.71 407.91 182.976 405.792 183.238 403.672L235.405 433.863C238.582 435.715 241.763 435.715 244.938 433.863L311.407 395.466V420.622C311.407 422.742 310.612 424.331 308.758 425.389L258.179 454.519C251.293 458.491 243.083 460.343 234.611 460.343H234.614ZM300.286 491.854C332.329 491.854 359.073 469.082 365.167 438.892C394.825 431.211 413.892 403.406 413.892 375.073C413.892 356.535 405.948 338.529 391.648 325.552C392.972 319.991 393.766 314.43 393.766 308.87C393.766 271.003 363.048 242.666 327.562 242.666C320.413 242.666 313.528 243.723 306.644 246.109C294.725 234.457 278.307 227.042 260.301 227.042C228.258 227.042 201.513 249.815 195.42 280.004C165.761 287.685 146.694 315.49 146.694 343.824C146.694 362.362 154.638 380.368 168.938 393.344C167.613 398.906 166.819 404.467 166.819 410.027C166.819 447.894 197.538 476.231 233.024 476.231C240.172 476.231 247.058 475.173 253.943 472.788C265.859 484.441 282.278 491.854 300.286 491.854Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ClaudeBrandIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-brand-icon="claude"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"
+        fill="#d97757"
+      />
+    </svg>
+  );
+}
+
+function MockNavItem({ icon: Icon, children, active = false }) {
+  return (
+    <div className={active ? "mock-nav-item mock-nav-item--active" : "mock-nav-item"}>
+      <Icon aria-hidden="true" data-app-icon="" />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function ComposerIcon({ icon: Icon, label, className = "" }) {
+  return (
+    <button
+      className={`composer-icon-button ${className}`.trim()}
+      type="button"
+      aria-label={label}
+      tabIndex="-1"
+    >
+      <Icon aria-hidden="true" />
+    </button>
+  );
+}
+
+function ComparisonComposer({ variant }) {
+  if (variant === "chatgpt") {
+    return (
+      <div className="product-composer product-composer--chatgpt" data-ui-composer="">
+        <ComposerIcon icon={Plus} label="Add attachment" />
+        <span className="product-composer-field" data-composer-field="">
+          Ask ChatGPT
+        </span>
+        <div className="product-composer-actions">
+          <button className="composer-model-button" type="button" tabIndex="-1">
+            Instant
+            <ChevronDown aria-hidden="true" />
+          </button>
+          <ComposerIcon icon={Mic} label="Use microphone" className="composer-desktop-control" />
+          <ComposerIcon
+            icon={AudioLines}
+            label="Start voice mode"
+            className="chatgpt-voice-button"
+          />
+          <ComposerIcon icon={ArrowUp} label="Send message" className="chatgpt-mobile-send" />
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "claude") {
+    return (
+      <div className="product-composer product-composer--claude" data-ui-composer="">
+        <span className="product-composer-field" data-composer-field="">
+          Write a message…
+        </span>
+        <div className="product-composer-footer">
+          <ComposerIcon icon={Plus} label="Add attachment" />
+          <div className="product-composer-actions">
+            <button className="composer-model-button" type="button" tabIndex="-1">
+              Opus 5 High
+              <ChevronDown aria-hidden="true" />
+            </button>
+            <ComposerIcon icon={Mic} label="Use microphone" />
+            <ComposerIcon icon={AudioLines} label="Start voice mode" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="product-composer product-composer--opencandle" data-ui-composer="">
+      <span className="product-composer-field" data-composer-field="">
+        Ask anything
+      </span>
+      <div className="product-composer-footer">
+        <button className="opencandle-model-button" type="button" tabIndex="-1">
+          gpt-5.6-terra
+          <ChevronDown aria-hidden="true" />
+        </button>
+        <ComposerIcon icon={Plus} label="Add context" />
+        <ComposerIcon icon={ArrowUp} label="Send message" className="opencandle-send-button" />
+      </div>
+    </div>
+  );
+}
+
+function ProductMobileHeader({ variant }) {
+  if (variant === "opencandle") {
+    return (
+      <header
+        className="product-mobile-header product-mobile-header--opencandle"
+        data-ui-mobile-header=""
+      >
+        <ComposerIcon icon={Menu} label="Open sidebar" />
+        <span className="product-mobile-brand">
+          <OpenCandleLogo src="assets/logo.svg" />
+          <strong>OpenCandle</strong>
+        </span>
+      </header>
+    );
+  }
+
+  if (variant === "claude") {
+    return (
+      <header
+        className="product-mobile-header product-mobile-header--claude"
+        data-ui-mobile-header=""
+      >
+        <ComposerIcon icon={Menu} label="Open sidebar" />
+        <strong>Claude</strong>
+        <span className="product-mobile-actions">
+          <ComposerIcon icon={Share2} label="Share chat" />
+          <ComposerIcon icon={MoreHorizontal} label="More options" />
+        </span>
+      </header>
+    );
+  }
+
+  return (
+    <header
+      className="product-mobile-header product-mobile-header--chatgpt"
+      data-ui-mobile-header=""
+    >
+      <ComposerIcon icon={Menu} label="Open sidebar" />
+      <strong>ChatGPT</strong>
+      <span className="product-mobile-actions">
+        <ComposerIcon icon={SquarePen} label="New chat" />
+        <ComposerIcon icon={MoreHorizontal} label="More options" />
+      </span>
+    </header>
+  );
+}
+
+function ChatGptComparisonUi() {
+  return (
+    <article
+      className="answer-surface product-mock product-mock--chatgpt"
+      data-answer-surface="chatgpt"
+    >
+      <aside className="product-sidebar chatgpt-sidebar" data-ui-sidebar="">
+        <div className="chatgpt-brand">
+          <span>
+            <strong>ChatGPT</strong>
+            <small>Pro</small>
+          </span>
+          <span className="product-brand-actions">
+            <ComposerIcon icon={Search} label="Search chats" />
+            <ComposerIcon icon={PanelLeft} label="Toggle sidebar" />
+          </span>
+        </div>
+        <div className="mock-nav">
+          <MockNavItem icon={SquarePen}>New chat</MockNavItem>
+          <MockNavItem icon={LibraryBig}>Library</MockNavItem>
+          <MockNavItem icon={Folder}>Projects</MockNavItem>
+          <MockNavItem icon={Clock3}>Scheduled</MockNavItem>
+          <MockNavItem icon={Shapes}>Plugins</MockNavItem>
+          <MockNavItem icon={Ellipsis}>More</MockNavItem>
+        </div>
+        <div className="mock-recents">
+          <strong>Recents</strong>
+          <span className="mock-recent-active">NVDA Investment Strategy</span>
+          <span>Apple Q2 2026 Earnings</span>
+          <span>Mortgage Recast in Ontario</span>
+          <span>World Cup Recap</span>
+          <span>Cottage Cheese Yogurt Pancakes</span>
+        </div>
+        <div className="product-profile">
+          <span>W</span>
+          <div>
+            <strong>Warren</strong>
+            <small>Pro</small>
+          </div>
+          <Shapes aria-hidden="true" />
+        </div>
+      </aside>
+      <div className="product-main chatgpt-main">
+        <ProductMobileHeader variant="chatgpt" />
+        <header className="product-topbar product-topbar--chatgpt">
+          <span />
+          <span>
+            <Share2 aria-hidden="true" />
+            Share
+            <MoreHorizontal aria-hidden="true" />
+          </span>
+        </header>
+        <div className="product-conversation chatgpt-conversation">
+          <p className="product-user-message chatgpt-user-message" data-ui-user-message="">
+            {comparisonQuestion}
+          </p>
+          <div className="product-response chatgpt-response">
+            <p>
+              Because your concern is only the next month, I would keep the 200 shares and hedge
+              rather than sell outright.
+            </p>
+            <h3>Hold</h3>
+            <p>Keep all the upside, but only if you can tolerate a 15–25% drawdown.</p>
+            <h3>Sell some</h3>
+            <p>Trim 50–100 shares if this has grown beyond roughly 15–20% of your portfolio.</p>
+            <h3>Protect</h3>
+            <p>
+              A protective put limits downside. A collar can help pay for it, but caps your upside.
+            </p>
+            <p className="chatgpt-follow-up">
+              Share your cost basis, account type, and downside limit, and I can suggest a current
+              strike and estimate the cost.
+            </p>
+          </div>
+        </div>
+        <ComparisonComposer variant="chatgpt" />
+      </div>
+    </article>
+  );
+}
+
+function ClaudeComparisonUi() {
+  return (
+    <article
+      className="answer-surface product-mock product-mock--claude"
+      data-answer-surface="claude"
+    >
+      <aside className="product-sidebar claude-sidebar" data-ui-sidebar="">
+        <div className="claude-brand">
+          <strong>Claude</strong>
+          <span className="product-brand-actions">
+            <Search aria-hidden="true" />
+            <PanelLeft aria-hidden="true" />
+          </span>
+        </div>
+        <div className="mock-nav">
+          <MockNavItem icon={Plus}>New chat</MockNavItem>
+          <MockNavItem icon={MessageCircle}>Chats</MockNavItem>
+          <MockNavItem icon={Archive}>Projects</MockNavItem>
+          <MockNavItem icon={Shapes}>Artifacts</MockNavItem>
+          <MockNavItem icon={BriefcaseBusiness}>Customize</MockNavItem>
+        </div>
+        <div className="mock-recents claude-products">
+          <small>Products</small>
+          <span>
+            <Code2 aria-hidden="true" /> Code
+          </span>
+          <span>
+            <ListChecks aria-hidden="true" /> Cowork
+          </span>
+          <span>
+            <Palette aria-hidden="true" /> Design
+          </span>
+        </div>
+        <div className="mock-recents">
+          <strong className="mock-recents-heading">
+            Recents <SlidersHorizontal aria-hidden="true" />
+          </strong>
+          <span className="mock-recent-active">Protecting NVDA shares from potential decline</span>
+          <span>Apple’s latest earnings impact</span>
+          <span>Stock sparklines API naming ideas</span>
+          <span>Market data provider research</span>
+        </div>
+        <div className="product-profile claude-profile">
+          <span>W</span>
+          <div>
+            <strong>Warren</strong>
+            <small>Max plan</small>
+          </div>
+          <Download aria-hidden="true" />
+        </div>
+      </aside>
+      <div className="product-main claude-main">
+        <ProductMobileHeader variant="claude" />
+        <header className="product-topbar claude-topbar">
+          <strong>
+            Protecting NVDA shares from potential decline
+            <ChevronDown aria-hidden="true" />
+          </strong>
+          <span>Share</span>
+        </header>
+        <div className="product-conversation claude-conversation">
+          <p className="product-user-message claude-user-message" data-ui-user-message="">
+            {comparisonQuestion}
+          </p>
+          <div className="claude-context">
+            Weighed position sizing, tax implications, and hedging around earnings
+          </div>
+          <div className="product-response claude-response">
+            <p>
+              Worth knowing first: NVDA is around <strong>$206</strong>, and its next earnings
+              report is <strong>August 26, 2026</strong>, inside the window you’re worried about.
+            </p>
+            <h3>If the position is too large</h3>
+            <p>
+              Selling 50–100 shares permanently reduces concentration risk. Account type and taxes
+              can change the choice.
+            </p>
+            <h3>If earnings are the concern</h3>
+            <p>
+              200 shares is exactly 2 contracts. Consider a September put 5–10% below spot, after
+              the earnings date.
+            </p>
+            <p className="claude-chain-note">
+              The premium may be expensive. Pull up the actual chain rather than guessing.
+            </p>
+            <div className="claude-response-actions" aria-hidden="true">
+              <Copy />
+              <Volume2 />
+              <ThumbsUp />
+              <ThumbsDown />
+              <RotateCcw />
+            </div>
+          </div>
+        </div>
+        <ComparisonComposer variant="claude" />
+      </div>
+    </article>
+  );
+}
+
+function OpenCandleComparisonUi() {
+  return (
+    <article
+      className="answer-surface product-mock product-mock--opencandle"
+      data-answer-surface="opencandle"
+    >
+      <aside className="product-sidebar opencandle-sidebar" data-ui-sidebar="">
+        <div className="opencandle-mock-brand">
+          <OpenCandleLogo src="assets/logo.svg" />
+          <strong>OpenCandle</strong>
+          <PanelLeft aria-hidden="true" />
+        </div>
+        <div className="opencandle-new-chat">
+          <Plus aria-hidden="true" />
+          New chat
+        </div>
+        <div className="opencandle-search">
+          <Search aria-hidden="true" />
+          Search
+        </div>
+        <div className="mock-recents opencandle-market-state">
+          <small>Market state</small>
+          <MockNavItem icon={ListPlus}>Watchlists</MockNavItem>
+          <MockNavItem icon={BriefcaseBusiness}>Portfolios</MockNavItem>
+          <MockNavItem icon={Bell}>Alerts</MockNavItem>
+          <MockNavItem icon={ClipboardList}>Reports</MockNavItem>
+          <MockNavItem icon={ClipboardCheck}>Diagnostics</MockNavItem>
+        </div>
+        <div className="mock-recents opencandle-history">
+          <small>Today</small>
+          <span className="mock-recent-active">I own 200 shares of NVDA</span>
+          <span>What changed for Apple?</span>
+          <small>Yesterday</small>
+          <span>What’s moving in my portfolio?</span>
+        </div>
+      </aside>
+      <div className="product-main opencandle-main">
+        <ProductMobileHeader variant="opencandle" />
+        <div className="product-conversation opencandle-conversation">
+          <p className="product-user-message opencandle-user-message" data-ui-user-message="">
+            {comparisonQuestion}
+          </p>
+          <small className="opencandle-answer-label">Answer</small>
+          <div className="opencandle-research-card">
+            <span className="opencandle-research-icon">
+              <CircleHelp aria-hidden="true" />
+            </span>
+            <div>
+              <strong>Research &amp; analysis</strong>
+              <small>9 of 9 steps · 103 sources</small>
+            </div>
+            <span className="opencandle-sources" data-ui-research-status="">
+              <span className="opencandle-source-stack" data-ui-source-stack="">
+                <img src="assets/source-icons/yahoo.svg" alt="" />
+                <img src="assets/source-icons/sec.svg" alt="" />
+                <img src="assets/source-icons/fred.svg" alt="" />
+                <img src="assets/source-icons/reddit.svg" alt="" />
+              </span>
+              103 sources
+            </span>
+            <span className="opencandle-steps">9 steps &nbsp;›</span>
+            <ChevronRight className="opencandle-research-chevron" aria-hidden="true" />
+          </div>
+          <div className="product-response opencandle-response">
+            <p>
+              <strong>At $206.84, protect the position rather than sell it outright:</strong> buy 2
+              contracts, NVDA Aug. 21 $200 puts, to cover all 200 shares.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Position / hedge</th>
+                  <th>Current reference</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Position">NVDA shares</td>
+                  <td data-label="Reference">200 × $206.84 = $41,368</td>
+                  <td data-label="Action">Hold</td>
+                </tr>
+                <tr>
+                  <td data-label="Position">Protective puts</td>
+                  <td data-label="Reference">2 × Aug. 21 $200 puts</td>
+                  <td data-label="Action">Buy</td>
+                </tr>
+                <tr>
+                  <td data-label="Position">Indicative quoted ask</td>
+                  <td data-label="Reference">$5.95/share</td>
+                  <td data-label="Action">~$1,190 total</td>
+                </tr>
+                <tr>
+                  <td data-label="Position">Protection floor at expiry</td>
+                  <td data-label="Reference">~$194.05/share</td>
+                  <td data-label="Action">Roughly 6.2% net downside</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="opencandle-evidence">
+              <strong>Why this trade:</strong> price is above its 20-day average but below its
+              50-day average. RSI is neutral at 51.1, while MACD and volume are constructive. Risk
+              remains elevated at 35.8% annualized volatility and a 20.2% maximum drawdown.
+            </p>
+            <p className="opencandle-time">
+              Option quotes were after-hours as of July 24, 2026, 4:00 p.m. ET.
+            </p>
+          </div>
+        </div>
+        <ComparisonComposer variant="opencandle" />
+      </div>
+    </article>
+  );
+}
+
+function AnswerComparisonTabs() {
+  return (
+    <div className="answer-tabs" data-answer-tabs="">
+      <div className="icon-tabs answer-icon-tabs" role="tablist" aria-label="Compare answers">
+        <button
+          className="icon-tab"
+          id="answer-tab-chatgpt"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="answer-panel-chatgpt"
+          tabIndex="0"
+          data-answer-tab="chatgpt"
+        >
+          <span data-tab-icon="">
+            <ChatGptBrandIcon />
+          </span>
+          <span>ChatGPT</span>
+        </button>
+        <button
+          className="icon-tab"
+          id="answer-tab-claude"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="answer-panel-claude"
+          tabIndex="-1"
+          data-answer-tab="claude"
+        >
+          <span data-tab-icon="">
+            <ClaudeBrandIcon />
+          </span>
+          <span>Claude</span>
+        </button>
+        <button
+          className="icon-tab"
+          id="answer-tab-opencandle"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="answer-panel-opencandle"
+          tabIndex="-1"
+          data-answer-tab="opencandle"
+        >
+          <span data-tab-icon="">
+            <OpenCandleLogo src="assets/logo.svg" />
+          </span>
+          <span>OpenCandle</span>
+        </button>
+      </div>
+      <div className="answer-tab-panels">
+        <div
+          id="answer-panel-chatgpt"
+          role="tabpanel"
+          aria-labelledby="answer-tab-chatgpt"
+          data-answer-panel="chatgpt"
+        >
+          <ChatGptComparisonUi />
+        </div>
+        <div
+          id="answer-panel-claude"
+          role="tabpanel"
+          aria-labelledby="answer-tab-claude"
+          data-answer-panel="claude"
+          hidden
+        >
+          <ClaudeComparisonUi />
+        </div>
+        <div
+          id="answer-panel-opencandle"
+          role="tabpanel"
+          aria-labelledby="answer-tab-opencandle"
+          data-answer-panel="opencandle"
+          hidden
+        >
+          <OpenCandleComparisonUi />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomePage({ buildDate, version }) {
   const faqs = [
     {
       question: "What is OpenCandle?",
       answer:
-        "OpenCandle is an open source financial investigator built around a local browser GUI, with an equally complete terminal interface for users who prefer a keyboard-first workflow.",
+        "OpenCandle is an open source AI stock and market research tool that runs on your own machine. It is built around a local browser GUI, with an equally complete terminal interface for users who prefer a keyboard-first workflow.",
+    },
+    {
+      question: "Is it free?",
+      answer:
+        "OpenCandle itself is free and MIT licensed, with no account and no subscription. You pay only your own model provider for the tokens a session uses. Core market data works without paying any data provider.",
     },
     {
       question: "How is this different from asking ChatGPT?",
       answer:
-        "A general chatbot answers from training data unless you wire up browsing and data feeds yourself. OpenCandle calls typed finance tools first: quotes, filings, options chains, macro series, and sentiment. It keeps the provider trail, timestamps, and data gaps visible in the answer.",
+        "A general chatbot can produce a confident market answer you have no way to check. OpenCandle calls typed finance tools first, then keeps the provider, the timestamp, and the data gaps attached to every claim, so you can audit the answer instead of trusting it.",
     },
     {
       question: "Which model does it use?",
@@ -889,23 +1479,22 @@ function HomePage({ buildDate, version }) {
       <main>
         <section className="landing-hero mx-auto max-w-[1100px] px-4 pt-16 pb-12 text-center sm:pt-24 lg:px-6">
           <h1 className="mx-auto max-w-[860px] font-semibold text-4xl text-foreground tracking-[-0.045em] sm:text-6xl lg:text-7xl">
-            Ask the market. <span className="text-accent">Inspect the evidence.</span>
+            Ask any market question. <span className="text-accent">Check every number.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-[660px] text-base text-muted-foreground leading-relaxed sm:text-lg">
-            OpenCandle is a local-first financial research workspace. Start in the visual GUI to
-            gather live market data, filings, macro context, options, and sentiment, then inspect
-            every source behind the answer.
+            OpenCandle is an open source financial investigator. It fetches live quotes, filings,
+            options, and macro data before answering, then shows the provider, the timestamp, and
+            what it could not find.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Button asChild variant="brand" rounded="full">
-              <a href="docs/gui-quickstart.html">Start with the GUI</a>
-            </Button>
-            <Button asChild variant="bordered">
-              <a href="docs/tui.html">Prefer the terminal</a>
-            </Button>
+          <div className="landing-command" data-surface-command="">
+            <span aria-hidden="true">$</span>
+            <code data-surface-command-text="">npx opencandle@latest gui</code>
+            <button type="button" aria-label="Copy install command" data-command-copy="">
+              <CopyIcon />
+            </button>
           </div>
-          <p className="mt-4 text-muted-foreground text-xs">
-            Open source · read-only · your model key · market data needs no keys
+          <p className="mt-6 text-muted-foreground text-xs">
+            MIT licensed · runs on your machine · no account · market data needs no keys
           </p>
         </section>
 
@@ -930,7 +1519,6 @@ function HomePage({ buildDate, version }) {
               <span className="evidence-hub-mark">
                 <OpenCandleLogo src="assets/logo.svg" className="h-7 w-7" />
               </span>
-              <span className="evidence-hub-label">OpenCandle</span>
             </div>
             <svg
               className="evidence-branches"
@@ -1014,7 +1602,7 @@ function HomePage({ buildDate, version }) {
         >
           <div className="landing-section-heading">
             <h2 id="research-flow-title">Ask. Gather. Verify.</h2>
-            <p>The agent does the collection work. You keep the judgment.</p>
+            <p>Every step leaves a record you can open.</p>
           </div>
           <div className="research-steps">
             {researchSteps.map((step) => (
@@ -1033,62 +1621,9 @@ function HomePage({ buildDate, version }) {
           <div className="mx-auto max-w-[1100px] px-4 py-20 lg:px-6">
             <div className="answer-comparison-heading">
               <h2>Same question. Different evidence.</h2>
-              <p>Ask each assistant the same market question without connecting extra data.</p>
+              <p>ChatGPT and Claude explain the choices. OpenCandle checks the market.</p>
             </div>
-            <div className="comparison-prompt">
-              <span>You</span>
-              <p>What changed for Apple after its latest earnings?</p>
-            </div>
-            <div className="answer-surfaces">
-              <article className="answer-surface" data-answer-surface="chatgpt">
-                <header>
-                  <span className="answer-surface-mark" aria-hidden="true">
-                    G
-                  </span>
-                  <strong>ChatGPT</strong>
-                  <small>No market tools</small>
-                </header>
-                <p>
-                  The quarter appears to show resilient demand, with services providing a steadier
-                  counterweight to hardware cycles.
-                </p>
-                <footer>No live market record attached</footer>
-              </article>
-              <article className="answer-surface" data-answer-surface="claude">
-                <header>
-                  <span className="answer-surface-mark" aria-hidden="true">
-                    C
-                  </span>
-                  <strong>Claude</strong>
-                  <small>No market tools</small>
-                </header>
-                <p>
-                  Focus on product demand, services growth, margins, and what management changed in
-                  its outlook.
-                </p>
-                <footer>No filing or price data attached</footer>
-              </article>
-              <article
-                className="answer-surface answer-surface--opencandle"
-                data-answer-surface="opencandle"
-              >
-                <header>
-                  <OpenCandleLogo src="assets/logo.svg" className="answer-surface-logo" />
-                  <strong>OpenCandle</strong>
-                  <small>Live tools connected</small>
-                </header>
-                <p>
-                  I checked the latest filing, current quote context, price history, and options
-                  activity before comparing the result with management guidance.
-                </p>
-                <ul className="answer-evidence" aria-label="Evidence gathered">
-                  <li>SEC filing</li>
-                  <li>Quote history</li>
-                  <li>Options chain</li>
-                </ul>
-                <footer>Sources attached · Freshness shown · Gaps named</footer>
-              </article>
-            </div>
+            <AnswerComparisonTabs />
             <p className="answer-comparison-link">
               <a
                 className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
@@ -1169,6 +1704,9 @@ function HomePage({ buildDate, version }) {
               <span aria-hidden="true">$</span>
               <code>npx opencandle@latest gui</code>
             </div>
+            <p className="mt-6 text-muted-foreground text-xs">
+              The agent does the collection work. You keep the judgment.
+            </p>
           </div>
         </section>
       </main>

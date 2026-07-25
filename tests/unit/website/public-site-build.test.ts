@@ -142,8 +142,31 @@ describe("public site build contract", () => {
 
     expect(homeHtml).not.toContain("hero-grid");
     expect(homeHtml).not.toContain("float-tile");
-    expect(homeHtml).toContain("Ask the market.");
-    expect(homeHtml).toContain("Inspect the evidence.");
+    expect(homeHtml).toContain("Ask any market question.");
+    expect(homeHtml).toContain("Check every number.");
+  });
+
+  it("puts the install command and the free/local proof line in the hero", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const heroCommand = homeDocument.querySelector(".landing-hero [data-surface-command]");
+
+    // The one-line install is the fastest path to value, so it must appear
+    // above the product demo rather than only in the closing CTA.
+    expect(homeHtml.indexOf("npx opencandle@latest gui")).toBeLessThan(
+      homeHtml.indexOf('data-surface-demo=""'),
+    );
+    expect(homeHtml).toContain(
+      "MIT licensed · runs on your machine · no account · market data needs no keys",
+    );
+    expect(homeHtml).not.toContain("local-first financial research workspace");
+    expect(homeHtml).not.toContain("Start in the visual GUI");
+    expect(heroCommand?.querySelector("code")?.textContent).toBe("npx opencandle@latest gui");
+    expect(heroCommand?.querySelector("[data-command-copy]")).not.toBeNull();
+    expect(homeHtml).not.toContain("Start with the GUI");
+    expect(homeHtml).not.toContain("Prefer the terminal");
+    expect(homeDocument.querySelector("header a[href='docs/comparisons.html']")).toBeNull();
+    expect(homeDocument.querySelector(".evidence-hub-label")).toBeNull();
   });
 
   it("renders the homepage product journey and switchable product demos", async () => {
@@ -162,13 +185,14 @@ describe("public site build contract", () => {
     expect(homeHtml).toContain('data-surface-video="gui"');
     expect(homeHtml.match(/controls=""/g)).toHaveLength(2);
     expect(homeHtml).toContain('data-legacy-cli-demo=""');
-    expect(homeHtml).toContain("Start with the GUI");
-    expect(homeHtml).toContain("Prefer the terminal");
     expect(homeHtml).toContain("equally complete terminal interface");
     expect(homeHtml.indexOf('data-surface-tab="gui"')).toBeLessThan(
       homeHtml.indexOf('data-surface-tab="tui"'),
     );
     expect(homeHtml).toMatch(/data-surface-tab="gui"[^>]*>[\s\S]*?Browser/);
+    expect(homeHtml).toMatch(/data-surface-tab="tui"[^>]*>[\s\S]*?CLI/);
+    expect(homeHtml).toContain('class="surface-demo-tabs icon-tabs"');
+    expect(homeHtml).toContain('class="icon-tabs answer-icon-tabs"');
     expect(homeHtml).not.toContain("Research from the terminal or the browser");
     expect(homeHtml).toContain('class="evidence-branches"');
     expect(homeHtml).toContain("evidence-branch--mobile");
@@ -217,6 +241,101 @@ describe("public site build contract", () => {
     );
   });
 
+  it("compares the same NVDA question with progressively more concrete answers", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const comparison = homeDocument.querySelector(".answer-comparison");
+    const tablist = comparison?.querySelector('[role="tablist"]');
+    const tabs = [...(tablist?.querySelectorAll('[role="tab"]') ?? [])];
+    const panels = [...(comparison?.querySelectorAll('[role="tabpanel"]') ?? [])];
+    const chatgpt = comparison?.querySelector('[data-answer-surface="chatgpt"]');
+    const claude = comparison?.querySelector('[data-answer-surface="claude"]');
+    const opencandle = comparison?.querySelector('[data-answer-surface="opencandle"]');
+
+    expect(tablist?.getAttribute("aria-label")).toBe("Compare answers");
+    expect(tabs).toHaveLength(3);
+    expect(tabs.every((tab) => tab.querySelector("svg, [data-tab-icon]"))).toBe(true);
+    expect(tabs[0]?.querySelector('[data-brand-icon="chatgpt"]')).not.toBeNull();
+    expect(tabs[1]?.querySelector('[data-brand-icon="claude"]')).not.toBeNull();
+    expect(tabs[2]?.querySelector('img[src="assets/logo.svg"]')).not.toBeNull();
+    expect(tabs[0]?.textContent).not.toContain("✣");
+    expect(tabs[1]?.textContent).not.toContain("✳");
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(panels).toHaveLength(3);
+    expect(panels[0]?.hasAttribute("hidden")).toBe(false);
+    expect(panels[1]?.hasAttribute("hidden")).toBe(true);
+    expect(panels[2]?.hasAttribute("hidden")).toBe(true);
+    const surfaces = [chatgpt, claude, opencandle];
+    for (const surface of surfaces) {
+      expect(surface?.querySelector("[data-ui-sidebar]")).not.toBeNull();
+      expect(surface?.querySelector("[data-ui-composer]")).not.toBeNull();
+      expect(surface?.querySelector("[data-ui-user-message]")?.textContent).toContain(
+        "I own 200 shares of NVDA",
+      );
+    }
+    expect(comparison?.querySelector(".comparison-prompt")).toBeNull();
+    expect(chatgpt?.textContent).toContain("15–25% drawdown");
+    expect(chatgpt?.textContent).toContain("Trim 50–100 shares");
+    expect(chatgpt?.textContent).toContain("cost basis, account type, and downside limit");
+    expect(chatgpt?.textContent).not.toContain("$200 put");
+    expect(claude?.textContent).toContain("August 26, 2026");
+    expect(claude?.textContent).toContain("200 shares is exactly 2 contracts");
+    expect(claude?.textContent).toContain("September put 5–10% below spot");
+    expect(claude?.textContent).toContain("actual chain rather than guessing");
+    expect(claude?.textContent).not.toContain("$1,190");
+    expect(chatgpt?.querySelector(".product-profile strong")?.textContent).toBe("Warren");
+    expect(claude?.querySelector(".product-profile strong")?.textContent).toBe("Warren");
+    expect(comparison?.textContent).not.toMatch(/kahtaf/i);
+    expect(opencandle?.querySelector("[data-ui-research-status]")?.textContent).toContain(
+      "103 sources",
+    );
+    expect(opencandle?.textContent).toContain("2 contracts");
+    expect(opencandle?.textContent).toContain("Aug. 21");
+    expect(opencandle?.textContent).toContain("$200 put");
+    expect(opencandle?.textContent).toContain("$1,190");
+    expect(opencandle?.textContent).toContain("$194.05");
+    expect(opencandle?.textContent).toContain("RSI is neutral at 51.1");
+    expect(opencandle?.textContent).toContain("35.8% annualized volatility");
+    expect(opencandle?.textContent).toContain("20.2% maximum drawdown");
+    expect(opencandle?.textContent).toContain("July 24, 2026, 4:00 p.m. ET");
+    expect(opencandle?.querySelector(".opencandle-latest-pill")).toBeNull();
+  });
+
+  it("recreates each app with vector controls, its native composer, and a mobile shell", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const comparison = homeDocument.querySelector(".answer-comparison");
+
+    for (const product of ["chatgpt", "claude", "opencandle"]) {
+      const surface = comparison?.querySelector(`[data-answer-surface="${product}"]`);
+      const navItems = [...(surface?.querySelectorAll(".mock-nav-item") ?? [])];
+      const composer = surface?.querySelector("[data-ui-composer]");
+
+      expect(surface?.querySelector("[data-ui-mobile-header]")).not.toBeNull();
+      expect(navItems.length).toBeGreaterThan(0);
+      expect(navItems.every((item) => item.querySelector("svg[data-app-icon]"))).toBe(true);
+      expect(composer?.querySelector("[data-composer-field]")).not.toBeNull();
+      expect(composer?.querySelectorAll("svg").length).toBeGreaterThanOrEqual(2);
+    }
+
+    expect(
+      comparison?.querySelector('[data-answer-surface="chatgpt"] [data-ui-composer]')?.textContent,
+    ).toContain("Instant");
+    expect(
+      comparison?.querySelector('[data-answer-surface="claude"] [data-ui-composer]')?.textContent,
+    ).toContain("Opus 5 High");
+    expect(
+      comparison?.querySelector('[data-answer-surface="opencandle"] [data-ui-composer]')
+        ?.textContent,
+    ).toContain("gpt-5.6-terra");
+    expect(
+      comparison?.querySelectorAll('[data-answer-surface="opencandle"] [data-ui-source-stack] img'),
+    ).toHaveLength(4);
+    expect(comparison?.textContent).not.toMatch(/[□▥▱◷♧▣☷⌕▤]/);
+    expect(siteCss).toMatch(/\.answer-surface \.product-mobile-header\s*\{\s*display:\s*none;/);
+  });
+
   it("uses direct punctuation instead of em dashes across the public site", async () => {
     const docsFiles = (await readdir(join(root, "website/dist/docs")))
       .filter((file) => file.endsWith(".html") || file.endsWith(".md"))
@@ -246,6 +365,10 @@ describe("public site build contract", () => {
       `<!doctype html>
       <html>
         <body>
+          <div data-surface-command>
+            <code data-surface-command-text>npx opencandle@latest gui</code>
+            <button data-command-copy>Copy</button>
+          </div>
           <div data-surface-demo>
             <div role="tablist">
               <button data-surface-tab="gui" aria-selected="true" tabindex="0">Browser</button>
@@ -275,6 +398,16 @@ describe("public site build contract", () => {
       pause: { configurable: true, value() {} },
       play: { configurable: true, value: () => Promise.resolve() },
     });
+    let copiedCommand = "";
+    Object.defineProperty(dom.window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText(value: string) {
+          copiedCommand = value;
+          return Promise.resolve();
+        },
+      },
+    });
 
     dom.window.eval(entryClient);
     const browserTab = dom.window.document.querySelector<HTMLButtonElement>(
@@ -294,5 +427,78 @@ describe("public site build contract", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(terminalTab?.getAttribute("aria-selected")).toBe("true");
     expect(dom.window.document.activeElement).toBe(terminalTab);
+    expect(dom.window.document.querySelector("[data-surface-command-text]")?.textContent).toBe(
+      "npx opencandle@latest",
+    );
+
+    dom.window.document
+      .querySelector<HTMLButtonElement>("[data-command-copy]")
+      ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(copiedCommand).toBe("npx opencandle@latest");
+  });
+
+  it("shows one comparison chat at a time with keyboard-accessible icon tabs", async () => {
+    const manifest = JSON.parse(
+      await readFile(join(root, "website/dist/.vite/manifest.json"), "utf8"),
+    );
+    const entryClient = await readFile(
+      join(root, "website/dist", manifest["src/entry-client.jsx"].file),
+      "utf8",
+    );
+    const dom = new JSDOM(
+      `<!doctype html>
+      <html>
+        <body>
+          <div data-answer-tabs>
+            <div role="tablist">
+              <button data-answer-tab="chatgpt" aria-selected="true" tabindex="0">ChatGPT</button>
+              <button data-answer-tab="claude" aria-selected="false" tabindex="-1">Claude</button>
+              <button data-answer-tab="opencandle" aria-selected="false" tabindex="-1">OpenCandle</button>
+            </div>
+            <div data-answer-panel="chatgpt">ChatGPT answer</div>
+            <div data-answer-panel="claude" hidden>Claude answer</div>
+            <div data-answer-panel="opencandle" hidden>OpenCandle answer</div>
+          </div>
+        </body>
+      </html>`,
+      { runScripts: "outside-only", url: "https://opencandle.app/" },
+    );
+
+    dom.window.eval(entryClient);
+    const chatgptTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="chatgpt"]',
+    );
+    const claudeTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="claude"]',
+    );
+    const opencandleTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="opencandle"]',
+    );
+    const event = new dom.window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+    });
+
+    chatgptTab?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(claudeTab?.getAttribute("aria-selected")).toBe("true");
+    expect(dom.window.document.activeElement).toBe(claudeTab);
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="chatgpt"]')?.hidden,
+    ).toBe(true);
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="claude"]')?.hidden,
+    ).toBe(false);
+
+    opencandleTab?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+    expect(opencandleTab?.getAttribute("aria-selected")).toBe("true");
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="opencandle"]')?.hidden,
+    ).toBe(false);
   });
 });
