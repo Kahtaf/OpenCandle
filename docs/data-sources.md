@@ -45,7 +45,7 @@ Optional keys:
 - `BRAVE_API_KEY` enables [Brave](https://brave.com/search/api/) as a web search fallback.
 - `EXA_API_KEY` enables [Exa](https://exa.ai) web search.
 - `FINNHUB_API_KEY` enables [Finnhub company news](https://finnhub.io) in sentiment summaries.
-- `LSE_API_KEY` enables the [London Strategic Edge](https://londonstrategicedge.com/databank) free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles back to 2003 as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key — bring your own key; OpenCandle does not redistribute LSE data.
+- `LSE_API_KEY` enables the [London Strategic Edge](https://londonstrategicedge.com/databank) free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles back to 2003 as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key; bring your own key. OpenCandle does not redistribute LSE data.
 
 ## Caching and Degradation
 

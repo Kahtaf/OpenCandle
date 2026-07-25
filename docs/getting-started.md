@@ -1,11 +1,11 @@
 ---
 title: Getting Started
-description: Install OpenCandle, configure providers, and run the CLI or GUI.
+description: Install OpenCandle, start the local GUI, and use the equally complete terminal interface when you prefer it.
 ---
 
 # Getting Started
 
-OpenCandle runs as an interactive [Pi](https://github.com/earendil-works/pi) agent in the terminal and as a local browser GUI. Pi is the bundled local agent runtime that handles model setup, the terminal shell, and saved sessions; OpenCandle adds the financial tools and workflows on top. The CLI is the primary entry point; the GUI is a local workbench for chat, tool discovery, provider status, session history, and financial context.
+OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime. The GUI is the primary path: it brings chat, visual tool results, workflows, provider status, session history, charts, watchlists, portfolios, alerts, and reports into one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
@@ -19,13 +19,13 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 ```bash
 npm install -g opencandle
-opencandle
+opencandle gui
 ```
 
 You can also run the latest package without a global install:
 
 ```bash
-npx opencandle@latest
+npx opencandle@latest gui
 ```
 
 From a source checkout:
@@ -33,22 +33,20 @@ From a source checkout:
 ```bash
 npm install
 cp .env.example .env # optional
-npm start
+npm run gui
 ```
 
 On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
 
-On first run, OpenCandle walks through model setup. You can rerun setup later from inside the agent with `/setup`.
+On first run, the GUI opens model setup before chat. The terminal interface also supports Pi sign-in and `/setup`.
 
-For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures — including native `better-sqlite3` install errors.
+For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures, including native `better-sqlite3` install errors.
 
 ## Choose Your Interface
 
-Use the terminal UI when you want the fastest keyboard loop, slash commands, and a plain transcript.
+Start with the GUI for the visual investigation workspace: chat, workflow cards, charts, tool results, provider setup, session history, and financial context in one browser tab.
 
-Use the GUI when you want a visual investigation workspace: chat, workflow cards, tool results, provider setup, session history, and financial context in one browser tab.
-
-Both use the same OpenCandle tools and saved session state. You can start in the terminal and later inspect sessions in the GUI.
+Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same OpenCandle tools, workflows, saved session state, and provider-backed evidence. You can move between both interfaces during the same investigation.
 
 ## Run the Local GUI
 
@@ -145,4 +143,4 @@ Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 
 OpenCandle should tell you when a provider is unavailable, a key is missing, or a result is degraded. Treat those warnings as part of the answer.
 
-For slash commands, session behavior, and CLI-vs-GUI tradeoffs, see [TUI](./tui.md). Contributors validating a source checkout should follow [Testing and Evals](./testing-and-evals.md).
+For the equally complete keyboard-first path, slash commands, and terminal session behavior, see [TUI](./tui.md). Contributors validating a source checkout should follow [Testing and Evals](./testing-and-evals.md).

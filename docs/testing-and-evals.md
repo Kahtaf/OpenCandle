@@ -141,7 +141,7 @@ Each run writes a timestamped `*_product-evals.json` report under `tests/evals/r
 
 ## Competitive Benchmarking
 
-The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins — generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
+The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins. Generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
 
 Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 

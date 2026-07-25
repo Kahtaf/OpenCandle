@@ -20,7 +20,7 @@ OpenCandle uses model providers for synthesis, but the finance workflow starts w
 | Finance tools | Built-in tool calls for market, macro, options, filings, sentiment, fundamentals, crypto, and portfolio workflows | Depends on plan, connectors, browsing mode, or custom setup |
 | Missing/stale data disclosure | Preserved in the session and answer context | Usually manual unless a custom workflow records them |
 | Local portfolio state | Supported through OpenCandle state | Requires a separate file, spreadsheet, or connector |
-| Local terminal agent and GUI | Yes | No |
+| Local browser GUI and equally complete terminal TUI | Yes | No |
 
 Use a general chatbot when the task is mostly writing, education, brainstorming, or turning already-collected facts into a cleaner explanation. Use OpenCandle when the task depends on current or inspectable financial evidence.
 
@@ -38,7 +38,7 @@ Spreadsheets are excellent for owned models, repeatable calculations, and portfo
 | --- | --- | --- |
 | Evidence gathering | Agent routes prompts to explicit finance tools | Manual imports, formulas, plugins, or pasted data |
 | Missing/stale data disclosure | Surfaced in the session | Usually tracked manually in notes or formulas |
-| Repeatable models | Not the goal — findings feed into your own models | Best fit for durable valuation, allocation, and scenario models |
+| Repeatable models | Not the goal; findings feed into your own models | Best fit for durable valuation, allocation, and scenario models |
 
 Use them together: OpenCandle gathers the facts and caveats, then stable assumptions move into a spreadsheet. Discounted cash flow models, position sizing tables, tax lots, and rebalancing plans belong in a workbook where you control every formula.
 

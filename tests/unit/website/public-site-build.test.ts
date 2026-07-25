@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const root = process.cwd();
@@ -46,6 +47,20 @@ describe("public site build contract", () => {
       "website/dist/llms-full.txt",
       "website/dist/assets/logo.svg",
       "website/dist/assets/gui-screenshot.png",
+      "website/dist/assets/gui-demo.mp4",
+      "website/dist/assets/tui-demo.mp4",
+      "website/dist/assets/gui-demo-poster.png",
+      "website/dist/assets/tui-demo-poster.png",
+      "website/dist/assets/source-icons/yahoo.svg",
+      "website/dist/assets/source-icons/sec.svg",
+      "website/dist/assets/source-icons/fred.svg",
+      "website/dist/assets/source-icons/tradingview.svg",
+      "website/dist/assets/source-icons/coingecko.png",
+      "website/dist/assets/source-icons/polymarket.ico",
+      "website/dist/assets/source-icons/reddit.svg",
+      "website/dist/assets/source-icons/exa.svg",
+      "website/dist/assets/source-icons/brave.svg",
+      "website/dist/assets/source-icons/alpha-vantage.ico",
       "website/dist/favicon.ico",
       "website/dist/docs/index.md",
     ]) {
@@ -103,11 +118,387 @@ describe("public site build contract", () => {
     }
   });
 
+  it("presents the GUI as primary and the TUI as equally complete across the docs journey", async () => {
+    const overviewHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const gettingStartedHtml = await readFile(
+      join(root, "website/dist/docs/getting-started.html"),
+      "utf8",
+    );
+    const firstRunHtml = await readFile(join(root, "website/dist/docs/first-run.html"), "utf8");
+    const tuiHtml = await readFile(join(root, "website/dist/docs/tui.html"), "utf8");
+
+    expect(overviewHtml).toContain("local browser GUI and an equally complete terminal interface");
+    expect(gettingStartedHtml).toContain("The GUI is the primary path");
+    expect(gettingStartedHtml).not.toContain("The CLI is the primary entry point");
+    expect(firstRunHtml.indexOf("opencandle@latest gui")).toBeLessThan(
+      firstRunHtml.indexOf("opencandle@latest</code>"),
+    );
+    expect(tuiHtml).toContain("equally complete terminal interface");
+    expect(tuiHtml).not.toContain("main OpenCandle agent experience");
+  });
+
   it("does not keep the old decorative landing-page shell in generated output", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
 
     expect(homeHtml).not.toContain("hero-grid");
     expect(homeHtml).not.toContain("float-tile");
-    expect(homeHtml).toContain("Market research that shows its evidence");
+    expect(homeHtml).toContain("Ask any market question.");
+    expect(homeHtml).toContain("Check every number.");
+  });
+
+  it("puts the install command and the free/local proof line in the hero", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const heroCommand = homeDocument.querySelector(".landing-hero [data-surface-command]");
+
+    // The one-line install is the fastest path to value, so it must appear
+    // above the product demo rather than only in the closing CTA.
+    expect(homeHtml.indexOf("npx opencandle@latest gui")).toBeLessThan(
+      homeHtml.indexOf('data-surface-demo=""'),
+    );
+    expect(homeHtml).toContain(
+      "MIT licensed · runs on your machine · no account · market data needs no keys",
+    );
+    expect(homeHtml).not.toContain("local-first financial research workspace");
+    expect(homeHtml).not.toContain("Start in the visual GUI");
+    expect(heroCommand?.querySelector("code")?.textContent).toBe("npx opencandle@latest gui");
+    expect(heroCommand?.querySelector("[data-command-copy]")).not.toBeNull();
+    expect(homeHtml).not.toContain("Start with the GUI");
+    expect(homeHtml).not.toContain("Prefer the terminal");
+    expect(homeDocument.querySelector("header a[href='docs/comparisons.html']")).toBeNull();
+    expect(homeDocument.querySelector(".evidence-hub-label")).toBeNull();
+  });
+
+  it("renders the homepage product journey and switchable product demos", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+
+    expect(homeHtml).toContain("The tools behind every answer");
+    expect(homeHtml).toContain("Ask. Gather. Verify.");
+    expect(homeHtml).toContain("Same question. Different evidence.");
+    expect(homeHtml).toContain('aria-label="OpenCandle terminal demonstration"');
+    expect(homeHtml).toContain('data-cli-demo=""');
+    expect(homeHtml).toContain('data-surface-demo=""');
+    expect(homeHtml).toContain('role="tablist"');
+    expect(homeHtml).toContain('data-surface-tab="tui"');
+    expect(homeHtml).toContain('data-surface-tab="gui"');
+    expect(homeHtml).toContain('data-surface-video="tui"');
+    expect(homeHtml).toContain('data-surface-video="gui"');
+    expect(homeHtml.match(/controls=""/g)).toHaveLength(2);
+    expect(homeHtml).toContain('data-legacy-cli-demo=""');
+    expect(homeHtml).toContain("equally complete terminal interface");
+    expect(homeHtml.indexOf('data-surface-tab="gui"')).toBeLessThan(
+      homeHtml.indexOf('data-surface-tab="tui"'),
+    );
+    expect(homeHtml).toMatch(/data-surface-tab="gui"[^>]*>[\s\S]*?Browser/);
+    expect(homeHtml).toMatch(/data-surface-tab="tui"[^>]*>[\s\S]*?CLI/);
+    expect(homeHtml).toContain('class="surface-demo-tabs icon-tabs"');
+    expect(homeHtml).toContain('class="icon-tabs answer-icon-tabs"');
+    expect(homeHtml).not.toContain("Research from the terminal or the browser");
+    expect(homeHtml).toContain('class="evidence-branches"');
+    expect(homeHtml).toContain("evidence-branch--mobile");
+    expect(homeHtml).toContain("evidence-row-connector--desktop");
+    expect(homeHtml).toContain("evidence-row-connector--mobile");
+    expect(homeHtml).toContain('class="evidence-source-logo"');
+    expect(homeHtml).toContain('src="assets/source-icons/fred.svg"');
+    expect(homeHtml).not.toMatch(/<img[^>]+src="https?:\/\//);
+    expect(homeHtml).not.toContain("evidence-source-mark");
+    expect(homeHtml).not.toContain("Exa + Brave");
+    expect(homeHtml).toContain(">Exa</strong>");
+    expect(homeHtml).toContain(">Brave</strong>");
+    expect(homeHtml).not.toContain("autoplay");
+    expect(homeHtml).toContain("npx opencandle@latest gui");
+    expect(homeHtml).toContain("Common questions");
+  });
+
+  it("keeps the homepage focused on product evidence instead of decorative filler", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const guiTab = homeDocument.querySelector("#surface-tab-gui");
+
+    expect(homeHtml).not.toContain(">Local-first<");
+    expect(homeHtml).not.toContain("One engine. Two complete interfaces.");
+    expect(homeHtml).not.toContain("Start visually in the GUI.");
+    expect(homeHtml).not.toContain("Typed tools · live providers");
+    expect(homeHtml).not.toContain("How it works");
+    expect(homeHtml).not.toContain("One local workspace");
+    expect(homeHtml).not.toContain("One command. Your machine.");
+    expect(homeHtml).not.toContain('class="landing-eyebrow"');
+    expect(guiTab?.querySelector(".surface-demo-tab-icon")).toBeNull();
+    expect(guiTab?.firstElementChild?.tagName).toBe("svg");
+    expect(homeHtml).toContain("Same question. Different evidence.");
+    expect(homeHtml).toContain('data-answer-surface="chatgpt"');
+    expect(homeHtml).toContain('data-answer-surface="claude"');
+    expect(homeHtml).toContain('data-answer-surface="opencandle"');
+    expect(homeHtml).not.toContain("Why not just ask a chatbot?");
+    expect(homeHtml).not.toContain("Research in the browser or the terminal");
+    expect(homeHtml).not.toContain("twitterSentimentTool");
+    expect(homeHtml).toContain('class="extension-path"');
+    expect(homeHtml).not.toContain("See the first run");
+    expect(homeHtml).not.toContain("MIT licensed · Node.js");
+    expect(homeHtml).not.toContain("MIT licensed · read-only");
+    expect(homeHtml.indexOf('aria-label="FAQ"')).toBeLessThan(
+      homeHtml.indexOf('aria-label="Start locally"'),
+    );
+  });
+
+  it("compares the same NVDA question with progressively more concrete answers", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const comparison = homeDocument.querySelector(".answer-comparison");
+    const tablist = comparison?.querySelector('[role="tablist"]');
+    const tabs = [...(tablist?.querySelectorAll('[role="tab"]') ?? [])];
+    const panels = [...(comparison?.querySelectorAll('[role="tabpanel"]') ?? [])];
+    const chatgpt = comparison?.querySelector('[data-answer-surface="chatgpt"]');
+    const claude = comparison?.querySelector('[data-answer-surface="claude"]');
+    const opencandle = comparison?.querySelector('[data-answer-surface="opencandle"]');
+
+    expect(tablist?.getAttribute("aria-label")).toBe("Compare answers");
+    expect(tabs).toHaveLength(3);
+    expect(tabs.every((tab) => tab.querySelector("svg, [data-tab-icon]"))).toBe(true);
+    expect(tabs[0]?.querySelector('[data-brand-icon="chatgpt"]')).not.toBeNull();
+    expect(tabs[1]?.querySelector('[data-brand-icon="claude"]')).not.toBeNull();
+    expect(tabs[2]?.querySelector('img[src="assets/logo.svg"]')).not.toBeNull();
+    expect(tabs[0]?.textContent).not.toContain("✣");
+    expect(tabs[1]?.textContent).not.toContain("✳");
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(panels).toHaveLength(3);
+    expect(panels[0]?.hasAttribute("hidden")).toBe(false);
+    expect(panels[1]?.hasAttribute("hidden")).toBe(true);
+    expect(panels[2]?.hasAttribute("hidden")).toBe(true);
+    const surfaces = [chatgpt, claude, opencandle];
+    for (const surface of surfaces) {
+      expect(surface?.querySelector("[data-ui-sidebar]")).not.toBeNull();
+      expect(surface?.querySelector("[data-ui-composer]")).not.toBeNull();
+      expect(surface?.querySelector("[data-ui-user-message]")?.textContent).toContain(
+        "I own 200 shares of NVDA",
+      );
+    }
+    expect(comparison?.querySelector(".comparison-prompt")).toBeNull();
+    expect(chatgpt?.textContent).toContain("15–25% drawdown");
+    expect(chatgpt?.textContent).toContain("Trim 50–100 shares");
+    expect(chatgpt?.textContent).toContain("cost basis, account type, and downside limit");
+    expect(chatgpt?.textContent).not.toContain("$200 put");
+    expect(claude?.textContent).toContain("August 26, 2026");
+    expect(claude?.textContent).toContain("200 shares is exactly 2 contracts");
+    expect(claude?.textContent).toContain("September put 5–10% below spot");
+    expect(claude?.textContent).toContain("actual chain rather than guessing");
+    expect(claude?.textContent).not.toContain("$1,190");
+    expect(chatgpt?.querySelector(".product-profile strong")?.textContent).toBe("Warren");
+    expect(claude?.querySelector(".product-profile strong")?.textContent).toBe("Warren");
+    expect(comparison?.textContent).not.toMatch(/kahtaf/i);
+    expect(opencandle?.querySelector("[data-ui-research-status]")?.textContent).toContain(
+      "103 sources",
+    );
+    expect(opencandle?.textContent).toContain("2 contracts");
+    expect(opencandle?.textContent).toContain("Aug. 21");
+    expect(opencandle?.textContent).toContain("$200 put");
+    expect(opencandle?.textContent).toContain("$1,190");
+    expect(opencandle?.textContent).toContain("$194.05");
+    expect(opencandle?.textContent).toContain("RSI is neutral at 51.1");
+    expect(opencandle?.textContent).toContain("35.8% annualized volatility");
+    expect(opencandle?.textContent).toContain("20.2% maximum drawdown");
+    expect(opencandle?.textContent).toContain("July 24, 2026, 4:00 p.m. ET");
+    expect(opencandle?.querySelector(".opencandle-latest-pill")).toBeNull();
+  });
+
+  it("recreates each app with vector controls, its native composer, and a mobile shell", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const comparison = homeDocument.querySelector(".answer-comparison");
+
+    for (const product of ["chatgpt", "claude", "opencandle"]) {
+      const surface = comparison?.querySelector(`[data-answer-surface="${product}"]`);
+      const navItems = [...(surface?.querySelectorAll(".mock-nav-item") ?? [])];
+      const composer = surface?.querySelector("[data-ui-composer]");
+
+      expect(surface?.querySelector("[data-ui-mobile-header]")).not.toBeNull();
+      expect(navItems.length).toBeGreaterThan(0);
+      expect(navItems.every((item) => item.querySelector("svg[data-app-icon]"))).toBe(true);
+      expect(composer?.querySelector("[data-composer-field]")).not.toBeNull();
+      expect(composer?.querySelectorAll("svg").length).toBeGreaterThanOrEqual(2);
+    }
+
+    expect(
+      comparison?.querySelector('[data-answer-surface="chatgpt"] [data-ui-composer]')?.textContent,
+    ).toContain("Instant");
+    expect(
+      comparison?.querySelector('[data-answer-surface="claude"] [data-ui-composer]')?.textContent,
+    ).toContain("Opus 5 High");
+    expect(
+      comparison?.querySelector('[data-answer-surface="opencandle"] [data-ui-composer]')
+        ?.textContent,
+    ).toContain("gpt-5.6-terra");
+    expect(
+      comparison?.querySelectorAll('[data-answer-surface="opencandle"] [data-ui-source-stack] img'),
+    ).toHaveLength(4);
+    expect(comparison?.textContent).not.toMatch(/[□▥▱◷♧▣☷⌕▤]/);
+    expect(siteCss).toMatch(/\.answer-surface \.product-mobile-header\s*\{\s*display:\s*none;/);
+  });
+
+  it("uses direct punctuation instead of em dashes across the public site", async () => {
+    const docsFiles = (await readdir(join(root, "website/dist/docs")))
+      .filter((file) => file.endsWith(".html") || file.endsWith(".md"))
+      .map((file) => join(root, "website/dist/docs", file));
+    const publicTextFiles = [
+      join(root, "website/dist/index.html"),
+      join(root, "website/dist/llms.txt"),
+      join(root, "website/dist/llms-full.txt"),
+      ...docsFiles,
+    ];
+
+    for (const file of publicTextFiles) {
+      const contents = await readFile(file, "utf8");
+      expect(contents, `${file} should not contain an em dash`).not.toContain("—");
+    }
+  });
+
+  it("switches product demos with arrow keys without scrolling the page", async () => {
+    const manifest = JSON.parse(
+      await readFile(join(root, "website/dist/.vite/manifest.json"), "utf8"),
+    );
+    const entryClient = await readFile(
+      join(root, "website/dist", manifest["src/entry-client.jsx"].file),
+      "utf8",
+    );
+    const dom = new JSDOM(
+      `<!doctype html>
+      <html>
+        <body>
+          <div data-surface-command>
+            <code data-surface-command-text>npx opencandle@latest gui</code>
+            <button data-command-copy>Copy</button>
+          </div>
+          <div data-surface-demo>
+            <div role="tablist">
+              <button data-surface-tab="gui" aria-selected="true" tabindex="0">Browser</button>
+              <button data-surface-tab="tui" aria-selected="false" tabindex="-1">Terminal</button>
+            </div>
+            <div data-surface-panel="gui">
+              <video data-surface-video="gui" src="gui.mp4"></video>
+            </div>
+            <div data-surface-panel="tui" hidden>
+              <video data-surface-video="tui" data-src="tui.mp4"></video>
+            </div>
+          </div>
+        </body>
+      </html>`,
+      { runScripts: "outside-only", url: "https://opencandle.app/" },
+    );
+
+    Object.defineProperty(dom.window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        addEventListener() {},
+      }),
+    });
+    Object.defineProperties(dom.window.HTMLMediaElement.prototype, {
+      load: { configurable: true, value() {} },
+      pause: { configurable: true, value() {} },
+      play: { configurable: true, value: () => Promise.resolve() },
+    });
+    let copiedCommand = "";
+    Object.defineProperty(dom.window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText(value: string) {
+          copiedCommand = value;
+          return Promise.resolve();
+        },
+      },
+    });
+
+    dom.window.eval(entryClient);
+    const browserTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-surface-tab="gui"]',
+    );
+    const terminalTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-surface-tab="tui"]',
+    );
+    const event = new dom.window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+    });
+
+    browserTab?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(terminalTab?.getAttribute("aria-selected")).toBe("true");
+    expect(dom.window.document.activeElement).toBe(terminalTab);
+    expect(dom.window.document.querySelector("[data-surface-command-text]")?.textContent).toBe(
+      "npx opencandle@latest",
+    );
+
+    dom.window.document
+      .querySelector<HTMLButtonElement>("[data-command-copy]")
+      ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(copiedCommand).toBe("npx opencandle@latest");
+  });
+
+  it("shows one comparison chat at a time with keyboard-accessible icon tabs", async () => {
+    const manifest = JSON.parse(
+      await readFile(join(root, "website/dist/.vite/manifest.json"), "utf8"),
+    );
+    const entryClient = await readFile(
+      join(root, "website/dist", manifest["src/entry-client.jsx"].file),
+      "utf8",
+    );
+    const dom = new JSDOM(
+      `<!doctype html>
+      <html>
+        <body>
+          <div data-answer-tabs>
+            <div role="tablist">
+              <button data-answer-tab="chatgpt" aria-selected="true" tabindex="0">ChatGPT</button>
+              <button data-answer-tab="claude" aria-selected="false" tabindex="-1">Claude</button>
+              <button data-answer-tab="opencandle" aria-selected="false" tabindex="-1">OpenCandle</button>
+            </div>
+            <div data-answer-panel="chatgpt">ChatGPT answer</div>
+            <div data-answer-panel="claude" hidden>Claude answer</div>
+            <div data-answer-panel="opencandle" hidden>OpenCandle answer</div>
+          </div>
+        </body>
+      </html>`,
+      { runScripts: "outside-only", url: "https://opencandle.app/" },
+    );
+
+    dom.window.eval(entryClient);
+    const chatgptTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="chatgpt"]',
+    );
+    const claudeTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="claude"]',
+    );
+    const opencandleTab = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-answer-tab="opencandle"]',
+    );
+    const event = new dom.window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+    });
+
+    chatgptTab?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(claudeTab?.getAttribute("aria-selected")).toBe("true");
+    expect(dom.window.document.activeElement).toBe(claudeTab);
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="chatgpt"]')?.hidden,
+    ).toBe(true);
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="claude"]')?.hidden,
+    ).toBe(false);
+
+    opencandleTab?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+    expect(opencandleTab?.getAttribute("aria-selected")).toBe("true");
+    expect(
+      dom.window.document.querySelector<HTMLElement>('[data-answer-panel="opencandle"]')?.hidden,
+    ).toBe(false);
   });
 });

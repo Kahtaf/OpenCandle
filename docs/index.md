@@ -5,13 +5,13 @@ description: Documentation for the open source financial investigator.
 
 # OpenCandle Docs
 
-OpenCandle is an open source financial investigator: a terminal agent and local browser workbench that fetches real market data before the model writes an answer.
+OpenCandle is an open source financial investigator with a local browser GUI and an equally complete terminal interface. Both fetch real market data before the model writes an answer.
 
 It is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## How OpenCandle Works
 
-1. You ask a financial question in the terminal or GUI.
+1. You ask a financial question in the GUI or terminal.
 2. OpenCandle classifies the investigation and asks a follow-up only if a missing detail changes the answer.
 3. Tools fetch quotes, filings, options, macro data, and sentiment. Gaps and stale data are surfaced.
 4. The model writes an answer that separates facts from judgment and names the risks.
@@ -24,8 +24,8 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 
 - [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
 - [Getting Started](./getting-started.md): requirements, install, provider keys.
-- [First Run](./first-run.md): install to a keyless market answer in five minutes.
 - [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
+- [First Run](./first-run.md): install to a keyless market answer in five minutes.
 
 ## Guides and reference
 
@@ -62,8 +62,8 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 ## Try it
 
 ```bash
-npx opencandle
 npx opencandle gui
+npx opencandle       # equally complete terminal interface
 ```
 
 First prompts:

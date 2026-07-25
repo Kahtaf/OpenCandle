@@ -54,7 +54,7 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentiment> = 
 ### Parameters
 
 - Use Typebox `Type.Object({...})` as the root (recommended convention)
-- Every parameter needs a `description` — the agent reads these to decide how to call the tool
+- Every parameter needs a `description`: the agent reads these to decide how to call the tool
 - Use `Type.Optional()` for non-required params
 
 ### Return Format
@@ -66,8 +66,8 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentiment> = 
 }
 ```
 
-- `content` — human-readable. Format nicely (tables, bullet points)
-- `details` — typed structured data the agent reasons over
+- `content`: human-readable. Format nicely (tables, bullet points)
+- `details`: typed structured data the agent reasons over
 
 ## Where Files Go
 
@@ -178,7 +178,7 @@ if (result.status === "unavailable") {
 // result.stale is true when serving cached data after a provider failure
 ```
 
-For multi-provider fallback, use `withFallback()` — see `src/tools/market/stock-quote.ts`.
+For multi-provider fallback, use `withFallback()`; see `src/tools/market/stock-quote.ts`.
 
 For a real-world example that uses `wrapProvider` with stale fallback and login-specific error detection, see `src/tools/sentiment/twitter-sentiment.ts`.
 
