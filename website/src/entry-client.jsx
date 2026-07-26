@@ -50,6 +50,8 @@ if (surfaceDemo) {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   function activateSurface(name, focus = false) {
+    surfaceDemo.dataset.surfaceActive = name;
+
     if (surfaceCommandText) {
       surfaceCommandText.textContent =
         name === "tui" ? "npx opencandle@latest" : "npx opencandle@latest gui";
@@ -63,7 +65,13 @@ if (surfaceDemo) {
     }
 
     for (const panel of surfacePanels) {
-      panel.hidden = panel.dataset.surfacePanel !== name;
+      const active = panel.dataset.surfacePanel === name;
+      panel.setAttribute("aria-hidden", String(!active));
+      if (active) {
+        panel.removeAttribute("inert");
+      } else {
+        panel.setAttribute("inert", "");
+      }
     }
 
     for (const video of surfaceVideos) {

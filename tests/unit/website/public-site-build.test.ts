@@ -118,6 +118,37 @@ describe("public site build contract", () => {
     }
   });
 
+  it("extends the desktop documentation sidebar surface to the viewport edge", async () => {
+    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const docsDocument = new JSDOM(docsHtml, {
+      url: "https://opencandle.app/docs/index.html",
+    }).window.document;
+    const sidebar = docsDocument.querySelector("aside[data-docs-sidebar]");
+
+    expect(sidebar).not.toBeNull();
+    expect(sidebar?.classList.contains("docs-sidebar")).toBe(true);
+    expect(sidebar?.classList.contains("overflow-hidden")).toBe(false);
+    expect(sidebar?.querySelector('nav[aria-label="Documentation"]')).not.toBeNull();
+  });
+
+  it("extends the desktop table of contents surface to the viewport edge", async () => {
+    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const docsDocument = new JSDOM(docsHtml, {
+      url: "https://opencandle.app/docs/index.html",
+    }).window.document;
+    const sidebar = docsDocument.querySelector("aside[data-docs-toc-sidebar]");
+    const nav = sidebar?.querySelector('nav[aria-label="On this page"]');
+    const firstLink = nav?.querySelector("a");
+
+    expect(sidebar).not.toBeNull();
+    expect(sidebar?.classList.contains("docs-toc-sidebar")).toBe(true);
+    expect(nav).not.toBeNull();
+    expect(nav?.parentElement?.classList.contains("px-3")).toBe(true);
+    expect(nav?.parentElement?.classList.contains("py-5")).toBe(true);
+    expect(firstLink?.classList.contains("hover:bg-tertiary")).toBe(true);
+    expect(firstLink?.classList.contains("hover:bg-secondary")).toBe(false);
+  });
+
   it("presents the GUI as primary and the TUI as equally complete across the docs journey", async () => {
     const overviewHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
     const gettingStartedHtml = await readFile(
@@ -139,16 +170,21 @@ describe("public site build contract", () => {
 
   it("does not keep the old decorative landing-page shell in generated output", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
 
     expect(homeHtml).not.toContain("hero-grid");
     expect(homeHtml).not.toContain("float-tile");
-    expect(homeHtml).toContain("Ask any market question.");
-    expect(homeHtml).toContain("Check every number.");
+    expect(homeDocument.querySelector(".landing-hero h1")?.textContent).toBe(
+      "Market research that shows its work.",
+    );
+    expect(homeHtml).not.toContain("Ask any market question.");
+    expect(homeHtml).not.toContain("Check every number.");
   });
 
   it("puts the install command and the free/local proof line in the hero", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
     const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const hero = homeDocument.querySelector(".landing-hero");
     const heroCommand = homeDocument.querySelector(".landing-hero [data-surface-command]");
 
     // The one-line install is the fastest path to value, so it must appear
@@ -156,9 +192,12 @@ describe("public site build contract", () => {
     expect(homeHtml.indexOf("npx opencandle@latest gui")).toBeLessThan(
       homeHtml.indexOf('data-surface-demo=""'),
     );
-    expect(homeHtml).toContain(
-      "MIT licensed · runs on your machine · no account · market data needs no keys",
+    expect(hero?.textContent).toContain(
+      "OpenCandle is an open source financial investigator. It fetches live quotes, filings, options, and macro data before answering, then shows where the result came from.",
     );
+    expect(hero?.textContent).toContain("Free and open source · runs locally · bring your own AI");
+    expect(hero?.textContent).not.toContain("core market data needs no key");
+    expect(hero?.textContent).not.toContain("no account");
     expect(homeHtml).not.toContain("local-first financial research workspace");
     expect(homeHtml).not.toContain("Start in the visual GUI");
     expect(heroCommand?.querySelector("code")?.textContent).toBe("npx opencandle@latest gui");
@@ -172,9 +211,16 @@ describe("public site build contract", () => {
   it("renders the homepage product journey and switchable product demos", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
 
-    expect(homeHtml).toContain("The tools behind every answer");
-    expect(homeHtml).toContain("Ask. Gather. Verify.");
-    expect(homeHtml).toContain("Same question. Different evidence.");
+    expect(homeHtml).toContain("The best tools behind every answer.");
+    expect(homeHtml).toContain(
+      "OpenCandle picks the relevant sources for the question and keeps each one attached to the result.",
+    );
+    expect(homeHtml).not.toContain("Ask. Gather. Verify.");
+    expect(homeHtml).toContain("Same question.");
+    expect(homeHtml).toContain("Different results.");
+    expect(homeHtml).toContain(
+      "Why not ask another AI? OpenCandle can use live financial tools before it answers, so you get current numbers you can inspect.",
+    );
     expect(homeHtml).toContain('aria-label="OpenCandle terminal demonstration"');
     expect(homeHtml).toContain('data-cli-demo=""');
     expect(homeHtml).toContain('data-surface-demo=""');
@@ -185,7 +231,7 @@ describe("public site build contract", () => {
     expect(homeHtml).toContain('data-surface-video="gui"');
     expect(homeHtml.match(/controls=""/g)).toHaveLength(2);
     expect(homeHtml).toContain('data-legacy-cli-demo=""');
-    expect(homeHtml).toContain("equally complete terminal interface");
+    expect(homeHtml).toContain("It runs locally in a browser or terminal");
     expect(homeHtml.indexOf('data-surface-tab="gui"')).toBeLessThan(
       homeHtml.indexOf('data-surface-tab="tui"'),
     );
@@ -210,10 +256,90 @@ describe("public site build contract", () => {
     expect(homeHtml).toContain("Common questions");
   });
 
+  it("uses the same full footer on the homepage and docs pages", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const docsDocument = new JSDOM(docsHtml, {
+      url: "https://opencandle.app/docs/index.html",
+    }).window.document;
+    const homeFooter = homeDocument.querySelector(".site-footer");
+    const docsFooter = docsDocument.querySelector(".site-footer");
+
+    expect(homeFooter?.textContent.replace(/\s+/g, " ").trim()).toBe(
+      docsFooter?.textContent.replace(/\s+/g, " ").trim(),
+    );
+    expect(homeDocument.querySelector(".site-footer-minimal")).toBeNull();
+    expect(homeFooter?.textContent).toContain("Product");
+    expect(homeFooter?.textContent).toContain("Build");
+    expect(homeFooter?.textContent).toContain("Project");
+    expect(homeFooter?.textContent).toContain("Open source financial investigator.");
+    expect(homeFooter?.textContent).not.toContain("Local-first financial research");
+  });
+
+  it("renders both product videos as accessible sides of the hero switcher", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const demo = homeDocument.querySelector<HTMLElement>("[data-surface-demo]");
+    const flipper = demo?.querySelector("[data-surface-flipper]");
+    const browserPanel = flipper?.querySelector<HTMLElement>('[data-surface-panel="gui"]');
+    const cliPanel = flipper?.querySelector<HTMLElement>('[data-surface-panel="tui"]');
+
+    expect(demo?.dataset.surfaceActive).toBe("gui");
+    expect(flipper).not.toBeNull();
+    expect(flipper?.classList.contains("surface-demo-stage")).toBe(true);
+    expect(browserPanel?.getAttribute("aria-hidden")).toBe("false");
+    expect(browserPanel?.hasAttribute("inert")).toBe(false);
+    expect(cliPanel?.getAttribute("aria-hidden")).toBe("true");
+    expect(cliPanel?.hasAttribute("inert")).toBe(true);
+    expect(browserPanel?.hidden).toBe(false);
+    expect(cliPanel?.hidden).toBe(false);
+  });
+
+  it("keeps the expanded hero demo within the available desktop viewport gutter", async () => {
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
+    const desktopHeroRule = siteCss.match(
+      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero-media\s*\{([\s\S]*?)\}/,
+    )?.[1];
+    const normalizedRule = desktopHeroRule
+      ?.replace(/\s+/g, " ")
+      .replace(/\(\s+/g, "(")
+      .replace(/\s+\)/g, ")")
+      .trim();
+
+    expect(normalizedRule).toContain(
+      "width: min(calc(100% + min(7vw, 6rem)), calc(100% + max(1.5rem, (100vw - 1320px) / 2 + 1.5rem)))",
+    );
+    expect(normalizedRule).not.toContain("width: calc(100% + min(7vw, 6rem))");
+  });
+
+  it("answers first-run and privacy questions without implementation jargon", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const faq = homeDocument.querySelector('[aria-label="FAQ"]');
+
+    expect(faq?.textContent).toContain("What do I need to get started?");
+    expect(faq?.textContent).toContain("Node.js");
+    expect(faq?.textContent).toContain("Where is my data stored?");
+    expect(faq?.textContent).toContain(
+      "Watchlists, portfolios, alerts, and sessions are stored on your machine.",
+    );
+    expect(faq?.textContent).toContain(
+      "Questions and research context are sent to the model provider you choose.",
+    );
+    expect(faq?.textContent).not.toContain("bundled Pi agent runtime");
+    expect(faq?.textContent).not.toContain("typed finance tools");
+    expect(faq?.textContent).not.toContain("Which data sources does OpenCandle use?");
+  });
+
   it("keeps the homepage focused on product evidence instead of decorative filler", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
     const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
     const guiTab = homeDocument.querySelector("#surface-tab-gui");
+    const hero = homeDocument.querySelector(".landing-hero");
+    const evidenceMap = homeDocument.querySelector(".evidence-map");
+    const comparison = homeDocument.querySelector(".answer-comparison");
+    const faq = homeDocument.querySelector('[aria-label="FAQ"]');
 
     expect(homeHtml).not.toContain(">Local-first<");
     expect(homeHtml).not.toContain("One engine. Two complete interfaces.");
@@ -225,19 +351,35 @@ describe("public site build contract", () => {
     expect(homeHtml).not.toContain('class="landing-eyebrow"');
     expect(guiTab?.querySelector(".surface-demo-tab-icon")).toBeNull();
     expect(guiTab?.firstElementChild?.tagName).toBe("svg");
-    expect(homeHtml).toContain("Same question. Different evidence.");
+    expect(homeHtml).toContain("Same question.");
+    expect(homeHtml).toContain("Different results.");
     expect(homeHtml).toContain('data-answer-surface="chatgpt"');
     expect(homeHtml).toContain('data-answer-surface="claude"');
     expect(homeHtml).toContain('data-answer-surface="opencandle"');
     expect(homeHtml).not.toContain("Why not just ask a chatbot?");
     expect(homeHtml).not.toContain("Research in the browser or the terminal");
     expect(homeHtml).not.toContain("twitterSentimentTool");
-    expect(homeHtml).toContain('class="extension-path"');
+    expect(hero?.querySelector("[data-surface-command]")).not.toBeNull();
+    expect(hero?.querySelector("[data-surface-demo]")).not.toBeNull();
+    expect(evidenceMap).not.toBeNull();
+    expect(comparison).not.toBeNull();
+    expect(faq).not.toBeNull();
+    expect(homeHtml).not.toContain("Ask. Gather. Verify.");
+    expect(homeHtml).not.toContain('class="research-steps"');
+    expect(homeHtml).not.toContain('class="builder-section');
+    expect(homeHtml).not.toContain('class="extension-path"');
+    expect(homeHtml).not.toContain('aria-label="Start locally"');
     expect(homeHtml).not.toContain("See the first run");
     expect(homeHtml).not.toContain("MIT licensed · Node.js");
     expect(homeHtml).not.toContain("MIT licensed · read-only");
-    expect(homeHtml.indexOf('aria-label="FAQ"')).toBeLessThan(
-      homeHtml.indexOf('aria-label="Start locally"'),
+    expect(homeHtml.indexOf('class="landing-hero')).toBeLessThan(
+      homeHtml.indexOf('class="evidence-map"'),
+    );
+    expect(homeHtml.indexOf('class="evidence-map"')).toBeLessThan(
+      homeHtml.indexOf('class="answer-comparison'),
+    );
+    expect(homeHtml.indexOf('class="answer-comparison')).toBeLessThan(
+      homeHtml.indexOf('aria-label="FAQ"'),
     );
   });
 
@@ -258,6 +400,7 @@ describe("public site build contract", () => {
     expect(tabs[0]?.querySelector('[data-brand-icon="chatgpt"]')).not.toBeNull();
     expect(tabs[1]?.querySelector('[data-brand-icon="claude"]')).not.toBeNull();
     expect(tabs[2]?.querySelector('img[src="assets/logo.svg"]')).not.toBeNull();
+    expect(tabs.every((tab) => !tab.hasAttribute("data-featured"))).toBe(true);
     expect(tabs[0]?.textContent).not.toContain("✣");
     expect(tabs[1]?.textContent).not.toContain("✳");
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
@@ -369,16 +512,18 @@ describe("public site build contract", () => {
             <code data-surface-command-text>npx opencandle@latest gui</code>
             <button data-command-copy>Copy</button>
           </div>
-          <div data-surface-demo>
+          <div data-surface-demo data-surface-active="gui">
             <div role="tablist">
               <button data-surface-tab="gui" aria-selected="true" tabindex="0">Browser</button>
               <button data-surface-tab="tui" aria-selected="false" tabindex="-1">Terminal</button>
             </div>
-            <div data-surface-panel="gui">
-              <video data-surface-video="gui" src="gui.mp4"></video>
-            </div>
-            <div data-surface-panel="tui" hidden>
-              <video data-surface-video="tui" data-src="tui.mp4"></video>
+            <div data-surface-flipper>
+              <div data-surface-panel="gui" aria-hidden="false">
+                <video data-surface-video="gui" src="gui.mp4"></video>
+              </div>
+              <div data-surface-panel="tui" aria-hidden="true" inert>
+                <video data-surface-video="tui" data-src="tui.mp4"></video>
+              </div>
             </div>
           </div>
         </body>
@@ -427,6 +572,29 @@ describe("public site build contract", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(terminalTab?.getAttribute("aria-selected")).toBe("true");
     expect(dom.window.document.activeElement).toBe(terminalTab);
+    expect(
+      dom.window.document.querySelector<HTMLElement>("[data-surface-demo]")?.dataset.surfaceActive,
+    ).toBe("tui");
+    expect(
+      dom.window.document
+        .querySelector<HTMLElement>('[data-surface-panel="gui"]')
+        ?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    expect(
+      dom.window.document
+        .querySelector<HTMLElement>('[data-surface-panel="tui"]')
+        ?.getAttribute("aria-hidden"),
+    ).toBe("false");
+    expect(
+      dom.window.document
+        .querySelector<HTMLElement>('[data-surface-panel="gui"]')
+        ?.hasAttribute("inert"),
+    ).toBe(true);
+    expect(
+      dom.window.document
+        .querySelector<HTMLElement>('[data-surface-panel="tui"]')
+        ?.hasAttribute("inert"),
+    ).toBe(false);
     expect(dom.window.document.querySelector("[data-surface-command-text]")?.textContent).toBe(
       "npx opencandle@latest",
     );

@@ -430,7 +430,7 @@ function SiteFooter({ output = "index.html" }) {
             <span>OpenCandle</span>
           </a>
           <p className="mt-4 text-muted-foreground text-sm leading-relaxed">
-            Local-first financial research that gathers the live record and shows its evidence.
+            Open source financial investigator.
           </p>
           <p className="mt-5 font-mono text-muted-foreground text-xs">MIT licensed</p>
         </div>
@@ -585,7 +585,7 @@ function LegacyCliDemo() {
 
 function SurfaceDemo() {
   return (
-    <div className="surface-demo" data-surface-demo="">
+    <div className="surface-demo" data-surface-demo="" data-surface-active="gui">
       <div className="surface-demo-toolbar">
         <div
           className="surface-demo-tabs icon-tabs"
@@ -620,11 +620,13 @@ function SurfaceDemo() {
           </button>
         </div>
       </div>
-      <div className="surface-demo-stage">
+      <div className="surface-demo-stage surface-demo-flipper" data-surface-flipper="">
         <div
+          className="surface-demo-face surface-demo-face-gui"
           id="surface-panel-gui"
           role="tabpanel"
           aria-labelledby="surface-tab-gui"
+          aria-hidden="false"
           data-surface-panel="gui"
         >
           {/* This labeled product walkthrough is intentionally silent. */}
@@ -641,11 +643,13 @@ function SurfaceDemo() {
           />
         </div>
         <div
+          className="surface-demo-face surface-demo-face-tui"
           id="surface-panel-tui"
           role="tabpanel"
           aria-labelledby="surface-tab-tui"
+          aria-hidden="true"
           data-surface-panel="tui"
-          hidden
+          inert
         >
           {/* This labeled product walkthrough is intentionally silent. */}
           <video
@@ -763,7 +767,10 @@ function DocsShell({ page, children }) {
     <>
       <SiteHeader output={page.output} />
       <div className="mx-auto flex w-full max-w-[1320px]">
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary md:block">
+        <aside
+          className="docs-sidebar sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[260px] shrink-0 border-border border-r bg-secondary md:block"
+          data-docs-sidebar=""
+        >
           <DocsNav activeOutput={page.output} />
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
@@ -1324,22 +1331,22 @@ function HomePage({ buildDate, version }) {
     {
       question: "What is OpenCandle?",
       answer:
-        "OpenCandle is an open source AI stock and market research tool that runs on your own machine. It is built around a local browser GUI, with an equally complete terminal interface for users who prefer a keyboard-first workflow.",
+        "OpenCandle is an open source AI research app for stocks, portfolios, and markets. It runs locally in a browser or terminal and checks current financial data before it answers.",
     },
     {
       question: "Is it free?",
       answer:
-        "OpenCandle itself is free and MIT licensed, with no account and no subscription. You pay only your own model provider for the tokens a session uses. Core market data works without paying any data provider.",
+        "OpenCandle is free and MIT licensed, with no OpenCandle account or subscription. You pay your AI model provider for usage. Core market data does not require paid data APIs.",
     },
     {
       question: "How is this different from asking ChatGPT?",
       answer:
-        "A general chatbot can produce a confident market answer you have no way to check. OpenCandle calls typed finance tools first, then keeps the provider, the timestamp, and the data gaps attached to every claim, so you can audit the answer instead of trusting it.",
+        "OpenCandle gathers quotes, filings, option chains, macro data, and portfolio context before answering. It then shows the source and timestamp behind the result, including anything it could not verify.",
     },
     {
-      question: "Which model does it use?",
+      question: "What do I need to get started?",
       answer:
-        "You bring your own Anthropic, OpenAI, or Google model credentials through the bundled Pi agent runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
+        "You need Node.js and access to an Anthropic, OpenAI, or Google model through an API key or supported sign-in. OpenCandle provides the app and core market-data connections, with no OpenCandle account or subscription.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -1347,9 +1354,9 @@ function HomePage({ buildDate, version }) {
         "No. OpenCandle is read-only research software. It gathers and organizes market evidence, but it does not place trades, route orders, or provide financial advice.",
     },
     {
-      question: "Which data sources does OpenCandle use?",
+      question: "Where is my data stored?",
       answer:
-        "OpenCandle integrates Yahoo Finance, TradingView scanner, Alpha Vantage, London Strategic Edge, FRED, Polymarket, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
+        "Watchlists, portfolios, alerts, and sessions are stored on your machine. Questions and research context are sent to the model provider you choose.",
     },
   ];
   const dataSources = [
@@ -1406,24 +1413,6 @@ function HomePage({ buildDate, version }) {
     },
     { name: "Local portfolio", capability: "your positions", icons: [] },
   ];
-  const researchSteps = [
-    {
-      mark: "01",
-      title: "Ask in plain English",
-      body: "Start with a company, portfolio, market event, or thesis. OpenCandle turns the question into a research plan.",
-    },
-    {
-      mark: "02",
-      title: "Gather the live record",
-      body: "Typed tools fetch quotes, filings, options, macro series, news, and sentiment before the answer is written.",
-    },
-    {
-      mark: "03",
-      title: "Inspect every claim",
-      body: "Providers, timestamps, tool calls, and missing-data notes stay attached so you can verify the work.",
-    },
-  ];
-
   return (
     <HtmlDocument
       title="OpenCandle"
@@ -1477,39 +1466,41 @@ function HomePage({ buildDate, version }) {
     >
       <SiteHeader />
       <main>
-        <section className="landing-hero mx-auto max-w-[1100px] px-4 pt-16 pb-12 text-center sm:pt-24 lg:px-6">
-          <h1 className="mx-auto max-w-[860px] font-semibold text-4xl text-foreground tracking-[-0.045em] sm:text-6xl lg:text-7xl">
-            Ask any market question. <span className="text-accent">Check every number.</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-[660px] text-base text-muted-foreground leading-relaxed sm:text-lg">
-            OpenCandle is an open source financial investigator. It fetches live quotes, filings,
-            options, and macro data before answering, then shows the provider, the timestamp, and
-            what it could not find.
-          </p>
-          <div className="landing-command" data-surface-command="">
-            <span aria-hidden="true">$</span>
-            <code data-surface-command-text="">npx opencandle@latest gui</code>
-            <button type="button" aria-label="Copy install command" data-command-copy="">
-              <CopyIcon />
-            </button>
+        <section className="landing-hero">
+          <div className="landing-hero-copy">
+            <h1>
+              Market research that <span>shows its work.</span>
+            </h1>
+            <p>
+              OpenCandle is an open source financial investigator. It fetches live quotes, filings,
+              options, and macro data before answering, then shows where the result came from.
+            </p>
+            <div className="landing-command" data-surface-command="">
+              <span aria-hidden="true">$</span>
+              <code data-surface-command-text="">npx opencandle@latest gui</code>
+              <button type="button" aria-label="Copy install command" data-command-copy="">
+                <CopyIcon />
+              </button>
+            </div>
+            <p className="landing-hero-proof">
+              Free and open source · runs locally · bring your own AI
+            </p>
           </div>
-          <p className="mt-6 text-muted-foreground text-xs">
-            MIT licensed · runs on your machine · no account · market data needs no keys
-          </p>
+          <div className="landing-hero-media">
+            <SurfaceDemo />
+            <template data-legacy-cli-demo="">
+              <LegacyCliDemo />
+            </template>
+          </div>
         </section>
 
         <section
-          className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6"
-          aria-label="OpenCandle in the browser and terminal"
+          className="landing-evidence mx-auto max-w-[1100px] px-4 lg:px-6"
+          aria-labelledby="evidence-map-title"
         >
-          <SurfaceDemo />
-          <template data-legacy-cli-demo="">
-            <LegacyCliDemo />
-          </template>
-
           <div className="evidence-map">
             <div className="evidence-map-heading">
-              <h2>The tools behind every answer</h2>
+              <h2 id="evidence-map-title">The best tools behind every answer.</h2>
               <p>
                 OpenCandle picks the relevant sources for the question and keeps each one attached
                 to the result.
@@ -1596,32 +1587,17 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section
-          className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6"
-          aria-labelledby="research-flow-title"
-        >
-          <div className="landing-section-heading">
-            <h2 id="research-flow-title">Ask. Gather. Verify.</h2>
-            <p>Every step leaves a record you can open.</p>
-          </div>
-          <div className="research-steps">
-            {researchSteps.map((step) => (
-              <article key={step.mark} className="research-step">
-                <span className="research-step-mark" aria-hidden="true">
-                  {step.mark}
-                </span>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <section className="answer-comparison border-border border-y bg-secondary/50">
           <div className="mx-auto max-w-[1100px] px-4 py-20 lg:px-6">
             <div className="answer-comparison-heading">
-              <h2>Same question. Different evidence.</h2>
-              <p>ChatGPT and Claude explain the choices. OpenCandle checks the market.</p>
+              <h2>
+                Same question.
+                <span>Different results.</span>
+              </h2>
+              <p>
+                Why not ask another AI? OpenCandle can use live financial tools before it answers,
+                so you get current numbers you can inspect.
+              </p>
             </div>
             <AnswerComparisonTabs />
             <p className="answer-comparison-link">
@@ -1635,78 +1611,22 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section
-          className="builder-section mx-auto max-w-[1100px] px-4 py-24 lg:px-6"
-          aria-label="For builders"
-        >
-          <div className="builder-intro">
-            <div>
-              <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
-                Built to be extended
-              </h2>
-              <p className="mt-3 text-muted-foreground text-sm leading-relaxed">
-                Extend OpenCandle at three layers: connect a provider, wrap it in a typed tool, then
-                expose it to workflows. Shared caching and rate limits come built in; keep the
-                extension local or publish it as an npm package.
-              </p>
+        <section className="faq-section mx-auto max-w-[1100px] px-4 lg:px-6" aria-label="FAQ">
+          <div className="faq-layout">
+            <div className="faq-heading">
+              <h2>Common questions</h2>
             </div>
-          </div>
-          <ol className="extension-path">
-            <li>
-              <span>01</span>
-              <div>
-                <a href="docs/system-architecture.html">Connect a provider</a>
-                <p>Normalize one API behind shared caching and rate limits.</p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <a href="docs/build-a-tool.html">Declare a typed tool</a>
-                <p>Define its inputs and return evidence the agent can inspect.</p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <a href="docs/testing-and-evals.html">Route, test, and ship</a>
-                <p>Expose it to workflows, verify it, then package it if others need it.</p>
-              </div>
-            </li>
-          </ol>
-        </section>
-
-        <section className="mx-auto max-w-[860px] px-4 py-24 lg:px-6" aria-label="FAQ">
-          <div className="landing-section-heading">
-            <h2>Common questions</h2>
-          </div>
-          <div className="faq-list">
-            {faqs.map((faq) => (
-              <details key={faq.question}>
-                <summary>
-                  {faq.question}
-                  <span aria-hidden="true">+</span>
-                </summary>
-                <p>{faq.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <section
-          className="landing-cta border-border border-y bg-secondary/60"
-          aria-label="Start locally"
-        >
-          <div className="mx-auto max-w-[1100px] px-4 py-20 text-center lg:px-6">
-            <h2>Start your first investigation.</h2>
-            <p>Bring an Anthropic, OpenAI, or Google model key. Market data needs no keys.</p>
-            <div className="landing-command">
-              <span aria-hidden="true">$</span>
-              <code>npx opencandle@latest gui</code>
+            <div className="faq-list">
+              {faqs.map((faq) => (
+                <details key={faq.question}>
+                  <summary>
+                    {faq.question}
+                    <span aria-hidden="true">+</span>
+                  </summary>
+                  <p>{faq.answer}</p>
+                </details>
+              ))}
             </div>
-            <p className="mt-6 text-muted-foreground text-xs">
-              The agent does the collection work. You keep the judgment.
-            </p>
           </div>
         </section>
       </main>
@@ -1765,15 +1685,18 @@ function DocsPage({ page, content, headings, buildDate }) {
             />
           </article>
           {toc.length > 0 ? (
-            <aside className="hidden w-[200px] shrink-0 xl:block">
-              <div className="sticky top-20 flex flex-col gap-0.5">
+            <aside
+              className="docs-toc-sidebar hidden w-[200px] shrink-0 xl:block"
+              data-docs-toc-sidebar=""
+            >
+              <div className="sticky top-14 flex flex-col gap-0.5 px-3 py-5">
                 <SectionLabel>On this page</SectionLabel>
                 <nav className="flex flex-col gap-0.5" aria-label="On this page">
                   {toc.map((heading) => (
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-tertiary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {heading.text}
                     </a>
