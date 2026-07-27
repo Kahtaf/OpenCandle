@@ -18,7 +18,7 @@ npx opencandle gui   # browser UI at http://127.0.0.1:14567
 
 https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29
 
-![OpenCandle GUI answering "How is NVDA doing today?" with a quote table, cited news sources, and the research steps panel open.](docs/images/gui-chat-research.png)
+![OpenCandle GUI answering "How is NVDA doing today?" with a quote table, cited news sources, and the research steps panel open.](https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/docs/images/gui-chat-research.png)
 
 ## Why OpenCandle
 
@@ -78,7 +78,7 @@ Model access is configured through Pi on first run (`GEMINI_API_KEY`, `OPENAI_AP
 
 ## How It Fits Together
 
-![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](assets/opencandle-architecture.png)
+![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/opencandle-architecture.png)
 
 ```text
 User prompt
