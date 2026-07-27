@@ -19,6 +19,12 @@
       "skillPath": "plugins/developer-essentials/skills/git-advanced-workflows/SKILL.md",
       "computedHash": "f4d0569096237c09b1c07896770fe487d7224c549f7aab0c6551a4f330fcf160"
     },
+    "impeccable": {
+      "source": "pbakaus/impeccable",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/impeccable/SKILL.md",
+      "computedHash": "8e68c45ab038a3707795034a060b90098e08250ae60ad9987e9e73ec269aaf7e"
+    },
     "prompt-engineering-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",

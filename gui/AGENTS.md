@@ -38,5 +38,5 @@ npx tsx tests/screenshots/capture.ts <phase> [--viewport=...]  # screenshot harn
 - For server or shared-state changes, run `npm test` and ensure the relevant `tests/unit/gui-server/*.test.ts` coverage moves with the change.
 - UI changes require visual audits, before/after captures, rebuild first and use `tests/screenshots/capture.ts`. Then verify both for correctness.
 - Any UI change requires browser verification with `@browser` or `npx agent-browser` in both desktop and mobile viewports, not just code inspection.
-- Any UI change also requires an `impeccable` pass for UX correctness before closing the task.
+- Any UI change also requires an `impeccable` pass for UX correctness before closing the task — the `impeccable` skill at `.agents/skills/impeccable/` (agents load it via their skills mechanism).
 - For React UI changes, run a `vercel-react-best-practices` pass before closing the task.
