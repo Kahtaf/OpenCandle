@@ -1,146 +1,92 @@
 ---
 title: Getting Started
-description: Install OpenCandle, start the local GUI, and use the equally complete terminal interface when you prefer it.
+description: Install OpenCandle, connect a model, and get a first market answer in about five minutes.
 ---
 
 # Getting Started
 
-OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime. The GUI is the primary path: it brings chat, visual tool results, workflows, provider status, session history, charts, watchlists, portfolios, alerts, and reports into one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
+OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime, which handles model sign-in, model keys, sessions, and the terminal shell. The GUI is the primary path: chat, visual tool results, workflows, provider status, charts, watchlists, portfolios, alerts, and reports in one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## Requirements
 
 - [Node.js](https://nodejs.org) 22.19+ (22.x) or 24–26
-- One supported model provider configured through Pi: OpenAI, Anthropic, or Google
-- Optional market data provider keys for expanded coverage
+- One model provider: an OpenAI, Anthropic, or Google API key, or Pi sign-in
+- Optional market-data provider keys for expanded coverage
 
-## Install
+OpenCandle is free and open source, and its core data sources need no keys. Model usage is billed by the model provider whose key or account you connect; OpenCandle adds no charge on top.
+
+## Install and Start
 
 ```bash
 npm install -g opencandle
-opencandle gui
+opencandle gui       # browser GUI at http://127.0.0.1:14567
+opencandle           # terminal (TUI)
 ```
 
-You can also run the latest package without a global install:
+You can also run without a global install with `npx opencandle@latest gui`, or from a source checkout with `npm install` followed by `npm run gui` (GUI) or `npm start` (terminal).
 
-```bash
-npx opencandle@latest gui
-```
+The first launch needs network access; Pi downloads small helper binaries into `~/.pi/agent/bin`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
 
-From a source checkout:
+## Connect a Model
 
-```bash
-npm install
-cp .env.example .env # optional
-npm run gui
-```
+On first run, the GUI opens model setup before chat: connect an OpenAI, Anthropic, or Google API key. Chat cannot start without a model. If you prefer Pi sign-in, run `/setup` in the terminal first, then refresh the GUI. The TUI supports both paths directly.
 
-On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
+Model credentials are stored by Pi. Market-data provider keys are separate, optional, and live in environment variables or `~/.opencandle/config.json`.
 
-On first run, the GUI opens model setup before chat. The terminal interface also supports Pi sign-in and `/setup`.
-
-For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures, including native `better-sqlite3` install errors.
-
-## Choose Your Interface
-
-Start with the GUI for the visual investigation workspace: chat, workflow cards, charts, tool results, provider setup, session history, and financial context in one browser tab.
-
-Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same OpenCandle tools, workflows, saved session state, and provider-backed evidence. You can move between both interfaces during the same investigation.
-
-## Run the Local GUI
-
-From a source checkout:
-
-```bash
-npm run gui
-```
-
-From an installed package:
-
-```bash
-opencandle gui
-```
-
-Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions with the terminal UI.
-
-Good first GUI flow:
-
-1. Ask `What is AAPL trading at?`
-2. Open the tool and workflow catalog with `⌘K` (macOS) or `Ctrl+K` (Windows/Linux).
-3. Pick a workflow such as Comprehensive Analysis or Compare Assets.
-4. Inspect the tool card details to see what data was used.
-5. Open the provider tab if the answer says a data source is missing.
-
-See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and local session coordination.
-
-## Configure Providers
-
-Model credentials and data-provider keys are separate. OpenCandle needs one model provider before chat can start; every data-provider key is optional.
-
-Model credentials, handled by Pi (sign-in or one of these keys):
-
-| Key | Required | Used for |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | One model provider required | Anthropic models through Pi |
-| `OPENAI_API_KEY` | One model provider required | OpenAI models through Pi |
-| `GEMINI_API_KEY` | One model provider required | Google models through Pi |
-
-Data-provider keys, from environment variables or `~/.opencandle/config.json`:
-
-| Key | Required | Used for |
-| --- | --- | --- |
-| `ALPHA_VANTAGE_API_KEY` | No | Fundamentals, earnings, financial statements |
-| `FRED_API_KEY` | No | Macro series such as rates, CPI, GDP, unemployment |
-| `BRAVE_API_KEY` | No | Brave web search fallback |
-| `EXA_API_KEY` | No | Exa web search |
-| `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
-| `LSE_API_KEY` | No | London Strategic Edge financial statements and deep intraday/long-range history |
-
-Yahoo Finance, CoinGecko, SEC EDGAR, and several other sources need no keys; Reddit and Twitter/X sentiment use the `rdt-cli` and `twitter-cli` tools with your normal browser sessions. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the full list and caveats.
-
-Example config:
-
-```json
-{
-  "providers": {
-    "alphaVantage": {
-      "apiKey": "..."
-    },
-    "fred": {
-      "apiKey": "..."
-    },
-    "brave": {
-      "apiKey": "..."
-    },
-    "exa": {
-      "apiKey": "..."
-    },
-    "finnhub": {
-      "apiKey": "..."
-    },
-    "lse": {
-      "apiKey": "..."
-    }
-  }
-}
-```
-
-Environment variables override `~/.opencandle/config.json`. Set `OPENCANDLE_HOME` to store OpenCandle state somewhere other than `~/.opencandle/`.
-
-See [Configuration](./configuration.md) for the complete env var list, config precedence, state files, and GUI host/port settings.
-
-## First Investigations
+## Ask a Keyless First Prompt
 
 ```text
 What is AAPL trading at?
 Compare BTC and ETH over the last month
-Show MSFT puts with Greeks
-Get CPI from FRED
-Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
-/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
+What is the latest SEC filing for AAPL?
 ```
 
-OpenCandle should tell you when a provider is unavailable, a key is missing, or a result is degraded. Treat those warnings as part of the answer.
+Yahoo Finance, CoinGecko, SEC EDGAR, and several other sources work without provider keys; Reddit and Twitter/X sentiment use the `rdt-cli` and `twitter-cli` tools with your normal browser sessions. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the full list and caveats.
 
-For the equally complete keyboard-first path, slash commands, and terminal session behavior, see [TUI](./tui.md). Contributors validating a source checkout should follow [Testing and Evals](./testing-and-evals.md).
+A good first answer shows that OpenCandle gathered evidence before synthesizing: a current price, daily move, source or timestamp context, and explicit caveats when a provider was unavailable. Treat warnings, stale-data notes, and data gaps as part of the answer.
+
+## Add Provider Keys When Needed
+
+If an answer says a provider is missing or degraded, open Providers in the GUI, or run the suggested `/connect ...` command in the terminal:
+
+```text
+/connect financials   # Alpha Vantage: fundamentals, earnings, statements
+/connect economy      # FRED: rates, CPI, GDP, unemployment
+/connect search       # Brave or Exa web search
+```
+
+The full `/connect` target list is in [TUI](./tui.md#connect-targets). Env var names, the `~/.opencandle/config.json` format, precedence rules, and state-file locations are in [Configuration](./configuration.md).
+
+## Choose Your Interface
+
+Start with the GUI for the visual investigation workspace. Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same tools, workflows, saved session state, and provider-backed evidence, and you can move between both interfaces during the same investigation. See [GUI Quickstart](./gui-quickstart.md) and [TUI](./tui.md).
+
+## Troubleshooting
+
+| Symptom | What to do |
+| --- | --- |
+| Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
+| A model key was rejected during setup | Check that the key matches the selected provider and paste a fresh key; rejected keys are not saved. |
+| A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
+| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell profile, or in the `.env` file in the launch directory if it is set there. Environment variables override `~/.opencandle/config.json`. |
+| Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
+| The GUI is open but not updating | Wait for any active run to settle, refresh the browser, or restart the GUI and reopen `http://127.0.0.1:14567`. |
+
+### Native dependency (`better-sqlite3`)
+
+OpenCandle stores local state with [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
+
+1. Use a supported Node.js version: 22.19+ (22.x) or 24–26.
+2. Retry a clean install.
+3. Run `npm rebuild better-sqlite3` after switching Node versions.
+4. Install platform build tools if npm has to compile native modules locally.
+
+## Uninstall
+
+```bash
+npm uninstall -g opencandle
+```
+
+OpenCandle keeps its state in `~/.opencandle`; Pi keeps model credentials and sessions in `~/.pi`. Delete those directories to remove all local data.

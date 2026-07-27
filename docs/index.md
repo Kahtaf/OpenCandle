@@ -23,9 +23,8 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 ## Start here
 
 - [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
-- [Getting Started](./getting-started.md): requirements, install, provider keys.
+- [Getting Started](./getting-started.md): install to a first market answer in five minutes, plus troubleshooting.
 - [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
-- [First Run](./first-run.md): install to a keyless market answer in five minutes.
 
 ## Guides and reference
 
@@ -40,40 +39,11 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 - [Build a Tool](./build-a-tool.md): first-party tools and add-on npm packages.
 - [Testing and Evals](./testing-and-evals.md): tests, session quality, benchmarking.
 
-## What OpenCandle Investigates
-
-| Area | Examples |
-| --- | --- |
-| Market data | Quotes, price history, indexed price comparisons, ticker lookup, stock screening, crypto price and history |
-| Options | Option chains, open interest, implied volatility, locally computed Greeks |
-| Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
-| Macro | FRED series, rates, inflation, GDP, unemployment, Polymarket event probabilities, crypto Fear & Greed |
-| Sentiment | Reddit via `rdt-cli`, Twitter/X via `twitter-cli`, web search, and cross-source sentiment summaries |
-| Filings | SEC EDGAR filing search |
-| Portfolio | Watchlists, holdings, correlation, risk analysis |
-
 ## Operating Principles
 
 - Evidence first. Show the data used; avoid unsupported conclusions.
 - Tools fetch and format. The model synthesizes.
 - Provider gaps stay visible: missing keys, stale data, degraded sources.
 - Local state stays local, under `~/.opencandle/`.
-
-## Try it
-
-```bash
-npx opencandle gui
-npx opencandle       # equally complete terminal interface
-```
-
-First prompts:
-
-```text
-What is AAPL trading at?
-Compare MSFT and GOOGL using price, fundamentals, and sentiment
-Show me TSLA puts with Greeks
-Get the fed funds rate from FRED
-/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
-```
 
 OpenCandle gathers and organizes evidence. Judgment and risk stay with you.

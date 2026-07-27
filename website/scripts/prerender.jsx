@@ -82,7 +82,6 @@ const sourcePages = [
   },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
-  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Start here" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
@@ -112,6 +111,7 @@ const sourcePages = [
 // canonicalizes and refreshes to its new home.
 const legacyRedirects = [
   { from: "docs/benchmarking.html", to: "docs/testing-and-evals.html#competitive-benchmarking" },
+  { from: "docs/first-run.html", to: "docs/getting-started.html" },
   {
     from: "docs/opencandle-vs-chatgpt.html",
     to: "docs/comparisons.html#opencandle-vs-general-chatbots",

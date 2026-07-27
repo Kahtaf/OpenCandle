@@ -27,17 +27,7 @@ Type a question and press Enter. OpenCandle identifies what kind of financial in
 
 If a ticker, goal, horizon, budget, or risk preference is missing and materially changes the answer, OpenCandle may ask a focused follow-up before continuing. If a provider is missing, stale, or unavailable, the answer should name that gap instead of hiding it.
 
-Good first prompts:
-
-```text
-What is AAPL trading at?
-/analyze NVDA
-Compare MSFT and GOOGL using price, fundamentals, and sentiment
-Show me TSLA puts with Greeks
-Get the fed funds rate from FRED
-```
-
-Slash commands are optional. Plain-English prompts can trigger the same investigation paths:
+Slash commands are optional. Plain-English prompts trigger the same investigation paths:
 
 ```text
 Analyze NVDA and tell me whether to buy, wait, or avoid.

@@ -167,9 +167,11 @@ describe("public site build contract", () => {
     expect(overviewHtml).toContain("local browser GUI and an equally complete terminal interface");
     expect(gettingStartedHtml).toContain("The GUI is the primary path");
     expect(gettingStartedHtml).not.toContain("The CLI is the primary entry point");
-    expect(firstRunHtml.indexOf("opencandle@latest gui")).toBeLessThan(
-      firstRunHtml.indexOf("opencandle@latest</code>"),
+    expect(gettingStartedHtml.indexOf("opencandle gui")).toBeLessThan(
+      gettingStartedHtml.indexOf("# terminal (TUI)"),
     );
+    expect(firstRunHtml).toContain("docs/getting-started.html");
+    expect(firstRunHtml).toContain("noindex");
     expect(tuiHtml).toContain("equally complete terminal interface");
     expect(tuiHtml).not.toContain("main OpenCandle agent experience");
   });
