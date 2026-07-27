@@ -5,22 +5,27 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
-    "@remotion/cli": "4.0.489",
-    "@remotion/media": "4.0.489",
-    "lucide-react": "^1.24.0",
-    "openai": "^6.15.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "remotion": "4.0.489"
+    "@remotion/cli": "4.0.499",
+    "@remotion/media": "4.0.499",
+    "lucide-react": "^1.27.0",
+    "openai": "^6.49.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.499"
   },
   "devDependencies": {
-    "@remotion/eslint-config-flat": "4.0.489",
-    "@types/node": "^22.10.2",
-    "@types/react": "19.2.7",
-    "@types/web": "0.0.166",
-    "eslint": "9.19.0",
-    "prettier": "3.8.1",
+    "@remotion/eslint-config-flat": "4.0.499",
+    "@types/node": "^26.1.1",
+    "@types/react": "19.2.17",
+    "@types/web": "0.0.354",
+    "eslint": "10.8.0",
+    "prettier": "3.9.6",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@remotion/eslint-config-flat": {
+      "typescript-eslint": "8.65.0"
+    }
   },
   "scripts": {
     "dev": "remotion studio",
