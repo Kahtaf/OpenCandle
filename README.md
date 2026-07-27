@@ -12,13 +12,13 @@ npx opencandle       # terminal
 npx opencandle gui   # browser UI at http://127.0.0.1:14567
 ```
 
-[Docs](https://opencandle.app/docs/) | [First run](https://opencandle.app/docs/first-run.html) | [GUI quickstart](https://opencandle.app/docs/gui-quickstart.html) | [Data sources](https://opencandle.app/docs/data-sources.html) | [Build a tool](https://opencandle.app/docs/build-a-tool.html)
+[Docs](https://opencandle.app/docs/) | [Getting started](https://opencandle.app/docs/getting-started.html) | [GUI quickstart](https://opencandle.app/docs/gui-quickstart.html) | [Data sources](https://opencandle.app/docs/data-sources.html) | [Build a tool](https://opencandle.app/docs/build-a-tool.html)
 
 ## See It Work
 
 https://github.com/user-attachments/assets/334956b1-18b4-4d6f-92b5-3f739824cd29
 
-![OpenCandle GUI answering "How is NVDA doing today?" with a quote table, cited news sources, and the research steps panel open.](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/docs/images/gui-chat-research.png)
+![OpenCandle GUI answering "How is NVDA doing today?" with a quote table, cited news sources, and the research steps panel open.](https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/docs/images/gui-chat-research.png)
 
 ## Why OpenCandle
 
@@ -52,7 +52,7 @@ Requires [Node.js](https://nodejs.org/) 22.19+ or 24–26. macOS and Linux are f
 npx opencandle
 ```
 
-On first run, OpenCandle walks you through model setup — use Pi sign-in when offered, or provide a model API key (in the GUI, use the API-key setup panel). Data-provider keys are separate and optional. For the five-minute path from install to a first answer, see [First Run](https://opencandle.app/docs/first-run.html).
+On first run, OpenCandle walks you through model setup — use Pi sign-in when offered, or provide a model API key (in the GUI, use the API-key setup panel). Data-provider keys are separate and optional. For the five-minute path from install to a first answer, see [Getting Started](https://opencandle.app/docs/getting-started.html).
 
 Check your setup anytime with `npx opencandle doctor` (or the GUI's `/diagnostics` page).
 
@@ -70,18 +70,7 @@ Run risk analysis on SPY
 
 ## Data Sources
 
-| Area         | Examples                                                                                       | Source                                                                                                           |
-| ------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Market data  | Quotes, history, indexed price comparisons, ticker search, screeners, crypto price and history | Yahoo Finance, TradingView scanner, Alpha Vantage and London Strategic Edge fallbacks when configured, CoinGecko |
-| Options      | Chains, open interest, IV, locally computed Greeks                                             | Yahoo Finance plus local calculations                                                                            |
-| Fundamentals | Overview, financials, earnings, DCF, comparable companies                                      | Alpha Vantage; optional London Strategic Edge for financial statements and DCF, with Yahoo Finance fallbacks     |
-| Macro        | Rates, CPI, GDP, unemployment, event probabilities, crypto Fear & Greed                        | FRED, Polymarket Gamma API, alternative.me                                                                       |
-| Technical    | Indicators and strategy backtests                                                              | Local calculations over market history                                                                           |
-| Sentiment    | Reddit, Twitter/X, Finnhub news, and web sentiment                                             | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, Exa, Brave, DuckDuckGo                  |
-| Filings      | SEC filing search                                                                              | SEC EDGAR                                                                                                        |
-| Portfolio    | Watchlists, holdings, correlation, risk                                                        | Local state plus market data                                                                                     |
-
-Most sources work without API keys. Reddit and Twitter/X sentiment use `rdt-cli` / `twitter-cli` (`uv tool install ...`) with your normal browser sessions. Alpha Vantage, FRED, Brave, Exa, Finnhub, and London Strategic Edge unlock deeper coverage when configured — see [Data Sources](https://opencandle.app/docs/data-sources.html).
+Quotes, history, screeners, options chains, crypto, SEC filings, macro series, event probabilities, and cross-source sentiment — from Yahoo Finance, TradingView, CoinGecko, SEC EDGAR, FRED, Polymarket, alternative.me, and more. Most sources work without API keys; Alpha Vantage, FRED, Brave, Exa, Finnhub, and London Strategic Edge unlock deeper coverage when configured, and Reddit/Twitter sentiment uses `rdt-cli` / `twitter-cli` with your normal browser sessions. Full coverage tables in [Data Sources](https://opencandle.app/docs/data-sources.html).
 
 ## Configuration
 
@@ -89,7 +78,7 @@ Model access is configured through Pi on first run (`GEMINI_API_KEY`, `OPENAI_AP
 
 ## How It Fits Together
 
-![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-architecture.png)
+![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/opencandle-architecture.png)
 
 ```text
 User prompt
@@ -119,7 +108,6 @@ Contributor conventions live in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CON
 ## Documentation
 
 - [Getting Started](https://opencandle.app/docs/getting-started.html)
-- [First Run](https://opencandle.app/docs/first-run.html)
 - [TUI](https://opencandle.app/docs/tui.html)
 - [GUI Quickstart](https://opencandle.app/docs/gui-quickstart.html)
 - [Investigation Recipes](https://opencandle.app/docs/investigation-recipes.html)

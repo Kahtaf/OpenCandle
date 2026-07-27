@@ -118,17 +118,23 @@ describe("public site build contract", () => {
     }
   });
 
-  it("extends the desktop documentation sidebar surface to the viewport edge", async () => {
+  it("keeps desktop documentation rails white while the mobile drawer stays muted", async () => {
     const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
     const docsDocument = new JSDOM(docsHtml, {
       url: "https://opencandle.app/docs/index.html",
     }).window.document;
     const sidebar = docsDocument.querySelector("aside[data-docs-sidebar]");
+    const tocSidebar = docsDocument.querySelector("aside[data-docs-toc-sidebar]");
+    const mobileDrawer = docsDocument.querySelector("[data-drawer-panel]");
 
     expect(sidebar).not.toBeNull();
     expect(sidebar?.classList.contains("docs-sidebar")).toBe(true);
+    expect(sidebar?.classList.contains("bg-background")).toBe(true);
+    expect(sidebar?.classList.contains("bg-secondary")).toBe(false);
     expect(sidebar?.classList.contains("overflow-hidden")).toBe(false);
     expect(sidebar?.querySelector('nav[aria-label="Documentation"]')).not.toBeNull();
+    expect(tocSidebar?.classList.contains("bg-background")).toBe(true);
+    expect(mobileDrawer?.classList.contains("bg-secondary")).toBe(true);
   });
 
   it("extends the desktop table of contents surface to the viewport edge", async () => {
@@ -161,9 +167,11 @@ describe("public site build contract", () => {
     expect(overviewHtml).toContain("local browser GUI and an equally complete terminal interface");
     expect(gettingStartedHtml).toContain("The GUI is the primary path");
     expect(gettingStartedHtml).not.toContain("The CLI is the primary entry point");
-    expect(firstRunHtml.indexOf("opencandle@latest gui")).toBeLessThan(
-      firstRunHtml.indexOf("opencandle@latest</code>"),
+    expect(gettingStartedHtml.indexOf("opencandle gui")).toBeLessThan(
+      gettingStartedHtml.indexOf("# terminal (TUI)"),
     );
+    expect(firstRunHtml).toContain("docs/getting-started.html");
+    expect(firstRunHtml).toContain("noindex");
     expect(tuiHtml).toContain("equally complete terminal interface");
     expect(tuiHtml).not.toContain("main OpenCandle agent experience");
   });
@@ -177,6 +185,9 @@ describe("public site build contract", () => {
     expect(homeDocument.querySelector(".landing-hero h1")?.textContent).toBe(
       "Market research that shows its work.",
     );
+    expect(
+      homeDocument.querySelector(".landing-hero h1 [data-hero-heading-lockup]")?.textContent,
+    ).toBe("Market research");
     expect(homeHtml).not.toContain("Ask any market question.");
     expect(homeHtml).not.toContain("Check every number.");
   });

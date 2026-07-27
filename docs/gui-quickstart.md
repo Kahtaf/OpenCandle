@@ -54,35 +54,18 @@ Charts also appear directly in chat: price-history answers render as interactive
 
 Chart and dashboard data is cached locally, so reloading the page or opening a second window stays fast without extra provider calls.
 
-## Investigator Workflow
+## Working In The GUI
 
-The GUI is a local investigation workbench. It keeps the transcript, tool catalog, provider setup, session history, and financial context close together so you can see what evidence the agent is using.
-
-- Chat carries the question, tool calls, and synthesis.
-- Catalog exposes workflows, individual tools, and provider setup without guessing prompt syntax.
-- Session history keeps prior investigations reachable through Pi session state.
-- Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
-- Browser and terminal views of the same session stay in sync.
-
-## What You Can Do From The GUI
+The GUI is a local investigation workbench: the transcript, tool catalog, provider setup, and session history stay close together so you can see what evidence the agent is using.
 
 - Ask a normal finance question, such as `Should I add NVDA if I already own AAPL and TSLA?`
-- Launch a workflow from the catalog, such as Comprehensive Analysis, Compare Assets, Portfolio Builder, or Options Screener.
-- Run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
+- Launch a workflow from the catalog (Comprehensive Analysis, Compare Assets, Portfolio Builder, Options Screener), or run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
 - Open a symbol page for any ticker to see its chart, key stats, and your saved positions and alerts in one place.
+- Inspect tool cards to see arguments, results, sources, and warnings.
 - Connect provider keys from the Providers tab instead of editing config files.
-- Inspect tool cards and their details to see arguments, results, sources, and warnings.
-- Reopen previous sessions and continue the investigation.
+- Reopen previous sessions and continue the investigation; browser and terminal views of the same session stay in sync.
 - Answer focused follow-up questions when OpenCandle needs a ticker, goal, horizon, budget, or risk preference before proceeding.
 
-Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history.
+Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history. Data-quality warnings and provider gaps are available on the Diagnostics page.
 
-Data-quality warnings and provider gaps are available on the Diagnostics page.
-
-## When To Use The GUI
-
-Use the GUI as the primary OpenCandle workspace: inspect tool output visually, browse prior sessions, run an individual tool from the catalog, and manage provider setup without remembering command syntax.
-
-Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state, with slash commands and a plain terminal transcript. See [Terminal (TUI)](./tui.md).
-
-For GUI internals, see [System Architecture](./system-architecture.md). For GUI validation, see [Testing and Evals](./testing-and-evals.md).
+Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state. See [Terminal (TUI)](./tui.md). For GUI internals, see [System Architecture](./system-architecture.md).

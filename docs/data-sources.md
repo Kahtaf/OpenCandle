@@ -14,7 +14,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Market | `search_ticker`, `screen_stocks`, `get_stock_quote`, `get_stock_history`, `get_price_comparison` | Yahoo Finance; TradingView scanner for breadth screening and watchlist batch quotes; Alpha Vantage fallback for quote/history when configured; London Strategic Edge fallback for intraday and deep-range history (back to 2003) when configured |
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
-| Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | London Strategic Edge (when configured), then Alpha Vantage for financial statements and DCF; Alpha Vantage with Yahoo Finance fallbacks for overview, earnings, and comparisons |
+| Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | London Strategic Edge (when configured), then Alpha Vantage for financial statements; `compute_dcf` additionally falls back to Yahoo Finance for statements and market cap; Alpha Vantage with Yahoo Finance fallbacks for overview, earnings, and comparisons |
 | Macro | `get_economic_data`, `get_event_probabilities`, `get_fear_greed` | FRED, [Polymarket](https://polymarket.com) Gamma API, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
 | Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, DuckDuckGo, Brave, Exa |
@@ -31,6 +31,7 @@ Keyless by default:
 - [CoinGecko](https://www.coingecko.com)
 - [SEC EDGAR](https://www.sec.gov/edgar/search/)
 - [DuckDuckGo](https://duckduckgo.com) search
+- [Exa](https://exa.ai) web search, through its keyless MCP endpoint
 - [alternative.me crypto Fear & Greed](https://alternative.me/crypto/fear-and-greed-index/)
 
 External local tools:
@@ -38,14 +39,14 @@ External local tools:
 - Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
 - Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
 
-Optional keys:
+Optional keys (see [configuration.md](./configuration.md) for env var names and setup):
 
-- `ALPHA_VANTAGE_API_KEY` expands fundamentals, earnings, financial statements, DCF, and company comparison coverage through [Alpha Vantage](https://www.alphavantage.co).
-- `FRED_API_KEY` enables [FRED](https://fred.stlouisfed.org) macro series lookups.
-- `BRAVE_API_KEY` enables [Brave](https://brave.com/search/api/) as a web search fallback.
-- `EXA_API_KEY` enables [Exa](https://exa.ai) web search.
-- `FINNHUB_API_KEY` enables [Finnhub company news](https://finnhub.io) in sentiment summaries.
-- `LSE_API_KEY` enables the [London Strategic Edge](https://londonstrategicedge.com/databank) free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles back to 2003 as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key; bring your own key. OpenCandle does not redistribute LSE data.
+- [Alpha Vantage](https://www.alphavantage.co) expands fundamentals, earnings, financial statements, DCF, and company comparison coverage.
+- [FRED](https://fred.stlouisfed.org) adds macro series lookups.
+- [Brave](https://brave.com/search/api/) adds a web search fallback.
+- [Exa](https://exa.ai) web search runs keylessly through its MCP endpoint by default; a key upgrades it to the direct API for better quality and limits.
+- [Finnhub](https://finnhub.io) adds company news to sentiment summaries.
+- [London Strategic Edge](https://londonstrategicedge.com/databank) unlocks its free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles back to 2003 as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key; bring your own key. OpenCandle does not redistribute LSE data.
 
 ## Caching and Degradation
 

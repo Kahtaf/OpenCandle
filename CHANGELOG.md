@@ -8,6 +8,9 @@
 
 ### Changed
 
+- The public Comparisons page now grounds the chatbot comparison in observed head-to-head benchmark behavior — fabricated filing and sentiment specifics, missed same-day market moves, per-share versus per-contract option slips, and absent saved-portfolio context — and names where general chatbots legitimately win (conceptual education and judgment-heavy personal finance).
+- Public docs were consolidated for leanness: First Run merged into a single Getting Started page (adding uninstall steps and a model-cost note, with a legacy redirect from the old URL), the docs index is navigation-only, the GUI quickstart collapsed three overlapping sections into one, duplicated prompt lists and provider-key tables now live in one canonical place each, and the README uses in-repo image paths instead of CDN links.
+- CONTRIBUTING now leads with the supported Node range, the CI gate commands (`lint`, `typecheck`, `gates`, `review:pr`), and the required asynchronous Codex PR review gate, and defers engineering conventions to AGENTS.md instead of duplicating them.
 - The public homepage and docs now present the local browser GUI as OpenCandle's primary path and the terminal as an equally complete keyboard-first interface, backed by the same tools, workflows, evidence, saved sessions, and market state.
 - The homepage product demo can now switch between the approved Remotion browser and terminal walkthroughs, defaulting to the GUI while respecting reduced-motion preferences, lazy-loading and playing only the active surface, serving source logos locally, and preserving the handcrafted CLI animation as an inert fallback.
 - The homepage now removes redundant labels and interface copy, uses full-width tabs with inline unboxed icons for its GUI and terminal walkthroughs, compares illustrative ChatGPT, Claude, and OpenCandle answers by visible evidence, presents extension as a provider-to-tool-to-workflow path, places the install call to action after common questions, and uses direct punctuation throughout every published docs page.
@@ -15,6 +18,7 @@
 
 ### Fixed
 
+- Documentation accuracy corrections from a full docs review: Exa web search is documented as keyless by default (MCP endpoint) with the API key as an upgrade, the DCF fallback chain includes its Yahoo Finance tail, configuration docs cover the sentiment tuning keys and `OPENCANDLE_EXTERNAL_TOOL_BIN_DIR`, stale references to the GUI financial context panel removed in 0.12 are gone, the build-a-tool registration snippet matches the current `getAllTools` signature, `.env.example` includes `LSE_API_KEY`, and the agent harness README documents the `send` subcommand, the bounded `run` follow-up window, and the full list of captured `opencandle-*` session entries.
 - Homepage demo arrow-key navigation now switches interfaces without also scrolling the page.
 
 ## [0.13.0] - 2026-07-19

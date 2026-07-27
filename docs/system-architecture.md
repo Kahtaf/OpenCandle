@@ -48,7 +48,7 @@ OpenCandle has two main surfaces.
 
 The terminal UI is the fastest way to work from the keyboard. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
-The local GUI is a browser workbench at `http://127.0.0.1:14567`. It shows chat, session history, provider setup, a tool and workflow catalog, a financial context panel, and visual result cards for market data, options, macro, filings, sentiment, and portfolio facts.
+The local GUI is a browser workbench at `http://127.0.0.1:14567`. Its home is a market dashboard (an indices strip, watchlist movers, a portfolio summary, and alerts status), and it adds per-symbol pages with interactive charts, chat answers rendered as chart cards, session history, provider setup, and a tool/workflow catalog and diagnostics.
 
 Both surfaces use the same OpenCandle session and finance tools. The GUI adds richer rendering and easier discovery; it is not a separate agent.
 
@@ -102,8 +102,6 @@ Expected behavior:
 - A ticker mismatch should be treated as a red flag before discussing social hype.
 - A filing question should separate SEC filing evidence from news or market context.
 - A pure education question should avoid unnecessary tool calls.
-
-The model synthesizes after evidence is gathered. It should answer directly, name risks, disclose gaps, and avoid unsupported certainty.
 
 ## GUI Runtime
 

@@ -82,7 +82,6 @@ const sourcePages = [
   },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
-  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Start here" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
@@ -112,9 +111,10 @@ const sourcePages = [
 // canonicalizes and refreshes to its new home.
 const legacyRedirects = [
   { from: "docs/benchmarking.html", to: "docs/testing-and-evals.html#competitive-benchmarking" },
+  { from: "docs/first-run.html", to: "docs/getting-started.html" },
   {
     from: "docs/opencandle-vs-chatgpt.html",
-    to: "docs/comparisons.html#opencandle-vs-chatgpt-and-general-chatbots",
+    to: "docs/comparisons.html#opencandle-vs-general-chatbots",
   },
   {
     from: "docs/opencandle-vs-spreadsheets.html",
@@ -768,7 +768,7 @@ function DocsShell({ page, children }) {
       <SiteHeader output={page.output} />
       <div className="mx-auto flex w-full max-w-[1320px]">
         <aside
-          className="docs-sidebar sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[260px] shrink-0 border-border border-r bg-secondary md:block"
+          className="docs-sidebar sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[260px] shrink-0 border-border border-r bg-background md:block"
           data-docs-sidebar=""
         >
           <DocsNav activeOutput={page.output} />
@@ -1469,7 +1469,7 @@ function HomePage({ buildDate, version }) {
         <section className="landing-hero">
           <div className="landing-hero-copy">
             <h1>
-              Market research that <span>shows its work.</span>
+              <span data-hero-heading-lockup="">Market research</span> that shows its work.
             </h1>
             <p>
               OpenCandle is an open source financial investigator. It fetches live quotes, filings,
@@ -1686,7 +1686,7 @@ function DocsPage({ page, content, headings, buildDate }) {
           </article>
           {toc.length > 0 ? (
             <aside
-              className="docs-toc-sidebar hidden w-[200px] shrink-0 xl:block"
+              className="docs-toc-sidebar hidden w-[200px] shrink-0 bg-background xl:block"
               data-docs-toc-sidebar=""
             >
               <div className="sticky top-14 flex flex-col gap-0.5 px-3 py-5">

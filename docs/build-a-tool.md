@@ -87,7 +87,7 @@ Add your export to `src/tools/index.ts`:
 ```ts
 import { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 
-export function getAllTools(): AgentTool<any>[] {
+export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}) {
   return [
     // ... existing tools
     twitterSentimentTool,
@@ -235,7 +235,7 @@ export default function(pi: ExtensionAPI): void {
 }
 ```
 
-Pi discovers it automatically when installed. For Pi extension lifecycle details, see [Pi coding-agent documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md).
+Discovery is handled by the Pi runtime via the `pi.extensions` field; exact behavior depends on the installed Pi version. For Pi extension lifecycle details, see [Pi coding-agent documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md).
 
 ## Checklist
 
@@ -245,9 +245,6 @@ Pi discovers it automatically when installed. For Pi extension lifecycle details
 - [ ] Uses `cache` and `rateLimiter` for external API calls
 - [ ] Tests mock `globalThis.fetch` with fixtures
 - [ ] Tool registered in `src/tools/index.ts`
-
-## Investigation Quality Checklist
-
 - [ ] The tool reports source/provider identity in structured details when useful
 - [ ] Missing credentials produce a clear setup path instead of a vague failure
 - [ ] Stale or partial data is labeled in the user-facing content

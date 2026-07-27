@@ -1,6 +1,6 @@
 # TESTS
 
-Unit + e2e tests for all OpenCandle modules. Fixtures prevent live API calls in CI.
+Unit + e2e tests for all OpenCandle modules.
 
 ## COMMANDS
 ```bash
@@ -23,9 +23,8 @@ tests/
 ├── evals/        # Agent/session eval cases, scoring, and report helpers
 ├── scripts/      # Eval front door and long-running opt-in eval runners
 ├── e2e/          # End-to-end workflow, CLI, and GUI browser tests
-├── integration/  # Cross-module integration tests
 ├── screenshots/  # GUI screenshot capture harness (npx tsx tests/screenshots/capture.ts)
-└── fixtures/     # Mock JSON responses, one directory per provider (yahoo/, alphavantage/, fred/, lse/, polymarket/, …)
+└── fixtures/     # Mock JSON responses, one directory per provider (yahoo/, alphavantage/, lse/, polymarket/, …)
 ```
 
 ## TEST PATTERN

@@ -24,20 +24,6 @@ Expected evidence:
 - relevant news or web context when search is configured
 - clear warnings for unavailable providers
 
-Sample shape:
-
-```text
-Evidence gathered
-- Quote: provider timestamp and recent move shown before synthesis
-- Fundamentals: company profile or provider warning
-- Filings/news: source links or explicit "not configured" note
-
-Answer
-- What the evidence says
-- What still depends on judgment
-- Main downside risks and data gaps
-```
-
 Good follow-up:
 
 ```text
@@ -58,21 +44,6 @@ Expected evidence:
 - comparable-company or financial-statement data when available
 - sentiment or web search context if configured
 - a synthesis that separates data-backed observations from judgment calls
-
-Sample shape:
-
-```text
-Side-by-side comparison
-| Asset | Price context | Fundamental context | Sentiment/source notes |
-| --- | --- | --- | --- |
-| MSFT | provider quote + trend | available or unavailable | source count or gap |
-| GOOGL | provider quote + trend | available or unavailable | source count or gap |
-| AMZN | provider quote + trend | available or unavailable | source count or gap |
-
-Verdict
-- Best fit for the stated goal
-- Concentration, valuation, and data-quality risks
-```
 
 ## Options Screen
 
@@ -102,15 +73,6 @@ Expected evidence:
 - [SEC EDGAR](https://www.sec.gov/edgar/search/) filing records
 - filing dates, accession links, or available identifiers
 - cautious synthesis that does not overstate what was inspected
-
-Sample shape:
-
-```text
-SEC filing trail
-- 10-K/10-Q/8-K record: filing date, form type, accession or document link
-- What that form is normally used for
-- What OpenCandle inspected versus what would require reading the full filing
-```
 
 ## Macro Check
 

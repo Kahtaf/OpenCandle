@@ -24,7 +24,7 @@ Effective precedence:
 3. `$OPENCANDLE_HOME/config.json`.
 4. Built-in defaults.
 
-For provider API keys, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
+For provider API keys, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API`, `OPENCANDLE_NOTIFICATION_WEBHOOK_URL`, and developer diagnostic switches are env-only.
 
 ## Environment Variables
 
@@ -38,7 +38,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `ALPHA_VANTAGE_API_KEY` | unset | Fundamentals, earnings, financial statements, DCF, and comps. Overrides `providers.alphaVantage.apiKey`. |
 | `FRED_API_KEY` | unset | FRED macro series. Overrides `providers.fred.apiKey`. |
 | `BRAVE_API_KEY` | unset | Brave search in the web-search cascade. Overrides `providers.brave.apiKey`. |
-| `EXA_API_KEY` | unset | Exa search. Overrides `providers.exa.apiKey`. |
+| `EXA_API_KEY` | unset | Upgrades Exa search from its keyless MCP endpoint to the direct Exa API (better quality/limits). Overrides `providers.exa.apiKey`. |
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
 | `LSE_API_KEY` | unset | London Strategic Edge free-tier key for financial statements and intraday/deep-range history fallbacks. Overrides `providers.lse.apiKey`. |
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config and local state. |
@@ -46,6 +46,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
 | `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | unset | Optional local webhook target for alert/report notification delivery attempts. In-app notifications are still recorded first. |
+| `OPENCANDLE_EXTERNAL_TOOL_BIN_DIR` | unset | Extra directory searched for the `rdt`/`twitter` sentiment CLI shims, alongside `UV_TOOL_BIN_DIR` and `XDG_BIN_HOME`. |
 
 ### Advanced Developer Diagnostics
 
@@ -82,7 +83,12 @@ Run `opencandle doctor` to check OpenCandle health, including runtime, `OPENCAND
     "retentionDays": 30,
     "defaultSubreddits": ["wallstreetbets", "stocks", "investing", "options"],
     "commentsPerPost": 5,
-    "divergenceThreshold": 0.4
+    "divergenceThreshold": 0.4,
+    "minUsefulSampleSize": 10,
+    "maxInsightDriversPerPolarity": 3,
+    "maxRepresentativeItemsPerSource": 5,
+    "maxAggregateRepresentativeItems": 8,
+    "maxNotableClaims": 5
   }
 }
 ```
@@ -100,7 +106,6 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
 | `lse-byte-budget.json` | Monthly London Strategic Edge free-tier usage meter; LSE drops out of fallback chains at 80% of the allowance. |
-| `logs/` | Log directory (currently unused). |
 
 Durable market state, including watchlists, portfolios, and alerts, lives only in `state.db`. There is no JSON-file alternative for that state.
 
