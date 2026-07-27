@@ -9,7 +9,7 @@ src/tools/
 ├── technical/     # Indicators (SMA, RSI, MACD), backtesting
 ├── options/       # Options chains, Greeks computation
 ├── macro/         # FRED economic data, fear & greed index
-├── sentiment/     # Reddit sentiment, news sentiment
+├── sentiment/     # Reddit, Twitter/X, web/news sentiment, plus aggregate summary/trend
 ├── portfolio/     # Tracker, risk analysis, watchlist, correlation
 ├── market/        # Stock quotes, history, crypto, ticker search
 ├── interaction/   # ask_user clarification tool
@@ -23,7 +23,7 @@ src/tools/
 | RSI, MACD, SMA, backtest | `technical/` |
 | Put/call ratio, IV, Greeks | `options/` |
 | GDP, inflation, Fed rates | `macro/` |
-| Reddit buzz, news | `sentiment/` |
+| Reddit, Twitter/X, web/news, aggregate sentiment | `sentiment/` |
 | Positions, Sharpe, VaR, watchlist | `portfolio/` |
 | Quotes, OHLCV, crypto, search | `market/` |
 | Clarifying questions (`ask_user`) | `interaction/` |

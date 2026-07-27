@@ -17,6 +17,7 @@
 
 ### Fixed
 
+- Documentation accuracy corrections from a full docs review: Exa web search is documented as keyless by default (MCP endpoint) with the API key as an upgrade, the DCF fallback chain includes its Yahoo Finance tail, configuration docs cover the sentiment tuning keys and `OPENCANDLE_EXTERNAL_TOOL_BIN_DIR`, stale references to the GUI financial context panel removed in 0.12 are gone, the build-a-tool registration snippet matches the current `getAllTools` signature, `.env.example` includes `LSE_API_KEY`, and the agent harness README documents the `send` subcommand, the bounded `run` follow-up window, and the full list of captured `opencandle-*` session entries.
 - Homepage demo arrow-key navigation now switches interfaces without also scrolling the page.
 
 ## [0.13.0] - 2026-07-19

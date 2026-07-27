@@ -123,13 +123,7 @@ Run all product evals:
 npm run eval -- product
 ```
 
-Useful environment variables:
-
-The `--case`, `--family`, and `--limit` options set these; set the env vars directly only when not going through `npm run eval`.
-
-- `PRODUCT_EVAL_CASE`: run one case by id, such as `compare-assets-aapl-msft-6mo`.
-- `PRODUCT_EVAL_FAMILY`: run one family, such as `portfolio` or `macro`.
-- `PRODUCT_EVAL_LIMIT`: run only the first N selected cases.
+Filter with the `--case`, `--family`, and `--limit` options from the suite table above.
 
 Example:
 
@@ -192,7 +186,7 @@ For visual or GUI behavior changes, also build the web bundle:
 npm run gui:web:build
 ```
 
-At minimum, exercise prompts that render stock quotes, quote comparison, options chains, SEC filings, macro/FRED data, and news/search so the matching tool cards and financial context panel render from saved session state.
+At minimum, exercise prompts that render stock quotes, quote comparison, options chains, SEC filings, macro/FRED data, and news/search so the matching tool cards render from saved session state.
 
 ## Agent Harness
 
@@ -209,6 +203,14 @@ If the run asks a question:
 ```bash
 npx tsx tests/harness/cli.ts answer --ipc /tmp/oc-test --value "Moderate"
 ```
+
+To drive a follow-up prompt into the same live session, use `send`:
+
+```bash
+npx tsx tests/harness/cli.ts send --prompt "What about at $500?" --ipc /tmp/oc-test
+```
+
+`run` exits after a bounded idle window once its prompt (and any `send` follow-ups) settle: 120s by default, reset by each accepted follow-up; override with `--linger`.
 
 The final `trace.json` includes tool calls, results, interactions, final text, duration, and OpenCandle custom entries such as workflow dispatch, request-understanding output, disclaimers, and degradation notes.
 
