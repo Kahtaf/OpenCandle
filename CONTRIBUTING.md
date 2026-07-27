@@ -11,6 +11,8 @@ OpenCandle is an open source financial investigator built with [TypeScript](http
 
 ## Local Setup
 
+Requires Node.js `^22.19.0 || >=24.0.0 <27` (see `engines` in `package.json`). `npm install`, `npm test`, and `npm start` all run a `check:node` guard first, so an unsupported Node version fails fast with a clear message instead of a confusing downstream error.
+
 ```bash
 npm install
 cp .env.example .env
@@ -30,9 +32,16 @@ npm run test:e2e:cli
 npm run test:e2e:providers
 ```
 
-`npm test` is the required quick-loop validation after changes.
+`npm test` is the required quick-loop validation after changes. Before pushing, run what CI gates on:
 
-Before opening a release-facing PR, run the CI-equivalent local gate:
+```bash
+npm run lint        # biome check (CI gates on this)
+npm run typecheck   # tsc --noEmit
+npm run gates       # full handoff battery: typecheck + biome ci + unit tests + agent-tool tests
+npm run review:pr   # repo autoreview + typecheck/lint/test (run before opening or updating a PR)
+```
+
+Before opening a release-facing PR, also run the CI-equivalent local gate:
 
 ```bash
 npm run release:check
@@ -40,31 +49,9 @@ npm run release:check
 
 See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke requires `npx playwright-core install chromium` locally. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. Before version or tag mutation, the release script asks you to confirm that `npm run eval -- release` was run and acceptable; `--skip-eval-confirm` is an emergency bypass.
 
-## Contribution Rules
+## Engineering Conventions
 
-### TDD is mandatory
-
-Write or update the failing test first, then implement the change.
-
-This is not optional for runtime behavior. If a change affects behavior and has no test coverage, it is incomplete.
-
-### Keep tool boundaries clean
-
-- Tools fetch and format data
-- Analysts and prompts synthesize
-- Do not move analysis logic into tools
-
-### Keep provider tests fixture-based
-
-- Unit tests must mock `globalThis.fetch`
-- Do not make live API calls in unit tests
-- Add fixture JSON under `tests/fixtures/<provider>/` for new provider responses
-
-### Keep typing strict
-
-- Avoid `any` except for raw provider payloads at the API boundary
-- Use `.js` extensions on relative imports
-- Use `node:` prefixes for built-in modules
+Code style, TDD requirements, tool boundaries, where things live, and what needs sign-off before changing all live in [AGENTS.md](./AGENTS.md), the authoritative engineering guide for human and agent contributors alike. Read it before making non-trivial changes; this file only covers what AGENTS.md doesn't.
 
 ## Pull Requests
 
@@ -79,6 +66,8 @@ Every PR should explain:
 - risks, follow-ups, or known gaps
 
 For non-trivial work, link the issue or design discussion that established scope.
+
+Every PR's head commit also gets an asynchronous Codex review, required alongside CI and unresolved-conversation protection. Expect your PR to wait on that check and to resolve its review threads before merge.
 
 ## Release Notes and Changelog Discipline
 
@@ -114,30 +103,6 @@ The actual npm publish step runs in GitHub Actions from the pushed `v*` tag usin
 
 OpenCandle intentionally publishes `AGENTS.md` as an AI-agent contributor guide and keeps repo-local skills under version control when they are part of maintainer workflow. Generated local locks, raw agent traces, local plans, and machine-specific outputs are not part of the public contract and should not be committed.
 
-## Scope Boundaries
+## Code of Conduct and Security
 
-Ask first before changing:
-
-- system prompt or analyst orchestration
-- Pi shell integration under `src/pi/`
-- memory SQLite schema
-- provider strategy that needs new rate-limit or fixture policy
-
-Do not:
-
-- guess financial numbers or metrics
-- hardcode mock data into tools
-- make live API calls in unit tests
-- blur the separation between Pi-owned config and OpenCandle-owned state
-
-## Where Things Live
-
-- Providers: `src/providers/`
-- Tools: `src/tools/`
-- Request understanding: `src/routing/`
-- Workflows: `src/workflows/`
-- Memory: `src/memory/`
-- Pi integration: `src/pi/`
-- Tests and fixtures: `tests/`
-
-The repo-level [AGENTS.md](./AGENTS.md) remains the most specific implementation guide for code changes.
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues per [SECURITY.md](SECURITY.md) rather than filing a public issue.
