@@ -114,7 +114,7 @@ const legacyRedirects = [
   { from: "docs/benchmarking.html", to: "docs/testing-and-evals.html#competitive-benchmarking" },
   {
     from: "docs/opencandle-vs-chatgpt.html",
-    to: "docs/comparisons.html#opencandle-vs-chatgpt-and-general-chatbots",
+    to: "docs/comparisons.html#opencandle-vs-general-chatbots",
   },
   {
     from: "docs/opencandle-vs-spreadsheets.html",
