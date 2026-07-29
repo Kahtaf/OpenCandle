@@ -1,5 +1,5 @@
-import type { NewsResult, SearchResult } from "duck-duck-scrape";
-import { SafeSearchType, SearchTimeType, search, searchNews } from "duck-duck-scrape";
+import type { NewsResult, SearchResult } from "ddg-kit";
+import { SafeSearchType, SearchTimeType, search, searchNews } from "ddg-kit";
 import { getConfig } from "../config.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";

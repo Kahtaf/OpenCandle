@@ -4,15 +4,15 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import ddgGeneralFixture from "../../fixtures/web-search/ddg-general.json";
 import ddgNewsFixture from "../../fixtures/web-search/ddg-news.json";
 
-// Mock duck-duck-scrape
-vi.mock("duck-duck-scrape", () => ({
+// Mock ddg-kit
+vi.mock("ddg-kit", () => ({
   search: vi.fn(),
   searchNews: vi.fn(),
   SafeSearchType: { STRICT: 0, MODERATE: -1, OFF: -2 },
   SearchTimeType: { ALL: "a", DAY: "d", WEEK: "w", MONTH: "m", YEAR: "y" },
 }));
 
-import { SearchTimeType, search, searchNews } from "duck-duck-scrape";
+import { SearchTimeType, search, searchNews } from "ddg-kit";
 import { getConfig } from "../../../src/config.js";
 import { httpGet } from "../../../src/infra/http-client.js";
 import { exaSearch } from "../../../src/providers/exa-search.js";

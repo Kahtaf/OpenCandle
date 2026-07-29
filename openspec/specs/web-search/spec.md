@@ -45,16 +45,16 @@ The provider SHALL define `WebSearchOpts`: `{ category: "news" | "general"; fres
 - **WHEN** `searchWeb("AAPL earnings", {})` is called without explicit options
 - **THEN** the provider uses category `"news"`, freshness `"day"`, and limit `10`
 
-### Requirement: DuckDuckGo search via duck-duck-scrape
-The system SHALL use the `duck-duck-scrape` npm package for DuckDuckGo searches. Enum names and method signatures SHALL be verified against the published package before implementation (not assumed from the spec).
+### Requirement: DuckDuckGo search via ddg-kit
+The system SHALL use the `ddg-kit` npm package for DuckDuckGo searches. Enum names and method signatures SHALL be verified against the published package before implementation (not assumed from the spec).
 
 #### Scenario: News search with day freshness
 - **WHEN** called with `category: "news"` and `freshness: "day"`
-- **THEN** the function calls duck-duck-scrape with news search type and day time range
+- **THEN** the function calls ddg-kit with news search type and day time range
 
 #### Scenario: General search
 - **WHEN** called with `category: "general"`
-- **THEN** the function calls duck-duck-scrape with default (web) search type
+- **THEN** the function calls ddg-kit with default (web) search type
 
 #### Scenario: Hours freshness (approximation)
 - **WHEN** called with `freshness: "hours"`
