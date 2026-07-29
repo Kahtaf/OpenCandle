@@ -95,7 +95,7 @@
   .landing-hero-copy h1 {
     margin: 0;
     color: hsl(var(--tw-foreground));
-    font-size: clamp(2.75rem, 4.25vw, 4.25rem);
+    font-size: clamp(2.75rem, 4vw, 4rem);
     font-weight: 600;
     letter-spacing: -0.055em;
     line-height: 0.98;

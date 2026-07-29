@@ -75,6 +75,31 @@ describe("public site build contract", () => {
     expect(docsHtml).toContain("docs/index.md");
   });
 
+  it("publishes a readable social preview with concise landing metadata", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const title = homeDocument.querySelector("title")?.textContent ?? "";
+    const description =
+      homeDocument.querySelector('meta[property="og:description"]')?.getAttribute("content") ?? "";
+    const socialImage =
+      homeDocument.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "";
+    const socialImageAlt =
+      homeDocument.querySelector('meta[property="og:image:alt"]')?.getAttribute("content") ?? "";
+    const socialImageBytes = await readFile(
+      join(root, "website/dist/assets/opencandle-social-card.png"),
+    );
+
+    expect(title).toBe("OpenCandle: Financial Research That Shows Its Work");
+    expect(description).toBe(
+      "OpenCandle checks live quotes, filings, options, and macro data, then shows the sources behind every result.",
+    );
+    expect(description.length).toBeLessThanOrEqual(125);
+    expect(socialImage).toBe("https://opencandle.app/assets/opencandle-social-card.png");
+    expect(socialImageAlt).toBe("OpenCandle: Market research that shows its work");
+    expect(socialImageBytes.readUInt32BE(16)).toBe(1200);
+    expect(socialImageBytes.readUInt32BE(20)).toBe(630);
+  });
+
   it("copies docs images into the site and references them from docs pages", async () => {
     for (const image of [
       "website/dist/docs/images/gui-chat-research.png",
@@ -322,6 +347,13 @@ describe("public site build contract", () => {
       "width: min(calc(100% + min(7vw, 6rem)), calc(100% + max(1.5rem, (100vw - 1320px) / 2 + 1.5rem)))",
     );
     expect(normalizedRule).not.toContain("width: calc(100% + min(7vw, 6rem))");
+  });
+
+  it("keeps the desktop hero heading clear of the product demo", async () => {
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
+    const heroHeadingRule = siteCss.match(/\.landing-hero-copy h1\s*\{([\s\S]*?)\}/)?.[1];
+
+    expect(heroHeadingRule?.replace(/\s+/g, " ")).toContain("font-size: clamp(2.75rem, 4vw, 4rem)");
   });
 
   it("answers first-run and privacy questions without implementation jargon", async () => {
