@@ -8,6 +8,7 @@
 
 ### Changed
 
+- DuckDuckGo Web and News search now uses the provenance-backed `ddg-kit` client, pinned to its audited `0.1.0` release, adding bounded requests, typed provider failures, bot-challenge cooldowns, and Web representation fallback while preserving OpenCandle's provider cascade.
 - The public Comparisons page now grounds the chatbot comparison in observed head-to-head benchmark behavior — fabricated filing and sentiment specifics, missed same-day market moves, per-share versus per-contract option slips, and absent saved-portfolio context — and names where general chatbots legitimately win (conceptual education and judgment-heavy personal finance).
 - Public docs were consolidated for leanness: First Run merged into a single Getting Started page (adding uninstall steps and a model-cost note, with a legacy redirect from the old URL), the docs index is navigation-only, the GUI quickstart collapsed three overlapping sections into one, duplicated prompt lists and provider-key tables now live in one canonical place each, and the README uses in-repo image paths instead of CDN links.
 - CONTRIBUTING now leads with the supported Node range, the CI gate commands (`lint`, `typecheck`, `gates`, `review:pr`), and the required asynchronous Codex PR review gate, and defers engineering conventions to AGENTS.md instead of duplicating them.
