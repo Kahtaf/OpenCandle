@@ -58,11 +58,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const outDir = join(root, "website/dist");
 const siteUrl = "https://opencandle.app";
 const brandName = "OpenCandle";
-// Kept under ~160 characters so search results do not truncate it, and led with
-// the words people actually search for rather than the internal category name.
+const landingTitle = "OpenCandle: Financial Research That Shows Its Work";
 const landingDescription =
-  "Free, open source stock and market research that runs on your machine. OpenCandle fetches live market data, then shows the source behind every number.";
-const socialImage = `${siteUrl}/assets/gui-screenshot.png`;
+  "OpenCandle checks live quotes, filings, options, and macro data, then shows the sources behind every result.";
+const socialImage = `${siteUrl}/assets/opencandle-social-card.png`;
+const socialImageAlt = "OpenCandle: Market research that shows its work";
 
 // Ordered as a first-time visitor's journey: why and how to start, then daily
 // use, then reference, then extending, then project meta. `navLabel` renames a
@@ -295,10 +295,14 @@ function sharedHeadTags({ title, description, canonicalUrl, image = socialImage,
       <meta property="og:description" content={description} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:image" content={image} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={socialImageAlt} />
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
+      <meta name="twitter:image:alt" content={socialImageAlt} />
       <link
         rel="alternate"
         type="text/plain"
@@ -1415,7 +1419,7 @@ function HomePage({ buildDate, version }) {
   ];
   return (
     <HtmlDocument
-      title="OpenCandle"
+      title={landingTitle}
       description={landingDescription}
       canonicalUrl={siteUrl}
       markdownUrl={`${siteUrl}/llms-full.txt`}
