@@ -9,7 +9,12 @@ import { Select } from "../../components/ui/select.jsx";
 export function ModelSetupCard({ modelSetup, role = "writer", send, setToast }) {
   return (
     <Card className="mx-auto grid w-full max-w-[760px] gap-4 p-6 shadow-subtle-xs">
-      <ModelSetupHeader variant="first-run" role={role} requirement={modelSetup?.requirement} />
+      <ModelSetupHeader
+        variant="first-run"
+        role={role}
+        requirement={modelSetup?.requirement}
+        hosted={modelSetup?.hosted}
+      />
       <ModelSetupBody modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
     </Card>
   );
@@ -32,6 +37,7 @@ export function ModelSetupDialog({
             hasReady={modelSetup?.requirement === "ready"}
             role={role}
             requirement={modelSetup?.requirement}
+            hosted={modelSetup?.hosted}
           />
           <ModelSetupBody modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
         </div>
@@ -40,8 +46,8 @@ export function ModelSetupDialog({
   );
 }
 
-function ModelSetupHeader({ variant, hasReady, role, requirement }) {
-  const setupUnavailable = role === "follower";
+function ModelSetupHeader({ variant, hasReady, role, requirement, hosted }) {
+  const setupUnavailable = role === "follower" && !hosted;
   if (variant === "first-run") {
     return (
       <div className="grid gap-2">
@@ -56,7 +62,9 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
             ? "Model setup is unavailable in this window while OpenCandle reconnects local setup access."
             : requirement === "select_model"
               ? "OpenCandle found model credentials. Choose one model below and chat will be ready."
-              : "OpenCandle needs one model before chat can run. Paste a key below or use terminal sign-in, then start chatting from the same window."}
+              : hosted
+                ? "Add an OpenAI key to run the model directly in this browser. OpenCandle never sends it to an OpenCandle server."
+                : "OpenCandle needs one model before chat can run. Paste a key below or use terminal sign-in, then start chatting from the same window."}
         </p>
       </div>
     );
@@ -68,8 +76,12 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
         {setupUnavailable
           ? "Model setup is unavailable in this window while OpenCandle reconnects local setup access."
           : hasReady
-            ? "Add or switch the model that powers chat. Keys are saved locally in Pi's auth store."
-            : "Paste a Google Gemini, OpenAI, or Anthropic API key. Keys are saved locally in Pi's auth store."}
+            ? hosted
+              ? "Replace the model key kept by this browser. The saved key is never shown again."
+              : "Add or switch the model that powers chat. Keys are saved locally in Pi's auth store."
+            : hosted
+              ? "Paste an OpenAI API key and choose how long this browser should keep it."
+              : "Paste a Google Gemini, OpenAI, or Anthropic API key. Keys are saved locally in Pi's auth store."}
       </p>
     </div>
   );
@@ -78,10 +90,12 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
 function ModelSetupBody({ modelSetup, role, send, setToast }) {
   const modelSelectId = useId();
   const [keys, setKeys] = useState({});
+  const [storageMode, setStorageMode] = useState(modelSetup?.storageMode || "persistent");
   const providers = modelSetup?.providers || [];
   const availableModels = modelSetup?.availableModels || [];
   const setupError = modelSetup?.error || "";
-  const setupDisabled = role === "follower";
+  const hosted = modelSetup?.hosted === true;
+  const setupDisabled = role === "follower" && !hosted;
 
   const saveKey = (provider) => {
     const apiKey = keys[provider]?.trim() || "";
@@ -94,7 +108,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
       return;
     }
     setToast?.("Saving model key...");
-    send?.("model.setup.save_api_key", { provider, apiKey });
+    send?.("model.setup.save_api_key", { provider, apiKey, ...(hosted ? { storageMode } : {}) });
     setKeys((current) => ({ ...current, [provider]: "" }));
   };
 
@@ -132,6 +146,43 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
           </Select>
         </label>
       ) : null}
+      {hosted ? (
+        <fieldset className="grid gap-2 rounded-md border border-border p-3">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">Keep this key</legend>
+          <label className="flex min-h-10 cursor-pointer items-start gap-3 text-sm text-foreground">
+            <input
+              type="radio"
+              name="hosted-key-storage"
+              value="persistent"
+              checked={storageMode === "persistent"}
+              onChange={() => setStorageMode("persistent")}
+              className="mt-1"
+            />
+            <span>
+              <strong className="block font-medium">Keep on this device</strong>
+              <span className="text-xs leading-relaxed text-muted-foreground">
+                Available after closing and reopening the installed app.
+              </span>
+            </span>
+          </label>
+          <label className="flex min-h-10 cursor-pointer items-start gap-3 text-sm text-foreground">
+            <input
+              type="radio"
+              name="hosted-key-storage"
+              value="session"
+              checked={storageMode === "session"}
+              onChange={() => setStorageMode("session")}
+              className="mt-1"
+            />
+            <span>
+              <strong className="block font-medium">Only for this browser session</strong>
+              <span className="text-xs leading-relaxed text-muted-foreground">
+                Removed after the final OpenCandle tab closes.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+      ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {providers.map((provider) => (
           <div
@@ -141,8 +192,16 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
             <div>
               <h3 className="m-0 mb-1 text-sm font-semibold text-foreground">{provider.label}</h3>
               <p className="m-0 text-xs leading-5 text-muted-foreground">
-                Uses <code>{provider.envVar}</code> or a saved local key. Default model:{" "}
-                <code>{provider.defaultModel}</code>.
+                {hosted ? (
+                  "Runs directly from this browser."
+                ) : (
+                  <>
+                    <span>Uses </span>
+                    <code>{provider.envVar}</code>
+                    <span> or a saved local key. </span>
+                  </>
+                )}
+                Default model: <code>{provider.defaultModel}</code>.
               </p>
             </div>
             <label className="grid gap-1.5" htmlFor={`${provider.id}-api-key`}>
@@ -181,7 +240,15 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
       </div>
       <div className="flex flex-col items-stretch justify-between gap-3 border-t border-border pt-4 text-sm leading-relaxed text-muted-foreground sm:flex-row sm:items-center">
         <span className="text-xs">
-          Prefer browser sign-in? Run <code>/setup</code> in the terminal, then refresh this panel.
+          {hosted ? (
+            "Device storage can be read by same-origin scripts, browser extensions with site access, and anyone with access to this browser profile."
+          ) : (
+            <>
+              <span>Prefer browser sign-in? Run </span>
+              <code>/setup</code>
+              <span> in the terminal, then refresh this panel.</span>
+            </>
+          )}
         </span>
         <Button
           variant="bordered"

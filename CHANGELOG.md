@@ -4,6 +4,7 @@
 
 ### Added
 
+- An installable hosted PWA now runs the real Pi/OpenCandle agent loop in browser-hosted Node with no OpenCandle application server, persists canonical Pi sessions and compatible SQLite market state in OPFS, supports a live-tested direct Polymarket tool path, coordinates writable follower tabs with session-key failover, deduplicates logical runs and mutations, and provides offline read/export, integrity-checked atomic import, update checkpointing, and clear-key/clear-all controls. The existing local GUI and TUI retain their native Node, filesystem, provider, and SQLite paths.
 - Agent-developer guardrails now provide canonical `typecheck` and `gates` scripts, a safe worktree bootstrap command, and checked-in delegation and resume contracts.
 
 ### Changed
@@ -20,6 +21,7 @@
 ### Fixed
 
 - Compact dashboard, watchlist, and portfolio sparklines now use Ticker Line's market-aware stock, crypto, FX, index, and commodity URLs instead of fetching Yahoo intraday history per saved symbol; the guarded proxy rejects stale fallbacks, enforces its SVG limit while streaming, preserves provider as-of metadata, retries one transient browser failure, and normalizes non-USD crypto pairs. The fixed Nasdaq card now tracks the supported Nasdaq-100 rather than presenting Nasdaq-100 data as the Nasdaq Composite.
+- Hosted PWA hardening now applies a restrictive CSP to the credential-holding shell, removes cleared model keys from the running WebContainer by restarting it, rejects newer SQLite schemas without resetting data, preserves pre-import and pre-migration recovery backups, bounds follower actions across writer failover, forwards large event chunks without truncation, and keeps background invalidations from changing the session being viewed.
 - Homepage social previews now use a purpose-built 1200×630 Open Graph card with concise metadata and an authentic OpenCandle comparison result, while the desktop hero heading scales down enough to stay clear of the product demo at constrained widths.
 - Documentation accuracy corrections from a full docs review: Exa web search is documented as keyless by default (MCP endpoint) with the API key as an upgrade, the DCF fallback chain includes its Yahoo Finance tail, configuration docs cover the sentiment tuning keys and `OPENCANDLE_EXTERNAL_TOOL_BIN_DIR`, stale references to the GUI financial context panel removed in 0.12 are gone, the build-a-tool registration snippet matches the current `getAllTools` signature, `.env.example` includes `LSE_API_KEY`, and the agent harness README documents the `send` subcommand, the bounded `run` follow-up window, and the full list of captured `opencandle-*` session entries.
 - Homepage demo arrow-key navigation now switches interfaces without also scrolling the page.

@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
 
 const EMPTY_DASHBOARD = {
   knownSymbols: [],
@@ -8,6 +9,9 @@ const EMPTY_DASHBOARD = {
   recentResearch: [],
   dataQuality: { softGaps: [], hardSkips: [] },
 };
+
+const EMPTY_CATALOG = { tools: [], workflows: [], providers: [] };
+const EMPTY_MODEL_SETUP = { requirement: "unknown", providers: [], availableModels: [] };
 
 export const TOOL_INVOKE_TIMEOUT_MESSAGE =
   "The operation is still running. OpenCandle will refresh state when the server finishes.";
@@ -28,7 +32,11 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
     case "model.setup.save_api_key":
       return {
         path: "/api/model-setup/api-key",
-        body: { provider: payload.provider, apiKey: payload.apiKey },
+        body: {
+          provider: payload.provider,
+          apiKey: payload.apiKey,
+          ...(payload.storageMode ? { storageMode: payload.storageMode } : {}),
+        },
       };
     case "model.setup.select_model":
       return {
@@ -158,7 +166,16 @@ export function shouldReconnectOnForeground({ documentVisibility, readyState }) 
   return readyState !== 0 && readyState !== 1;
 }
 
+export function resolveEventChannelBootTimeout(transportKind) {
+  return transportKind === "hosted" ? 120_000 : 1_500;
+}
+
+export function resolveWritableRole(role, coordination) {
+  return coordination?.writable === true && role === "follower" ? "writer" : role;
+}
+
 export function useGuiConnection() {
+  const transport = useRuntimeTransport();
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
   const pendingToolInvokesRef = useRef(new Map());
@@ -232,9 +249,7 @@ export function useGuiConnection() {
     const connectHttpFallback = async () => {
       try {
         wsRef.current = null;
-        const response = await fetch("/api/bootstrap");
-        if (!response.ok) throw new Error(response.statusText);
-        const data = await response.json();
+        const data = await transport.bootstrap();
         if (disposed) return;
         setSupportsSessionActions(data.supportsSessionActions !== false);
         applyBootstrap(data);
@@ -244,115 +259,136 @@ export function useGuiConnection() {
     };
 
     const connect = () => {
-      if (typeof WebSocket !== "function") {
-        void connectHttpFallback();
-        return;
-      }
-      const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
       let ws;
+      let usingHttpFallback = false;
+      let receivedBoot = false;
+      let bootTimeout;
       try {
-        ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+        ws = transport.openEventChannel({
+          onMessage: (rawMessage) => {
+            let message;
+            try {
+              message = JSON.parse(rawMessage);
+            } catch {
+              setToast("Received malformed GUI server message.", { destructive: true });
+              return;
+            }
+            if (message.type === "boot") {
+              receivedBoot = true;
+              window.clearTimeout(bootTimeout);
+              setSupportsSessionActions(true);
+              setRole(message.role);
+              setCoordination(message.coordination || null);
+              setCurrentSessionId(message.sessionId);
+              setAskUserPrompts(message.askUserPrompts || []);
+              startTransition(() => {
+                setCatalog(message.catalog);
+                setModelSetup(
+                  message.modelSetup || {
+                    requirement: "unknown",
+                    providers: [],
+                    availableModels: [],
+                  },
+                );
+              });
+            } else if (message.type === "runtime.status") {
+              setRole(message.role);
+              setCoordination((current) =>
+                resolveSnapshotCoordination(current, message.coordination),
+              );
+              setAskUserPrompts(message.askUserPrompts || []);
+              startTransition(() => {
+                setCatalog(message.catalog || EMPTY_CATALOG);
+                setModelSetup(message.modelSetup || EMPTY_MODEL_SETUP);
+              });
+            } else if (message.type === "catalog") {
+              startTransition(() => setCatalog(message.catalog));
+            } else if (message.type === "provider.status") {
+              startTransition(() =>
+                setCatalog((current) =>
+                  mergeProviderStatus(current, message.providerId, message.status),
+                ),
+              );
+            } else if (message.type === "model.setup") {
+              startTransition(() =>
+                setModelSetup(
+                  message.modelSetup || {
+                    requirement: "unknown",
+                    providers: [],
+                    availableModels: [],
+                  },
+                ),
+              );
+            } else if (message.type === "sessions") {
+              startTransition(() => setSessions(message.sessions));
+            } else if (message.type === "state.snapshot") {
+              const nextSnapshot = sessionSnapshotFromPayload(message);
+              setEntries(nextSnapshot?.entries || []);
+              setCurrentSessionId(message.sessionId || "");
+              setCoordination((current) =>
+                resolveSnapshotCoordination(current, message.coordination),
+              );
+              if (nextSnapshot) {
+                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+              }
+              startTransition(() => {
+                setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+                setEvents(nextSnapshot?.events || []);
+              });
+            } else if (message.type === "session.snapshot") {
+              const nextSnapshot = sessionSnapshotFromPayload(message);
+              if (nextSnapshot) {
+                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+              }
+            } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
+              setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
+            } else if (message.type === "tool.invoke.result") {
+              const requestId = typeof message.requestId === "string" ? message.requestId : "";
+              if (message.ok) {
+                settleToolInvoke(requestId, "resolve", message);
+              } else {
+                settleToolInvoke(
+                  requestId,
+                  "reject",
+                  new Error(message.error?.message || "Tool invocation failed"),
+                );
+              }
+            } else if (message.type === "error") {
+              if (String(message.message || "").startsWith("Key was rejected by ")) {
+                setModelSetupError(message.message);
+              }
+              setToast(message.message, { destructive: true });
+            }
+          },
+          onClose: () => {
+            window.clearTimeout(bootTimeout);
+            if (wsRef.current !== ws) return;
+            for (const [requestId, pending] of pendingToolInvokesRef.current) {
+              window.clearTimeout(pending.timeout);
+              pending.reject(new Error("GUI connection closed before the tool finished."));
+              pendingToolInvokesRef.current.delete(requestId);
+            }
+            if (usingHttpFallback) return;
+            setSupportsSessionActions(false);
+            setRole("disconnected");
+            if (!disposed) reconnect = window.setTimeout(connect, 1000);
+          },
+        });
       } catch {
         void connectHttpFallback();
         return;
       }
-      let receivedBoot = false;
-      let usingHttpFallback = false;
-      const bootTimeout = window.setTimeout(() => {
+      if (!ws) {
+        void connectHttpFallback();
+        return;
+      }
+      bootTimeout = window.setTimeout(() => {
         if (receivedBoot || disposed) return;
         usingHttpFallback = true;
         ws.close();
         void connectHttpFallback();
-      }, 1_500);
+      }, resolveEventChannelBootTimeout(transport.kind));
       wsRef.current = ws;
-      ws.onmessage = (event) => {
-        let message;
-        try {
-          message = JSON.parse(event.data);
-        } catch {
-          setToast("Received malformed GUI server message.", { destructive: true });
-          return;
-        }
-        if (message.type === "boot") {
-          receivedBoot = true;
-          window.clearTimeout(bootTimeout);
-          setSupportsSessionActions(true);
-          setRole(message.role);
-          setCoordination(message.coordination || null);
-          setCurrentSessionId(message.sessionId);
-          setAskUserPrompts(message.askUserPrompts || []);
-          startTransition(() => {
-            setCatalog(message.catalog);
-            setModelSetup(
-              message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
-            );
-          });
-        } else if (message.type === "catalog") {
-          startTransition(() => setCatalog(message.catalog));
-        } else if (message.type === "provider.status") {
-          startTransition(() =>
-            setCatalog((current) =>
-              mergeProviderStatus(current, message.providerId, message.status),
-            ),
-          );
-        } else if (message.type === "model.setup") {
-          startTransition(() =>
-            setModelSetup(
-              message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
-            ),
-          );
-        } else if (message.type === "sessions") {
-          startTransition(() => setSessions(message.sessions));
-        } else if (message.type === "state.snapshot") {
-          const nextSnapshot = sessionSnapshotFromPayload(message);
-          setEntries(nextSnapshot?.entries || []);
-          setCurrentSessionId(message.sessionId || "");
-          setCoordination((current) => resolveSnapshotCoordination(current, message.coordination));
-          if (nextSnapshot) {
-            setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
-          }
-          startTransition(() => {
-            setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
-            setEvents(nextSnapshot?.events || []);
-          });
-        } else if (message.type === "session.snapshot") {
-          const nextSnapshot = sessionSnapshotFromPayload(message);
-          if (nextSnapshot) {
-            setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
-          }
-        } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
-          setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
-        } else if (message.type === "tool.invoke.result") {
-          const requestId = typeof message.requestId === "string" ? message.requestId : "";
-          if (message.ok) {
-            settleToolInvoke(requestId, "resolve", message);
-          } else {
-            settleToolInvoke(
-              requestId,
-              "reject",
-              new Error(message.error?.message || "Tool invocation failed"),
-            );
-          }
-        } else if (message.type === "error") {
-          if (String(message.message || "").startsWith("Key was rejected by ")) {
-            setModelSetupError(message.message);
-          }
-          setToast(message.message, { destructive: true });
-        }
-      };
-      ws.onclose = () => {
-        window.clearTimeout(bootTimeout);
-        if (wsRef.current !== ws) return;
-        for (const [requestId, pending] of pendingToolInvokesRef.current) {
-          window.clearTimeout(pending.timeout);
-          pending.reject(new Error("GUI connection closed before the tool finished."));
-          pendingToolInvokesRef.current.delete(requestId);
-        }
-        if (usingHttpFallback) return;
-        setSupportsSessionActions(false);
-        setRole("disconnected");
-        if (!disposed) reconnect = window.setTimeout(connect, 1000);
-      };
     };
 
     const reconnectOnForeground = () => {
@@ -384,18 +420,12 @@ export function useGuiConnection() {
       document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
-  }, [applyBootstrap, setModelSetupError, setToast, settleToolInvoke]);
+  }, [applyBootstrap, setModelSetupError, setToast, settleToolInvoke, transport]);
 
   const sendHttpFallbackMessage = useCallback(
     async (request) => {
       try {
-        const response = await fetch(request.path, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(request.body),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data?.error || response.statusText);
+        const data = await transport.postCommand(request.path, request.body);
         applyBootstrap(data);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -403,7 +433,7 @@ export function useGuiConnection() {
         setToast(message, { destructive: true });
       }
     },
-    [applyBootstrap, setModelSetupError, setToast],
+    [applyBootstrap, setModelSetupError, setToast, transport],
   );
 
   const send = useCallback(
@@ -447,14 +477,7 @@ export function useGuiConnection() {
             targetSessionId,
             options,
           );
-          const response = await fetch(request.path, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(request.body),
-          });
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data?.error || response.statusText);
-          return data.result;
+          return await transport.invokeTool(request.body);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           setToast(message, { destructive: true });
@@ -497,14 +520,12 @@ export function useGuiConnection() {
       }
       return promise;
     },
-    [currentSessionId, setToast],
+    [currentSessionId, setToast, transport],
   );
 
   const newSession = useCallback(async () => {
     try {
-      const response = await fetch("/api/session/new", { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || response.statusText);
+      const data = await transport.createSession();
       setSupportsSessionActions(true);
       applyBootstrap(data);
       return String(data?.sessionId ?? "");
@@ -512,18 +533,14 @@ export function useGuiConnection() {
       setToast(error instanceof Error ? error.message : String(error), { destructive: true });
       return "";
     }
-  }, [applyBootstrap, setToast]);
+  }, [applyBootstrap, setToast, transport]);
 
   const loadSession = useCallback(
     async (sessionId) => {
       const targetSessionId = String(sessionId ?? "").trim();
       if (!targetSessionId) return false;
       try {
-        const response = await fetch(
-          `/api/sessions/${encodeURIComponent(targetSessionId)}/bootstrap`,
-        );
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data?.error || response.statusText);
+        const data = await transport.loadSession(targetSessionId);
         setSupportsSessionActions(true);
         return applyBootstrap(data, targetSessionId, {
           updateCurrentSessionId: false,
@@ -535,12 +552,12 @@ export function useGuiConnection() {
         return false;
       }
     },
-    [applyBootstrap, setToast],
+    [applyBootstrap, setToast, transport],
   );
 
   return useMemo(
     () => ({
-      role,
+      role: resolveWritableRole(role, coordination),
       catalog,
       sessions,
       entries,
@@ -561,6 +578,7 @@ export function useGuiConnection() {
     }),
     [
       role,
+      coordination,
       catalog,
       sessions,
       entries,
@@ -569,7 +587,6 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
-      coordination,
       modelSetup,
       supportsSessionActions,
       setToast,

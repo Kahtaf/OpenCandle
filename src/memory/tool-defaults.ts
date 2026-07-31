@@ -1,9 +1,9 @@
+import type { StateDatabase } from "../runtime/state-database.js";
 import { initDefaultDatabase } from "./sqlite.js";
 
 export type ToolDefaults = Record<string, unknown>;
-type SqliteDb = ReturnType<typeof initDefaultDatabase>;
 
-export function getDefaults(toolName: string, db?: SqliteDb): ToolDefaults {
+export function getDefaults(toolName: string, db?: StateDatabase): ToolDefaults {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {
@@ -23,7 +23,7 @@ export function getDefaults(toolName: string, db?: SqliteDb): ToolDefaults {
   }
 }
 
-export function getAllDefaults(db?: SqliteDb): Map<string, ToolDefaults> {
+export function getAllDefaults(db?: StateDatabase): Map<string, ToolDefaults> {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {
@@ -49,7 +49,7 @@ export function setDefault(
   toolName: string,
   paramPath: string,
   value: unknown,
-  db?: SqliteDb,
+  db?: StateDatabase,
 ): void {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
@@ -68,7 +68,7 @@ export function setDefault(
   }
 }
 
-export function clearDefault(toolName: string, paramPath: string, db?: SqliteDb): void {
+export function clearDefault(toolName: string, paramPath: string, db?: StateDatabase): void {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {

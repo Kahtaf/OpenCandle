@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
 
 export const MARKET_STATE_POLL_MS = 4000;
 export const QUOTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -58,15 +59,14 @@ export function useMarketState({
   pollMs = MARKET_STATE_POLL_MS,
   quotePollMs = QUOTE_REFRESH_INTERVAL_MS,
 } = {}) {
+  const transport = useRuntimeTransport();
   const [state, setState] = useState(EMPTY_MARKET_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch("/api/market-state");
-      if (!response.ok) throw new Error(response.statusText || "Failed to load market state");
-      const data = await response.json();
+      const data = await transport.getMarketState();
       setState((current) => mergeMarketStateSnapshot(current, data));
       setError("");
     } catch (err) {
@@ -74,19 +74,17 @@ export function useMarketState({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [transport]);
 
   const refreshQuotes = useCallback(async () => {
     try {
-      const response = await fetch("/api/market-state/quotes");
-      if (!response.ok) throw new Error(response.statusText || "Failed to load market quotes");
-      const quoteSnapshot = await response.json();
+      const quoteSnapshot = await transport.getMarketQuotes();
       setState((current) => ({ ...current, quoteSnapshot }));
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [transport]);
 
   useEffect(() => {
     let disposed = false;

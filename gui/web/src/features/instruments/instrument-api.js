@@ -1,16 +1,14 @@
-export async function searchInstruments(query) {
+import { loopbackRuntimeTransport } from "../../runtime/runtime-transport.js";
+
+export async function searchInstruments(query, transport = loopbackRuntimeTransport) {
   const trimmed = String(query ?? "").trim();
   if (!trimmed) return [];
-  const response = await fetch(`/api/instruments/search?q=${encodeURIComponent(trimmed)}`);
-  if (!response.ok) throw new Error(response.statusText || "Search failed");
-  const data = await response.json();
+  const data = await transport.searchInstruments(trimmed);
   return data.candidates || [];
 }
 
-export async function getInstrumentQuote(symbol) {
+export async function getInstrumentQuote(symbol, transport = loopbackRuntimeTransport) {
   const trimmed = String(symbol ?? "").trim();
   if (!trimmed) return null;
-  const response = await fetch(`/api/instruments/quote?symbol=${encodeURIComponent(trimmed)}`);
-  if (!response.ok) throw new Error(response.statusText || "Quote lookup failed");
-  return response.json();
+  return transport.getInstrumentQuote(trimmed);
 }

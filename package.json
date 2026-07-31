@@ -13,6 +13,7 @@
   },
   "type": "module",
   "workspaces": [
+    "gui/hosted",
     "gui/server",
     "gui/web",
     "packages/ui",
@@ -84,6 +85,8 @@
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
+    "gui:hosted:build": "npm --workspace @opencandle/gui-hosted run build",
+    "gui:hosted:dev": "npm --workspace @opencandle/gui-hosted run dev",
     "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
@@ -105,6 +108,8 @@
     "test:e2e:credential-soft-fallback": "tsx tests/e2e/credential-soft-fallback.test.ts",
     "test:e2e:credential-per-workflow-cap": "tsx tests/e2e/credential-per-workflow-cap.test.ts",
     "test:gui:browser": "OPENCANDLE_GUI_BROWSER=1 vitest run --config vitest.config.gui.ts",
+    "test:gui:hosted": "npm --workspace @opencandle/gui-hosted run test:browser",
+    "test:hosted:tui-continuation": "tsx tests/harness/hosted-tui-continuation.ts",
     "test:gui:release-smoke": "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --config vitest.config.gui-release.ts",
     "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
     "test:e2e:harness-dcf": "tsx tests/e2e/harness-dcf.test.ts",
@@ -128,13 +133,17 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.82.1",
     "@earendil-works/pi-ai": "^0.82.1",
-    "@earendil-works/pi-coding-agent": "^0.82.1",
+    "@earendil-works/pi-coding-agent": "0.82.1",
     "better-sqlite3": "^13.0.1",
     "ddg-kit": "0.1.0",
     "yahoo-finance2": "^4.0.0"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
+  },
+  "overrides": {
+    "@hono/node-server": "^2.0.12",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.62.0",
@@ -144,6 +153,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
     "@types/semver": "^7.7.1",
+    "@types/sql.js": "^1.4.10",
     "acpx": "^0.12.1",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.62.0",

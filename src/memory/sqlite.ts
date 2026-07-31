@@ -1,9 +1,16 @@
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import { ensureOpenCandleHomeDir, getStateDbPath } from "../infra/opencandle-paths.js";
+import type { StateDatabase } from "../runtime/state-database.js";
+import { CURRENT_SCHEMA_VERSION } from "../runtime/state-schema-version.js";
 
-const CURRENT_SCHEMA_VERSION = 9;
+export { CURRENT_SCHEMA_VERSION } from "../runtime/state-schema-version.js";
+
+const require = createRequire(import.meta.url);
+
+type NativeDatabaseConstructor = new (path: string) => Database.Database;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -334,13 +341,24 @@ export function initDatabase(path: string): Database.Database {
   if (path !== ":memory:") {
     mkdirSync(dirname(path), { recursive: true });
   }
-  const db = new Database(path);
+  const NativeDatabase = loadNativeDatabaseConstructor();
+  const db = new NativeDatabase(path);
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   db.pragma("foreign_keys = ON");
-  ensureCurrentSchema(db);
+  initializeStateDatabase(db);
 
   return db;
+}
+
+function loadNativeDatabaseConstructor(): NativeDatabaseConstructor {
+  const moduleName = ["better", "sqlite3"].join("-");
+  const loaded = require(moduleName) as
+    | NativeDatabaseConstructor
+    | { default?: NativeDatabaseConstructor };
+  const NativeDatabase = typeof loaded === "function" ? loaded : loaded.default;
+  if (!NativeDatabase) throw new Error("Native SQLite driver is unavailable");
+  return NativeDatabase;
 }
 
 export function initDefaultDatabase(): Database.Database {
@@ -348,7 +366,7 @@ export function initDefaultDatabase(): Database.Database {
   return initDatabase(getStateDbPath());
 }
 
-function ensureCurrentSchema(db: Database.Database): void {
+export function initializeStateDatabase(db: StateDatabase): void {
   const currentVersion = readSchemaVersion(db);
 
   if (currentVersion === CURRENT_SCHEMA_VERSION) {
@@ -356,6 +374,12 @@ function ensureCurrentSchema(db: Database.Database): void {
     // tables (e.g. workflow_events added out-of-band).
     db.exec(CURRENT_SCHEMA);
     return;
+  }
+
+  if (currentVersion !== null && currentVersion > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `State database uses newer OpenCandle schema version ${currentVersion}; this build supports version ${CURRENT_SCHEMA_VERSION}. Update OpenCandle before opening this data.`,
+    );
   }
 
   if (currentVersion === 8) {
@@ -421,7 +445,7 @@ function ensureCurrentSchema(db: Database.Database): void {
   resetSchema(db);
 }
 
-function migrateV2ToV3(db: Database.Database): void {
+function migrateV2ToV3(db: StateDatabase): void {
   const cols = (db.pragma("table_info(workflow_runs)") as Array<{ name: string }>).map(
     (c) => c.name,
   );
@@ -437,7 +461,7 @@ function migrateV2ToV3(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(3);
 }
 
-function migrateV3ToV4(db: Database.Database): void {
+function migrateV3ToV4(db: StateDatabase): void {
   // CURRENT_SCHEMA indexes alert_events(dedupe_key); pre-v7 tables lack the column.
   addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
@@ -446,7 +470,7 @@ function migrateV3ToV4(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(4);
 }
 
-function migrateV4ToV5(db: Database.Database): void {
+function migrateV4ToV5(db: StateDatabase): void {
   addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
 
@@ -454,7 +478,7 @@ function migrateV4ToV5(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(5);
 }
 
-function migrateV5ToV6(db: Database.Database): void {
+function migrateV5ToV6(db: StateDatabase): void {
   addColumnIfMissing(db, "import_rows", "source_row_id", "TEXT");
   addColumnIfMissing(db, "import_rows", "source_account_ref", "TEXT");
   addColumnIfMissing(db, "import_rows", "source_metadata_json", "TEXT");
@@ -463,7 +487,7 @@ function migrateV5ToV6(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(6);
 }
 
-function migrateV6ToV7(db: Database.Database): void {
+function migrateV6ToV7(db: StateDatabase): void {
   addColumnIfMissing(db, "alert_rules", "status", "TEXT NOT NULL DEFAULT 'active'");
   addColumnIfMissing(db, "alert_rules", "retrigger_mode", "TEXT NOT NULL DEFAULT 'recurring'");
   addColumnIfMissing(db, "alert_rules", "last_condition_state", "TEXT NOT NULL DEFAULT 'unknown'");
@@ -492,7 +516,7 @@ function migrateV6ToV7(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(7);
 }
 
-function migrateV7ToV8(db: Database.Database): void {
+function migrateV7ToV8(db: StateDatabase): void {
   // Predictions feature removal: dropping prediction_records is the explicit,
   // documented destructive step for this table; all other rows are preserved.
   db.exec("DROP TABLE IF EXISTS prediction_records");
@@ -502,7 +526,7 @@ function migrateV7ToV8(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(8);
 }
 
-function migrateV8ToV9(db: Database.Database): void {
+function migrateV8ToV9(db: StateDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS watchlists_v9 (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -549,7 +573,7 @@ function migrateV8ToV9(db: Database.Database): void {
 }
 
 function addColumnIfMissing(
-  db: Database.Database,
+  db: StateDatabase,
   tableName: string,
   columnName: string,
   definition: string,
@@ -565,14 +589,14 @@ function addColumnIfMissing(
   }
 }
 
-function tableExists(db: Database.Database, tableName: string): boolean {
+function tableExists(db: StateDatabase, tableName: string): boolean {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(tableName) as { name: string } | undefined;
   return table != null;
 }
 
-function readSchemaVersion(db: Database.Database): number | null {
+function readSchemaVersion(db: StateDatabase): number | null {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_version'")
     .get() as { name: string } | undefined;
@@ -586,7 +610,7 @@ function readSchemaVersion(db: Database.Database): number | null {
   return row?.version ?? null;
 }
 
-function resetSchema(db: Database.Database): void {
+function resetSchema(db: StateDatabase): void {
   db.exec(`
     DROP TABLE IF EXISTS import_rows;
     DROP TABLE IF EXISTS import_batches;
@@ -615,14 +639,14 @@ function resetSchema(db: Database.Database): void {
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
 }
 
-export function getTableNames(db: Database.Database): string[] {
+export function getTableNames(db: StateDatabase): string[] {
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     .all() as Array<{ name: string }>;
   return rows.map((r) => r.name);
 }
 
-export function getSchemaVersion(db: Database.Database): number {
+export function getSchemaVersion(db: StateDatabase): number {
   const row = db.prepare("SELECT version FROM schema_version LIMIT 1").get() as
     | { version: number }
     | undefined;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInstrumentHistory } from "../../hooks/useInstrumentHistory.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
 import { buildAlertSentenceRows } from "../market-state/alert-view-model.js";
 import { buildHoldingRows } from "../market-state/portfolio-view-model.js";
 
@@ -67,6 +68,7 @@ export function useSymbolData(ticker, range = "1M") {
 }
 
 export function useSymbolEndpoint(endpoint, symbol) {
+  const transport = useRuntimeTransport();
   const requestKey = `${endpoint}:${symbol}`;
   const [state, setState] = useState({
     key: requestKey,
@@ -80,11 +82,7 @@ export function useSymbolEndpoint(endpoint, symbol) {
     const run = async () => {
       setState({ key: requestKey, snapshot: null, loading: true, error: null });
       try {
-        const response = await fetch(
-          `/api/instruments/${endpoint}?symbol=${encodeURIComponent(symbol)}`,
-        );
-        if (!response.ok) throw new Error(response.statusText || `Failed to load ${endpoint}`);
-        const data = await response.json();
+        const data = await transport.getInstrumentEndpoint(endpoint, symbol);
         if (!disposed) setState({ key: requestKey, snapshot: data, loading: false, error: null });
       } catch (err) {
         if (!disposed) {
@@ -101,7 +99,7 @@ export function useSymbolEndpoint(endpoint, symbol) {
     return () => {
       disposed = true;
     };
-  }, [endpoint, symbol, requestKey]);
+  }, [endpoint, symbol, requestKey, transport]);
 
   return state.key === requestKey
     ? { snapshot: state.snapshot, loading: state.loading, error: state.error }

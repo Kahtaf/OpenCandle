@@ -15,6 +15,7 @@ import {
   MarketStatePage,
   nextComboboxActiveIndex,
   nextStateTabIndex,
+  normalizeExactHostedSymbol,
   PendingSubmitButton,
   PortfolioRenameForm,
   StateTabs,
@@ -971,6 +972,14 @@ describe("MarketStatePage rendering", () => {
     expect(nextComboboxActiveIndex(2, 3, "next")).toBe(0);
     expect(nextComboboxActiveIndex(-1, 3, "previous")).toBe(2);
     expect(nextComboboxActiveIndex(0, 3, "previous")).toBe(2);
+  });
+
+  it("accepts bounded exact symbols for hosted state forms without a search provider", () => {
+    expect(normalizeExactHostedSymbol(" aapl ")).toBe("AAPL");
+    expect(normalizeExactHostedSymbol("BRK.B")).toBe("BRK.B");
+    expect(normalizeExactHostedSymbol("BTC-USD")).toBe("BTC-USD");
+    expect(normalizeExactHostedSymbol("not a symbol")).toBe("");
+    expect(normalizeExactHostedSymbol("../escape")).toBe("");
   });
 
   it("keeps holding forms out of the first viewport", () => {

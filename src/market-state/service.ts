@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { StateDatabase } from "../runtime/state-database.js";
 
 export type AssetType = "equity" | "etf" | "fund" | "crypto" | "index" | "option" | "unknown";
 export type AlertScopeType = "instrument" | "watchlist" | "portfolio";
@@ -447,7 +447,7 @@ type ImportRowRow = {
 };
 
 export class MarketStateService {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: StateDatabase) {}
 
   getDefaultWatchlist(): CollectionRecord {
     const now = new Date().toISOString();
@@ -744,6 +744,13 @@ export class MarketStateService {
            AND instrument_id IN (SELECT id FROM instruments WHERE symbol = ?)`,
       )
       .run(watchlistId, symbol.trim().toUpperCase());
+    return result.changes > 0;
+  }
+
+  removeWatchlistItem(itemId: number, watchlistId = this.getDefaultWatchlist().id): boolean {
+    const result = this.db
+      .prepare("DELETE FROM watchlist_items WHERE id = ? AND watchlist_id = ?")
+      .run(itemId, watchlistId);
     return result.changes > 0;
   }
 

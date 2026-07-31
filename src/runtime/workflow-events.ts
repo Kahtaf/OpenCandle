@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { StateDatabase } from "./state-database.js";
 
 /** All workflow event types. */
 export type WorkflowEventType =
@@ -31,7 +31,7 @@ export interface WorkflowEvent {
 
 /** Append-only workflow event logger backed by SQLite. */
 export class WorkflowEventLogger {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: StateDatabase) {}
 
   /** Append a workflow event. */
   log(

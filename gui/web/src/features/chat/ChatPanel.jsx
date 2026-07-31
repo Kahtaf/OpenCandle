@@ -188,8 +188,11 @@ export function ChatPanel({
   const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
+  const attachmentsEnabled = modelSetup?.supportsAttachments !== false;
   const pendingAttachments =
-    pendingAttachmentState.sessionId === sessionId ? pendingAttachmentState.attachments : [];
+    attachmentsEnabled && pendingAttachmentState.sessionId === sessionId
+      ? pendingAttachmentState.attachments
+      : [];
 
   const submit = (value = draft, { includePendingAttachments = true } = {}) => {
     const prompt = String(value || "").trim();
@@ -271,6 +274,7 @@ export function ChatPanel({
       send={send}
       setToast={setToast}
       pendingAttachments={pendingAttachments}
+      attachmentsEnabled={attachmentsEnabled}
       portfolios={marketState.state?.portfolios}
       watchlists={marketState.state?.watchlists}
       onAddAttachment={addAttachment}

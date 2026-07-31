@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CustomMessage } from "../../../gui/web/src/components/chat/custom-message.jsx";
 import { ModelSelector } from "../../../gui/web/src/features/chat/model-selector.jsx";
 import { ModelSetupCard } from "../../../gui/web/src/features/onboarding/ModelSetupCard.jsx";
+import { buildHttpFallbackMessageRequest } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("model recovery controls", () => {
   it("labels the composer selector when no model is connected", () => {
@@ -44,5 +45,47 @@ describe("model recovery controls", () => {
     );
 
     expect(html).toContain("Key was rejected by OpenAI");
+  });
+
+  it("explains hosted key storage and offers persistent and session-only choices", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ModelSetupCard, {
+        role: "follower",
+        modelSetup: {
+          hosted: true,
+          requirement: "api_key",
+          storageMode: "session",
+          availableModels: [],
+          providers: [
+            {
+              id: "openai",
+              label: "OpenAI",
+              envVar: "OPENAI_API_KEY",
+              defaultModel: "gpt-4.1-mini",
+              signupUrl: "https://platform.openai.com/api-keys",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Only for this browser session");
+    expect(html).toContain("Keep on this device");
+    expect(html).toContain("browser extensions");
+    expect(html).not.toContain("terminal sign-in");
+    expect(html).not.toContain("setup changes are unavailable");
+  });
+
+  it("passes hosted credential storage mode through the shared command contract", () => {
+    expect(
+      buildHttpFallbackMessageRequest("model.setup.save_api_key", {
+        provider: "openai",
+        apiKey: "sentinel",
+        storageMode: "session",
+      }),
+    ).toEqual({
+      path: "/api/model-setup/api-key",
+      body: { provider: "openai", apiKey: "sentinel", storageMode: "session" },
+    });
   });
 });

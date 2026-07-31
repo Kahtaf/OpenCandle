@@ -33,6 +33,7 @@ export function ChatComposer({
   send,
   setToast,
   pendingAttachments = EMPTY_ATTACHMENTS,
+  attachmentsEnabled = true,
   portfolios,
   watchlists,
   onAddAttachment,
@@ -46,7 +47,7 @@ export function ChatComposer({
   };
 
   async function onPaste(event) {
-    if (disabled) return;
+    if (disabled || !attachmentsEnabled) return;
     const files = imageFilesFromClipboardData(event.clipboardData);
     if (files.length === 0) return;
     event.preventDefault();
@@ -85,10 +86,12 @@ export function ChatComposer({
         <label className="sr-only" htmlFor="chat-composer">
           Message OpenCandle
         </label>
-        <PendingAttachmentRail
-          attachments={pendingAttachments}
-          onRemoveAttachment={onRemoveAttachment}
-        />
+        {attachmentsEnabled ? (
+          <PendingAttachmentRail
+            attachments={pendingAttachments}
+            onRemoveAttachment={onRemoveAttachment}
+          />
+        ) : null}
         <Textarea
           ref={textareaRef}
           id="chat-composer"
@@ -134,17 +137,19 @@ export function ChatComposer({
               disabled={disabled}
             />
           </div>
-          <div className="ml-1 flex items-center [&>div>button]:h-11 [&>div>button]:w-11 md:[&>div>button]:h-8 md:[&>div>button]:w-8">
-            <AttachMenu
-              disabled={disabled}
-              pendingAttachments={pendingAttachments}
-              portfolios={portfolios}
-              watchlists={watchlists}
-              onAddAttachment={onAddAttachment}
-              onRemoveAttachment={onRemoveAttachment}
-              setToast={setToast}
-            />
-          </div>
+          {attachmentsEnabled ? (
+            <div className="ml-1 flex items-center [&>div>button]:h-11 [&>div>button]:w-11 md:[&>div>button]:h-8 md:[&>div>button]:w-8">
+              <AttachMenu
+                disabled={disabled}
+                pendingAttachments={pendingAttachments}
+                portfolios={portfolios}
+                watchlists={watchlists}
+                onAddAttachment={onAddAttachment}
+                onRemoveAttachment={onRemoveAttachment}
+                setToast={setToast}
+              />
+            </div>
+          ) : null}
           <div className="ml-auto">
             <Button
               variant={canStop ? "secondary" : canSend ? "brand" : "secondary"}

@@ -15,7 +15,7 @@ import {
   formatPortfolioSummary,
   formatWatchlistSummary,
 } from "../market-state/summaries.js";
-import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
+import { MemoryStorage } from "../memory/storage.js";
 
 /**
  * Alias for the session-manager handle extensions receive via
@@ -25,17 +25,14 @@ import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/in
  */
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
-import type Database from "better-sqlite3";
 import type { FilteredMemoryEntry } from "../memory/manager.js";
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
 import type { MemoryEntry } from "../memory/types.js";
-import { runOpenCandleSetup } from "../pi/setup.js";
 import { type FallbackContext, PromptContextBuilder } from "../prompts/context-builder.js";
 import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
-import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { EvidenceRecord } from "./evidence.js";
 import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
@@ -47,6 +44,7 @@ import {
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import type { StateDatabase } from "./state-database.js";
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
@@ -65,6 +63,29 @@ interface ActiveStepCapture {
   pendingTools: Map<string, { tool: string; args: unknown; startedAt: string }>;
   rawText: string;
 }
+
+export interface SessionCoordinatorOptions {
+  /**
+   * Runtime-owned durable state factory. Browser-hosted and test compositions
+   * can intentionally return null while the WASM database is unavailable.
+   */
+  stateDatabaseFactory?: () => StateDatabase | null;
+  setupRunner?: SessionSetupRunner;
+  addonToolDescriptionsFactory?: () => ReadonlyArray<{
+    name: string;
+    description: string;
+  }>;
+  toolDefaultsFactory?: (
+    database: StateDatabase | null,
+  ) => ReadonlyMap<string, Record<string, unknown>>;
+}
+
+export type SessionSetupRunner = (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext | ExtensionCommandContext,
+  options: { mode: "startup" | "manual" },
+  modelRuntime?: ModelRuntime,
+) => Promise<"ready" | "shutdown" | "cancelled">;
 
 function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   if (typeof raw !== "string" || raw.length === 0) return undefined;
@@ -142,7 +163,7 @@ async function waitForPromptSettlement(
  * and prompt assembly. The extension delegates to this.
  */
 export class SessionCoordinator {
-  private db: Database.Database | null = null;
+  private db: StateDatabase | null = null;
   private storage: MemoryStorage | null = null;
   private memoryManager: MemoryManager | null = null;
   private eventLogger: WorkflowEventLogger | null = null;
@@ -155,7 +176,7 @@ export class SessionCoordinator {
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
-  constructor() {
+  constructor(private readonly options: SessionCoordinatorOptions = {}) {
     // Runner is always available — event logger is optional and added after session init
     this.providerTracker = new ProviderTracker();
     this.runner = new WorkflowRunner({ providerTracker: this.providerTracker });
@@ -179,13 +200,13 @@ export class SessionCoordinator {
 
   /** Initialize session: database, memory, event logger, workflow runner. */
   initSession(sessionId: string): void {
-    this.db = initDefaultDatabase();
-    this.storage = new MemoryStorage(this.db);
-    this.memoryManager = new MemoryManager(this.storage);
-    this.eventLogger = new WorkflowEventLogger(this.db);
+    this.db = this.options.stateDatabaseFactory?.() ?? null;
+    this.storage = this.db ? new MemoryStorage(this.db) : null;
+    this.memoryManager = this.storage ? new MemoryManager(this.storage) : null;
+    this.eventLogger = this.db ? new WorkflowEventLogger(this.db) : null;
     this.providerTracker = new ProviderTracker();
     this.runner = new WorkflowRunner({
-      eventLogger: this.eventLogger,
+      eventLogger: this.eventLogger ?? undefined,
       providerTracker: this.providerTracker,
     });
     this.sessionId = sessionId;
@@ -198,7 +219,7 @@ export class SessionCoordinator {
     options: { mode: "startup" | "manual" },
     modelRuntime?: ModelRuntime,
   ): Promise<"ready" | "shutdown" | "cancelled"> {
-    return runOpenCandleSetup(pi, ctx, options, modelRuntime);
+    return this.options.setupRunner?.(pi, ctx, options, modelRuntime) ?? "ready";
   }
 
   /** Extract and persist user preferences from natural language. */
@@ -351,7 +372,7 @@ export class SessionCoordinator {
   ): string {
     const builder = new PromptContextBuilder();
 
-    const addonTools = getAddonToolDescriptions();
+    const addonTools = this.options.addonToolDescriptionsFactory?.() ?? [];
     const addonDescriptions =
       addonTools.length > 0 ? addonTools.map((t) => `${t.name}: ${t.description}`) : undefined;
 
@@ -380,7 +401,14 @@ export class SessionCoordinator {
       resolvedTurnContext,
     });
 
-    const toolDefaults = formatToolDefaultsForPrompt();
+    let toolDefaults: string[] = [];
+    try {
+      toolDefaults = formatToolDefaultsForPrompt(
+        this.options.toolDefaultsFactory?.(this.db) ?? new Map(),
+      );
+    } catch {
+      toolDefaults = [];
+    }
     const defaultsSection =
       toolDefaults.length > 0 ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}` : "";
 
@@ -846,19 +874,17 @@ function isFreshnessStamp(value: unknown): value is FreshnessStamp {
   );
 }
 
-function formatToolDefaultsForPrompt(): string[] {
-  try {
-    return [...getAllDefaults()]
-      .filter(([, defaults]) => Object.keys(defaults).some((key) => key !== "__enabled"))
-      .map(([toolName, defaults]) => {
-        const pairs = flattenDefaults(defaults)
-          .filter(([key]) => key !== "__enabled")
-          .map(([key, value]) => `${key}: ${String(value)}`);
-        return `- User has set defaults for \`${toolName}\` (${pairs.join(", ")}). You may override when the user's request requires it.`;
-      });
-  } catch {
-    return [];
-  }
+function formatToolDefaultsForPrompt(
+  defaultsByTool: ReadonlyMap<string, Record<string, unknown>>,
+): string[] {
+  return [...defaultsByTool]
+    .filter(([, defaults]) => Object.keys(defaults).some((key) => key !== "__enabled"))
+    .map(([toolName, defaults]) => {
+      const pairs = flattenDefaults(defaults)
+        .filter(([key]) => key !== "__enabled")
+        .map(([key, value]) => `${key}: ${String(value)}`);
+      return `- User has set defaults for \`${toolName}\` (${pairs.join(", ")}). You may override when the user's request requires it.`;
+    });
 }
 
 function flattenDefaults(defaults: Record<string, unknown>, prefix = ""): Array<[string, unknown]> {
@@ -957,7 +983,7 @@ function analystRoleFromStep(stepType: string): string | undefined {
   return stepType.startsWith("analyst_") ? stepType.slice("analyst_".length) : undefined;
 }
 
-function buildSavedMarketStateContext(db: Database.Database): string {
+function buildSavedMarketStateContext(db: StateDatabase): string {
   try {
     const service = new MarketStateService(db);
     const watchlist = service.listWatchlistItems();

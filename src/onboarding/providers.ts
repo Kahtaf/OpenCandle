@@ -25,6 +25,21 @@ export type ProviderCategory =
 
 export type ProviderTier = "hard" | "soft";
 
+export type BrowserTransport =
+  | {
+      readonly mode: "direct";
+      readonly reason: string;
+      readonly proof: {
+        readonly browser: "chromium";
+        readonly test: string;
+        readonly verifiedAt: string;
+      };
+    }
+  | {
+      readonly mode: "proxy" | "blocked";
+      readonly reason: string;
+    };
+
 interface BaseProviderDescriptor {
   readonly id: ProviderId;
   readonly kind: "api-key" | "external-tool" | "public-http";
@@ -48,6 +63,8 @@ interface BaseProviderDescriptor {
   readonly fallbackDescription: string | null;
   readonly snoozeDurationDays: number;
   readonly instructionsHint: string;
+  /** Hosted mode is fail closed: only a descriptor with live `direct` proof is callable. */
+  readonly browserTransport: BrowserTransport;
 }
 
 export interface ApiKeyProviderDescriptor extends BaseProviderDescriptor {
@@ -104,6 +121,11 @@ export const PROVIDERS = [
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, signup opens in your browser",
+    browserTransport: {
+      mode: "proxy",
+      reason:
+        "The production API has not passed the hosted Chromium CORS and secret-handling proof.",
+    },
   },
   {
     id: "fred",
@@ -120,6 +142,10 @@ export const PROVIDERS = [
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, requires a St. Louis Fed account",
+    browserTransport: {
+      mode: "proxy",
+      reason: "FRED has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
   },
   {
     id: "finnhub",
@@ -140,6 +166,10 @@ export const PROVIDERS = [
       "Other sentiment sources (Reddit, Twitter, web search) continue to work without Finnhub",
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, signup opens in your browser",
+    browserTransport: {
+      mode: "proxy",
+      reason: "Finnhub has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
   },
   {
     id: "brave",
@@ -160,6 +190,11 @@ export const PROVIDERS = [
       "Web search continues to work via DuckDuckGo (free, no key needed, lower-quality freshness)",
     snoozeDurationDays: 7,
     instructionsHint: "Free tier available, signup opens in your browser",
+    browserTransport: {
+      mode: "proxy",
+      reason:
+        "Brave Search requires a request path that has not passed the hosted Chromium CORS proof.",
+    },
   },
   {
     id: "exa",
@@ -187,6 +222,10 @@ export const PROVIDERS = [
       "Exa search continues to work via the keyless Exa MCP endpoint, which has lower rate limits but similar quality",
     snoozeDurationDays: 7,
     instructionsHint: "Paid with free tier, signup opens in your browser",
+    browserTransport: {
+      mode: "proxy",
+      reason: "Exa has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
   },
   {
     id: "lse",
@@ -207,6 +246,11 @@ export const PROVIDERS = [
       "Market data continues through Yahoo Finance and Alpha Vantage when London Strategic Edge is unavailable",
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, signup opens in your browser",
+    browserTransport: {
+      mode: "proxy",
+      reason:
+        "London Strategic Edge has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
   },
   {
     id: "yahoo",
@@ -220,6 +264,11 @@ export const PROVIDERS = [
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "No account needed; OpenCandle checks public Yahoo Finance reachability",
+    browserTransport: {
+      mode: "proxy",
+      reason:
+        "Yahoo Finance does not provide a stable direct-browser CORS contract for OpenCandle.",
+    },
   },
   {
     id: "polymarket",
@@ -233,6 +282,16 @@ export const PROVIDERS = [
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "No account needed; OpenCandle checks public Polymarket Gamma reachability",
+    browserTransport: {
+      mode: "direct",
+      reason:
+        "The public Gamma endpoint passes the hosted Chromium CORS and bounded-response proof.",
+      proof: {
+        browser: "chromium",
+        test: "gui/hosted/tests/hosted-pwa.e2e.mjs",
+        verifiedAt: "2026-07-30",
+      },
+    },
   },
   {
     id: "tradingview",
@@ -248,6 +307,10 @@ export const PROVIDERS = [
     snoozeDurationDays: 7,
     instructionsHint:
       "No account needed; OpenCandle checks the public TradingView scanner endpoint",
+    browserTransport: {
+      mode: "proxy",
+      reason: "The unofficial scanner endpoint has not passed a stable hosted Chromium CORS proof.",
+    },
   },
   {
     id: "twitter",
@@ -266,6 +329,10 @@ export const PROVIDERS = [
       "Sentiment summaries continue with Reddit, web search, and news when X is unavailable",
     snoozeDurationDays: 7,
     instructionsHint: "Install twitter-cli and stay logged into x.com in a supported browser",
+    browserTransport: {
+      mode: "blocked",
+      reason: "X requires the native twitter CLI and a desktop browser-cookie session.",
+    },
   },
   {
     id: "reddit",
@@ -284,6 +351,10 @@ export const PROVIDERS = [
       "Sentiment summaries continue with X/Twitter, web search, and news when Reddit is unavailable",
     snoozeDurationDays: 7,
     instructionsHint: "Install rdt-cli and stay logged into reddit.com in a supported browser",
+    browserTransport: {
+      mode: "blocked",
+      reason: "Reddit requires the native rdt CLI and a desktop browser-cookie session.",
+    },
   },
 ] as const satisfies readonly ProviderDescriptor[];
 
@@ -312,6 +383,17 @@ function byId(): Map<ProviderId, ProviderDescriptor> {
 
 export function listAllProviders(): readonly ProviderDescriptor[] {
   return PROVIDERS;
+}
+
+export function getHostedBrowserCapabilityReport(): {
+  direct: readonly ProviderDescriptor[];
+  unavailable: readonly ProviderDescriptor[];
+} {
+  const direct = PROVIDERS.filter((provider) => provider.browserTransport.mode === "direct");
+  return {
+    direct,
+    unavailable: PROVIDERS.filter((provider) => provider.browserTransport.mode !== "direct"),
+  };
 }
 
 export function isApiKeyProvider(

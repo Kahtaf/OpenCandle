@@ -1,0 +1,25 @@
+{
+  "name": "@opencandle/gui-hosted",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build:runtime": "node scripts/build-runtime-payload.mjs",
+    "build": "npm run build:runtime && vite build && node scripts/build-service-worker.mjs",
+    "dev": "npm run build:runtime && vite",
+    "preview": "vite preview",
+    "test:browser": "npm run build && node tests/hosted-pwa.e2e.mjs"
+  },
+  "dependencies": {
+    "@opencandle/gui-web": "*",
+    "@webcontainer/api": "1.6.4",
+    "@tanstack/react-router": "^1.170.18",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "vite": "8.1.5"
+  }
+}

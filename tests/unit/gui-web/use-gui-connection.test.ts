@@ -11,7 +11,9 @@ import {
   rejectTimedOutToolInvoke,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
+  resolveEventChannelBootTimeout,
   resolveSnapshotCoordination,
+  resolveWritableRole,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   shouldReconnectOnForeground,
@@ -19,6 +21,17 @@ import {
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("useGuiConnection helpers", () => {
+  it("allows the hosted event channel to finish booting its WebContainer", () => {
+    expect(resolveEventChannelBootTimeout("hosted")).toBe(120_000);
+    expect(resolveEventChannelBootTimeout("loopback")).toBe(1_500);
+  });
+
+  it("lets a hosted follower use the shared writer while preserving offline read-only state", () => {
+    expect(resolveWritableRole("follower", { writable: true })).toBe("writer");
+    expect(resolveWritableRole("follower", { writable: false })).toBe("follower");
+    expect(resolveWritableRole("offline", { writable: false })).toBe("offline");
+  });
+
   it("treats empty toast messages as a no-op payload", () => {
     expect(buildGuiToastPayload("")).toBeNull();
     expect(buildGuiToastPayload(null)).toBeNull();

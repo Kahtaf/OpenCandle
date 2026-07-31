@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
 import { searchInstruments } from "../instruments/instrument-api.js";
 
 const EMPTY_SYMBOL_RESOLUTION = {
@@ -8,6 +9,7 @@ const EMPTY_SYMBOL_RESOLUTION = {
 };
 
 export function useSymbolResolution(selectedSymbol) {
+  const transport = useRuntimeTransport();
   const [resolution, setResolution] = useState(EMPTY_SYMBOL_RESOLUTION);
 
   useEffect(() => {
@@ -17,7 +19,7 @@ export function useSymbolResolution(selectedSymbol) {
     }
     let disposed = false;
     setResolution({ candidate: null, error: "", resolving: true });
-    searchInstruments(selectedSymbol)
+    searchInstruments(selectedSymbol, transport)
       .then((candidates) => {
         if (disposed) return;
         const normalizedSelected = selectedSymbol.trim().toUpperCase();
@@ -42,7 +44,7 @@ export function useSymbolResolution(selectedSymbol) {
     return () => {
       disposed = true;
     };
-  }, [selectedSymbol]);
+  }, [selectedSymbol, transport]);
 
   return resolution;
 }

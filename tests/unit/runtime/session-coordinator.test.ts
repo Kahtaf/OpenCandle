@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { initDatabase, initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type { WorkflowDefinition } from "../../../src/runtime/prompt-step.js";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
@@ -359,6 +359,62 @@ function fakeQueueContext(isIdle: () => boolean, entries: SessionEntry[] = []) {
 afterEach(() => {
   vi.useRealTimers();
   clearRunContext();
+});
+
+describe("SessionCoordinator runtime composition", () => {
+  it("builds prompt capability context from injected runtime factories", () => {
+    const coord = new SessionCoordinator({
+      addonToolDescriptionsFactory: () => [
+        {
+          name: "get_browser_quote",
+          description: "Fetch a quote from a browser-safe provider.",
+        },
+      ],
+      toolDefaultsFactory: () =>
+        new Map([
+          [
+            "get_browser_quote",
+            {
+              currency: "USD",
+              nested: { timeframe: "1d" },
+              __enabled: true,
+            },
+          ],
+        ]),
+    });
+
+    const prompt = coord.buildSystemPrompt("base");
+
+    expect(prompt).toContain("get_browser_quote: Fetch a quote from a browser-safe provider.");
+    expect(prompt).toContain("currency: USD");
+    expect(prompt).toContain("nested.timeframe: 1d");
+    expect(prompt).not.toContain("__enabled");
+  });
+
+  it("initializes persistence through an injected StateDatabase factory", () => {
+    const database = initDatabase(":memory:");
+    const stateDatabaseFactory = vi.fn(() => database);
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory,
+    });
+
+    coord.initSession("browser-session");
+
+    expect(stateDatabaseFactory).toHaveBeenCalledOnce();
+    expect(coord.getStorage()).not.toBeNull();
+    database.close();
+  });
+
+  it("supports an intentionally ephemeral runtime composition", () => {
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: () => null,
+    });
+
+    coord.initSession("ephemeral-session");
+
+    expect(coord.getStorage()).toBeNull();
+    expect(coord.getRunner()).toBeDefined();
+  });
 });
 
 describe("SessionCoordinator workflow runtime ownership", () => {
@@ -1318,7 +1374,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
     const prompt = coord.buildSystemPrompt(
       "base",
@@ -1357,7 +1415,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
 
     expect(coord.buildSystemPrompt("base")).not.toContain("Saved Market State");
@@ -1387,7 +1447,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
     const prompt = coord.buildSystemPrompt("base", undefined, {
       assumptionsBlock: "",

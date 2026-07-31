@@ -140,6 +140,7 @@ export function WatchlistPage({
     if (!pendingRemoval) return;
     const removed = await invokeTool("manage_watchlist", {
       action: "remove",
+      item_id: pendingRemoval.id,
       symbol: pendingRemoval.symbol,
       watchlist_name: activeWatchlist?.name,
     });

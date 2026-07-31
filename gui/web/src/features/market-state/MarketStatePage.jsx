@@ -17,6 +17,7 @@ import { Select } from "../../components/ui/select.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
@@ -773,6 +774,7 @@ export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
 }
 
 export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
+  const transport = useRuntimeTransport();
   const quantityId = useId();
   const averageCostId = useId();
   const currencyId = useId();
@@ -812,7 +814,7 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     };
 
     applyAutofill(null);
-    getInstrumentQuote(resolvedSymbol)
+    getInstrumentQuote(resolvedSymbol, transport)
       .then((quote) => {
         if (!disposed) applyAutofill(quote);
       })
@@ -821,7 +823,7 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     return () => {
       disposed = true;
     };
-  }, [lot, resolvedSymbol]);
+  }, [lot, resolvedSymbol, transport]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -978,8 +980,10 @@ export function SymbolSearchInput({
   onSelectedChange,
   navigate,
 }) {
+  const transport = useRuntimeTransport();
   const inputId = useId();
   const listboxId = useId();
+  const exactSymbolHintId = useId();
   const searchRef = useRef(null);
   const { candidates, setCandidates, activeIndex, setActiveIndex } = useInstrumentSearch({
     query,
@@ -995,6 +999,7 @@ export function SymbolSearchInput({
   const activeOptionId = activeCandidate
     ? instrumentSuggestionOptionId(listboxId, clampedActiveIndex)
     : undefined;
+  const allowExactSymbol = transport.kind === "hosted";
 
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
@@ -1019,6 +1024,7 @@ export function SymbolSearchInput({
         aria-expanded={visibleCandidates.length > 0}
         aria-controls={listboxId}
         aria-activedescendant={activeOptionId}
+        aria-describedby={allowExactSymbol ? exactSymbolHintId : undefined}
         className="pl-9"
         placeholder="Search ticker or company"
         value={query}
@@ -1036,9 +1042,20 @@ export function SymbolSearchInput({
             setActiveIndex((index) =>
               nextInstrumentActiveIndex(index, visibleCandidates.length, "previous"),
             );
-          } else if (event.key === "Enter" && activeCandidate) {
-            event.preventDefault();
-            selectCandidate(activeCandidate);
+          } else if (event.key === "Enter") {
+            if (activeCandidate) {
+              event.preventDefault();
+              selectCandidate(activeCandidate);
+              return;
+            }
+            const exactSymbol = allowExactSymbol ? normalizeExactHostedSymbol(query) : "";
+            if (exactSymbol) {
+              event.preventDefault();
+              onSelectedChange(exactSymbol);
+              onQueryChange(exactSymbol);
+              setCandidates([]);
+              setActiveIndex(-1);
+            }
           } else if (event.key === "Escape" && visibleCandidates.length > 0) {
             event.preventDefault();
             setCandidates([]);
@@ -1052,6 +1069,11 @@ export function SymbolSearchInput({
           onSelectedChange("");
         }}
       />
+      {allowExactSymbol ? (
+        <p id={exactSymbolHintId} className="mt-1 text-xs text-muted-foreground">
+          Search is unavailable in hosted mode. Enter an exact symbol and press Enter.
+        </p>
+      ) : null}
       {visibleCandidates.length ? (
         <InstrumentSuggestionList
           id={listboxId}
@@ -1068,6 +1090,13 @@ export function SymbolSearchInput({
       ) : null}
     </div>
   );
+}
+
+export function normalizeExactHostedSymbol(value) {
+  const symbol = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  return /^[A-Z0-9][A-Z0-9.^/_-]{0,19}$/.test(symbol) ? symbol : "";
 }
 
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;

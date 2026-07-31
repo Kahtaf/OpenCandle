@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
 
 const CURRENT_SESSION_KEY = "__current__";
 
@@ -52,6 +53,7 @@ export function isDuplicateChatRunAck(body) {
 }
 
 export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart }) {
+  const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
   const runStatesRef = useRef({});
   const [runStates, setRunStates] = useState({});
@@ -101,14 +103,11 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       abortsRef.current.set(key, abort);
 
       try {
-        const response = await fetch(chatRunEndpoint(targetSessionId), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(
-            buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
-          ),
-          signal: abort.signal,
-        });
+        const response = await transport.startChatRun(
+          targetSessionId,
+          buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
+          abort.signal,
+        );
         if (!response.ok) {
           const error = await response.json().catch(() => ({ error: response.statusText }));
           if (isSessionChangedChatRunError(response.status, error)) {
@@ -157,7 +156,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         abortsRef.current.delete(key);
       }
     },
-    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart],
+    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart, transport],
   );
 
   const stopRun = useCallback(

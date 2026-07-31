@@ -37,6 +37,9 @@ const params = Type.Object({
     }),
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
+  item_id: Type.Optional(
+    Type.Integer({ minimum: 1, description: "Stable watchlist row id for an exact remove." }),
+  ),
   new_watchlist_name: Type.Optional(
     Type.String({ description: "New watchlist name (required for rename)." }),
   ),
@@ -132,8 +135,28 @@ export const watchlistTool: AgentTool<typeof params> = {
       }
 
       if (args.action === "remove") {
+        if (args.item_id != null) {
+          const item = service
+            .listWatchlistItems(watchlist.id)
+            .find(({ id }) => id === args.item_id);
+          if (!item || !service.removeWatchlistItem(args.item_id, watchlist.id)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Watchlist item ${args.item_id} not found in ${watchlist.name}`,
+                },
+              ],
+              details: null,
+            };
+          }
+          return {
+            content: [{ type: "text", text: `Removed ${item.symbol} from ${watchlist.name}` }],
+            details: null,
+          };
+        }
         if (!args.symbol) {
-          throw new Error("symbol is required for remove action.");
+          throw new Error("symbol or item_id is required for remove action.");
         }
         const symbol = args.symbol.toUpperCase();
         if (!service.removeWatchlistItemBySymbol(symbol, watchlist.id)) {

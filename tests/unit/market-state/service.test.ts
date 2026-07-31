@@ -146,6 +146,21 @@ describe("MarketStateService", () => {
     expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
   });
 
+  it("removes a watchlist item by stable row identity", () => {
+    const watchlist = service.getDefaultWatchlist();
+    const item = service.addWatchlistItem({
+      watchlistId: watchlist.id,
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        provider: "test",
+      },
+    });
+
+    expect(service.removeWatchlistItem(item.id, watchlist.id)).toBe(true);
+    expect(service.removeWatchlistItem(item.id, watchlist.id)).toBe(false);
+  });
+
   it("renames a watchlist without moving its symbols", () => {
     const growth = service.createWatchlist("Growth");
     service.addWatchlistItem({

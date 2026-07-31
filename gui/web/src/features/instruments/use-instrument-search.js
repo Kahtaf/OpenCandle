@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
 import { searchInstruments } from "./instrument-api.js";
 import {
   rankInstrumentCandidates,
@@ -15,6 +16,7 @@ export function useInstrumentSearch({
   debounceMs = DEFAULT_INSTRUMENT_SEARCH_DEBOUNCE_MS,
   initialActiveIndex = 0,
 } = {}) {
+  const transport = useRuntimeTransport();
   const [searchState, setSearchState] = useState({
     query: "",
     candidates: [],
@@ -36,7 +38,7 @@ export function useInstrumentSearch({
 
     let disposed = false;
     const timer = window.setTimeout(() => {
-      searchInstruments(trimmedQuery)
+      searchInstruments(trimmedQuery, transport)
         .then((items) => {
           if (disposed) return;
           const next = rankInstrumentCandidates(items, trimmedQuery).slice(0, limit);
@@ -61,7 +63,7 @@ export function useInstrumentSearch({
       disposed = true;
       window.clearTimeout(timer);
     };
-  }, [debounceMs, enabled, initialActiveIndex, limit, minLength, trimmedQuery]);
+  }, [debounceMs, enabled, initialActiveIndex, limit, minLength, trimmedQuery, transport]);
 
   const setCandidates = useCallback(
     (nextCandidates) => {

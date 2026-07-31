@@ -25,6 +25,7 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 - [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
 - [Getting Started](./getting-started.md): install to a first market answer in five minutes, plus troubleshooting.
 - [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
+- [Hosted PWA](./hosted-pwa.md): install and use OpenCandle without keeping a local server running.
 
 ## Guides and reference
 

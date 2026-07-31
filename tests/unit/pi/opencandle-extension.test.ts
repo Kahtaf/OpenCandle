@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
+import { initDatabase, initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import {
   loadOnboardingState,
   markProviderNeverAsk,
@@ -20,6 +21,14 @@ vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   return {
     ...actual,
     initDefaultDatabase: () => actual.initDatabase(":memory:"),
+  };
+});
+
+vi.mock("../../../src/memory/sqlite.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/memory/sqlite.js")>();
+  return {
+    ...actual,
+    initDefaultDatabase: vi.fn(() => actual.initDatabase(":memory:")),
   };
 });
 
@@ -401,6 +410,8 @@ describe("opencandle extension", () => {
   });
 
   describe("memory integration", () => {
+    const stateDatabaseFactory = () => initDatabase(":memory:");
+
     function createSessionCtx() {
       return {
         hasUI: false,
@@ -416,7 +427,7 @@ describe("opencandle extension", () => {
 
     it("initializes storage on session_start", async () => {
       const fake = createFakeApi();
-      openCandleExtension(fake.api);
+      openCandleExtension(fake.api, { stateDatabaseFactory });
       await initMemory(fake);
 
       // Storage is initialized — before_agent_start should include system prompt
@@ -427,6 +438,17 @@ describe("opencandle extension", () => {
       );
       expect(result.systemPrompt).toContain("BASE");
       expect(result.systemPrompt).toContain("OpenCandle");
+    });
+
+    it("provisions native persistence when loaded as a standalone Pi extension", async () => {
+      vi.mocked(initDefaultDatabase).mockClear();
+      const fake = createFakeApi();
+      openCandleExtension(fake.api);
+      const callsBeforeSessionStart = vi.mocked(initDefaultDatabase).mock.calls.length;
+
+      await initMemory(fake);
+
+      expect(vi.mocked(initDefaultDatabase).mock.calls.length).toBe(callsBeforeSessionStart + 1);
     });
 
     it("records workflow runs after router dispatch", async () => {
@@ -444,6 +466,7 @@ describe("opencandle extension", () => {
       };
       openCandleExtension(fake.api, {
         routerLlmClient: { complete: async () => JSON.stringify(workflowOutput) },
+        stateDatabaseFactory,
       });
       await initMemory(fake);
 
@@ -481,6 +504,7 @@ describe("opencandle extension", () => {
       };
       openCandleExtension(fake.api, {
         routerLlmClient: { complete: async () => JSON.stringify(fallbackOutput) },
+        stateDatabaseFactory,
       });
       await initMemory(fake);
 

@@ -58,6 +58,8 @@ export interface RunOpenCandleSessionOptions {
   defaultProvider?: string;
   defaultModel?: string;
   modelRuntime?: ModelRuntime;
+  /** Optional canonical Pi session to continue, including an imported hosted JSONL session. */
+  sessionManager?: PiSessionManager;
 }
 
 export interface RunOpenCandleSessionResult {
@@ -90,7 +92,7 @@ export async function runOpenCandleSession(
     const created = await createOpenCandleSession({
       cwd: options.cwd ?? process.cwd(),
       modelRuntime: options.modelRuntime,
-      sessionManager: PiSessionManager.inMemory(),
+      sessionManager: options.sessionManager ?? PiSessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory({
         defaultProvider: options.defaultProvider ?? "google",
         defaultModel: options.defaultModel ?? "gemini-2.5-flash",

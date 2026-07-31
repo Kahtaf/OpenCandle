@@ -161,6 +161,36 @@ describe("runOpenCandleSession", () => {
     expect(process.env.OPENCANDLE_HOME).toBe(originalHome);
   });
 
+  it("passes an imported Pi session manager through for cross-surface continuation", async () => {
+    const importedSessionManager = SessionManager.inMemory("/tmp/imported-hosted-session");
+    const listeners: Array<(event: { type: string }) => void> = [];
+    const session = {
+      subscribe: vi.fn((listener: (event: { type: string }) => void) => {
+        listeners.push(listener);
+        return () => {};
+      }),
+      prompt: vi.fn(async () => {
+        queueMicrotask(() => {
+          for (const listener of listeners) listener({ type: "agent_end" });
+        });
+      }),
+      dispose: vi.fn(),
+      sessionManager: importedSessionManager,
+    };
+    createOpenCandleSessionMock.mockResolvedValue({ session });
+
+    await runOpenCandleSession({
+      prompt: "Continue this hosted session",
+      sessionManager: importedSessionManager,
+      settleGraceMs: 0,
+      timeoutMs: 1000,
+    });
+
+    expect(createOpenCandleSessionMock.mock.calls[0]?.[0].sessionManager).toBe(
+      importedSessionManager,
+    );
+  });
+
   it("keeps single prompt traces in the original one-prompt shape", async () => {
     const listeners: Array<(event: Record<string, unknown>) => void> = [];
     const session = {

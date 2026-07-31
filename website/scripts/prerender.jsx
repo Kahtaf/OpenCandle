@@ -82,6 +82,7 @@ const sourcePages = [
   },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
+  { source: "docs/hosted-pwa.md", output: "docs/hosted-pwa.html", section: "Guides" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",

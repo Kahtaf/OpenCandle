@@ -4,6 +4,7 @@ import * as configModule from "../../../src/config.js";
 import {
   getCredential,
   getCredentialSource,
+  getHostedBrowserCapabilityReport,
   getProvider,
   getProvidersByCategory,
   getProvidersByTier,
@@ -58,6 +59,35 @@ afterEach(() => {
 });
 
 describe("provider registry — shape", () => {
+  it("classifies every provider for hosted-browser transport and fails closed", () => {
+    const report = getHostedBrowserCapabilityReport();
+
+    expect(report.direct.map((provider) => provider.id)).toEqual(["polymarket"]);
+    expect(report.unavailable).toHaveLength(PROVIDERS.length - 1);
+    for (const provider of PROVIDERS) {
+      expect(["direct", "proxy", "blocked"]).toContain(provider.browserTransport.mode);
+      expect(provider.browserTransport.reason.trim()).not.toBe("");
+      if (provider.browserTransport.mode === "direct") {
+        expect(provider.browserTransport.proof).toMatchObject({
+          browser: "chromium",
+          test: expect.stringContaining("hosted-pwa.e2e"),
+        });
+      }
+    }
+  });
+
+  it("identifies desktop-cookie providers as blocked and CORS-only providers as proxy", () => {
+    expect(getProvider("twitter").browserTransport).toMatchObject({
+      mode: "blocked",
+      reason: expect.stringContaining("CLI"),
+    });
+    expect(getProvider("reddit").browserTransport).toMatchObject({
+      mode: "blocked",
+      reason: expect.stringContaining("CLI"),
+    });
+    expect(getProvider("yahoo").browserTransport.mode).toBe("proxy");
+  });
+
   it("contains API-key, external-tool, and public HTTP providers with stable ids", () => {
     const ids = PROVIDERS.map((p) => p.id).sort();
     expect(ids).toEqual(

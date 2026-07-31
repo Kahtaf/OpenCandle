@@ -1,0 +1,53 @@
+## ADDED Requirements
+
+### Requirement: Provider registry declares browser transport
+
+Every provider descriptor SHALL declare a hosted-browser transport of
+`direct`, `proxy`, or `blocked`, together with a concise reason and the live
+browser proof required for `direct`. Unknown or missing classification SHALL be
+treated as `blocked`.
+
+#### Scenario: External desktop tool is blocked
+
+- **WHEN** the hosted runtime reads the Reddit or X provider descriptor
+- **THEN** its browser transport is `blocked`
+- **AND** the reason identifies the native CLI or desktop-session dependency
+
+#### Scenario: Proxy-only provider remains unavailable
+
+- **WHEN** a provider requires forbidden CORS access, custom headers, or a
+  credential relay
+- **THEN** its browser transport is `proxy`
+- **AND** the serverless hosted build treats it as unavailable
+
+### Requirement: Hosted tool registration is capability filtered
+
+Hosted Pi tool construction SHALL receive the provider capability manifest and
+MUST omit a tool when no complete direct-browser provider path can execute it.
+Runtime provider checks SHALL remain as defense in depth.
+
+#### Scenario: Unsupported tool is absent from Pi
+
+- **WHEN** hosted mode builds the tool set and a tool depends only on proxy or
+  blocked providers
+- **THEN** that tool is absent from the model-visible definitions
+- **AND** a user-facing capability report explains why it is unavailable
+
+#### Scenario: New provider defaults to blocked
+
+- **WHEN** a provider is added without a browser transport classification
+- **THEN** hosted capability tests fail
+- **AND** the provider cannot become model-visible in hosted mode
+
+### Requirement: Direct classification requires a real browser proof
+
+A provider SHALL be classified `direct` only after a real-browser test from the
+hosted runtime proves its required request shape, authentication, CORS behavior,
+bounded response, and secret handling.
+
+#### Scenario: Documentation claim is insufficient
+
+- **WHEN** provider documentation says browser access is supported but the live
+  browser proof is absent or failing
+- **THEN** the provider remains `proxy` or `blocked`
+
