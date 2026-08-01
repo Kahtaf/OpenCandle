@@ -194,20 +194,25 @@ unchanged.
 `ProviderDescriptor` gains a browser transport classification:
 
 - `direct`: callable from the hosted runtime without an OpenCandle proxy;
-- `proxy`: technically requires a proxy and is unavailable in this serverless
-  release;
+- `proxy`: callable only through the version-negotiated, fixed-policy
+  OpenCandle relay when its manifest advertises that provider;
 - `blocked`: requires a native process, desktop cookie, forbidden header, or
   otherwise unsupported capability.
 
 Unknown classifications default to blocked. Hosted tool construction receives
-a capability manifest and omits tools without a direct provider path. Runtime
-checks remain as defense in depth and degradation diagnostics name unavailable
-capabilities explicitly.
+the negotiated capability manifest and omits tools without a complete direct
+or relayed path. Model requests use the same manifest gate before Pi traffic is
+forwarded. Runtime checks remain as defense in depth and degradation diagnostics
+name unavailable capabilities explicitly.
 
-The initial direct set is proven or individually browser-tested before release.
-The known candidates are Polymarket, CoinGecko, Fear and Greed, Alpha Vantage
-with a user key, and Finnhub with a user key. Classification is evidence-based,
-not inferred from API documentation alone.
+Live proof currently covers direct Polymarket, CoinGecko, Fear and Greed, and
+Alpha Vantage requests, plus relayed Yahoo Finance, TradingView, FRED, Brave,
+and Exa requests. OpenAI and Google Pi model streams have live relay proof;
+Anthropic has contract coverage but was not live-tested in the current
+environment because no key was configured. SEC EDGAR, Finnhub, LSE, Reddit,
+and X remain unavailable in hosted mode until their transport and credential
+requirements pass the same proof. Classification is evidence-based, not
+inferred from API documentation alone.
 
 ### 7. Browser writer/follower mirrors local coordination
 
@@ -218,6 +223,12 @@ and forward writer-only intents. On writer loss, one follower acquires the lock,
 rehydrates from the last durable checkpoint, and announces a new runtime epoch.
 
 The runtime epoch prevents late events from a dead writer from being applied.
+BroadcastChannel is a coordination mechanism, not an authentication boundary:
+all executable code on the application origin is trusted. Message shapes,
+operation names, targets, and epochs are still validated, while production CSP,
+immutable first-party assets, and the absence of third-party scripts protect
+the same-origin boundary. A channel token would not improve this threat model
+because another same-origin listener could observe it.
 
 ### 8. The PWA caches only the shell
 
@@ -392,11 +403,11 @@ Rollback removes the hosted build/deployment entry. Native adapters and shared
 contracts remain because they preserve existing behavior and improve
 testability.
 
-## Open Questions
+## Resolved deployment questions
 
-- Can WebContainer session files be checkpointed after every Pi append without
-  an upstream Pi change, or is a minimal upstream callback required?
-- Which direct-provider candidates pass live browser CORS tests consistently
-  enough to enter the initial capability manifest?
-- Where will the static PWA be hosted, and can that host guarantee required
-  COOP/COEP, CSP, service-worker scope, and immutable asset caching?
+- Canonical Pi append/checkpoint hooks persist hosted sessions without an
+  upstream Pi change.
+- Provider admission is determined by repeatable Chromium and relay smoke
+  proofs recorded above.
+- The static PWA is hosted at `web.opencandle.app` with the required COOP/COEP,
+  CSP, service-worker scope, and immutable asset caching headers.

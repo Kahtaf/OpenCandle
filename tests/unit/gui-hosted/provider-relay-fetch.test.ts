@@ -105,6 +105,7 @@ describe("hosted provider relay fetch", () => {
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
       clientId: "0123456789abcdef0123456789abcdef",
       fetchImpl: relayFetch,
+      loadRelayManifest: async () => ({ version: 1, providers: [provider] }),
     });
 
     const response = await hostedFetch(url, {
@@ -132,6 +133,7 @@ describe("hosted provider relay fetch", () => {
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
       clientId: "0123456789abcdef0123456789abcdef",
       fetchImpl: relayFetch,
+      loadRelayManifest: async () => ({ version: 1, providers: ["openai"] }),
     });
 
     await expect(
@@ -139,6 +141,25 @@ describe("hosted provider relay fetch", () => {
         headers: { authorization: "Bearer key" },
       }),
     ).resolves.toBeInstanceOf(Response);
+  });
+
+  it("fails closed when the negotiated relay manifest omits a model provider", async () => {
+    const relayFetch = vi.fn();
+    const hostedFetch = createHostedProviderFetch({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      clientId: "0123456789abcdef0123456789abcdef",
+      fetchImpl: relayFetch,
+      loadRelayManifest: async () => ({ version: 1, providers: ["yahoo"] }),
+    });
+
+    await expect(
+      hostedFetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { authorization: "Bearer key" },
+        body: "{}",
+      }),
+    ).rejects.toThrow("OpenAI model relay is unavailable");
+    expect(relayFetch).not.toHaveBeenCalled();
   });
 
   it("fails closed when a proxy provider has no configured relay", async () => {

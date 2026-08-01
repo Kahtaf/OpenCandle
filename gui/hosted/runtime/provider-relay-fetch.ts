@@ -30,6 +30,7 @@ interface HostedProviderFetchOptions {
   relayUrl: string;
   clientId: string;
   fetchImpl?: typeof globalThis.fetch;
+  loadRelayManifest?: () => Promise<HostedRelayManifest | undefined>;
 }
 
 interface RelayResponseEnvelope {
@@ -150,6 +151,11 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
     if (!options.relayUrl) throw new Error("Hosted provider relay is unavailable");
 
     if (isModelRelayProvider(provider)) {
+      const manifest = await options.loadRelayManifest?.();
+      if (!manifest?.providers.includes(provider)) {
+        const label = provider === "openai" ? "OpenAI" : provider === "google" ? "Google" : "Anthropic";
+        throw new Error(`${label} model relay is unavailable or incompatible`);
+      }
       const request = new Request(input, init);
       const relayEndpoint = new URL(options.relayUrl);
       relayEndpoint.pathname = MODEL_RELAY_PATH;

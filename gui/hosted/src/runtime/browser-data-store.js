@@ -9,6 +9,7 @@ const MAX_SESSION_ENTRY_BYTES = 32 * 1_024 * 1_024;
 const MAX_ACTION_STORE_BYTES = 1_024 * 1_024;
 const MAX_STATE_BYTES = 32 * 1_024 * 1_024;
 const MAX_ARCHIVE_BYTES = 256 * 1_024 * 1_024;
+const MAX_ACTION_TIMESTAMP_SKEW_MS = 5 * 60 * 1_000;
 const SQLITE_SIGNATURE = "SQLite format 3\0";
 
 export function createBrowserDataStore(options = {}) {
@@ -40,14 +41,22 @@ class BrowserDataStore {
       const checkpoint = value?.checkpoint;
       if (!checkpoint || typeof checkpoint !== "object") return false;
       const sessions = Array.isArray(checkpoint.sessions) ? checkpoint.sessions : [];
+      const previous = await this.readArchive();
       const state = checkpoint.state;
-      const stateBytes =
+      let stateBytes;
+      if (state === undefined) {
+        stateBytes = previous?.stateBase64
+          ? decodeStateBase64(previous.stateBase64)
+          : undefined;
+      } else if (
         state?.format === "sqlite3" &&
         state?.filename === "current.sqlite3" &&
         typeof state.contentBase64 === "string"
-          ? decodeBase64(state.contentBase64)
-          : undefined;
-      const previous = await this.readArchive();
+      ) {
+        stateBytes = decodeBase64(state.contentBase64);
+      } else {
+        throw new Error("State checkpoint is invalid");
+      }
       const archive = createHostedArchive({
         sessions,
         stateBytes,
@@ -303,7 +312,9 @@ function validateActionStore(content) {
       (entry) =>
         !isRecord(entry) ||
         typeof entry.id !== "string" ||
-        typeof entry.pendingAtMs !== "number",
+        !Number.isSafeInteger(entry.pendingAtMs) ||
+        entry.pendingAtMs < 0 ||
+        entry.pendingAtMs > Date.now() + MAX_ACTION_TIMESTAMP_SKEW_MS,
     ) ||
     (parsed.actionFingerprints !== undefined &&
       (!isRecord(parsed.actionFingerprints) ||

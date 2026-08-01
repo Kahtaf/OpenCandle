@@ -560,6 +560,51 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("cancels the writer's stream reader when a follower stream times out", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let producerCancelled = false;
+    const streamRequest = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("first"));
+            },
+            cancel() {
+              producerCancelled = true;
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    );
+    const options = {
+      createHost: () => ({
+        request: vi.fn(),
+        streamRequest,
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 20,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+    const response = await follower.streamRequest("gui", { action: "chat_run" });
+    const reader = response.body!.getReader();
+
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+    await expect(reader.read()).rejects.toThrow("did not complete the stream");
+    await vi.waitFor(() => expect(producerCancelled).toBe(true));
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("does not invalidate followers after a read-only forwarded bootstrap", async () => {
     FakeBroadcastChannel.channels.clear();
     FakeBroadcastChannel.messages = [];

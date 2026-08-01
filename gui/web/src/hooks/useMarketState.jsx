@@ -73,6 +73,9 @@ export function mergeQuoteRefreshSnapshot(current, refreshed) {
   for (const quote of portfolioQuotes) {
     if (quote?.refreshStatus === "unavailable") stalePortfolioIds.add(quote.portfolioId);
   }
+  for (const quote of refreshed.portfolioQuotes ?? []) {
+    if (quote?.status === "unavailable") stalePortfolioIds.add(quote.portfolioId);
+  }
   const portfolioSummaries = mergePortfolioSummaries(
     current.portfolioSummaries,
     refreshed.portfolioSummaries,
@@ -155,7 +158,13 @@ function retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFail
   if (!current || current.status === "unavailable") return refreshed;
   const rows = portfolioQuotes.filter((quote) => quote?.portfolioId === refreshed.portfolioId);
   const includedRows = rows.filter((quote) => quote?.includedInTotals !== false);
+  const hasUnavailableBaseCurrencyRow = rows.some(
+    (quote) =>
+      quote?.status === "unavailable" &&
+      (!quote.currency || quote.currency === refreshed.baseCurrency),
+  );
   const canRecompute =
+    !hasUnavailableBaseCurrencyRow &&
     includedRows.length > 0 &&
     includedRows.every(
       (quote) =>
@@ -264,7 +273,6 @@ export function useMarketState({
     const timer = window.setInterval(run, pollMs);
     return () => {
       disposed = true;
-      quoteRefreshGate.current.cancel();
       window.clearInterval(timer);
     };
   }, [pollMs, refresh]);
@@ -273,6 +281,7 @@ export function useMarketState({
   // pages fresh without surfacing age badges in the UI.
   useEffect(() => {
     let disposed = false;
+    const gate = quoteRefreshGate.current;
     const run = async () => {
       if (!disposed) await refreshQuotes();
     };
@@ -280,6 +289,7 @@ export function useMarketState({
     const timer = window.setInterval(run, quotePollMs);
     return () => {
       disposed = true;
+      gate.cancel();
       window.clearInterval(timer);
     };
   }, [quotePollMs, refreshQuotes]);

@@ -121,7 +121,10 @@ class BrowserRuntimeCoordinator {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    for (const controller of this.activeForwardedStreams.values()) controller.abort();
+    for (const active of this.activeForwardedStreams.values()) {
+      active.controller.abort();
+      void active.reader?.cancel("Hosted runtime coordinator closed");
+    }
     this.activeForwardedStreams.clear();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
@@ -267,7 +270,9 @@ class BrowserRuntimeCoordinator {
     if (!isEpoch(message.epoch) || message.epoch !== this.epoch) return;
     if (message.type === "cancel") {
       if (this.role === "writer" && message.target === this.tabId) {
-        this.activeForwardedStreams.get(message.requestId)?.abort();
+        const active = this.activeForwardedStreams.get(message.requestId);
+        active?.controller.abort();
+        void active?.reader?.cancel("Hosted follower cancelled the stream");
       }
       return;
     }
@@ -354,7 +359,8 @@ class BrowserRuntimeCoordinator {
 
   async handleForwardedStream(message) {
     const controller = new AbortController();
-    this.activeForwardedStreams.set(message.requestId, controller);
+    const active = { controller, reader: null };
+    this.activeForwardedStreams.set(message.requestId, active);
     try {
       const response = await this.host.streamRequest(
         message.operation,
@@ -363,6 +369,7 @@ class BrowserRuntimeCoordinator {
       );
       if (!response.ok || !response.body) throw new Error("Hosted writer could not start the stream");
       const reader = response.body.getReader();
+      active.reader = reader;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;

@@ -173,6 +173,48 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("rejects a sparse sparkline response instead of silently dropping provider bars", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_000,
+        open: 198,
+        high: 202,
+        low: 197,
+        close: 200,
+        volume: 1_000,
+      },
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_300,
+        open: 0,
+        high: 0,
+        low: 0,
+        close: 0,
+        volume: 0,
+      },
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_600,
+        open: 200,
+        high: 204,
+        low: 199,
+        close: 203,
+        volume: 1_200,
+      },
+    ]);
+
+    const snapshot = await buildHostedMarketQuoteSnapshot({
+      watchlists: [{ id: 1, name: "Default", isDefault: true }],
+      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
+    });
+
+    expect(snapshot.watchlistQuotes[0]?.sparkline).toMatchObject({
+      status: "unavailable",
+      reason: "Historical data contains invalid bars",
+    });
+  });
+
   it("rejects zero-filled and malformed history instead of returning an OK chart", async () => {
     vi.mocked(getHistory).mockResolvedValueOnce([
       {

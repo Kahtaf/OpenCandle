@@ -190,9 +190,13 @@ async function fetchHostedSparklineSnapshot(symbol: string) {
   const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
   if (result.status === "unavailable") return unavailableSparkline(result.reason);
   const bars = result.data.filter((bar) => Number.isFinite(bar.close) && bar.close > 0);
-  if (result.stale || bars.length < 2) {
+  if (result.stale || bars.length !== result.data.length || bars.length < 2) {
     return unavailableSparkline(
-      result.stale ? "Historical data is stale" : "Not enough intraday history",
+      result.stale
+        ? "Historical data is stale"
+        : bars.length < 2
+          ? "Not enough intraday history"
+          : "Historical data contains invalid bars",
       bars.at(-1)?.date,
       result.stale === true,
     );

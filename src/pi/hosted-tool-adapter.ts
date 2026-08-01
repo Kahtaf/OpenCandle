@@ -34,12 +34,18 @@ import { agentToolToPiTool } from "./tool-adapter-core.js";
 interface HostedToolPolicy {
   readonly tool: ReturnType<typeof agentToolToPiTool>;
   readonly anyProviders: readonly ProviderId[];
+  readonly credentialRequiredProviders: ReadonlySet<ProviderId>;
 }
 
 const hosted = (
   tool: Parameters<typeof agentToolToPiTool>[0],
   anyProviders: readonly ProviderId[],
-): HostedToolPolicy => ({ tool: agentToolToPiTool(tool), anyProviders });
+  credentialRequiredProviders: readonly ProviderId[] = [],
+): HostedToolPolicy => ({
+  tool: agentToolToPiTool(tool),
+  anyProviders,
+  credentialRequiredProviders: new Set(credentialRequiredProviders),
+});
 
 function withParameters<TParams extends TSchema, TDetails, TState>(
   tool: ToolDefinition<TParams, TDetails, TState>,
@@ -91,11 +97,21 @@ const HOSTED_SCREEN_STOCKS = withParameters(
   ]),
 );
 
-function hostedWebSearchTool(available: ReadonlySet<string>) {
-  const allowedProviders = [
+const HOSTED_STOCK_HISTORY = hosted(
+  stockHistoryTool,
+  ["alpha_vantage", "lse", "yahoo"],
+  ["alpha_vantage", "lse"],
+);
+
+function hostedSearchProviders(available: ReadonlySet<string>) {
+  return [
     ...(available.has("exa") ? (["exa"] as const) : []),
     ...(available.has("brave") && hasCredential("brave") ? (["brave"] as const) : []),
   ];
+}
+
+function hostedWebSearchTool(available: ReadonlySet<string>) {
+  const allowedProviders = hostedSearchProviders(available);
   const providers = allowedProviders.map((provider) => Type.Literal(provider));
   if (providers.length === 0) return null;
   const providerSchema =
@@ -127,10 +143,14 @@ function hostedWebSearchTool(available: ReadonlySet<string>) {
  */
 const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(searchTickerTool, ["yahoo", "tradingview"]),
-  hosted(stockQuoteTool, ["alpha_vantage", "yahoo"]),
-  hosted(stockHistoryTool, ["alpha_vantage", "lse", "yahoo"]),
-  hosted(priceComparisonTool, ["alpha_vantage", "lse", "yahoo"]),
-  { tool: HOSTED_SCREEN_STOCKS, anyProviders: ["tradingview"] },
+  hosted(stockQuoteTool, ["alpha_vantage", "yahoo"], ["alpha_vantage"]),
+  HOSTED_STOCK_HISTORY,
+  hosted(priceComparisonTool, ["alpha_vantage", "lse", "yahoo"], ["alpha_vantage", "lse"]),
+  {
+    tool: HOSTED_SCREEN_STOCKS,
+    anyProviders: ["tradingview"],
+    credentialRequiredProviders: new Set(),
+  },
   hosted(cryptoPriceTool, ["coingecko"]),
   hosted(cryptoHistoryTool, ["coingecko"]),
   hosted(companyOverviewTool, ["alpha_vantage"]),
@@ -150,12 +170,6 @@ const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(optionChainTool, ["yahoo"]),
 ];
 
-const ALPHA_VANTAGE_MARKET_TOOLS = new Set([
-  "get_stock_quote",
-  "get_stock_history",
-  "get_price_comparison",
-]);
-
 export function getHostedOpenCandleToolDefinitions(
   options: { relayProviders?: readonly string[] } = {},
 ) {
@@ -164,17 +178,13 @@ export function getHostedOpenCandleToolDefinitions(
       (provider) => provider.id,
     ),
   );
-  const hasIntradayHistory = available.has("yahoo") || available.has("lse");
-  const hasAlphaVantageCredential = hasCredential("alpha_vantage");
-  const tools = HOSTED_TOOLS.filter(({ tool, anyProviders }) =>
-    anyProviders.some(
-      (provider) =>
-        available.has(provider) &&
-        (provider !== "brave" || hasCredential("brave")) &&
-        (provider !== "alpha_vantage" ||
-          !ALPHA_VANTAGE_MARKET_TOOLS.has(tool.name) ||
-          hasAlphaVantageCredential),
-    ),
+  const providerIsUsable = (provider: ProviderId, credentialRequired: ReadonlySet<ProviderId>) =>
+    available.has(provider) && (!credentialRequired.has(provider) || hasCredential(provider));
+  const hasIntradayHistory =
+    available.has("yahoo") ||
+    providerIsUsable("lse", HOSTED_STOCK_HISTORY.credentialRequiredProviders);
+  const tools = HOSTED_TOOLS.filter(({ anyProviders, credentialRequiredProviders }) =>
+    anyProviders.some((provider) => providerIsUsable(provider, credentialRequiredProviders)),
   ).map(({ tool }) => {
     if (hasIntradayHistory) return tool;
     if (tool.name === "get_stock_history") return DAILY_ONLY_STOCK_HISTORY;
@@ -182,10 +192,7 @@ export function getHostedOpenCandleToolDefinitions(
     return tool;
   });
   const search = hostedWebSearchTool(available);
-  const sentimentProviders = [
-    ...(available.has("exa") ? (["exa"] as const) : []),
-    ...(available.has("brave") && hasCredential("brave") ? (["brave"] as const) : []),
-  ];
+  const sentimentProviders = hostedSearchProviders(available);
   const sentiment =
     sentimentProviders.length > 0
       ? Object.assign(

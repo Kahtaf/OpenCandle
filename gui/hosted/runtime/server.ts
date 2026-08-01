@@ -51,6 +51,7 @@ const hostedGuiRuntimePromise = initialHostedRelayManifestPromise.then((relayMan
     relayUrl: providerRelayUrl,
     clientId: providerRelayClientId,
     fetchImpl: nativeFetch,
+    loadRelayManifest: loadHostedRelayManifest,
   });
   const selectedProvider = isFirstClassModelProvider(process.env.OPENCANDLE_MODEL_PROVIDER)
     ? process.env.OPENCANDLE_MODEL_PROVIDER

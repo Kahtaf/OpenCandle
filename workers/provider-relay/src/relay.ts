@@ -396,11 +396,19 @@ async function relayModelRequest(options: {
       return options.respondError(502, "upstream_redirect_rejected");
     }
     clearTimeout(timeout);
-    return new Response(boundedPassThrough(upstream.body, options.maxResponseBytes), {
+    return new Response(
+      guardedModelStream(
+        upstream.body,
+        options.maxResponseBytes,
+        options.timeoutMs,
+        controller,
+      ),
+      {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: modelResponseHeaders(upstream.headers, options.corsOrigin),
-    });
+      },
+    );
   } catch {
     if (controller.signal.aborted) return options.respondError(504, "upstream_timeout");
     return options.respondError(502, "upstream_unavailable");
@@ -409,24 +417,69 @@ async function relayModelRequest(options: {
   }
 }
 
-function boundedPassThrough(
+function guardedModelStream(
   stream: ReadableStream<Uint8Array> | null,
   maxBytes: number,
+  timeoutMs: number,
+  upstreamController: AbortController,
 ): ReadableStream<Uint8Array> | null {
   if (!stream) return null;
+  const reader = stream.getReader();
   let total = 0;
-  return stream.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        total += chunk.byteLength;
-        if (total > maxBytes) {
-          controller.error(new RequestTooLargeError());
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let output: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let closed = false;
+  const clearDeadline = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const fail = (error: Error) => {
+    if (closed) return;
+    closed = true;
+    clearDeadline();
+    upstreamController.abort(error);
+    void reader.cancel(error);
+    output?.error(error);
+  };
+  const resetDeadline = () => {
+    clearDeadline();
+    timer = setTimeout(() => fail(new Error("upstream_timeout")), timeoutMs);
+  };
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      output = controller;
+      resetDeadline();
+    },
+    async pull(controller) {
+      if (closed) return;
+      try {
+        const { done, value } = await reader.read();
+        if (closed) return;
+        if (done) {
+          closed = true;
+          clearDeadline();
+          controller.close();
           return;
         }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+        total += value.byteLength;
+        if (total > maxBytes) {
+          fail(new RequestTooLargeError());
+          return;
+        }
+        controller.enqueue(value);
+        resetDeadline();
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error("upstream_unavailable"));
+      }
+    },
+    async cancel(reason) {
+      if (closed) return;
+      closed = true;
+      clearDeadline();
+      upstreamController.abort(reason);
+      await reader.cancel(reason);
+    },
+  });
 }
 
 async function pseudonymousRateLimitKey(connectingIp: string): Promise<string> {

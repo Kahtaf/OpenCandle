@@ -377,4 +377,70 @@ describe("mergeQuoteRefreshSnapshot", () => {
       stale: true,
     });
   });
+
+  it("does not publish a partial total when an unavailable base-currency row has no prior quote", () => {
+    const current = {
+      generatedAt: "2026-08-01T12:00:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        {
+          lotId: 1,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: 600,
+          totalCost: 500,
+          pnl: 100,
+          includedInTotals: true,
+          currency: "USD",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "ok",
+        totalValue: 600,
+        totalCost: 500,
+        totalPnl: 100,
+        totalPnlPercent: 20,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [],
+    };
+    current.portfolioSummaries = [current.portfolioSummary];
+    const refreshed = {
+      generatedAt: "2026-08-01T12:05:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        current.portfolioQuotes[0],
+        {
+          lotId: 2,
+          portfolioId: 3,
+          status: "unavailable",
+          reason: "relay timeout",
+          includedInTotals: false,
+          currency: "USD",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "unavailable",
+        totalValue: null,
+        totalCost: 700,
+        totalPnl: null,
+        totalPnlPercent: null,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [],
+    };
+    refreshed.portfolioSummaries = [refreshed.portfolioSummary];
+
+    const merged = mergeQuoteRefreshSnapshot(current, refreshed);
+
+    expect(merged.portfolioSummary).toMatchObject({
+      status: "unavailable",
+      totalValue: null,
+      totalPnl: null,
+      stale: true,
+      refreshStatus: "unavailable",
+    });
+  });
 });

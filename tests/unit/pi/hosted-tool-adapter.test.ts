@@ -73,6 +73,23 @@ describe("hosted tool adapter", () => {
     );
   });
 
+  it("does not advertise an API-key provider from relay negotiation alone", () => {
+    const withoutKey = getHostedOpenCandleToolDefinitions({ relayProviders: ["lse"] }).map(
+      (tool) => tool.name,
+    );
+    hasCredential.mockImplementation((provider) => provider === "lse");
+    const withKey = getHostedOpenCandleToolDefinitions({ relayProviders: ["lse"] }).map(
+      (tool) => tool.name,
+    );
+
+    expect(withoutKey).not.toEqual(
+      expect.arrayContaining(["get_stock_history", "get_price_comparison"]),
+    );
+    expect(withKey).toEqual(
+      expect.arrayContaining(["get_stock_history", "get_price_comparison", "get_financials"]),
+    );
+  });
+
   it("does not advertise DCF until its required Yahoo quote path is available", () => {
     const directNames = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
     const yahooNames = getHostedOpenCandleToolDefinitions({ relayProviders: ["yahoo"] }).map(

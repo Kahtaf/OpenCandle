@@ -14,7 +14,10 @@ import {
   getOptionsChain,
   getQuote,
 } from "../../../src/providers/yahoo-finance.js";
-import { createHostedProviderFetch } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
+import {
+  createHostedProviderFetch,
+  type HostedRelayManifest,
+} from "../../../gui/hosted/runtime/provider-relay-fetch.js";
 import {
   createFirstClassModelProviders,
   modelSetupProviders,
@@ -112,8 +115,17 @@ async function main(): Promise<void> {
   if (!health.ok || manifest.version !== 1 || !Array.isArray(manifest.providers)) {
     throw new Error("Relay health contract failed");
   }
+  const negotiatedManifest: HostedRelayManifest = {
+    version: 1,
+    providers: manifest.providers.filter((provider): provider is string => typeof provider === "string"),
+  };
 
-  globalThis.fetch = createHostedProviderFetch({ relayUrl, clientId, fetchImpl: nativeFetch });
+  globalThis.fetch = createHostedProviderFetch({
+    relayUrl,
+    clientId,
+    fetchImpl: nativeFetch,
+    loadRelayManifest: async () => negotiatedManifest,
+  });
 
   await check("yahoo", "live", true, async () => {
     clearCrumbCache();

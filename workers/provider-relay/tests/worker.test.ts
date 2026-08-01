@@ -206,6 +206,36 @@ describe("hosted provider relay", () => {
     await expect(response.text()).rejects.toBeDefined();
   });
 
+  it("cancels a model stream that stalls after response headers", async () => {
+    let cancelled = false;
+    const upstream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: first\n\n"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const relay = createProviderRelay({
+      modelTimeoutMs: 20,
+      fetchImpl: vi.fn(async () => new Response(upstream)),
+    });
+    const response = await relay.fetch(
+      modelRelayRequest({
+        provider: "openai",
+        url: "https://api.openai.com/v1/responses",
+        headers: { authorization: "Bearer test", "content-type": "application/json" },
+        body: "{}",
+      }),
+      environment(),
+    );
+    const reader = response.body!.getReader();
+
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+    await expect(reader.read()).rejects.toThrow("upstream_timeout");
+    expect(cancelled).toBe(true);
+  });
+
   it.each(["america", "global"])(
     "accepts the complete hosted TradingView market contract for %s",
     async (market) => {

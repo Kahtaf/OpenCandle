@@ -49,6 +49,79 @@ describe("hosted browser archive", () => {
       }),
     ).toThrow("action snapshot");
   });
+
+  it.each([-1, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid pending action timestamps: %s",
+    (pendingAtMs) => {
+      expect(() =>
+        createHostedArchive({
+          sessions: [
+            {
+              ...session,
+              actionStore: JSON.stringify({
+                acceptedActionIds: [],
+                pendingActionIds: [{ id: "action-1", pendingAtMs }],
+                actionFingerprints: {},
+              }),
+            },
+          ],
+        }),
+      ).toThrow("action snapshot");
+    },
+  );
+
+  it("preserves SQLite when a session-only checkpoint omits unchanged state", async () => {
+    const files = new Map<string, string>();
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+      validateStateDatabase: async () => {},
+    });
+    await store.persistCheckpoint({
+      sessionId: "session-1",
+      checkpoint: {
+        sessions: [session],
+        state: {
+          format: "sqlite3",
+          filename: "current.sqlite3",
+          contentBase64: btoa(String.fromCharCode(...sqlite)),
+        },
+      },
+    });
+
+    await store.persistCheckpoint({
+      sessionId: "session-1",
+      checkpoint: { sessions: [session] },
+    });
+
+    await expect(store.readRuntimeSnapshot()).resolves.toMatchObject({ stateBytes: sqlite });
+  });
+
+  it("rejects malformed explicit state instead of acknowledging the previous SQLite snapshot", async () => {
+    const files = new Map<string, string>();
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+      validateStateDatabase: async () => {},
+    });
+    await store.persistCheckpoint({
+      sessionId: "session-1",
+      checkpoint: {
+        sessions: [session],
+        state: {
+          format: "sqlite3",
+          filename: "current.sqlite3",
+          contentBase64: btoa(String.fromCharCode(...sqlite)),
+        },
+      },
+    });
+
+    await expect(
+      store.persistCheckpoint({
+        sessionId: "session-1",
+        checkpoint: { sessions: [session], state: { filename: "typo.sqlite3" } },
+      }),
+    ).rejects.toThrow("State checkpoint is invalid");
+    await expect(store.readRuntimeSnapshot()).resolves.toMatchObject({ stateBytes: sqlite });
+  });
   it("accepts attachment-sized Pi session entries above the old 1 MiB ceiling", () => {
     const largeSession = {
       ...session,
