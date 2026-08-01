@@ -221,7 +221,7 @@ export function createHostedRuntimeTransport({ host }) {
       selectedSessionId = targetSessionId;
       try {
         if (typeof host.streamRequest === "function") {
-          return host.streamRequest(
+          const response = await host.streamRequest(
             "gui",
             {
               action: "chat_run",
@@ -230,6 +230,7 @@ export function createHostedRuntimeTransport({ host }) {
             },
             { signal },
           );
+          return refreshAfterStream(response, refresh);
         }
         const result = await requestGui(
           {
@@ -296,6 +297,34 @@ export function createHostedRuntimeTransport({ host }) {
   };
 
   return transport;
+}
+
+function refreshAfterStream(response, refresh) {
+  if (!response?.body) return response;
+  const reader = response.body.getReader();
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        const value = await reader.read();
+        if (!value.done) {
+          controller.enqueue(value.value);
+          return;
+        }
+        controller.close();
+        await refresh();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 function requireSessionId(value) {

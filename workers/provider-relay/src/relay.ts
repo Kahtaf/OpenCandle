@@ -30,7 +30,10 @@ interface ProviderRelayOptions {
   maxRequestBytes?: number;
   maxResponseBytes?: number;
   timeoutMs?: number;
+  allowedOrigins?: readonly string[];
 }
+
+const DEFAULT_ALLOWED_ORIGINS = ["https://web.opencandle.app"] as const;
 
 interface ProviderPolicy {
   readonly methods: readonly RelayMethod[];
@@ -51,7 +54,7 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
   ),
   exa: policy(
     ["POST"],
-    new Set([...JSON_POST_HEADERS, "authorization"]),
+    new Set([...JSON_POST_HEADERS, "x-api-key"]),
     (url) => exact(url, "api.exa.ai", "/search") || exact(url, "mcp.exa.ai", "/mcp"),
   ),
   fear_greed: policy(["GET"], COMMON_GET_HEADERS, (url) =>
@@ -102,47 +105,56 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
   const maxRequestBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const allowedOrigins = new Set(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
 
   return {
     async fetch(request: Request, env: ProviderRelayEnv): Promise<Response> {
       const requestUrl = new URL(request.url);
-      if (request.method === "OPTIONS") return corsPreflight();
+      const requestOrigin = request.headers.get("origin");
+      const corsOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : null;
+      const respondJson = (status: number, body: unknown) =>
+        jsonResponse(status, body, corsOrigin);
+      const respondError = (status: number, error: string) =>
+        errorResponse(status, error, corsOrigin);
       if (requestUrl.pathname === "/v1/health") {
-        if (request.method !== "GET") return errorResponse(405, "method_not_allowed");
-        return jsonResponse(200, RELAY_POLICY_MANIFEST);
+        if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
+        if (request.method !== "GET") return respondError(405, "method_not_allowed");
+        return respondJson(200, RELAY_POLICY_MANIFEST);
       }
       if (requestUrl.pathname !== "/v1/provider-fetch") {
-        return errorResponse(404, "not_found");
+        return respondError(404, "not_found");
       }
-      if (request.method !== "POST") return errorResponse(405, "method_not_allowed");
+      if (requestOrigin && !corsOrigin) return respondError(403, "origin_not_allowed");
+      if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
+      if (request.method !== "POST") return respondError(405, "method_not_allowed");
 
       const clientId = request.headers.get("x-opencandle-client") ?? "";
-      if (!CLIENT_ID_PATTERN.test(clientId)) return errorResponse(400, "invalid_client");
+      if (!CLIENT_ID_PATTERN.test(clientId)) return respondError(400, "invalid_client");
       const connectingIp = request.headers.get("cf-connecting-ip")?.trim() ?? "";
       if (!/^[0-9a-f:.]{2,64}$/i.test(connectingIp)) {
-        return errorResponse(503, "relay_rate_limit_identity_unavailable");
+        return respondError(503, "relay_rate_limit_identity_unavailable");
       }
       if (!env.PROVIDER_RELAY_RATE_LIMITER) {
-        return errorResponse(503, "relay_rate_limiter_unavailable");
+        return respondError(503, "relay_rate_limiter_unavailable");
       }
       const rate = await env.PROVIDER_RELAY_RATE_LIMITER.limit({
         key: await pseudonymousRateLimitKey(connectingIp),
       });
-      if (!rate.success) return errorResponse(429, "relay_rate_limited");
+      if (!rate.success) return respondError(429, "relay_rate_limited");
 
       let envelope: RelayRequestEnvelope;
       try {
         const bytes = await readBounded(request.body, maxRequestBytes);
         envelope = parseEnvelope(new TextDecoder().decode(bytes));
       } catch (error) {
-        return errorResponse(
+        return respondError(
           error instanceof RequestTooLargeError ? 413 : 400,
           error instanceof RequestTooLargeError ? "request_too_large" : "invalid_request",
         );
       }
 
       const validated = validateProviderRequest(envelope);
-      if (!validated) return errorResponse(403, "provider_request_not_allowed");
+      if (!validated) return respondError(403, "provider_request_not_allowed");
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -159,11 +171,11 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
         );
         if (upstream.status >= 300 && upstream.status < 400) {
           await upstream.body?.cancel();
-          return errorResponse(502, "upstream_redirect_rejected");
+          return respondError(502, "upstream_redirect_rejected");
         }
         if (!upstream.ok) {
           await upstream.body?.cancel();
-          return jsonResponse(200, {
+          return respondJson(200, {
             version: CONTRACT_VERSION,
             status: upstream.status,
             statusText: "",
@@ -172,7 +184,7 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
           });
         }
         const body = await readBounded(upstream.body, maxResponseBytes);
-        return jsonResponse(200, {
+        return respondJson(200, {
           version: CONTRACT_VERSION,
           status: upstream.status,
           statusText: upstream.statusText,
@@ -181,10 +193,10 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
         });
       } catch (error) {
         if (error instanceof RequestTooLargeError) {
-          return errorResponse(502, "upstream_response_too_large");
+          return respondError(502, "upstream_response_too_large");
         }
-        if (controller.signal.aborted) return errorResponse(504, "upstream_timeout");
-        return errorResponse(502, "upstream_unavailable");
+        if (controller.signal.aborted) return respondError(504, "upstream_timeout");
+        return respondError(502, "upstream_unavailable");
       } finally {
         clearTimeout(timeout);
       }
@@ -349,9 +361,9 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-function corsHeaders(): Record<string, string> {
+function corsHeaders(origin: string | null): Record<string, string> {
   return {
-    "Access-Control-Allow-Origin": "*",
+    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-OpenCandle-Client",
     "Cache-Control": "no-store",
@@ -360,16 +372,16 @@ function corsHeaders(): Record<string, string> {
   };
 }
 
-function corsPreflight(): Response {
-  return new Response(null, { status: 204, headers: corsHeaders() });
+function corsPreflight(origin: string | null): Response {
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
 }
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: corsHeaders() });
+function jsonResponse(status: number, body: unknown, origin: string | null): Response {
+  return new Response(JSON.stringify(body), { status, headers: corsHeaders(origin) });
 }
 
-function errorResponse(status: number, error: string): Response {
-  return jsonResponse(status, { error });
+function errorResponse(status: number, error: string, origin: string | null): Response {
+  return jsonResponse(status, { error }, origin);
 }
 
 class RequestTooLargeError extends Error {}

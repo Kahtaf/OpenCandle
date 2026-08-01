@@ -4,6 +4,52 @@ import { createProviderRelay } from "../src/relay.js";
 const endpoint = "https://relay.test/v1/provider-fetch";
 
 describe("hosted provider relay", () => {
+  it("rejects untrusted browser origins before rate limiting", async () => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn() });
+    const env = environment();
+    const response = await relay.fetch(
+      relayRequest(
+        {
+          provider: "yahoo",
+          method: "GET",
+          url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+        },
+        undefined,
+        undefined,
+        "https://attacker.example",
+      ),
+      env,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "origin_not_allowed" });
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    expect(env.PROVIDER_RELAY_RATE_LIMITER.limit).not.toHaveBeenCalled();
+  });
+
+  it("echoes the approved hosted origin in CORS responses", async () => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn(async () => new Response("{}")) });
+    const response = await relay.fetch(
+      relayRequest(
+        {
+          provider: "yahoo",
+          method: "GET",
+          url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+        },
+        undefined,
+        undefined,
+        "https://web.opencandle.app",
+      ),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://web.opencandle.app",
+    );
+    expect(response.headers.get("vary")).toBe("Origin");
+  });
+
   it.each([
     ["brave", "GET", "https://api.search.brave.com/res/v1/web/search?q=markets"],
     ["exa", "POST", "https://api.exa.ai/search"],
@@ -301,6 +347,7 @@ function relayRequest(
   body: Record<string, unknown>,
   clientId = "0123456789abcdef0123456789abcdef",
   connectingIp = "203.0.113.10",
+  origin?: string,
 ): Request {
   return new Request(endpoint, {
     method: "POST",
@@ -308,6 +355,7 @@ function relayRequest(
       "content-type": "application/json",
       "x-opencandle-client": clientId,
       "cf-connecting-ip": connectingIp,
+      ...(origin ? { origin } : {}),
     },
     body: JSON.stringify({ version: 1, ...body }),
   });

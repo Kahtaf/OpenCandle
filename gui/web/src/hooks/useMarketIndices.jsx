@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { loopbackRuntimeTransport } from "../runtime/runtime-transport.js";
-import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 import { QUOTE_REFRESH_INTERVAL_MS } from "./useMarketState.jsx";
 
 const INITIAL_STATE = { loading: true, quotes: [], unavailable: false };

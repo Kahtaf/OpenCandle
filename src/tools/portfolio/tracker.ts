@@ -183,28 +183,9 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             details: removed,
           };
         }
-        if (!args.symbol) {
-          throw new Error("lot_id or symbol is required for remove action.");
-        }
-        const symbol = args.symbol.toUpperCase();
-        const removedLots = service
-          .listPortfolioLots(portfolio.id)
-          .filter((lot) => lot.symbol === symbol);
-        if (!service.removePortfolioLotsBySymbol(symbol, portfolio.id)) {
-          return {
-            content: [{ type: "text", text: `${symbol} not found in ${portfolio.name}` }],
-            details: null,
-          };
-        }
-        return {
-          content: [{ type: "text", text: `Removed ${symbol} from portfolio` }],
-          details: {
-            symbol,
-            removedCount: removedLots.length,
-            removedLotIds: removedLots.map((lot) => lot.id),
-            instrumentIds: [...new Set(removedLots.map((lot) => lot.instrumentId))],
-          },
-        };
+        throw new Error(
+          "lot_id is required for remove action. Use view to find the stable portfolio lot id.",
+        );
       }
 
       if (args.action === "update") {
@@ -295,6 +276,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           };
           return {
             ...position,
+            lotId: p.id,
             currentPrice,
             marketValue,
             totalCost,
@@ -337,10 +319,10 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           ? ""
           : ` [excluded from ${baseCurrency} totals: ${p.exclusionReason}]`;
         if (p.currentPrice == null || p.pnl == null || p.pnlPercent == null) {
-          return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → unavailable | P&L: unavailable${excluded}`;
+          return `  ${p.symbol} [lot ${p.lotId}]: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → unavailable | P&L: unavailable${excluded}`;
         }
         const sign = p.pnlPercent >= 0 ? "+" : "";
-        return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → ${formatMoney(p.currentPrice, p.currency)} | P&L: ${formatMoney(p.pnl, p.currency)} (${sign}${p.pnlPercent.toFixed(2)}%)${excluded}`;
+        return `  ${p.symbol} [lot ${p.lotId}]: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → ${formatMoney(p.currentPrice, p.currency)} | P&L: ${formatMoney(p.pnl, p.currency)} (${sign}${p.pnlPercent.toFixed(2)}%)${excluded}`;
       });
 
       const exclusions =

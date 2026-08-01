@@ -418,12 +418,17 @@ async function run() {
 
     r = await tool.execute("e2e", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
     assert(r.content[0].text.includes("AAPL"), "add failed");
+    const itemId = (r.details as { id: number }).id;
 
     r = await tool.execute("e2e", { action: "check", watchlist_name: "MAG7" });
     assert(r.content[0].text.includes("AAPL"), "check missing AAPL");
     assert(r.content[0].text.includes("MAG7"), "check missing watchlist name");
 
-    r = await tool.execute("e2e", { action: "remove", symbol: "AAPL", watchlist_name: "MAG7" });
+    r = await tool.execute("e2e", {
+      action: "remove",
+      item_id: itemId,
+      watchlist_name: "MAG7",
+    });
     assert(r.content[0].text.includes("Removed"), "remove failed");
 
     r = await tool.execute("e2e", { action: "check", watchlist_name: "MAG7" });

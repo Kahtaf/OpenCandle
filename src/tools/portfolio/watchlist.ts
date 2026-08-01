@@ -36,7 +36,7 @@ const params = Type.Object({
       description: "Named watchlist to create or use. Omit to use the default watchlist.",
     }),
   ),
-  symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
+  symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add)" })),
   item_id: Type.Optional(
     Type.Integer({ minimum: 1, description: "Stable watchlist row id for an exact remove." }),
   ),
@@ -155,20 +155,9 @@ export const watchlistTool: AgentTool<typeof params> = {
             details: null,
           };
         }
-        if (!args.symbol) {
-          throw new Error("symbol or item_id is required for remove action.");
-        }
-        const symbol = args.symbol.toUpperCase();
-        if (!service.removeWatchlistItemBySymbol(symbol, watchlist.id)) {
-          return {
-            content: [{ type: "text", text: `${symbol} not found in ${watchlist.name}` }],
-            details: null,
-          };
-        }
-        return {
-          content: [{ type: "text", text: `Removed ${symbol} from ${watchlist.name}` }],
-          details: null,
-        };
+        throw new Error(
+          "item_id is required for remove action. Use check to find the stable watchlist item id.",
+        );
       }
 
       const items = service.listWatchlistItems(watchlist.id);
@@ -219,7 +208,7 @@ function formatWatchlistCheck(watchlist: CollectionRecord, checks: WatchlistChec
       : "";
     const priceStr =
       typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
-    lines.push(`  ${c.symbol}: ${priceStr}${sourceStr}${statusStr}`);
+    lines.push(`  ${c.symbol} [item ${c.id}]: ${priceStr}${sourceStr}${statusStr}`);
   }
   return lines.join("\n");
 }

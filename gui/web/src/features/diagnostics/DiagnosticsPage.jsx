@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "../../components/ui/table.jsx";
 import { cn } from "../../lib/utils.js";
-import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { Badge, StatusBand } from "../market-state/shared.jsx";
 

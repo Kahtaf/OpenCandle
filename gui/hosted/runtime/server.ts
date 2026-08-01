@@ -41,7 +41,9 @@ import {
 } from "../../../src/pi/model-provider-metadata.js";
 
 const RUNTIME_VERSION = "opencandle-hosted-web-v1";
-const MAX_BODY_BYTES = 8_192;
+// Four 5 MiB image attachments expand to roughly 27 MiB as base64 JSON. Keep
+// one bounded request limit for both HTTP fallback and native stdio transport.
+const MAX_BODY_BYTES = 32 * 1_024 * 1_024;
 const MAX_EVIDENCE = 5;
 const CAPABILITIES = [
   "health",
@@ -458,7 +460,19 @@ function startStdioTransport(): void {
   process.stdin.setRawMode?.(true);
   const input = createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY });
   input.on("line", (line) => {
-    if (line.length > MAX_BODY_BYTES) return;
+    if (Buffer.byteLength(line) > MAX_BODY_BYTES) {
+      const requestId = line.match(/"requestId"\s*:\s*"([a-f0-9]{32})"/)?.[1];
+      if (requestId) {
+        writeProcessFrame({
+          type: "response",
+          runtimeEpoch,
+          requestId,
+          ok: false,
+          error: "Request frame is too large",
+        });
+      }
+      return;
+    }
     let message: Record<string, unknown>;
     try {
       message = JSON.parse(line) as Record<string, unknown>;

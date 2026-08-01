@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 export function useInstrumentHistory(symbol, range) {
   const transport = useRuntimeTransport();

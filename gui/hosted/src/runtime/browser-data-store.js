@@ -4,9 +4,10 @@ const ARCHIVE_VERSION = 1;
 const ARCHIVE_FILENAME = "checkpoint-v1.json";
 const BACKUP_FILENAME = "checkpoint-backup-v1.json";
 const MAX_SESSION_FILES = 100;
-const MAX_SESSION_BYTES = 1_048_576;
-const MAX_STATE_BYTES = 8_388_608;
-const MAX_ARCHIVE_BYTES = 16_777_216;
+const MAX_SESSION_BYTES = 128 * 1_024 * 1_024;
+const MAX_SESSION_ENTRY_BYTES = 32 * 1_024 * 1_024;
+const MAX_STATE_BYTES = 32 * 1_024 * 1_024;
+const MAX_ARCHIVE_BYTES = 256 * 1_024 * 1_024;
 const SQLITE_SIGNATURE = "SQLite format 3\0";
 
 export function createBrowserDataStore(options = {}) {
@@ -82,7 +83,14 @@ class BrowserDataStore {
       if (archive.stateBase64) {
         await this.validateStateDatabase(decodeBase64(archive.stateBase64));
       }
-      const current = await this.readArchive();
+      let current;
+      try {
+        current = await this.readArchive();
+      } catch {
+        // A validated import is also the recovery path for a corrupt current
+        // checkpoint. Do not let unreadable local state block replacement.
+        current = undefined;
+      }
       if (current) {
         const root = await this.getRoot();
         await writeFile(root, BACKUP_FILENAME, JSON.stringify(current));
@@ -290,7 +298,7 @@ function validateSessionContent(content) {
   const lines = content.split("\n").filter(Boolean);
   if (lines.length === 0 || lines.length > 20_000) throw new Error("Session snapshot is invalid");
   const parsed = lines.map((line) => {
-    if (byteLength(line) > 262_144) throw new Error("Session entry is too large");
+    if (byteLength(line) > MAX_SESSION_ENTRY_BYTES) throw new Error("Session entry is too large");
     try {
       return JSON.parse(line);
     } catch {
@@ -368,7 +376,9 @@ function validateBootstrap(value) {
     throw new Error("Offline bootstrap snapshot is invalid");
   }
   const serialized = JSON.stringify(value);
-  if (byteLength(serialized) > 2_097_152) throw new Error("Offline bootstrap snapshot is too large");
+  if (byteLength(serialized) > MAX_SESSION_BYTES) {
+    throw new Error("Offline bootstrap snapshot is too large");
+  }
   if (containsCredentialField(value)) {
     throw new Error("Offline bootstrap snapshot contains credential-bearing data");
   }

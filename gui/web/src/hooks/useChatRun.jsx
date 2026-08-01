@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const CURRENT_SESSION_KEY = "__current__";
 

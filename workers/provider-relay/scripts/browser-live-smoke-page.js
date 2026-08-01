@@ -124,7 +124,7 @@
       method: "POST",
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${keys.exa}`,
+        "x-api-key": keys.exa,
         "content-type": "application/json",
       },
       body: JSON.stringify({ query: "Apple earnings", type: "auto", numResults: 2 }),

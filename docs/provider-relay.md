@@ -19,6 +19,7 @@ Provider credentials still pass through Cloudflare in transit because the Worker
 - No redirects, URL credentials, fragments, arbitrary destinations, or arbitrary headers.
 - Requests capped at 256 KiB, upstream responses at 4 MiB, and upstream time at 15 seconds.
 - A 120-request-per-minute Workers Rate Limiting binding keyed by a SHA-256 digest of Cloudflare's server-observed client IP. The raw address is not logged, persisted by OpenCandle, or passed to the binding.
+- Browser requests are accepted only from `https://web.opencandle.app`; the Worker rejects other browser origins before rate limiting or reading a request body and echoes the approved origin instead of using wildcard CORS.
 - `Cache-Control: no-store` on every Worker response.
 - A versioned health manifest. Hosted OpenCandle enables relayed tools only when the version matches.
 

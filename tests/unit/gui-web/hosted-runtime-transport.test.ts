@@ -105,6 +105,26 @@ describe("hosted runtime transport", () => {
     );
   });
 
+  it("refreshes the completed target session after a streamed run is consumed", async () => {
+    const host = createHost();
+    host.streamRequest = vi.fn(
+      async () =>
+        new Response('data: {"type":"run.completed"}\n\n', {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const transport = createHostedRuntimeTransport({ host });
+
+    const response = await transport.startChatRun(
+      "session-1",
+      { prompt: "What changed?", sessionId: "session-1", actionId: "chat-stream" },
+      new AbortController().signal,
+    );
+    await response.text();
+
+    expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
+  });
+
   it("emulates the GUI event channel and refreshes snapshots after a run", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

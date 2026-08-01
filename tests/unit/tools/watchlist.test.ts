@@ -94,11 +94,11 @@ describe("watchlistTool", () => {
   });
 
   it("removes a symbol from the SQLite watchlist", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+    const added = await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
 
     const result = await watchlistTool.execute("test", {
       action: "remove",
-      symbol: "AAPL",
+      item_id: (added.details as { id: number }).id,
     });
 
     expect(result.content[0].text).toContain("Removed");
@@ -199,12 +199,16 @@ describe("watchlistTool", () => {
   });
 
   it("removes a symbol from only the selected named watchlist", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
+    const mag7Item = await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      watchlist_name: "MAG7",
+    });
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "ETFs" });
 
     const removed = await watchlistTool.execute("test", {
       action: "remove",
-      symbol: "AAPL",
+      item_id: (mag7Item.details as { id: number }).id,
       watchlist_name: "MAG7",
     });
     const mag7 = await watchlistTool.execute("test", { action: "check", watchlist_name: "MAG7" });
@@ -213,6 +217,14 @@ describe("watchlistTool", () => {
     expect(removed.content[0].text).toContain("Removed AAPL from MAG7");
     expect(mag7.content[0].text).toContain("MAG7 is empty");
     expect(etfs.content[0].text).toContain("AAPL");
+  });
+
+  it("requires a stable item id for removal", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+
+    await expect(
+      watchlistTool.execute("test", { action: "remove", symbol: "AAPL" }),
+    ).rejects.toThrow("item_id is required");
   });
 
   it("checks equity watchlist symbols through a TradingView batch and fills suffix symbols with Yahoo", async () => {
@@ -240,8 +252,8 @@ describe("watchlistTool", () => {
     expect(getQuotes).toHaveBeenCalledWith(["AAPL"]);
     expect(getQuote).toHaveBeenCalledTimes(1);
     expect(getQuote).toHaveBeenCalledWith("BTC-USD");
-    expect(result.content[0].text).toContain("AAPL: $190.50");
-    expect(result.content[0].text).toContain("BTC-USD: $68000.00");
+    expect(result.content[0].text).toMatch(/AAPL \[item \d+\]: \$190\.50/);
+    expect(result.content[0].text).toMatch(/BTC-USD \[item \d+\]: \$68000\.00/);
     expect(result.content[0].text).toContain("TradingView scanner data may be delayed");
     expect(result.details?.items).toEqual([
       expect.objectContaining({

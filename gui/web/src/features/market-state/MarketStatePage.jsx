@@ -17,7 +17,7 @@ import { Select } from "../../components/ui/select.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
-import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {

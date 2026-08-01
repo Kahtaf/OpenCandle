@@ -140,7 +140,7 @@ describe("browser runtime host", () => {
     );
   });
 
-  it("keeps a seeded session credential in memory without persisting it", () => {
+  it("keeps an inherited session credential through a reload of the promoted tab", () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     const storage = memoryStorage();
@@ -166,7 +166,21 @@ describe("browser runtime host", () => {
       currentModel: "anthropic/claude-haiku-4-5",
     });
     expect(storage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
-    expect(sessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+    expect(
+      JSON.parse(sessionStorage.getItem("opencandle.hosted.credentials.v1") ?? "null"),
+    ).toEqual(credential);
+
+    const reloaded = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage,
+      sessionStorage,
+      dataStore: {},
+    });
+    expect(reloaded.getSessionCredential()).toEqual(credential);
+    expect(reloaded.getModelSetup()).toMatchObject({
+      requirement: "ready",
+      currentModel: "anthropic/claude-haiku-4-5",
+    });
   });
 
   it("preserves provider credentials independently while switching Pi models", async () => {
@@ -442,6 +456,78 @@ describe("browser runtime host", () => {
     expect(storage.getItem("opencandle.hosted.relay-client.v1")).toBe(
       first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
     );
+  });
+
+  it("tears down a partially created WebContainer when boot fails", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
+    const teardown = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.boot = vi.fn(async () => {
+      host.container = { teardown };
+      throw new Error("asset failed");
+    });
+
+    await expect(host.ensureBooted()).rejects.toThrow("asset failed");
+    expect(teardown).toHaveBeenCalledOnce();
+    expect(host.container).toBeNull();
+    expect(host.bootPromise).toBeNull();
+  });
+
+  it("ignores superseded exits and fully resets the runtime that actually exits", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
+    let resolveExit = (_code: number) => {};
+    const teardown = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    const process = {
+      input: new WritableStream(),
+      output: new ReadableStream({
+        start(controller) {
+          queueMicrotask(() => {
+            controller.enqueue(
+              `@@OPENCANDLE@@${JSON.stringify({
+                type: "ready",
+                runtimeEpoch: host.runtimeEpoch,
+              })}\n`,
+            );
+          });
+        },
+      }),
+      exit: new Promise<number>((resolve) => {
+        resolveExit = resolve;
+      }),
+      kill: vi.fn(),
+    };
+    const container = { spawn: vi.fn(async () => process), teardown };
+    host.container = container;
+
+    await host.startProcess(container);
+    const runtimeEpoch = host.runtimeEpoch;
+    const reject = vi.fn();
+    host.pendingRequests.set("old-request", {
+      runtimeEpoch,
+      timer: 0,
+      reject,
+    });
+    resolveExit(1);
+
+    await vi.waitFor(() => expect(host.process).toBeNull());
+    expect(reject).toHaveBeenCalledOnce();
+    expect(host.pendingRequests.has("old-request")).toBe(false);
+    expect(host.processWriter).toBeNull();
+    expect(host.runtimeEpoch).toBe("");
+    expect(teardown).toHaveBeenCalledOnce();
   });
 
   it("fails closed when configured with a cross-origin production relay", () => {

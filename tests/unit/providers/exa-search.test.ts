@@ -431,7 +431,7 @@ describe("exaSearch (API path)", () => {
         "https://api.exa.ai/search",
         expect.objectContaining({
           method: "POST",
-          headers: expect.objectContaining({ Authorization: "Bearer test-exa-key" }),
+          headers: expect.objectContaining({ "x-api-key": "test-exa-key" }),
         }),
       );
     } finally {

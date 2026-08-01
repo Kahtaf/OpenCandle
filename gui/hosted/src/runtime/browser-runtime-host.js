@@ -48,6 +48,17 @@ class BrowserRuntimeHost {
     this.relayClientId = getOrCreateRelayClientId(this.storage);
     this.dataStore = options.dataStore ?? createBrowserDataStore();
     this.volatileCredential = normalizeCredential(options.sessionCredential);
+    if (this.volatileCredential) {
+      const currentSessionCredentials = parseCredentialStore(
+        this.sessionStorage.getItem(CREDENTIAL_KEY),
+        "session",
+      );
+      const inheritedCredentials = parseCredentialBundle(this.volatileCredential, "session");
+      writeCredentialStore(this.sessionStorage, {
+        ...currentSessionCredentials,
+        ...inheritedCredentials,
+      });
+    }
     this.container = null;
     this.process = null;
     this.processWriter = null;
@@ -284,6 +295,7 @@ class BrowserRuntimeHost {
         signal: options.signal,
         abort,
         blocksUpdate: requestBlocksUpdate(operation, payload),
+        runtimeEpoch: this.runtimeEpoch,
       });
       void this.writeProcessMessage({
         type: "request",
@@ -346,6 +358,7 @@ class BrowserRuntimeHost {
         signal: options.signal,
         abort,
         blocksUpdate: true,
+        runtimeEpoch: this.runtimeEpoch,
       });
       await this.writeProcessMessage({
         type: "request",
@@ -374,12 +387,12 @@ class BrowserRuntimeHost {
       await this.bootPromise;
       this.lastBootError = "";
     } catch (error) {
-      this.bootPromise = null;
       this.lastBootError = scrubSecrets(
         error instanceof Error ? error.message : String(error),
         Object.values(this.readModelCredentials()).map((credential) => credential.apiKey),
       ).slice(0, 500);
       console.error(`Hosted runtime boot failed: ${this.lastBootError}`);
+      await this.stopRuntime();
       throw error;
     }
   }
@@ -494,14 +507,16 @@ class BrowserRuntimeHost {
       env: environment,
       output: true,
     });
+    const runtimeProcess = this.process;
+    const runtimeEpoch = this.runtimeEpoch;
     const runtimeReady = new Promise((resolve, reject) => {
       this.runtimeReady = { resolve, reject };
     });
-    const processOutput = captureProcessOutput(this.process.output, (message) =>
+    const processOutput = captureProcessOutput(runtimeProcess.output, (message) =>
       this.handleRuntimeMessage(message),
     );
-    this.processWriter = this.process.input.getWriter();
-    const processExit = this.process.exit?.then(async (code) => {
+    this.processWriter = runtimeProcess.input.getWriter();
+    const processExit = runtimeProcess.exit?.then(async (code) => {
       const output = scrubSecrets(processOutput.snapshot(), Object.values(environment));
       throw new Error(
         `Hosted runtime exited before becoming ready (code ${code})${output ? `: ${output}` : ""}`,
@@ -518,14 +533,28 @@ class BrowserRuntimeHost {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`${message}${output && !message.includes(output) ? `: ${output}` : ""}`);
     }
-    void processExit.catch((error) => {
+    void processExit.catch(async (error) => {
+      if (this.process !== runtimeProcess || this.runtimeEpoch !== runtimeEpoch) return;
       const message = error instanceof Error ? error.message : String(error);
       this.lastBootError = message.slice(0, 500);
       console.error(`Hosted runtime stopped after becoming ready: ${this.lastBootError}`);
-      for (const pending of this.pendingRequests.values()) {
+      for (const [requestId, pending] of this.pendingRequests) {
+        if (pending.runtimeEpoch !== runtimeEpoch) continue;
+        globalThis.clearTimeout(pending.timer);
+        pending.signal?.removeEventListener("abort", pending.abort);
         pending.reject?.(error);
         pending.streamController?.error(error);
+        this.pendingRequests.delete(requestId);
       }
+      this.processWriter?.releaseLock?.();
+      this.process = null;
+      this.processWriter = null;
+      this.runtimeReady = null;
+      this.runtimeEpoch = "";
+      this.bootPromise = null;
+      const failedContainer = this.container;
+      this.container = null;
+      await failedContainer?.teardown?.();
     });
   }
 

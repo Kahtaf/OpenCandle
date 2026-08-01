@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -42,7 +43,10 @@ import { getBrowserHostedToolDefinitions } from "./hosted-tool-composition.js";
 import type { FirstClassModelProviderId } from "../../../src/pi/model-provider-metadata.js";
 import type { BrowserModelCredentials } from "./browser-model-runtime.js";
 
-const MAX_SESSION_FILE_BYTES = 1_048_576;
+// Pi sessions may contain base64 image blocks. This remains bounded while
+// allowing multiple attachment-bearing turns to stay readable and exportable.
+const MAX_SESSION_FILE_BYTES = 128 * 1_024 * 1_024;
+const SESSION_COMPLETION_RESERVE_BYTES = 8 * 1_024 * 1_024;
 const MAX_SESSION_FILES = 100;
 
 export interface BrowserHostedGuiRuntimeOptions {
@@ -257,6 +261,22 @@ export class BrowserHostedGuiRuntime {
       if (!modelProvider || !this.options.modelId || !this.options.modelCredentials?.[modelProvider]) {
         throw new Error("Connect an AI model before chat can run.");
       }
+      const dispatchedPrompt = buildDispatchedPromptFromState(
+        input,
+        new MarketStateService(this.stateDatabase),
+      );
+      const images = input.images.map((image) => ({ type: "image" as const, ...image }));
+      const nextInputBytes = Buffer.byteLength(JSON.stringify({ dispatchedPrompt, images }));
+      if (
+        (existsSync(sessionFile) ? statSync(sessionFile).size : 0) +
+          nextInputBytes +
+          SESSION_COMPLETION_RESERVE_BYTES >
+        MAX_SESSION_FILE_BYTES
+      ) {
+        throw new Error(
+          "This session is too large for another durable turn. Start a new session and attach the saved context you need.",
+        );
+      }
       await emit({ type: "run.started" });
       const createPiSession = this.options.createPiSession ?? BrowserPiSession.create;
       session = await createPiSession({
@@ -277,11 +297,6 @@ export class BrowserHostedGuiRuntime {
           for (const event of events) await emit(event as Record<string, unknown>);
         },
       });
-      const dispatchedPrompt = buildDispatchedPromptFromState(
-        input,
-        new MarketStateService(this.stateDatabase),
-      );
-      const images = input.images.map((image) => ({ type: "image" as const, ...image }));
       const result = await session.prompt(dispatchedPrompt, signal, images);
       this.currentSessionId = result.sessionId;
       await emit({ type: "run.completed" });

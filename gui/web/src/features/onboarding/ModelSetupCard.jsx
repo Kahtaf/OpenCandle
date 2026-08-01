@@ -30,8 +30,11 @@ export function ModelSetupDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent ariaTitle="Connect a model" className="max-w-[760px]">
-        <div className="grid gap-4 p-6">
+      <DialogContent
+        ariaTitle="Connect a model"
+        className="max-h-[calc(100dvh-32px)] max-w-[760px]"
+      >
+        <div className="grid min-h-0 gap-4 overflow-y-auto p-6">
           <ModelSetupHeader
             variant="manage"
             hasReady={modelSetup?.requirement === "ready"}

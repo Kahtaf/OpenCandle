@@ -584,7 +584,7 @@ describe("portfolioTrackerTool", () => {
     expect(view.content[0].text.toLowerCase()).toContain("empty");
   });
 
-  it("removes all lots for a symbol", async () => {
+  it("requires a stable lot id instead of deleting every lot for a symbol", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",
       symbol: "VTI",
@@ -592,19 +592,15 @@ describe("portfolioTrackerTool", () => {
       avg_cost: 250,
     });
 
-    const remove = await portfolioTrackerTool.execute("test", {
-      action: "remove",
-      symbol: "VTI",
-    });
-    expect(remove.content[0].text).toContain("Removed");
-    expect(remove.details).toMatchObject({
-      symbol: "VTI",
-      removedCount: 1,
-      removedLotIds: [expect.any(Number)],
-    });
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "remove",
+        symbol: "VTI",
+      }),
+    ).rejects.toThrow("lot_id is required");
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
-    expect(view.content[0].text.toLowerCase()).toContain("empty");
+    expect(view.content[0].text).toContain("VTI [lot ");
   });
 
   it("removes only the selected lot when lot_id is supplied", async () => {

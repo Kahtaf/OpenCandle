@@ -1,6 +1,6 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
-import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
   knownSymbols: [],

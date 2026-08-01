@@ -198,7 +198,11 @@ describe("hosted market data API", () => {
     expect(snapshot.portfolioSummary).toMatchObject({
       portfolioId: 2,
       baseCurrency: "CAD",
-      totalValue: 0,
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 360,
+      totalPnl: null,
+      totalPnlPercent: null,
       excludedFromTotals: [
         { symbol: "AAPL", currency: "CAD", reason: "Audited provider relay is unavailable" },
       ],

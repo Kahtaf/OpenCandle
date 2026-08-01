@@ -5,6 +5,8 @@ import { chromium } from "playwright-core";
 const relayUrl =
   process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ||
   "https://web.opencandle.app/v1/provider-fetch";
+const hostedAppUrl =
+  process.env.OPENCANDLE_HOSTED_APP_URL?.trim() || new URL("/", relayUrl).toString();
 const args = {
   clientId: randomBytes(16).toString("hex"),
   keys: {
@@ -25,7 +27,7 @@ interface BrowserProof {
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
-  await page.setContent("<!doctype html><title>OpenCandle relay proof</title>");
+  await page.goto(hostedAppUrl, { waitUntil: "domcontentloaded" });
   const serializedArgs = JSON.stringify(args).replaceAll("<", "\\u003c");
   await page.evaluate(`globalThis.__opencandleRelayProofArgs = ${serializedArgs}`);
   const browserProgram = await readFile(

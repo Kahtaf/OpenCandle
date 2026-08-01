@@ -4,8 +4,9 @@
 
 The system SHALL provide a hosted OpenCandle build that is deployable as static
 assets and SHALL execute OpenCandle application runtime work on the user's
-device without an OpenCandle application server, credential relay, provider
-proxy, or server database.
+device without an OpenCandle application server or server database. A separate
+auditable Worker MAY relay only fixed provider requests that fail direct-browser
+CORS proofs; it SHALL NOT store credentials, requests, responses, or sessions.
 
 #### Scenario: Static deployment boots the runtime
 

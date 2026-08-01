@@ -89,11 +89,8 @@ function manageWatchlist(service: MarketStateService, args: Record<string, unkno
         null,
       );
     }
-    const symbol = normalizedSymbol(args.symbol);
-    const removed = service.removeWatchlistItemBySymbol(symbol, watchlist.id);
-    return result(
-      removed ? `Removed ${symbol} from ${watchlist.name}.` : `${symbol} was not in ${watchlist.name}.`,
-      null,
+    throw new Error(
+      "item_id is required for remove action. Use check to find the stable watchlist item id.",
     );
   }
   if (action === "check") providerUnavailable("live watchlist quotes");
@@ -145,9 +142,9 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
       const value = service.removePortfolioLot(id);
       return result(value ? `Removed portfolio lot ${id}.` : `Portfolio lot ${id} was not found.`, value);
     }
-    const symbol = normalizedSymbol(args.symbol);
-    const removed = service.removePortfolioLotsBySymbol(symbol, portfolio.id);
-    return result(removed ? `Removed ${symbol} from ${portfolio.name}.` : `${symbol} was not found.`, null);
+    throw new Error(
+      "lot_id is required for remove action. Use view to find the stable portfolio lot id.",
+    );
   }
   if (action === "view") {
     const lots = service.listPortfolioLots(portfolio.id);

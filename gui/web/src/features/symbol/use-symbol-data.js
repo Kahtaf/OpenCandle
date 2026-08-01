@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInstrumentHistory } from "../../hooks/useInstrumentHistory.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
-import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { buildAlertSentenceRows } from "../market-state/alert-view-model.js";
 import { buildHoldingRows } from "../market-state/portfolio-view-model.js";
 

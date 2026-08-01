@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRuntimeTransport } from "../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 export const MARKET_STATE_POLL_MS = 4000;
 export const QUOTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;

@@ -32,6 +32,47 @@ const sqlite = Uint8Array.from([
 ]);
 
 describe("hosted browser archive", () => {
+  it("accepts attachment-sized Pi session entries above the old 1 MiB ceiling", () => {
+    const largeSession = {
+      ...session,
+      content: `${session.content}${JSON.stringify({
+        type: "message",
+        id: "entry-large",
+        parentId: "entry-1",
+        timestamp: "2026-07-31T12:00:02.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "x".repeat(2 * 1_024 * 1_024) }],
+          timestamp: 2,
+        },
+      })}\n`,
+    };
+
+    expect(
+      validateHostedArchive(createHostedArchive({ sessions: [largeSession], stateBytes: sqlite })),
+    ).toBeTruthy();
+  });
+
+  it("allows a valid import to replace a corrupt current checkpoint", async () => {
+    const replacement = createHostedArchive({
+      sessions: [session],
+      stateBytes: sqlite,
+      currentSessionId: "session-1",
+    });
+    const files = new Map([["checkpoint-v1.json", "not json"]]);
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+      validateStateDatabase: async () => {},
+    });
+
+    await expect(store.importAll(JSON.stringify(replacement))).resolves.toMatchObject({
+      currentSessionId: "session-1",
+    });
+    expect(JSON.parse(files.get("checkpoint-v1.json"))).toMatchObject({
+      currentSessionId: "session-1",
+    });
+  });
+
   it("restores the pre-update backup when the current checkpoint is corrupt", async () => {
     const archive = createHostedArchive({
       sessions: [session],

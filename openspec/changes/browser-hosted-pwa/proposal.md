@@ -24,8 +24,9 @@ product surface without weakening the existing local products.
 - Add browser writer/follower coordination so only one tab writes a session
   while other tabs remain usable followers.
 - Extend provider metadata with fail-closed browser transport capabilities and
-  register only direct-browser tools in hosted mode. The first release remains
-  genuinely serverless and does not add a CORS proxy.
+  register only direct-browser or fixed-relay tools in hosted mode. The static
+  app has no application server; its separately deployed, auditable relay is
+  restricted to exact provider policies and the production web origin.
 - Add a service worker, web app manifest, install/update behavior, offline app
   shell, and explicit offline/provider degradation.
 - Reuse the existing React GUI and canonical `gui/shared` event/reducer
@@ -34,8 +35,8 @@ product surface without weakening the existing local products.
   and filesystem Pi sessions, and preserve the local TUI's Node/filesystem
   behavior.
 - **BREAKING** for hosted mode only: tools whose providers require native
-  addons, child processes, desktop cookies, forbidden headers, or proxy-only
-  CORS access are absent from the hosted Pi tool set instead of failing after
+  addons, child processes, desktop cookies, or lack a proven direct or fixed
+  relay path are absent from the hosted Pi tool set instead of failing after
   selection.
 
 ## Capabilities

@@ -365,10 +365,16 @@ export function buildHostedUnavailableMarketQuoteSnapshot(
       summary: {
         portfolioId: portfolio.id,
         baseCurrency: portfolio.baseCurrency ?? "USD",
-        totalValue: 0,
-        totalCost: 0,
-        totalPnl: 0,
-        totalPnlPercent: 0,
+        status: quotes.length > 0 ? ("unavailable" as const) : ("empty" as const),
+        totalValue: quotes.length > 0 ? null : 0,
+        totalCost:
+          quotes.length > 0
+            ? quotes
+                .filter((quote) => quote.currency === (portfolio.baseCurrency ?? "USD"))
+                .reduce((sum, quote) => sum + quote.totalCost, 0)
+            : 0,
+        totalPnl: quotes.length > 0 ? null : 0,
+        totalPnlPercent: quotes.length > 0 ? null : 0,
         excludedFromTotals: quotes.map((quote) => ({
           symbol: quote.symbol,
           currency: quote.currency,
@@ -384,6 +390,7 @@ export function buildHostedUnavailableMarketQuoteSnapshot(
   const emptySummary = {
     portfolioId: defaultPortfolio?.id ?? 0,
     baseCurrency: defaultPortfolio?.baseCurrency ?? "USD",
+    status: "empty" as const,
     totalValue: 0,
     totalCost: 0,
     totalPnl: 0,

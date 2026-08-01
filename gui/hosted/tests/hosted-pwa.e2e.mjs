@@ -47,6 +47,7 @@ server.stderr.on("data", (chunk) => {
 
 let browser;
 let page;
+let follower;
 let stage = "launch";
 const browserErrors = [];
 const failedRequests = [];
@@ -226,7 +227,24 @@ try {
         120_000,
         "Google Pi model selection",
       );
-      await page.keyboard.press("Escape");
+      if ((await page.locator('[role="dialog"][data-state="open"]').count()) > 0) {
+        await page.getByRole("button", { name: "Close dialog" }).click();
+        await waitFor(
+          async () => (await page.locator('[role="dialog"][data-state="open"]').count()) === 0,
+          30_000,
+          "model key dialog close",
+        );
+      }
+      const expandedModelTrigger = page
+        .locator('button[aria-expanded="true"]')
+        .filter({ hasText: "gemini-2.5-flash" });
+      if ((await expandedModelTrigger.count()) > 0) {
+        await expandedModelTrigger.click({ force: true });
+      }
+      await page.getByRole("textbox", { name: "Message OpenCandle" }).waitFor({
+        state: "visible",
+        timeout: 30_000,
+      });
       const rowsBeforeGoogle = await page.locator("[data-chat-row-id]").count();
       await page
         .getByRole("textbox", { name: "Message OpenCandle" })
@@ -308,7 +326,7 @@ try {
   await page.getByRole("link", { name: "Watchlists" }).click();
   await waitForText(page, "AAPL", 30_000);
 
-  const follower = await context.newPage();
+  follower = await context.newPage();
   stage = "multi-tab follower";
   await follower.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
   assert(
@@ -318,7 +336,7 @@ try {
   await waitForText(follower, "Connected to the active tab", 120_000);
   await waitForText(follower, "AAPL", 30_000);
   await follower.getByRole("button", { name: "New chat", exact: true }).click();
-  await waitForText(follower, "Session transcript", 30_000);
+  await waitForText(follower, "What are we watching?", 30_000);
 
   const mobile = await context.newPage();
   stage = "mobile layout";
@@ -467,9 +485,10 @@ try {
   );
 } catch (error) {
   const pageText = await page?.locator("body").innerText().catch(() => "");
+  const followerText = await follower?.locator("body").innerText().catch(() => "");
   process.stderr.write(
     redact(
-      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
+      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nFOLLOWER=${String(followerText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
     ),
   );
   process.exitCode = 1;

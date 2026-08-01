@@ -1,4 +1,12 @@
-import type { Agent, AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type {
+  AfterToolCallContext,
+  AfterToolCallResult,
+  Agent,
+  AgentEvent,
+  AgentMessage,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+} from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -153,6 +161,7 @@ export class BrowserOpenCandleExtensionHost {
       setActiveTools: (names: string[]) => {
         const known = new Set(this.tools.keys());
         this.activeToolNames = names.filter((name) => known.has(name));
+        this.syncAgentTools();
       },
       getCommands: () => [],
       setModel: async () => false,
@@ -180,6 +189,9 @@ export class BrowserOpenCandleExtensionHost {
 
   bindAgent(agent: Agent): void {
     this.agent = agent;
+    this.syncAgentTools();
+    agent.beforeToolCall = (context) => this.beforeToolCall(context);
+    agent.afterToolCall = (context) => this.afterToolCall(context);
   }
 
   getAgentTools(): ToolDefinition[] {
@@ -302,6 +314,45 @@ export class BrowserOpenCandleExtensionHost {
       getThinkingLevel: () => "off",
       setThinkingLevel: () => undefined,
     } as unknown as ExtensionContext;
+  }
+
+  private syncAgentTools(): void {
+    if (this.agent) this.agent.state.tools = this.getAgentTools();
+  }
+
+  private async beforeToolCall(
+    context: BeforeToolCallContext,
+  ): Promise<BeforeToolCallResult | undefined> {
+    const results = await this.emit("tool_call", {
+      type: "tool_call",
+      toolCallId: context.toolCall.id,
+      toolName: context.toolCall.name,
+      input: context.args as Record<string, unknown>,
+    });
+    for (const result of results) {
+      const decision = result as BeforeToolCallResult | undefined;
+      if (decision?.block) return decision;
+    }
+    return undefined;
+  }
+
+  private async afterToolCall(
+    context: AfterToolCallContext,
+  ): Promise<AfterToolCallResult | undefined> {
+    let patch: AfterToolCallResult | undefined;
+    for (const result of await this.emit("tool_result", {
+      type: "tool_result",
+      toolCallId: context.toolCall.id,
+      toolName: context.toolCall.name,
+      input: context.args as Record<string, unknown>,
+      content: context.result.content,
+      details: context.result.details,
+      isError: context.isError,
+      usage: context.result.usage,
+    })) {
+      if (result) patch = result as AfterToolCallResult;
+    }
+    return patch;
   }
 
   private async emit(event: string, value: unknown): Promise<unknown[]> {

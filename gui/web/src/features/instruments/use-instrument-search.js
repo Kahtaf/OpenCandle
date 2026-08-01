@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useRuntimeTransport } from "../../runtime/runtime-transport-context.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { searchInstruments } from "./instrument-api.js";
 import {
   rankInstrumentCandidates,
