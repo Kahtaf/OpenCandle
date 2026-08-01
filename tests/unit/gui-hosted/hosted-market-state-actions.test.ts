@@ -17,13 +17,13 @@ describe("hosted market-state actions", () => {
 
   afterEach(() => database.close());
 
-  it("lists stable watchlist item ids in assistant-visible check content", () => {
-    const added = invokeHostedMarketStateTool(service, "manage_watchlist", {
+  it("lists stable watchlist item ids in assistant-visible check content", async () => {
+    const added = await invokeHostedMarketStateTool(service, "manage_watchlist", {
       action: "add",
       symbol: "AAPL",
     });
 
-    const checked = invokeHostedMarketStateTool(service, "manage_watchlist", {
+    const checked = await invokeHostedMarketStateTool(service, "manage_watchlist", {
       action: "check",
     });
 
@@ -31,8 +31,8 @@ describe("hosted market-state actions", () => {
     expect(checked.result.content[0]?.text).toContain(`AAPL [item ${item.id}]`);
   });
 
-  it("lists stable portfolio lot ids in assistant-visible view content", () => {
-    const added = invokeHostedMarketStateTool(service, "track_portfolio", {
+  it("lists stable portfolio lot ids in assistant-visible view content", async () => {
+    const added = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "add",
       symbol: "AAPL",
       shares: 2,
@@ -40,20 +40,84 @@ describe("hosted market-state actions", () => {
       currency: "USD",
     });
 
-    const viewed = invokeHostedMarketStateTool(service, "track_portfolio", {
-      action: "view",
-    });
+    const viewed = await invokeHostedMarketStateTool(
+      service,
+      "track_portfolio",
+      { action: "view" },
+      "hosted-view",
+      {
+        getCurrentPrice: async () => ({ status: "unavailable", reason: "test fixture" }),
+      },
+    );
 
     const lot = added.result.details as { id: number };
     expect(viewed.result.content[0]?.text).toContain(`AAPL [lot ${lot.id}]`);
   });
 
-  it("cannot update a lot belonging to a different portfolio", () => {
-    invokeHostedMarketStateTool(service, "track_portfolio", {
+  it("resolves the instrument currency instead of guessing USD for a new lot", async () => {
+    const added = await invokeHostedMarketStateTool(
+      service,
+      "track_portfolio",
+      {
+        action: "add",
+        symbol: "SHOP.TO",
+        shares: 2,
+        avg_cost: 140,
+      },
+      "hosted-currency",
+      {
+        resolveInstrument: async () => ({
+          status: "resolved",
+          instrument: {
+            symbol: "SHOP.TO",
+            assetType: "equity",
+            name: "Shopify Inc.",
+            currency: "CAD",
+            provider: "yahoo",
+            providerMetadata: { verified: true },
+          },
+        }),
+      },
+    );
+
+    expect(added.result.details).toMatchObject({ symbol: "SHOP.TO", currency: "CAD" });
+    expect(added.result.content[0]?.text).toContain("CAD");
+  });
+
+  it("returns live hosted P&L from the canonical portfolio view contract", async () => {
+    await invokeHostedMarketStateTool(service, "track_portfolio", {
+      action: "add",
+      symbol: "AAPL",
+      shares: 2,
+      avg_cost: 180,
+      currency: "USD",
+    });
+
+    const viewed = await invokeHostedMarketStateTool(
+      service,
+      "track_portfolio",
+      { action: "view" },
+      "hosted-pnl",
+      {
+        getCurrentPrice: async () => ({ status: "ok", price: 200, currency: "USD" }),
+      },
+    );
+
+    expect(viewed.result.content[0]?.text).toContain("P&L: $40.00 (+11.11%)");
+    expect(viewed.result.details).toMatchObject({
+      totalValue: 400,
+      totalCost: 360,
+      totalPnl: 40,
+      positions: [{ currentPrice: 200, pnl: 40, includedInTotals: true }],
+    });
+  });
+
+  it("cannot update a lot belonging to a different portfolio", async () => {
+    await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "create",
       portfolio_name: "Retirement",
     });
-    const added = invokeHostedMarketStateTool(service, "track_portfolio", {
+    const added = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "add",
       portfolio_name: "Retirement",
       symbol: "MSFT",
@@ -63,25 +127,25 @@ describe("hosted market-state actions", () => {
     });
     const lot = added.result.details as { id: number };
 
-    expect(() =>
+    await expect(
       invokeHostedMarketStateTool(service, "track_portfolio", {
         action: "update",
         portfolio_name: "Default",
         lot_id: lot.id,
         shares: 99,
       }),
-    ).toThrow("not found");
+    ).rejects.toThrow("not found");
     expect(service.listPortfolioLots(service.getPortfolioByName("Retirement")?.id)).toEqual([
       expect.objectContaining({ id: lot.id, quantity: 3 }),
     ]);
   });
 
-  it("cannot remove a lot belonging to a different portfolio", () => {
-    invokeHostedMarketStateTool(service, "track_portfolio", {
+  it("cannot remove a lot belonging to a different portfolio", async () => {
+    await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "create",
       portfolio_name: "Retirement",
     });
-    const added = invokeHostedMarketStateTool(service, "track_portfolio", {
+    const added = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "add",
       portfolio_name: "Retirement",
       symbol: "MSFT",
@@ -91,7 +155,7 @@ describe("hosted market-state actions", () => {
     });
     const lot = added.result.details as { id: number };
 
-    const removed = invokeHostedMarketStateTool(service, "track_portfolio", {
+    const removed = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "remove",
       portfolio_name: "Default",
       lot_id: lot.id,

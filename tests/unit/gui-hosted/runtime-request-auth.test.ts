@@ -5,9 +5,15 @@ describe("private hosted runtime request authorization", () => {
   const trustedOrigin = "https://web.opencandle.app";
   const runtimeToken = "a".repeat(32);
 
-  it("accepts the exact trusted browser origin", () => {
+  it("requires the private runtime token even for the exact trusted browser origin", () => {
     expect(
       isAuthorizedPrivateRuntimeRequest({ origin: trustedOrigin }, { trustedOrigin, runtimeToken }),
+    ).toBe(false);
+    expect(
+      isAuthorizedPrivateRuntimeRequest(
+        { origin: trustedOrigin, runtimeToken },
+        { trustedOrigin, runtimeToken },
+      ),
     ).toBe(true);
   });
 

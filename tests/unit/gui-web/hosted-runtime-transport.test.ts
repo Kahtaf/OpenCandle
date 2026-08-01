@@ -79,6 +79,24 @@ describe("hosted runtime transport", () => {
     });
   });
 
+  it("advertises offline hosted bootstraps as read-only for session actions", async () => {
+    const host = createHost();
+    host.request.mockResolvedValueOnce({
+      role: "offline",
+      sessionId: "session-1",
+      sessions: [],
+      coordination: { ownerKind: "offline", writable: false },
+      snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+    });
+    const transport = createHostedRuntimeTransport({ host });
+
+    await expect(transport.bootstrap()).resolves.toMatchObject({
+      role: "offline",
+      supportsSessionActions: false,
+      coordination: { writable: false },
+    });
+  });
+
   it("presents hosted chat results as the same SSE response consumed by the local GUI", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

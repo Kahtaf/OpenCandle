@@ -47,11 +47,10 @@ export function mergeQuoteRefreshSnapshot(current, refreshed) {
     "lotId",
     refreshFailedAt,
   );
-  const stalePortfolioIds = new Set(
-    portfolioQuotes
-      .filter((quote) => quote?.refreshStatus === "unavailable")
-      .map((quote) => quote.portfolioId),
-  );
+  const stalePortfolioIds = new Set();
+  for (const quote of portfolioQuotes) {
+    if (quote?.refreshStatus === "unavailable") stalePortfolioIds.add(quote.portfolioId);
+  }
   const portfolioSummaries = mergePortfolioSummaries(
     current.portfolioSummaries,
     refreshed.portfolioSummaries,

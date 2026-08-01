@@ -47,12 +47,8 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
         category: "news",
       }),
       config.finnhubApiKey && tickers.length > 0
-        ? Promise.all(
-            tickers.map((symbol) =>
-              getCompanyNews(symbol, from, to, config.finnhubApiKey as string),
-            ),
-          ).then((groups) => groups.flat())
-        : Promise.resolve([]),
+        ? collectFinnhubCompanyNews(tickers, from, to, config.finnhubApiKey)
+        : Promise.resolve({ articles: [], failedSymbols: [] }),
       tickers[0] ? wrapProvider("yahoo", () => getQuote(tickers[0])) : Promise.resolve(undefined),
     ]);
 
@@ -66,7 +62,7 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
             results: web.value.data.results,
           }
         : null;
-    const finnhubArticles = finnhub.status === "fulfilled" ? finnhub.value : [];
+    const finnhubArticles = finnhub.status === "fulfilled" ? finnhub.value.articles : [];
     const finnhubEvidence =
       finnhubArticles.length > 0
         ? {
@@ -103,10 +99,13 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
     }
 
     if (finnhub.status === "fulfilled") {
-      for (const item of finnhub.value.slice(0, 10)) {
+      for (const item of finnhubArticles) {
         lines.push(
           `${renderNewsItem(item.headline, item.url, item.summary, finnhubPublishedAt(item.datetime))} (Finnhub)`,
         );
+      }
+      for (const symbol of finnhub.value.failedSymbols) {
+        warnings.push(`Finnhub company news was unavailable for ${symbol}.`);
       }
       if (finnhubEvidence) {
         warnings.push(
@@ -150,13 +149,46 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
         finnhubEvidence,
         sources: {
           web: web.status === "fulfilled" && web.value.status === "ok",
-          finnhub: finnhub.status === "fulfilled" && finnhub.value.length > 0,
+          finnhub: finnhub.status === "fulfilled" && finnhubArticles.length > 0,
           price: quote.status === "fulfilled" && quote.value?.status === "ok",
         },
       },
     };
   },
 };
+
+async function collectFinnhubCompanyNews(
+  tickers: string[],
+  from: string,
+  to: string,
+  apiKey: string,
+) {
+  const settled = await Promise.allSettled(
+    tickers.map((symbol) => getCompanyNews(symbol, from, to, apiKey)),
+  );
+  const groups: Array<Awaited<ReturnType<typeof getCompanyNews>>> = [];
+  const failedSymbols: string[] = [];
+  for (const [index, outcome] of settled.entries()) {
+    if (outcome.status === "fulfilled") groups.push(outcome.value);
+    else failedSymbols.push(tickers[index]);
+  }
+  return { articles: roundRobin(groups, 10), failedSymbols };
+}
+
+function roundRobin<T>(groups: T[][], limit: number): T[] {
+  const values: T[] = [];
+  for (let index = 0; values.length < limit; index += 1) {
+    let found = false;
+    for (const group of groups) {
+      if (index >= group.length) continue;
+      values.push(group[index]);
+      found = true;
+      if (values.length === limit) break;
+    }
+    if (!found) break;
+  }
+  return values;
+}
 
 function renderNewsItem(
   title: string,

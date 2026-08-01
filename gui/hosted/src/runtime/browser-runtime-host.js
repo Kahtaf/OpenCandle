@@ -275,6 +275,7 @@ class BrowserRuntimeHost {
           role: "offline",
           offline: true,
           runtimeState: "offline",
+          supportsSessionActions: false,
           coordination: {
             ...(bootstrap.coordination || {}),
             writable: false,
@@ -784,6 +785,8 @@ class BrowserRuntimeHost {
     await this.dataStore.clearAll();
     this.clearSecrets();
     this.storage.removeItem(CURRENT_SESSION_KEY);
+    this.storage.removeItem(MODEL_SELECTION_KEY);
+    this.storage.removeItem(RELAY_CLIENT_KEY);
     if (globalThis.caches) {
       await Promise.all((await caches.keys()).map((name) => caches.delete(name)));
       await repopulateServiceWorkerShell();

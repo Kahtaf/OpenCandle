@@ -112,6 +112,39 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("rejects zero-filled Yahoo history instead of rendering a valid sparkline", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_000,
+        open: 0,
+        high: 0,
+        low: 0,
+        close: 0,
+        volume: 0,
+      },
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_300,
+        open: 0,
+        high: 0,
+        low: 0,
+        close: 0,
+        volume: 0,
+      },
+    ]);
+
+    const snapshot = await buildHostedMarketQuoteSnapshot({
+      watchlists: [{ id: 1, name: "Default", isDefault: true }],
+      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
+    });
+
+    expect(snapshot.watchlistQuotes[0]?.sparkline).toMatchObject({
+      status: "unavailable",
+      reason: "Not enough intraday history",
+    });
+  });
+
   it("does not calculate portfolio valuation or P&L across mismatched currencies", async () => {
     vi.mocked(getQuote).mockResolvedValueOnce({
       symbol: "SHOP.TO",

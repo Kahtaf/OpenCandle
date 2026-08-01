@@ -13,6 +13,7 @@ import {
   resolveBootstrapSessionId,
   resolveEventChannelBootTimeout,
   resolveSnapshotCoordination,
+  resolveSupportsSessionActions,
   resolveWritableRole,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
@@ -30,6 +31,12 @@ describe("useGuiConnection helpers", () => {
     expect(resolveWritableRole("follower", { writable: true })).toBe("writer");
     expect(resolveWritableRole("follower", { writable: false })).toBe("follower");
     expect(resolveWritableRole("offline", { writable: false })).toBe("offline");
+  });
+
+  it("disables session actions whenever the runtime is offline or explicitly read-only", () => {
+    expect(resolveSupportsSessionActions(true, "offline", { writable: false })).toBe(false);
+    expect(resolveSupportsSessionActions(false, "writer", { writable: true })).toBe(false);
+    expect(resolveSupportsSessionActions(true, "follower", { writable: true })).toBe(true);
   });
 
   it("treats empty toast messages as a no-op payload", () => {

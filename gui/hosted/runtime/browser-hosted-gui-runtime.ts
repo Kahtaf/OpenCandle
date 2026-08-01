@@ -463,9 +463,9 @@ export class BrowserHostedGuiRuntime {
       requireMatchingActionInput(existing.fingerprint, fingerprint);
       return existing.operation;
     }
-    const operation = Promise.resolve().then(() => {
+    const operation = Promise.resolve().then(async () => {
       const service = new MarketStateService(this.stateDatabase);
-      const result = invokeHostedMarketStateTool(service, toolName, args);
+      const result = await invokeHostedMarketStateTool(service, toolName, args);
       this.flushState();
       return { result };
     });

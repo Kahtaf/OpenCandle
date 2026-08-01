@@ -350,8 +350,17 @@ describe("browser runtime host", () => {
         };
       },
     );
+    const storage = memoryStorage();
+    const appKeys = [
+      "opencandle.hosted.credentials.v1",
+      "opencandle.hosted.model-selection.v1",
+      "opencandle.hosted.provider-credentials.v1",
+      "opencandle.hosted.current-session.v1",
+      "opencandle.hosted.relay-client.v1",
+    ];
+    for (const key of appKeys) storage.setItem(key, "retained-device-data");
     const host = createBrowserRuntimeHost({
-      storage: memoryStorage(),
+      storage,
       sessionStorage: memoryStorage(),
       dataStore: { clearAll: vi.fn(async () => {}) },
     });
@@ -362,6 +371,7 @@ describe("browser runtime host", () => {
       { type: "REPOPULATE_SHELL" },
       expect.any(Array),
     );
+    expect(appKeys.map((key) => storage.getItem(key))).toEqual([null, null, null, null, null]);
   });
 
   it("keeps an inherited session credential through a reload of the promoted tab", () => {

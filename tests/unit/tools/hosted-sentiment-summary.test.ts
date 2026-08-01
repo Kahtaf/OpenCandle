@@ -229,4 +229,67 @@ describe("hosted sentiment summary", () => {
       },
     });
   });
+
+  it("keeps successful Finnhub ticker evidence when a sibling ticker fails", async () => {
+    config.current = { finnhubApiKey: "test-key" };
+    vi.mocked(searchWeb).mockRejectedValue(new Error("web unavailable"));
+    vi.mocked(wrapProvider).mockResolvedValue(undefined as never);
+    vi.mocked(getCompanyNews).mockImplementation(async (symbol) => {
+      if (symbol === "AAPL") throw new Error("ticker unavailable");
+      return [companyArticle(symbol, 1)];
+    });
+
+    const result = await hostedSentimentSummaryTool.execute("call-partial-finnhub", {
+      query: "AAPL vs MSFT",
+    });
+
+    expect(result.content[0].text).toContain("MSFT headline 1");
+    expect(result.content[0].text).toContain("Finnhub company news was unavailable for AAPL");
+    expect(result.details).toMatchObject({ sources: { finnhub: true } });
+  });
+
+  it("round-robins the bounded Finnhub result budget across requested tickers", async () => {
+    config.current = { finnhubApiKey: "test-key" };
+    vi.mocked(searchWeb).mockRejectedValue(new Error("web unavailable"));
+    vi.mocked(wrapProvider).mockResolvedValue(undefined as never);
+    vi.mocked(getCompanyNews).mockImplementation(async (symbol) =>
+      Array.from({ length: 10 }, (_, index) => companyArticle(symbol, index)),
+    );
+
+    const result = await hostedSentimentSummaryTool.execute("call-fair-finnhub", {
+      query: "AAPL vs MSFT vs NVDA",
+    });
+    const details = result.details as {
+      finnhubEvidence: { results: Array<{ id: number; headline: string }> };
+    };
+
+    expect(details.finnhubEvidence.results).toHaveLength(10);
+    expect(details.finnhubEvidence.results.map((article) => article.headline)).toEqual([
+      "AAPL headline 0",
+      "MSFT headline 0",
+      "NVDA headline 0",
+      "AAPL headline 1",
+      "MSFT headline 1",
+      "NVDA headline 1",
+      "AAPL headline 2",
+      "MSFT headline 2",
+      "NVDA headline 2",
+      "AAPL headline 3",
+    ]);
+    expect(result.content[0].text).toContain("NVDA headline 2");
+  });
 });
+
+function companyArticle(symbol: string, index: number) {
+  return {
+    id: symbol.charCodeAt(0) * 100 + index,
+    headline: `${symbol} headline ${index}`,
+    summary: `${symbol} summary ${index}`,
+    source: "Example News",
+    datetime: Date.parse("2026-07-29T08:30:00.000Z") / 1000 + index,
+    url: `https://example.com/${symbol.toLowerCase()}/${index}`,
+    related: symbol,
+    category: "company",
+    image: "",
+  };
+}

@@ -9,7 +9,17 @@ import {
   volumeSpike,
 } from "../../../src/market-state/alert-conditions.js";
 import { nextDailyReportRunAt } from "../../../src/market-state/daily-report.js";
+import {
+  resolveInstrumentForMutation,
+  type MutationInstrumentResolution,
+} from "../../../src/market-state/resolve-for-mutation.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import {
+  buildPortfolioView,
+  type PortfolioPriceResolver,
+  renderPortfolioView,
+} from "../../../src/tools/portfolio/portfolio-view.js";
+import { getCurrentPrice } from "../../../src/tools/portfolio/tracker.js";
 
 export interface HostedToolInvokeResult {
   toolCallId: string;
@@ -20,17 +30,23 @@ export interface HostedToolInvokeResult {
   isError: false;
 }
 
-export function invokeHostedMarketStateTool(
+export interface HostedMarketStateDependencies {
+  resolveInstrument?: (symbol: string) => Promise<MutationInstrumentResolution>;
+  getCurrentPrice?: PortfolioPriceResolver;
+}
+
+export async function invokeHostedMarketStateTool(
   service: MarketStateService,
   toolName: string,
   args: Record<string, unknown>,
   toolCallId = `hosted-ui-${crypto.randomUUID()}`,
-): HostedToolInvokeResult {
+  dependencies: HostedMarketStateDependencies = {},
+): Promise<HostedToolInvokeResult> {
   const output =
     toolName === "manage_watchlist"
       ? manageWatchlist(service, args)
       : toolName === "track_portfolio"
-        ? trackPortfolio(service, args)
+        ? await trackPortfolio(service, args, dependencies)
         : toolName === "manage_alerts"
           ? manageAlerts(service, args)
           : toolName === "manage_notifications"
@@ -112,7 +128,11 @@ function manageWatchlist(service: MarketStateService, args: Record<string, unkno
   throw new Error("Unsupported watchlist action.");
 }
 
-function trackPortfolio(service: MarketStateService, args: Record<string, unknown>) {
+async function trackPortfolio(
+  service: MarketStateService,
+  args: Record<string, unknown>,
+  dependencies: HostedMarketStateDependencies,
+) {
   const action = stringArg(args, "action");
   if (action === "create") {
     const value = service.createPortfolio(requiredString(args, "portfolio_name"));
@@ -128,10 +148,27 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
     const symbol = normalizedSymbol(args.symbol);
     const quantity = positiveNumber(args.shares, "shares");
     const avgCost = positiveNumber(args.avg_cost, "avg_cost");
-    const currency = (optionalString(args, "currency") || "USD").toUpperCase();
+    const explicitCurrency = optionalString(args, "currency");
+    const resolved = explicitCurrency
+      ? { status: "resolved" as const, instrument: hostedInstrument(symbol, explicitCurrency) }
+      : await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
+    if (resolved.status === "needs_selection") {
+      return result(
+        `Could not verify ${resolved.query}. Choose one of the returned candidates before adding it to the portfolio.`,
+        resolved,
+      );
+    }
+    const resolvedCurrency = explicitCurrency || resolved.instrument.currency?.trim();
+    if (!resolvedCurrency) {
+      return result(
+        `Could not determine currency for ${resolved.instrument.symbol}. Supply currency explicitly before adding it to the portfolio.`,
+        { status: "needs_currency", symbol: resolved.instrument.symbol },
+      );
+    }
+    const currency = resolvedCurrency.toUpperCase();
     const value = service.addPortfolioLot({
       portfolioId: portfolio.id,
-      instrument: hostedInstrument(symbol, currency),
+      instrument: resolved.instrument,
       quantity,
       avgCost,
       currency,
@@ -172,16 +209,13 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
     if (lots.length === 0) {
       return result(`${portfolio.name} is empty. Use add action to add positions.`, lots);
     }
-    const rows = lots.map(
-      (lot) =>
-        `  ${lot.symbol} [lot ${lot.id}]: ${lot.quantity} @ ${lot.avgCost} ${lot.currency}`,
-    );
-    return result(
-      [`${portfolio.name} has ${lots.length} lot${lots.length === 1 ? "" : "s"}.`, ...rows].join(
-        "\n",
-      ),
+    const displayPortfolioName = portfolio.isDefault ? "Portfolio" : portfolio.name;
+    const summary = await buildPortfolioView(
       lots,
+      portfolio.baseCurrency ?? "USD",
+      dependencies.getCurrentPrice ?? getCurrentPrice,
     );
+    return result(renderPortfolioView(displayPortfolioName, summary), summary);
   }
   throw new Error("Unsupported portfolio action.");
 }

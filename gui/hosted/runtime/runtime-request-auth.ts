@@ -16,7 +16,7 @@ export function isAuthorizedPrivateRuntimeRequest(
   request: PrivateRuntimeRequestIdentity,
   authorization: PrivateRuntimeAuthorization,
 ): boolean {
-  if (request.origin !== undefined) return request.origin === authorization.trustedOrigin;
+  if (request.origin !== undefined && request.origin !== authorization.trustedOrigin) return false;
   return securelyMatches(request.runtimeToken, authorization.runtimeToken);
 }
 

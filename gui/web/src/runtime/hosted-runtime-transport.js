@@ -30,16 +30,20 @@ export function createHostedRuntimeTransport({ host }) {
 
   const withBrowserState = (payload) => {
     const role = payload?.role || "writer";
+    const coordination = payload?.coordination || {
+      ownerKind: role === "offline" ? "offline" : "hosted",
+      writable: role !== "offline",
+    };
     return {
       ...payload,
       role,
-      coordination: payload?.coordination || {
-        ownerKind: role === "offline" ? "offline" : "hosted",
-        writable: role !== "offline",
-      },
+      coordination,
+      supportsSessionActions:
+        payload?.supportsSessionActions !== false &&
+        role !== "offline" &&
+        coordination.writable !== false,
       catalog: payload?.catalog || EMPTY_CATALOG,
       modelSetup: host.getModelSetup?.() || payload?.modelSetup || EMPTY_MODEL_SETUP,
-      supportsSessionActions: payload?.supportsSessionActions !== false,
     };
   };
 
@@ -51,6 +55,7 @@ export function createHostedRuntimeTransport({ host }) {
       type: "runtime.status",
       role: bootstrap.role,
       coordination: bootstrap.coordination,
+      supportsSessionActions: bootstrap.supportsSessionActions,
       catalog: bootstrap.catalog,
       modelSetup: bootstrap.modelSetup,
       askUserPrompts: bootstrap.askUserPrompts || [],
@@ -108,6 +113,7 @@ export function createHostedRuntimeTransport({ host }) {
             role: bootstrap.role,
             sessionId: bootstrap.sessionId,
             coordination: bootstrap.coordination,
+            supportsSessionActions: bootstrap.supportsSessionActions,
             catalog: bootstrap.catalog,
             modelSetup: bootstrap.modelSetup,
             askUserPrompts: bootstrap.askUserPrompts || [],

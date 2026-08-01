@@ -180,6 +180,10 @@ export function resolveWritableRole(role, coordination) {
   return coordination?.writable === true && role === "follower" ? "writer" : role;
 }
 
+export function resolveSupportsSessionActions(supported, role, coordination) {
+  return supported !== false && role !== "offline" && coordination?.writable !== false;
+}
+
 export function useGuiConnection() {
   const transport = useRuntimeTransport();
   const wsRef = useRef(null);
@@ -253,7 +257,9 @@ export function useGuiConnection() {
         wsRef.current = null;
         const data = await transport.bootstrap();
         if (disposed) return;
-        setSupportsSessionActions(data.supportsSessionActions !== false);
+        setSupportsSessionActions(
+          resolveSupportsSessionActions(data.supportsSessionActions, data.role, data.coordination),
+        );
         applyBootstrap(data);
       } catch {
         if (!disposed) setRole("disconnected");
@@ -278,7 +284,13 @@ export function useGuiConnection() {
             if (message.type === "boot") {
               receivedBoot = true;
               window.clearTimeout(bootTimeout);
-              setSupportsSessionActions(true);
+              setSupportsSessionActions(
+                resolveSupportsSessionActions(
+                  message.supportsSessionActions,
+                  message.role,
+                  message.coordination,
+                ),
+              );
               setRole(message.role);
               setCoordination(message.coordination || null);
               setCurrentSessionId(message.sessionId);
@@ -294,6 +306,13 @@ export function useGuiConnection() {
                 );
               });
             } else if (message.type === "runtime.status") {
+              setSupportsSessionActions((current) =>
+                resolveSupportsSessionActions(
+                  message.supportsSessionActions ?? current,
+                  message.role,
+                  message.coordination,
+                ),
+              );
               setRole(message.role);
               setCoordination((current) =>
                 resolveSnapshotCoordination(current, message.coordination),

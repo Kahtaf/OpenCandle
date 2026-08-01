@@ -356,6 +356,20 @@ async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
 const server = createServer(async (request, response) => {
   const requestOrigin = request.headers.origin;
   const requestRuntimeToken = request.headers[PRIVATE_RUNTIME_TOKEN_HEADER];
+  if (request.method === "OPTIONS") {
+    if (requestOrigin !== trustedHostOrigin) {
+      sendJson(response, 403, { error: "Request is not authorized" });
+      return;
+    }
+    response.writeHead(204, {
+      ...isolationHeaders("text/plain; charset=utf-8"),
+      "Access-Control-Allow-Headers": `Content-Type, ${PRIVATE_RUNTIME_TOKEN_HEADER}`,
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Max-Age": "600",
+    });
+    response.end();
+    return;
+  }
   if (
     !isAuthorizedPrivateRuntimeRequest(
       {
@@ -368,16 +382,6 @@ const server = createServer(async (request, response) => {
     )
   ) {
     sendJson(response, 403, { error: "Request is not authorized" });
-    return;
-  }
-  if (request.method === "OPTIONS") {
-    response.writeHead(204, {
-      ...isolationHeaders("text/plain; charset=utf-8"),
-      "Access-Control-Allow-Headers": `Content-Type, ${PRIVATE_RUNTIME_TOKEN_HEADER}`,
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Max-Age": "600",
-    });
-    response.end();
     return;
   }
   if (request.method === "GET" && request.url === "/health") {

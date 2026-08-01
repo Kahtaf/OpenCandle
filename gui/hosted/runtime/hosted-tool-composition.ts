@@ -34,13 +34,15 @@ export function getBrowserHostedToolDefinitions(options: {
     const definition = agentToolToPiTool(tool);
     return {
       ...definition,
-      execute: async (toolCallId: string, args: unknown) =>
-        invokeHostedMarketStateTool(
+      execute: async (toolCallId: string, args: unknown) => {
+        const invoked = await invokeHostedMarketStateTool(
           service,
           definition.name,
           (args ?? {}) as Record<string, unknown>,
           toolCallId,
-        ).result,
+        );
+        return invoked.result;
+      },
     } as ToolDefinition;
   });
   return [
