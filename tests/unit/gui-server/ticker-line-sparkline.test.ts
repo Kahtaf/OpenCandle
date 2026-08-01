@@ -27,7 +27,7 @@ describe("Ticker Line sparkline proxy", () => {
 
     expect(providerFetch).toHaveBeenCalledOnce();
     expect(String(providerFetch.mock.calls[0][0])).toMatch(
-      /^https:\/\/ticker-line\.dev\/api\/v1\/sparkline\?/,
+      /^https:\/\/ticker-line\.com\/v1\/sparkline\?/,
     );
     expect(String(providerFetch.mock.calls[0][0])).toContain(
       "ticker=BTC%2FUSD&market=crypto&timeframe=1d",

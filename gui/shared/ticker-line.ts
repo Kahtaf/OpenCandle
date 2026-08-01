@@ -1,4 +1,4 @@
-const TICKER_LINE_SPARKLINE_ENDPOINT = "https://ticker-line.dev/api/v1/sparkline";
+const TICKER_LINE_SPARKLINE_ENDPOINT = "https://ticker-line.com/v1/sparkline";
 
 const INDEX_TICKERS = new Map([
   ["^GSPC", "SPX500/USD"],
