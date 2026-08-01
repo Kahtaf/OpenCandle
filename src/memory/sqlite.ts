@@ -344,6 +344,7 @@ export function initDatabase(path: string): Database.Database {
   const NativeDatabase = loadNativeDatabaseConstructor();
   const db = new NativeDatabase(path);
   try {
+    db.pragma("busy_timeout = 5000");
     const currentVersion = readSchemaVersion(db);
     if (currentVersion !== null && currentVersion > CURRENT_SCHEMA_VERSION) {
       throw new Error(
@@ -351,7 +352,6 @@ export function initDatabase(path: string): Database.Database {
       );
     }
     db.pragma("journal_mode = WAL");
-    db.pragma("busy_timeout = 5000");
     db.pragma("foreign_keys = ON");
     initializeStateDatabase(db);
     return db;

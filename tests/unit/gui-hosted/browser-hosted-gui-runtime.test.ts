@@ -134,6 +134,29 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
+  it("does not switch back when a background run completes after another session was selected", async () => {
+    let finishPrompt!: () => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<{ sessionId: string }>((resolve) => {
+          finishPrompt = () => resolve({ sessionId: "session-1" });
+        }),
+    );
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+    (runtime as any).currentSessionId = "session-1";
+
+    const run = runtime.chatRun("session-1", chatInput("First"), "run-background");
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    (runtime as any).currentSessionId = "session-2";
+    finishPrompt();
+    await run;
+
+    expect((runtime as any).currentSessionId).toBe("session-2");
+    expect((runtime as any).buildBootstrap).toHaveBeenLastCalledWith(expect.anything(), false);
+  });
+
   it("rejects reuse of an in-flight action id for different input", async () => {
     let finishPrompt!: () => void;
     const prompt = vi.fn(
@@ -367,6 +390,12 @@ function createRuntime(
       modelProvider: "openai",
       modelId: "gpt-5-mini",
       modelCredentials: { openai: "test-key" },
+      marketStateDependencies: {
+        resolveInstrument: async (symbol: string) => ({
+          status: "resolved",
+          instrument: { symbol, assetType: "equity", currency: "USD", provider: "test" },
+        }),
+      },
       ...overrides,
     },
     database,

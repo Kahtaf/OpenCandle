@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeHostedMarketStateTool } from "../../../gui/hosted/runtime/hosted-market-state-actions.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import {
@@ -18,10 +18,18 @@ describe("hosted market-state actions", () => {
   afterEach(() => database.close());
 
   it("lists stable watchlist item ids in assistant-visible check content", async () => {
-    const added = await invokeHostedMarketStateTool(service, "manage_watchlist", {
-      action: "add",
-      symbol: "AAPL",
-    });
+    const added = await invokeHostedMarketStateTool(
+      service,
+      "manage_watchlist",
+      { action: "add", symbol: "AAPL" },
+      "hosted-watchlist",
+      {
+        resolveInstrument: async () => ({
+          status: "resolved",
+          instrument: { symbol: "AAPL", assetType: "equity", currency: "USD", provider: "yahoo" },
+        }),
+      },
+    );
 
     const checked = await invokeHostedMarketStateTool(service, "manage_watchlist", {
       action: "check",
@@ -29,6 +37,51 @@ describe("hosted market-state actions", () => {
 
     const item = added.result.details as { id: number };
     expect(checked.result.content[0]?.text).toContain(`AAPL [item ${item.id}]`);
+  });
+
+  it("resolves watchlist metadata instead of guessing USD", async () => {
+    const added = await invokeHostedMarketStateTool(
+      service,
+      "manage_watchlist",
+      { action: "add", symbol: "SHOP.TO" },
+      "hosted-watchlist-currency",
+      {
+        resolveInstrument: async () => ({
+          status: "resolved",
+          instrument: {
+            symbol: "SHOP.TO",
+            assetType: "equity",
+            name: "Shopify Inc.",
+            currency: "CAD",
+            provider: "yahoo",
+          },
+        }),
+      },
+    );
+
+    expect(added.result.details).toMatchObject({ symbol: "SHOP.TO", currency: "CAD" });
+    expect(service.listWatchlistItems()[0]).toMatchObject({ symbol: "SHOP.TO", currency: "CAD" });
+  });
+
+  it("stores an explicitly confirmed hosted symbol without guessing its currency", async () => {
+    const resolveInstrument = vi.fn(async () => {
+      throw new Error("provider resolution should not run for an explicit hosted fallback");
+    });
+
+    const added = await invokeHostedMarketStateTool(
+      service,
+      "manage_watchlist",
+      { action: "add", symbol: "AAPL", unverified_exact_symbol: true },
+      "hosted-watchlist-exact",
+      { resolveInstrument },
+    );
+
+    expect(resolveInstrument).not.toHaveBeenCalled();
+    expect(added.result.details).toMatchObject({
+      symbol: "AAPL",
+      currency: null,
+    });
+    expect(service.listWatchlistItems()[0]).toMatchObject({ symbol: "AAPL", currency: null });
   });
 
   it("lists stable portfolio lot ids in assistant-visible view content", async () => {

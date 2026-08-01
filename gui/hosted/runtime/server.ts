@@ -23,8 +23,8 @@ import {
   searchHostedInstrumentCandidates,
 } from "./hosted-market-data-api.js";
 import {
+  createHostedRelayManifestLoader,
   createHostedProviderFetch,
-  fetchHostedRelayManifest,
 } from "./provider-relay-fetch.js";
 import {
   type GuiRequest,
@@ -69,18 +69,17 @@ if (providerRelayUrl && !/^[a-f0-9]{32}$/.test(providerRelayClientId)) {
   throw new Error("OPENCANDLE_PROVIDER_RELAY_CLIENT_ID is invalid");
 }
 const nativeFetch = globalThis.fetch.bind(globalThis);
-const hostedRelayManifestPromise = providerRelayUrl
-  ? fetchHostedRelayManifest({ relayUrl: providerRelayUrl, fetchImpl: nativeFetch }).catch(
-      () => undefined,
-    )
-  : Promise.resolve(undefined);
+const loadHostedRelayManifest = providerRelayUrl
+  ? createHostedRelayManifestLoader({ relayUrl: providerRelayUrl, fetchImpl: nativeFetch })
+  : async () => undefined;
+const initialHostedRelayManifestPromise = loadHostedRelayManifest();
 const runtimeEpoch = process.env.OPENCANDLE_RUNTIME_EPOCH;
 if (!runtimeEpoch || !/^[a-f0-9]{32}$/.test(runtimeEpoch)) {
   throw new Error("OPENCANDLE_RUNTIME_EPOCH is invalid");
 }
-const hostedGuiRuntimePromise = hostedRelayManifestPromise.then((relayManifest) => {
+const hostedGuiRuntimePromise = initialHostedRelayManifestPromise.then((relayManifest) => {
   globalThis.fetch = createHostedProviderFetch({
-    relayUrl: relayManifest ? providerRelayUrl : "",
+    relayUrl: providerRelayUrl,
     clientId: providerRelayClientId,
     fetchImpl: nativeFetch,
   });
@@ -205,8 +204,10 @@ async function runProbe(body: unknown): Promise<unknown> {
 async function runGuiRequest(request: GuiRequest): Promise<unknown> {
   const runtime = await hostedGuiRuntimePromise;
   switch (request.action) {
-    case "bootstrap":
+    case "bootstrap": {
+      await refreshHostedRelayProviders(runtime);
       return runtime.bootstrap();
+    }
     case "configure_model":
       runtime.configureModel(request.provider, request.modelId, request.apiKey);
       return runtime.bootstrap();
@@ -227,6 +228,7 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
     case "ask_user.cancel":
       return runtime.cancelAskUser(request.sessionId, request.id);
     case "chat_run":
+      await refreshHostedRelayProviders(runtime);
       return runtime.chatRun(
         request.sessionId,
         request,
@@ -272,8 +274,14 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
   }
 }
 
+async function refreshHostedRelayProviders(runtime: BrowserHostedGuiRuntime): Promise<void> {
+  const manifest = await loadHostedRelayManifest();
+  if (manifest) runtime.configureRelayProviders(manifest.providers);
+}
+
 async function hasRelayProvider(provider: string): Promise<boolean> {
-  const manifest = await hostedRelayManifestPromise;
+  const manifest = await loadHostedRelayManifest();
+  if (manifest) (await hostedGuiRuntimePromise).configureRelayProviders(manifest.providers);
   return manifest?.providers.includes(provider) === true;
 }
 
@@ -285,7 +293,8 @@ async function requireRelayProvider(provider: string, capability: string): Promi
 }
 
 async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
-  const relayManifest = await hostedRelayManifestPromise;
+  const relayManifest = await loadHostedRelayManifest();
+  if (relayManifest) (await hostedGuiRuntimePromise).configureRelayProviders(relayManifest.providers);
   const providers = resolveHostedBrowserCapabilityReport(relayManifest?.providers);
   const relayReady = Boolean(relayManifest);
   return {

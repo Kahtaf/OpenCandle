@@ -91,7 +91,15 @@ export async function buildPortfolioView(
       reason:
         position.exclusionReason ?? `No FX conversion from ${position.currency} to ${baseCurrency}`,
     }));
-  const totalsStatus = lots.length === 0 ? "empty" : included.length > 0 ? "ok" : "unavailable";
+  const hasUnavailableBaseCurrencyPosition = positions.some(
+    (position) => position.currency === baseCurrency && !position.includedInTotals,
+  );
+  const totalsStatus =
+    lots.length === 0
+      ? "empty"
+      : hasUnavailableBaseCurrencyPosition || included.length === 0
+        ? "unavailable"
+        : "ok";
   const totalValue =
     totalsStatus === "unavailable"
       ? null

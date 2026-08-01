@@ -39,7 +39,10 @@ import {
   type SqlJsStateDatabase,
 } from "../../../src/runtime/sqljs-state-database-node.js";
 import { BrowserPiSession } from "./browser-pi-session.js";
-import { invokeHostedMarketStateTool } from "./hosted-market-state-actions.js";
+import {
+  invokeHostedMarketStateTool,
+  type HostedMarketStateDependencies,
+} from "./hosted-market-state-actions.js";
 import { getBrowserHostedToolDefinitions } from "./hosted-tool-composition.js";
 import type { FirstClassModelProviderId } from "../../../src/pi/model-provider-metadata.js";
 import type { BrowserModelCredentials } from "./browser-model-runtime.js";
@@ -95,6 +98,7 @@ export interface BrowserHostedGuiRuntimeOptions {
   relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
   maxArchiveBytes?: number;
+  marketStateDependencies?: HostedMarketStateDependencies;
 }
 
 interface HostedSessionCheckpoint {
@@ -223,6 +227,10 @@ export class BrowserHostedGuiRuntime {
     };
   }
 
+  configureRelayProviders(providers: readonly string[]): void {
+    this.options.relayProviders = [...new Set(providers)];
+  }
+
   async newSession(): Promise<BrowserHostedBootstrap> {
     this.assertArchiveAdmission(await this.bootstrap(), SESSION_COMPLETION_RESERVE_BYTES);
     const existing = await SessionManager.list(this.options.cwd, this.options.sessionDir);
@@ -276,7 +284,7 @@ export class BrowserHostedGuiRuntime {
     if (completed) {
       requireMatchingChatInput(completed.fingerprint, fingerprint);
       return {
-        ...(await this.buildBootstrap(await this.resolveManager(completed.sessionId))),
+        ...(await this.buildBootstrap(await this.resolveManager(completed.sessionId), false)),
         events: [],
       };
     }
@@ -375,11 +383,13 @@ export class BrowserHostedGuiRuntime {
           for (const event of events) await emit(event as Record<string, unknown>);
         },
       });
-      const result = await session.prompt(dispatchedPrompt, signal, images);
-      this.currentSessionId = result.sessionId;
+      await session.prompt(dispatchedPrompt, signal, images);
       await emit({ type: "run.completed" });
       const completedResult = {
-        ...(await this.buildBootstrap(await this.resolveManager(guardedSessionId))),
+        ...(await this.buildBootstrap(
+          await this.resolveManager(guardedSessionId),
+          this.currentSessionId === guardedSessionId,
+        )),
         events: streamedEvents,
       };
       // Keep only the idempotency identity. A bootstrap can include many complete
@@ -466,7 +476,13 @@ export class BrowserHostedGuiRuntime {
     }
     const operation = Promise.resolve().then(async () => {
       const service = new MarketStateService(this.stateDatabase);
-      const result = await invokeHostedMarketStateTool(service, toolName, args);
+      const result = await invokeHostedMarketStateTool(
+        service,
+        toolName,
+        args,
+        undefined,
+        this.options.marketStateDependencies,
+      );
       this.flushState();
       return { result };
     });
@@ -527,8 +543,11 @@ export class BrowserHostedGuiRuntime {
     return SessionManager.open(match.path, this.options.sessionDir, this.options.cwd);
   }
 
-  private async buildBootstrap(manager: SessionManager): Promise<BrowserHostedBootstrap> {
-    this.currentSessionId = manager.getSessionId();
+  private async buildBootstrap(
+    manager: SessionManager,
+    selectCurrent = true,
+  ): Promise<BrowserHostedBootstrap> {
+    if (selectCurrent) this.currentSessionId = manager.getSessionId();
     const entries = manager.getEntries();
     const sessionId = manager.getSessionId();
     const marketState = new MarketStateService(this.stateDatabase);

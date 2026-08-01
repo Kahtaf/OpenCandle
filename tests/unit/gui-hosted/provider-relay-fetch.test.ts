@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createHostedProviderFetch,
+  createHostedRelayManifestLoader,
   fetchHostedRelayManifest,
 } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
 
@@ -116,6 +117,22 @@ describe("hosted provider relay fetch", () => {
         ),
       }),
     ).rejects.toThrow("incompatible");
+  });
+
+  it("retries relay negotiation after a transient failure and caches success", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary outage"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: 1, providers: ["yahoo"] })));
+    const load = createHostedRelayManifestLoader({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      fetchImpl,
+    });
+
+    await expect(load()).resolves.toBeUndefined();
+    await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
+    await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("bounds relay negotiation while the manifest body is still streaming", async () => {

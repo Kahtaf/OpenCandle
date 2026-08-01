@@ -116,7 +116,8 @@ describe("hosted PWA assets", () => {
   it("installs the relay transport only inside the hosted runtime", () => {
     const server = readFileSync(resolve(root, "gui/hosted/runtime/server.ts"), "utf8");
     expect(server).toContain("globalThis.fetch = createHostedProviderFetch");
-    expect(server).toContain('relayManifest ? providerRelayUrl : ""');
+    expect(server).toContain("createHostedRelayManifestLoader");
+    expect(server).toContain("relayUrl: providerRelayUrl");
     expect(server).toContain("OPENCANDLE_PROVIDER_RELAY_URL");
     const localServer = readFileSync(resolve(root, "gui/server/server.ts"), "utf8");
     expect(localServer).not.toContain("createHostedProviderFetch");

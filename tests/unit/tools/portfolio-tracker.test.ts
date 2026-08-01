@@ -336,6 +336,36 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("marks aggregate P&L unavailable when a base-currency lot cannot be valued", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      shares: 1,
+      avg_cost: 180,
+    });
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      symbol === "VTI"
+        ? quote("VTI", 300)
+        : quote("AAPL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Value: unavailable | P&L: unavailable");
+    expect(result.details).toMatchObject({
+      totalValue: null,
+      totalCost: 680,
+      totalPnl: null,
+      totalsStatus: "unavailable",
+    });
+  });
+
   it("excludes unsupported mixed-currency rows from base-currency totals", async () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);

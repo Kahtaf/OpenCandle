@@ -33,6 +33,28 @@ export interface HostedRelayManifest {
   providers: string[];
 }
 
+export function createHostedRelayManifestLoader(options: {
+  relayUrl: string;
+  fetchImpl?: typeof globalThis.fetch;
+  timeoutMs?: number;
+}): () => Promise<HostedRelayManifest | undefined> {
+  let cached: HostedRelayManifest | undefined;
+  let inFlight: Promise<HostedRelayManifest | undefined> | undefined;
+  return async () => {
+    if (cached) return cached;
+    inFlight ??= fetchHostedRelayManifest(options)
+      .then((manifest) => {
+        cached = manifest;
+        return manifest;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        inFlight = undefined;
+      });
+    return inFlight;
+  };
+}
+
 export async function fetchHostedRelayManifest(options: {
   relayUrl: string;
   fetchImpl?: typeof globalThis.fetch;

@@ -391,13 +391,25 @@ class BrowserRuntimeHost {
         blocksUpdate: true,
         runtimeEpoch: this.runtimeEpoch,
       });
-      await this.writeProcessMessage({
-        type: "request",
-        runtimeEpoch: this.runtimeEpoch,
-        operation: `${operation}-stream`,
-        requestId,
-        payload,
-      });
+      try {
+        await this.writeProcessMessage({
+          type: "request",
+          runtimeEpoch: this.runtimeEpoch,
+          operation: `${operation}-stream`,
+          requestId,
+          payload,
+        });
+      } catch (error) {
+        globalThis.clearTimeout(timer);
+        options.signal?.removeEventListener("abort", abort);
+        this.pendingRequests.delete(requestId);
+        try {
+          streamController.error(error);
+        } catch {
+          // The stream may already have been cancelled while the write failed.
+        }
+        throw error;
+      }
     }
     return new Response(stream, {
       status: 200,

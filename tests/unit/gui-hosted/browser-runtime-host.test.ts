@@ -309,6 +309,28 @@ describe("browser runtime host", () => {
     });
   });
 
+  it("cleans up stream state when writing the request frame fails", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.processWriter = {
+      write: vi.fn(async () => {
+        throw new Error("stdin closed");
+      }),
+    };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    await expect(host.streamRequest("chat", {})).rejects.toThrow("stdin closed");
+    expect(host.pendingRequests.size).toBe(0);
+  });
+
   it("tears down and reboots the runtime after clearing a live model key", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());

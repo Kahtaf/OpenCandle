@@ -86,7 +86,18 @@ export async function invokeMarketStateMutation({
     if (typeof invokeToolRequest !== "function") {
       throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
     }
-    await invokeToolRequest(toolName, args, "", { recordTranscript: false });
+    const response = await invokeToolRequest(toolName, args, "", { recordTranscript: false });
+    const responseDetails = response?.details?.value ?? response?.details;
+    if (
+      responseDetails?.status === "needs_selection" ||
+      responseDetails?.status === "needs_currency"
+    ) {
+      const message = response?.content?.find?.((item) => item?.type === "text")?.text;
+      setToast?.(message || "More information is required before this can be saved.", {
+        destructive: true,
+      });
+      return false;
+    }
     await refresh();
     await refreshQuotes?.();
     return true;
@@ -340,6 +351,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
           const saved = await invokeTool("manage_watchlist", {
             action: "add",
             symbol: values.symbol,
+            ...(values.unverifiedExact ? { unverified_exact_symbol: true } : {}),
             watchlist_name: watchlist?.name,
           });
           if (saved) closePanel();
@@ -740,15 +752,17 @@ export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
 export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState("");
+  const [unverifiedExact, setUnverifiedExact] = useState(false);
   const resolvedSymbol = selected;
 
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    const saved = await onSubmit({ symbol: resolvedSymbol });
+    const saved = await onSubmit({ symbol: resolvedSymbol, unverifiedExact });
     if (saved === false) return;
     setQuery("");
     setSelected("");
+    setUnverifiedExact(false);
   };
 
   return (
@@ -764,6 +778,7 @@ export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
         disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        onSelectionVerificationChange={(verified) => setUnverifiedExact(verified === false)}
         navigate={navigate}
       />
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
@@ -978,6 +993,7 @@ export function SymbolSearchInput({
   disabled,
   onQueryChange,
   onSelectedChange,
+  onSelectionVerificationChange,
   navigate,
 }) {
   const transport = useRuntimeTransport();
@@ -1003,6 +1019,7 @@ export function SymbolSearchInput({
 
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
+    onSelectionVerificationChange?.(true);
     onQueryChange(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
     setCandidates([]);
     setActiveIndex(-1);
@@ -1052,6 +1069,7 @@ export function SymbolSearchInput({
             if (exactSymbol) {
               event.preventDefault();
               onSelectedChange(exactSymbol);
+              onSelectionVerificationChange?.(false);
               onQueryChange(exactSymbol);
               setCandidates([]);
               setActiveIndex(-1);
@@ -1067,6 +1085,7 @@ export function SymbolSearchInput({
           setActiveIndex(-1);
           onQueryChange(event.target.value);
           onSelectedChange("");
+          onSelectionVerificationChange?.(undefined);
         }}
       />
       {allowExactSymbol ? (

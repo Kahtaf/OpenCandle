@@ -44,11 +44,11 @@ export async function invokeHostedMarketStateTool(
 ): Promise<HostedToolInvokeResult> {
   const output =
     toolName === "manage_watchlist"
-      ? manageWatchlist(service, args)
+      ? await manageWatchlist(service, args, dependencies)
       : toolName === "track_portfolio"
         ? await trackPortfolio(service, args, dependencies)
         : toolName === "manage_alerts"
-          ? manageAlerts(service, args)
+          ? await manageAlerts(service, args, dependencies)
           : toolName === "manage_notifications"
             ? manageNotifications(service, args)
             : toolName === "daily_watchlist_report"
@@ -69,7 +69,11 @@ export async function invokeHostedMarketStateTool(
   };
 }
 
-function manageWatchlist(service: MarketStateService, args: Record<string, unknown>) {
+async function manageWatchlist(
+  service: MarketStateService,
+  args: Record<string, unknown>,
+  dependencies: HostedMarketStateDependencies,
+) {
   const action = stringArg(args, "action");
   if (action === "create") {
     const value = service.createWatchlist(requiredString(args, "watchlist_name"));
@@ -88,12 +92,24 @@ function manageWatchlist(service: MarketStateService, args: Record<string, unkno
   const watchlist = resolveWatchlist(service, optionalString(args, "watchlist_name"), true);
   if (action === "add") {
     const symbol = normalizedSymbol(args.symbol);
+    const explicitCurrency = optionalString(args, "currency");
+    const unverifiedExactSymbol = args.unverified_exact_symbol === true;
+    const resolved =
+      explicitCurrency || unverifiedExactSymbol
+        ? { status: "resolved" as const, instrument: hostedInstrument(symbol, explicitCurrency) }
+        : await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
+    if (resolved.status === "needs_selection") {
+      return result(
+        `Could not verify ${resolved.query}. Choose one of the returned candidates before adding it to the watchlist.`,
+        resolved,
+      );
+    }
     const value = service.addWatchlistItem({
       watchlistId: watchlist.id,
-      instrument: hostedInstrument(symbol, optionalString(args, "currency")),
+      instrument: resolved.instrument,
       source: "hosted-user",
     });
-    return result(`Added ${symbol} to ${watchlist.name}.`, value);
+    return result(`Added ${resolved.instrument.symbol} to ${watchlist.name}.`, value);
   }
   if (action === "remove") {
     if (args.item_id != null) {
@@ -220,7 +236,11 @@ async function trackPortfolio(
   throw new Error("Unsupported portfolio action.");
 }
 
-function manageAlerts(service: MarketStateService, args: Record<string, unknown>) {
+async function manageAlerts(
+  service: MarketStateService,
+  args: Record<string, unknown>,
+  dependencies: HostedMarketStateDependencies,
+) {
   const action = stringArg(args, "action");
   if (action === "list" || action === "status") {
     const values = service.listAlertRules();
@@ -242,7 +262,14 @@ function manageAlerts(service: MarketStateService, args: Record<string, unknown>
 
   const conditionAction = action === "update" ? requiredString(args, "condition_action") : action;
   const symbol = normalizedSymbol(args.symbol);
-  const instrument = service.upsertInstrumentRecord(hostedInstrument(symbol, "USD"));
+  const resolved = await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
+  if (resolved.status === "needs_selection") {
+    return result(
+      `Could not verify ${resolved.query}. Choose one of the returned candidates before creating the alert.`,
+      resolved,
+    );
+  }
+  const instrument = service.upsertInstrumentRecord(resolved.instrument);
   const condition = alertCondition(conditionAction, args);
   if (action === "update") {
     const id = positiveInteger(args.id, "id");
@@ -349,7 +376,7 @@ function hostedInstrument(symbol: string, currency?: string | null) {
     symbol,
     assetType: symbol.endsWith("-USD") ? "crypto" : "equity",
     name: symbol,
-    currency: currency || "USD",
+    currency: currency?.trim().toUpperCase() || null,
     provider: "hosted-user",
     providerMetadata: { verified: false, source: "user-input" },
   };
