@@ -38,6 +38,10 @@ jobs:
         if: matrix.node-version == '24.x'
         run: npx tsc --noEmit
 
+      - name: Typecheck provider relay
+        if: matrix.node-version == '24.x'
+        run: npm run relay:typecheck
+
       - name: Lint
         if: matrix.node-version == '24.x'
         run: npx biome ci .
@@ -55,6 +59,10 @@ jobs:
       - name: Run tests
         if: matrix.node-version == '24.x'
         run: npm test
+
+      - name: Run provider relay tests
+        if: matrix.node-version == '24.x'
+        run: npm run relay:test
 
       - name: Run agent tool tests
         if: matrix.node-version == '24.x'

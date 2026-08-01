@@ -56,6 +56,13 @@ export function quoteFreshnessTitle(quotes = [], timeZone) {
 }
 
 export function degradedQuoteBadge(quotes = [], nowMs = Date.now()) {
+  const retainedUnavailable = quotes.filter((quote) => quote?.refreshStatus === "unavailable");
+  if (retainedUnavailable.length > 0) {
+    const fetchedAtMs = parsedQuoteTimes(retainedUnavailable, "fetchedAt");
+    if (fetchedAtMs.length === 0) return "Quotes unavailable · last update time unknown";
+    const oldestMs = Math.min(...fetchedAtMs);
+    return `Quotes unavailable · last updated ${relativeTime(new Date(oldestMs).toISOString(), nowMs)}`;
+  }
   if (quotes.some((quote) => quote?.status === "unavailable")) return "Quotes unavailable";
 
   const fetchedAtMs = parsedQuoteTimes(quotes, "fetchedAt");

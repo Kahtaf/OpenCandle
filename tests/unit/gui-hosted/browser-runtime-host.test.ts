@@ -60,6 +60,7 @@ describe("browser runtime host", () => {
     vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
     vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
     const createBackup = vi.fn(async () => true);
+    const restoreBackup = vi.fn(async () => true);
     const dataStore = {
       validateImportForRestore: vi.fn(async () => ({})),
       importAll: vi.fn(async () => ({ currentSessionId: "imported-session" })),
@@ -69,6 +70,7 @@ describe("browser runtime host", () => {
         currentSessionId: "imported-session",
       })),
       createBackup,
+      restoreBackup,
     };
     const host = createBrowserRuntimeHost({
       storage: memoryStorage(),
@@ -97,6 +99,7 @@ describe("browser runtime host", () => {
     ).rejects.toThrow("imported runtime failed");
 
     expect(createBackup).not.toHaveBeenCalled();
+    expect(restoreBackup).toHaveBeenCalledOnce();
   });
 
   it("advances the recovery backup only after the imported runtime boots successfully", async () => {
@@ -111,6 +114,9 @@ describe("browser runtime host", () => {
         events.push("backup");
         return true;
       }),
+      persistCheckpoint: vi.fn(async () => {
+        events.push("persisted");
+      }),
     };
     const host = createBrowserRuntimeHost({
       storage: memoryStorage(),
@@ -121,10 +127,47 @@ describe("browser runtime host", () => {
     host.boot = vi.fn(async () => {
       events.push("booted");
     });
+    host.request = vi.fn(async () => {
+      await host.persistCheckpoint({ sessionId: "imported-session" });
+      return { sessionId: "imported-session" };
+    });
 
     await host.handleCommand({ type: "hosted.data.import", archive: "validated archive" });
 
-    expect(events).toEqual(["booted", "backup"]);
+    expect(events).toEqual(["booted", "persisted", "backup"]);
+  });
+
+  it("restores the original archive when an imported same-version database fails bootstrap", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const restoreBackup = vi.fn(async () => true);
+    const dataStore = {
+      validateImportForRestore: vi.fn(async () => ({})),
+      importAll: vi.fn(async () => ({ currentSessionId: "imported-session" })),
+      restoreBackup,
+      readRuntimeSnapshot: vi.fn(async () => ({ currentSessionId: "original-session" })),
+      createBackup: vi.fn(async () => true),
+    };
+    const storage = memoryStorage();
+    const host = createBrowserRuntimeHost({
+      storage,
+      sessionStorage: memoryStorage(),
+      dataStore,
+    });
+    host.stopRuntime = vi.fn(async () => {});
+    host.ensureBooted = vi.fn(async () => {});
+    host.request = vi.fn(async () => {
+      throw new Error("Imported state schema is incompatible");
+    });
+
+    await expect(
+      host.handleCommand({ type: "hosted.data.import", archive: "validated archive" }),
+    ).rejects.toThrow("schema is incompatible");
+
+    expect(restoreBackup).toHaveBeenCalledOnce();
+    expect(host.stopRuntime).toHaveBeenCalledTimes(2);
+    expect(storage.getItem("opencandle.hosted.current-session.v1")).toBe("original-session");
   });
 
   it("waits for non-stream mutations before preparing an update", async () => {
@@ -171,6 +214,70 @@ describe("browser runtime host", () => {
     expect(createBackup).toHaveBeenCalledOnce();
   });
 
+  it("clears the stream startup timer on the first valid stream message", () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.runtimeEpoch = "runtime-epoch";
+    const push = vi.fn();
+    host.pendingRequests.set("stream-1", {
+      runtimeEpoch: "runtime-epoch",
+      timer: 42,
+      streamController: {},
+      sseGate: { push },
+    });
+
+    host.handleRuntimeMessage({
+      type: "stream-event",
+      requestId: "stream-1",
+      runtimeEpoch: "runtime-epoch",
+      event: { type: "run.started" },
+    });
+    host.handleRuntimeMessage({
+      type: "stream-event",
+      requestId: "stream-1",
+      runtimeEpoch: "runtime-epoch",
+      event: { type: "tool.started" },
+    });
+
+    expect(clearTimeout).toHaveBeenCalledTimes(1);
+    expect(clearTimeout).toHaveBeenCalledWith(42);
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels and unregisters a Pi stream when its browser consumer closes", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const response = await host.streamRequest("chat", { message: "hello" });
+    expect(host.pendingRequests.size).toBe(1);
+
+    await response.body.cancel();
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+
+    expect(host.pendingRequests.size).toBe(0);
+    expect(JSON.parse(write.mock.calls[1][0])).toMatchObject({
+      type: "cancel",
+    });
+  });
+
   it("tears down and reboots the runtime after clearing a live model key", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -211,6 +318,49 @@ describe("browser runtime host", () => {
     expect(host.request).not.toHaveBeenCalledWith(
       "gui",
       expect.objectContaining({ action: "configure_model" }),
+    );
+  });
+
+  it("repopulates the active service worker shell after clearing browser caches", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const worker = {
+      postMessage: vi.fn((_message, ports: Array<{ postMessage: (value: unknown) => void }>) => {
+        ports[0]?.postMessage({ ok: true });
+      }),
+    };
+    vi.stubGlobal("navigator", {
+      onLine: false,
+      serviceWorker: {
+        getRegistration: vi.fn(async () => ({ active: worker })),
+      },
+    });
+    vi.stubGlobal("caches", {
+      keys: vi.fn(async () => ["opencandle-hosted-shell-old"]),
+      delete: vi.fn(async () => true),
+    });
+    vi.stubGlobal(
+      "MessageChannel",
+      class {
+        port1 = { onmessage: null as null | ((event: { data: unknown }) => void), close: vi.fn() };
+        port2 = {
+          postMessage: (value: unknown) => {
+            queueMicrotask(() => this.port1.onmessage?.({ data: value }));
+          },
+        };
+      },
+    );
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { clearAll: vi.fn(async () => {}) },
+    });
+
+    await host.handleCommand({ type: "hosted.data.clear_all" });
+
+    expect(worker.postMessage).toHaveBeenCalledWith(
+      { type: "REPOPULATE_SHELL" },
+      expect.any(Array),
     );
   });
 

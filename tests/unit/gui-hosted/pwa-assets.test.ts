@@ -45,6 +45,18 @@ describe("hosted PWA assets", () => {
     expect(worker).not.toMatch(/\/gui|\/probe|credential|state\.sqlite|checkpoint-v1/);
   });
 
+  it("lets the active worker repopulate the offline shell after device data is cleared", () => {
+    const worker = readFileSync(resolve(root, "gui/hosted/public/sw.js"), "utf8");
+    const messageHandler = worker
+      .split('self.addEventListener("message"')[1]
+      ?.split('self.addEventListener("activate"')[0];
+
+    expect(messageHandler).toContain('event.data?.type === "REPOPULATE_SHELL"');
+    expect(messageHandler).toContain("event.waitUntil");
+    expect(messageHandler).toContain("cache.addAll(PRECACHE)");
+    expect(messageHandler).toContain("event.ports[0]");
+  });
+
   it("ships the cross-origin isolation and cache headers required by WebContainer", () => {
     const headers = readFileSync(resolve(root, "gui/hosted/public/_headers"), "utf8");
     expect(headers).toContain("Cross-Origin-Embedder-Policy: require-corp");

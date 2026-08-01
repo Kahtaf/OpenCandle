@@ -1,6 +1,10 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { type TSchema, Type } from "@sinclair/typebox";
-import { type ProviderId, resolveHostedBrowserCapabilityReport } from "../onboarding/providers.js";
+import {
+  hasCredential,
+  type ProviderId,
+  resolveHostedBrowserCapabilityReport,
+} from "../onboarding/providers.js";
 import { companyOverviewTool } from "../tools/fundamentals/company-overview.js";
 import { compsTool } from "../tools/fundamentals/comps.js";
 import { dcfTool } from "../tools/fundamentals/dcf.js";
@@ -121,6 +125,12 @@ const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(hostedSentimentSummaryTool, ["exa", "brave"]),
 ];
 
+const ALPHA_VANTAGE_MARKET_TOOLS = new Set([
+  "get_stock_quote",
+  "get_stock_history",
+  "get_price_comparison",
+]);
+
 export function getHostedOpenCandleToolDefinitions(
   options: { relayProviders?: readonly string[] } = {},
 ) {
@@ -130,8 +140,15 @@ export function getHostedOpenCandleToolDefinitions(
     ),
   );
   const hasIntradayHistory = available.has("yahoo") || available.has("lse");
-  return HOSTED_TOOLS.filter(({ anyProviders }) =>
-    anyProviders.some((provider) => available.has(provider)),
+  const hasAlphaVantageCredential = hasCredential("alpha_vantage");
+  return HOSTED_TOOLS.filter(({ tool, anyProviders }) =>
+    anyProviders.some(
+      (provider) =>
+        available.has(provider) &&
+        (provider !== "alpha_vantage" ||
+          !ALPHA_VANTAGE_MARKET_TOOLS.has(tool.name) ||
+          hasAlphaVantageCredential),
+    ),
   ).map(({ tool }) => {
     if (hasIntradayHistory) return tool;
     if (tool.name === "get_stock_history") return DAILY_ONLY_STOCK_HISTORY;

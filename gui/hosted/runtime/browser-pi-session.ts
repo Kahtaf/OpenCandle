@@ -25,6 +25,22 @@ import type { AskUserHandler } from "../../../src/types/index.js";
 
 const MAX_RETURNED_ENTRIES = 48;
 
+interface PiMessageOutcome {
+  readonly role: string;
+  readonly stopReason?: string;
+  readonly errorMessage?: string;
+}
+
+export function assertTerminalAssistantSucceeded(messages: readonly PiMessageOutcome[]): void {
+  const assistant = messages.findLast((message) => message.role === "assistant");
+  if (assistant?.stopReason === "aborted") {
+    throw new DOMException(assistant.errorMessage ?? "The operation was aborted", "AbortError");
+  }
+  if (assistant?.stopReason === "error") {
+    throw new Error(assistant.errorMessage ?? "The model provider returned an error");
+  }
+}
+
 export interface BrowserPiSessionResult {
   runtime: "pi-agent-session";
   sessionId: string;
@@ -181,52 +197,53 @@ export class BrowserPiSession {
     if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
     signal?.addEventListener("abort", abort, { once: true });
     try {
-    const input = await this.host.processInput(question);
-    if (input.action === "handled") {
-      throw new Error("Hosted Pi input was handled without producing a model turn");
-    }
-    this.agent.state.systemPrompt = await this.host.prepareSystemPrompt("");
-    await this.agent.prompt(input.text, images);
-    await this.agent.waitForIdle();
-    const sessionFile = this.sessionManager.getSessionFile();
-    if (!sessionFile || !existsSync(sessionFile)) {
-      throw new Error("Pi session did not produce a durable JSONL file");
-    }
-    const content = readFileSync(sessionFile, "utf8");
-    if (this.writeCurrentAlias) {
-      const checkpointFile = join(dirname(sessionFile), "current.jsonl");
-      if (checkpointFile !== sessionFile) writeFileSync(checkpointFile, content, "utf8");
-    }
-    const marketState = new MarketStateService(this.stateDatabase);
-    const defaultWatchlist = marketState.getDefaultWatchlist();
-    const watchlistCount = marketState.listWatchlists().length;
-    const stateBytes = this.stateDatabase.exportBytes();
-    const entries = this.sessionManager.getEntries();
-    writeFileSync(this.stateFile, stateBytes);
-    return {
-      runtime: "pi-agent-session",
-      sessionId: this.sessionManager.getSessionId(),
-      model: `${this.model.provider}/${this.model.id}`,
-      toolNames: this.host.getAgentTools().map((tool) => tool.name),
-      entries: entries.slice(-MAX_RETURNED_ENTRIES),
-      events: sessionEntriesToChatEvents(entries, {
+      const input = await this.host.processInput(question);
+      if (input.action === "handled") {
+        throw new Error("Hosted Pi input was handled without producing a model turn");
+      }
+      this.agent.state.systemPrompt = await this.host.prepareSystemPrompt("");
+      await this.agent.prompt(input.text, images);
+      await this.agent.waitForIdle();
+      assertTerminalAssistantSucceeded(this.agent.state.messages);
+      const sessionFile = this.sessionManager.getSessionFile();
+      if (!sessionFile || !existsSync(sessionFile)) {
+        throw new Error("Pi session did not produce a durable JSONL file");
+      }
+      const content = readFileSync(sessionFile, "utf8");
+      if (this.writeCurrentAlias) {
+        const checkpointFile = join(dirname(sessionFile), "current.jsonl");
+        if (checkpointFile !== sessionFile) writeFileSync(checkpointFile, content, "utf8");
+      }
+      const marketState = new MarketStateService(this.stateDatabase);
+      const defaultWatchlist = marketState.getDefaultWatchlist();
+      const watchlistCount = marketState.listWatchlists().length;
+      const stateBytes = this.stateDatabase.exportBytes();
+      const entries = this.sessionManager.getEntries();
+      writeFileSync(this.stateFile, stateBytes);
+      return {
+        runtime: "pi-agent-session",
         sessionId: this.sessionManager.getSessionId(),
-      }),
-      snapshot: {
-        format: "pi-jsonl",
-        filename: "current.jsonl",
-        content,
-      },
-      stateSnapshot: {
-        format: "sqlite3",
-        filename: "current.sqlite3",
-        contentBase64: Buffer.from(stateBytes).toString("base64"),
-      },
-      stateSummary: {
-        defaultWatchlistId: defaultWatchlist.id,
-        watchlistCount,
-      },
-    };
+        model: `${this.model.provider}/${this.model.id}`,
+        toolNames: this.host.getAgentTools().map((tool) => tool.name),
+        entries: entries.slice(-MAX_RETURNED_ENTRIES),
+        events: sessionEntriesToChatEvents(entries, {
+          sessionId: this.sessionManager.getSessionId(),
+        }),
+        snapshot: {
+          format: "pi-jsonl",
+          filename: "current.jsonl",
+          content,
+        },
+        stateSnapshot: {
+          format: "sqlite3",
+          filename: "current.sqlite3",
+          contentBase64: Buffer.from(stateBytes).toString("base64"),
+        },
+        stateSummary: {
+          defaultWatchlistId: defaultWatchlist.id,
+          watchlistCount,
+        },
+      };
     } finally {
       signal?.removeEventListener("abort", abort);
     }

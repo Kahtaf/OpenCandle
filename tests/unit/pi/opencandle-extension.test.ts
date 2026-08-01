@@ -621,6 +621,46 @@ describe("opencandle extension", () => {
     // simulate a fresh turn, not a multi-turn conversation.
     const emptySessionManager = { getBranch: () => [], getSessionId: () => "sid" };
 
+    it.each(["length", "error", "aborted"] as const)(
+      "restores the pre-route active tools after a terminal %s turn",
+      async (stopReason) => {
+        vi.stubEnv("OPENCANDLE_TOOL_SCOPE_MODE", "enforce");
+        resetConfigCache();
+        const fake = createFakeApi();
+        const baselineTools = ["get_stock_quote", "get_crypto_price"];
+        (fake.api.getAllTools as ReturnType<typeof vi.fn>).mockReturnValue(
+          getOpenCandleToolDefinitions(),
+        );
+        (fake.api.getActiveTools as ReturnType<typeof vi.fn>).mockReturnValue(baselineTools);
+        openCandleExtension(fake.api, { routerLlmClient: mockClient(fallbackOutput) });
+
+        const inputHandler = fake.handlers.get("input")?.[0];
+        await inputHandler!(
+          { type: "input", text: "What is happening with ASTS?", source: "interactive" },
+          {
+            isIdle: () => true,
+            ui: { notify: vi.fn() },
+            model: { id: "m" },
+            sessionManager: emptySessionManager,
+          },
+        );
+
+        expect(fake.api.setActiveTools).toHaveBeenCalled();
+        const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+        await turnEndHandler!(
+          {
+            type: "turn_end",
+            turnIndex: 0,
+            message: { role: "assistant", content: [], stopReason },
+            toolResults: [],
+          },
+          {},
+        );
+
+        expect(fake.api.setActiveTools).toHaveBeenLastCalledWith(baselineTools);
+      },
+    );
+
     it("returns a transform result when router dispatches a workflow", async () => {
       const fake = createFakeApi();
       openCandleExtension(fake.api, { routerLlmClient: mockClient(workflowOutput) });

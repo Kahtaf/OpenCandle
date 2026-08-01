@@ -1,14 +1,23 @@
 import { Value } from "@sinclair/typebox/value";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 
+const hasCredential = vi.hoisted(() => vi.fn(() => false));
+
+vi.mock("../../../src/onboarding/providers.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/onboarding/providers.js")>();
+  return { ...actual, hasCredential };
+});
+
 describe("hosted tool adapter", () => {
+  beforeEach(() => {
+    hasCredential.mockReset();
+    hasCredential.mockReturnValue(false);
+  });
+
   it("registers only tools with a complete direct-browser provider path", () => {
     expect(getHostedOpenCandleToolDefinitions().map((tool) => tool.name)).toEqual([
-      "get_stock_quote",
-      "get_stock_history",
-      "get_price_comparison",
       "get_crypto_price",
       "get_crypto_history",
       "get_company_overview",
@@ -20,6 +29,7 @@ describe("hosted tool adapter", () => {
   });
 
   it("advertises only daily stock history until an intraday-capable relay is available", () => {
+    hasCredential.mockReturnValue(true);
     const directHistory = getHostedOpenCandleToolDefinitions().find(
       (tool) => tool.name === "get_stock_history",
     );
@@ -34,6 +44,7 @@ describe("hosted tool adapter", () => {
   });
 
   it("advertises only daily price comparisons until an intraday-capable relay is available", () => {
+    hasCredential.mockReturnValue(true);
     const directComparison = getHostedOpenCandleToolDefinitions().find(
       (tool) => tool.name === "get_price_comparison",
     );
@@ -47,6 +58,19 @@ describe("hosted tool adapter", () => {
     expect(Value.Check(directComparison?.parameters, dailyArgs)).toBe(true);
     expect(Value.Check(directComparison?.parameters, intradayArgs)).toBe(false);
     expect(Value.Check(relayedComparison?.parameters, intradayArgs)).toBe(true);
+  });
+
+  it("advertises direct Alpha Vantage market tools only when its key is configured", () => {
+    const withoutKey = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
+    hasCredential.mockReturnValue(true);
+    const withKey = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
+
+    expect(withoutKey).not.toEqual(
+      expect.arrayContaining(["get_stock_quote", "get_stock_history", "get_price_comparison"]),
+    );
+    expect(withKey).toEqual(
+      expect.arrayContaining(["get_stock_quote", "get_stock_history", "get_price_comparison"]),
+    );
   });
 
   it("does not advertise DCF until its required Yahoo quote path is available", () => {

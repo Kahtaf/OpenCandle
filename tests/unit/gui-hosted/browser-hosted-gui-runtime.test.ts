@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  assertHostedBootstrapPersistable,
   BrowserHostedGuiRuntime,
   MAX_COMPLETED_CHAT_RESULTS,
   selectSessionCheckpoints,
 } from "../../../gui/hosted/runtime/browser-hosted-gui-runtime.js";
+import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 describe("BrowserHostedGuiRuntime action safety", () => {
@@ -50,6 +52,37 @@ describe("BrowserHostedGuiRuntime action safety", () => {
 
     finishPrompt();
     await first;
+  });
+
+  it("rejects a paid turn before invoking Pi when the projected archive cannot be persisted", async () => {
+    const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
+    const runtime = createRuntime({
+      maxArchiveBytes: 1,
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    await expect(
+      runtime.chatRun("session-1", chatInput("This cannot fit"), "run-over-budget"),
+    ).rejects.toThrow("browser storage limit");
+
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new session before creating its durable file when the archive is full", async () => {
+    const list = vi.spyOn(SessionManager, "list").mockResolvedValue([]);
+    const create = vi.spyOn(SessionManager, "create").mockImplementation(() => {
+      throw new Error("session was created");
+    });
+    const runtime = createRuntime({ maxArchiveBytes: 1 });
+    runtime.bootstrap = vi.fn(async () => (runtime as any).buildBootstrap());
+
+    try {
+      await expect(runtime.newSession()).rejects.toThrow("browser storage limit");
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      list.mockRestore();
+      create.mockRestore();
+    }
   });
 
   it("does not pay for a completed logical run twice when its acknowledgement is retried", async () => {
@@ -274,6 +307,20 @@ describe("BrowserHostedGuiRuntime action safety", () => {
 
     expect(selected).toHaveLength(100);
     expect(selected[0]?.sessionId).toBe("session-100");
+  });
+
+  it("enforces the final serialized bootstrap budget including checkpoint duplication", () => {
+    const duplicatedEntry = { type: "message", message: { content: "saved research" } };
+    const bootstrap = {
+      checkpoint: { sessions: [{ content: JSON.stringify(duplicatedEntry) }] },
+      snapshot: { entries: [duplicatedEntry] },
+    };
+    const serializedBytes = Buffer.byteLength(JSON.stringify(bootstrap));
+
+    expect(() => assertHostedBootstrapPersistable(bootstrap, serializedBytes - 1)).toThrow(
+      "browser storage limit",
+    );
+    expect(() => assertHostedBootstrapPersistable(bootstrap, serializedBytes)).not.toThrow();
   });
 });
 

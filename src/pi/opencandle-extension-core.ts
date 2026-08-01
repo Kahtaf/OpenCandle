@@ -323,9 +323,17 @@ export default function openCandleExtension(
   // footer status pinned at session_start is the primary user-visible channel.
   pi.on("turn_end", async (event) => {
     const msg = event.message;
-    const isFinalAssistantTurn = msg.role === "assistant" && msg.stopReason === "stop";
-    if (isFinalAssistantTurn) {
+    const isSuccessfulFinalAssistantTurn = msg.role === "assistant" && msg.stopReason === "stop";
+    const isTerminalAssistantTurn =
+      msg.role === "assistant" &&
+      (msg.stopReason === "stop" ||
+        msg.stopReason === "length" ||
+        msg.stopReason === "error" ||
+        msg.stopReason === "aborted");
+    if (isSuccessfulFinalAssistantTurn) {
       pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
+    }
+    if (isTerminalAssistantTurn) {
       restoreRouteToolScope();
     }
 

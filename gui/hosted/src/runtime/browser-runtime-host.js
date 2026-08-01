@@ -192,7 +192,24 @@ class BrowserRuntimeHost {
         } else {
           this.storage.removeItem(CURRENT_SESSION_KEY);
         }
-        if (navigator.onLine) await this.ensureBooted();
+        if (navigator.onLine) {
+          try {
+            await this.ensureBooted();
+            await this.request("gui", { action: "bootstrap" });
+          } catch (error) {
+            await this.stopRuntime();
+            if (await this.dataStore.restoreBackup?.()) {
+              this.preserveRecoveryBackupUntilBoot = false;
+              const recovery = await this.dataStore.readRuntimeSnapshot();
+              if (recovery.currentSessionId) {
+                this.storage.setItem(CURRENT_SESSION_KEY, recovery.currentSessionId);
+              } else {
+                this.storage.removeItem(CURRENT_SESSION_KEY);
+              }
+            }
+            throw error;
+          }
+        }
         return { imported: true };
       }
       case "hosted.data.clear_secrets":
@@ -332,9 +349,13 @@ class BrowserRuntimeHost {
     if (!this.processWriter) throw new Error("Hosted runtime process is unavailable");
     const requestId = randomRequestId();
     let streamController;
+    let cancelFromConsumer = () => {};
     const stream = new ReadableStream({
       start(controller) {
         streamController = controller;
+      },
+      cancel() {
+        cancelFromConsumer();
       },
     });
     const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
@@ -343,12 +364,19 @@ class BrowserRuntimeHost {
       streamController.error(new Error("Hosted runtime stream timed out"));
       void this.writeProcessMessage({ type: "cancel", requestId });
     }, timeoutMs);
-    const abort = () => {
+    const abort = (reportToConsumer = true) => {
       globalThis.clearTimeout(timer);
       this.pendingRequests.delete(requestId);
       void this.writeProcessMessage({ type: "cancel", requestId });
-      streamController.error(new DOMException("The operation was aborted", "AbortError"));
+      if (reportToConsumer) {
+        try {
+          streamController.error(new DOMException("The operation was aborted", "AbortError"));
+        } catch {
+          // The consumer may already have closed the stream while cancellation propagated.
+        }
+      }
     };
+    cancelFromConsumer = () => abort(false);
     if (options.signal?.aborted) abort();
     else {
       options.signal?.addEventListener("abort", abort, { once: true });
@@ -387,10 +415,6 @@ class BrowserRuntimeHost {
     this.bootPromise ??= this.boot();
     try {
       await this.bootPromise;
-      if (this.preserveRecoveryBackupUntilBoot) {
-        await this.dataStore.createBackup();
-        this.preserveRecoveryBackupUntilBoot = false;
-      }
       this.lastBootError = "";
     } catch (error) {
       this.lastBootError = scrubSecrets(
@@ -613,7 +637,13 @@ class BrowserRuntimeHost {
     }
     if (message.type === "stream-event" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
-      if (!pending?.streamController) return;
+      if (
+        !pending?.streamController ||
+        !message.event ||
+        typeof message.event !== "object" ||
+        typeof message.event.type !== "string"
+      ) return;
+      clearStreamStartupTimer(pending);
       if (
         message.event?.type === "ask_user.prompt" ||
         message.event?.type === "ask_user.resolved"
@@ -628,6 +658,7 @@ class BrowserRuntimeHost {
     if (message.type === "stream-chunk" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
       if (!pending?.streamController || !isByteArray(message.value)) return;
+      clearStreamStartupTimer(pending);
       pending.sseGate.push(Uint8Array.from(message.value));
       return;
     }
@@ -638,7 +669,7 @@ class BrowserRuntimeHost {
     if (message.type !== "response" || typeof message.requestId !== "string") return;
     const pending = this.pendingRequests.get(message.requestId);
     if (!pending) return;
-    globalThis.clearTimeout(pending.timer);
+    clearStreamStartupTimer(pending);
     pending.signal?.removeEventListener("abort", pending.abort);
     this.pendingRequests.delete(message.requestId);
     if (message.ok) {
@@ -658,7 +689,7 @@ class BrowserRuntimeHost {
   async finishStreamRequest(requestId, message) {
     const pending = this.pendingRequests.get(requestId);
     if (!pending?.streamController) return;
-    globalThis.clearTimeout(pending.timer);
+    clearStreamStartupTimer(pending);
     pending.signal?.removeEventListener("abort", pending.abort);
     this.pendingRequests.delete(requestId);
     if (!message.ok) {
@@ -721,6 +752,10 @@ class BrowserRuntimeHost {
 
   async persistCheckpoint(value) {
     await this.dataStore.persistCheckpoint(value);
+    if (this.preserveRecoveryBackupUntilBoot) {
+      await this.dataStore.createBackup();
+      this.preserveRecoveryBackupUntilBoot = false;
+    }
     if (typeof value.sessionId === "string") {
       this.storage.setItem(CURRENT_SESSION_KEY, value.sessionId);
     }
@@ -751,6 +786,7 @@ class BrowserRuntimeHost {
     this.storage.removeItem(CURRENT_SESSION_KEY);
     if (globalThis.caches) {
       await Promise.all((await caches.keys()).map((name) => caches.delete(name)));
+      await repopulateServiceWorkerShell();
     }
   }
 
@@ -765,6 +801,40 @@ class BrowserRuntimeHost {
     if (!response.ok) throw new Error(`Hosted runtime asset is unavailable: ${path}`);
     return response.text();
   }
+}
+
+function clearStreamStartupTimer(pending) {
+  if (pending.timer == null) return;
+  globalThis.clearTimeout(pending.timer);
+  pending.timer = null;
+}
+
+async function repopulateServiceWorkerShell() {
+  const serviceWorker = globalThis.navigator?.serviceWorker;
+  if (!serviceWorker?.getRegistration || typeof globalThis.MessageChannel !== "function") return;
+  const registration = await serviceWorker.getRegistration();
+  const worker = registration?.active ?? serviceWorker.controller;
+  if (!worker?.postMessage) return;
+  await new Promise((resolve, reject) => {
+    const channel = new MessageChannel();
+    const timer = globalThis.setTimeout(() => {
+      channel.port1.close();
+      reject(new Error("Timed out while restoring the offline application shell."));
+    }, 15_000);
+    channel.port1.onmessage = (event) => {
+      globalThis.clearTimeout(timer);
+      channel.port1.close();
+      if (event.data?.ok) resolve();
+      else reject(new Error("Could not restore the offline application shell."));
+    };
+    try {
+      worker.postMessage({ type: "REPOPULATE_SHELL" }, [channel.port2]);
+    } catch (error) {
+      globalThis.clearTimeout(timer);
+      channel.port1.close();
+      reject(error);
+    }
+  });
 }
 
 function hostedRelayUrl(value, hostOrigin) {

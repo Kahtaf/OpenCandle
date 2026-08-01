@@ -23,12 +23,107 @@ const EMPTY_MARKET_STATE = {
 
 export function mergeMarketStateSnapshot(current, data) {
   const quoteSnapshot = Object.hasOwn(data, "quoteSnapshot")
-    ? data.quoteSnapshot
+    ? mergeQuoteRefreshSnapshot(current?.quoteSnapshot, data.quoteSnapshot)
     : mergePreservedQuoteSnapshot(current, data);
   return {
     ...EMPTY_MARKET_STATE,
     ...data,
     quoteSnapshot,
+  };
+}
+
+export function mergeQuoteRefreshSnapshot(current, refreshed) {
+  if (!current || !refreshed) return refreshed ?? current ?? null;
+  const refreshFailedAt = refreshed.generatedAt;
+  const watchlistQuotes = mergeQuoteRows(
+    current.watchlistQuotes,
+    refreshed.watchlistQuotes,
+    "itemId",
+    refreshFailedAt,
+  );
+  const portfolioQuotes = mergeQuoteRows(
+    current.portfolioQuotes,
+    refreshed.portfolioQuotes,
+    "lotId",
+    refreshFailedAt,
+  );
+  const stalePortfolioIds = new Set(
+    portfolioQuotes
+      .filter((quote) => quote?.refreshStatus === "unavailable")
+      .map((quote) => quote.portfolioId),
+  );
+  const portfolioSummaries = mergePortfolioSummaries(
+    current.portfolioSummaries,
+    refreshed.portfolioSummaries,
+    stalePortfolioIds,
+    refreshFailedAt,
+  );
+  const portfolioSummary = mergePortfolioSummary(
+    current.portfolioSummary,
+    refreshed.portfolioSummary,
+    stalePortfolioIds,
+    refreshFailedAt,
+  );
+  const retainedUnavailable =
+    watchlistQuotes.some((quote) => quote?.refreshStatus === "unavailable") ||
+    portfolioQuotes.some((quote) => quote?.refreshStatus === "unavailable");
+  return {
+    ...refreshed,
+    ...(Object.hasOwn(refreshed, "watchlistQuotes") ? { watchlistQuotes } : {}),
+    ...(Object.hasOwn(refreshed, "portfolioQuotes") ? { portfolioQuotes } : {}),
+    ...(Object.hasOwn(refreshed, "portfolioSummary") ? { portfolioSummary } : {}),
+    ...(Object.hasOwn(refreshed, "portfolioSummaries") ? { portfolioSummaries } : {}),
+    ...(retainedUnavailable
+      ? {
+          lastSuccessfulGeneratedAt:
+            current.lastSuccessfulGeneratedAt ?? current.generatedAt ?? null,
+        }
+      : {}),
+  };
+}
+
+function mergeQuoteRows(currentRows = [], refreshedRows = [], identityKey, refreshFailedAt) {
+  const currentById = new Map(currentRows.map((quote) => [quote?.[identityKey], quote]));
+  return refreshedRows.map((quote) => {
+    const current = currentById.get(quote?.[identityKey]);
+    if (quote?.status !== "unavailable" || current?.status !== "ok") return quote;
+    return {
+      ...current,
+      stale: true,
+      refreshStatus: "unavailable",
+      refreshReason: quote.reason || "Quote refresh unavailable",
+      refreshFailedAt,
+    };
+  });
+}
+
+function mergePortfolioSummaries(
+  currentSummaries = [],
+  refreshedSummaries = [],
+  stalePortfolioIds,
+  refreshFailedAt,
+) {
+  const currentById = new Map(currentSummaries.map((summary) => [summary.portfolioId, summary]));
+  return refreshedSummaries.map((summary) =>
+    stalePortfolioIds.has(summary.portfolioId)
+      ? retainPortfolioSummary(currentById.get(summary.portfolioId), summary, refreshFailedAt)
+      : summary,
+  );
+}
+
+function mergePortfolioSummary(current, refreshed, stalePortfolioIds, refreshFailedAt) {
+  if (!refreshed || !stalePortfolioIds.has(refreshed.portfolioId)) return refreshed;
+  return retainPortfolioSummary(current, refreshed, refreshFailedAt);
+}
+
+function retainPortfolioSummary(current, refreshed, refreshFailedAt) {
+  if (!current || current.status === "unavailable") return refreshed;
+  return {
+    ...current,
+    stale: true,
+    refreshStatus: "unavailable",
+    refreshReason: refreshed?.reason || "Quote refresh unavailable",
+    refreshFailedAt,
   };
 }
 
@@ -79,7 +174,10 @@ export function useMarketState({
   const refreshQuotes = useCallback(async () => {
     try {
       const quoteSnapshot = await transport.getMarketQuotes();
-      setState((current) => ({ ...current, quoteSnapshot }));
+      setState((current) => ({
+        ...current,
+        quoteSnapshot: mergeQuoteRefreshSnapshot(current.quoteSnapshot, quoteSnapshot),
+      }));
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

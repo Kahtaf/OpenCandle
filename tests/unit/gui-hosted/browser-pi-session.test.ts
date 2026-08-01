@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it } from "vitest";
-import { BrowserPiSession } from "../../../gui/hosted/runtime/browser-pi-session.js";
+import {
+  assertTerminalAssistantSucceeded,
+  BrowserPiSession,
+} from "../../../gui/hosted/runtime/browser-pi-session.js";
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 describe("BrowserPiSession model history", () => {
@@ -64,6 +67,36 @@ describe("BrowserPiSession model history", () => {
       expect.objectContaining({ provider: "openai", modelId: "gpt-5-mini" }),
       expect.objectContaining({ provider: "anthropic", modelId: "claude-haiku-4-5" }),
     ]);
+  });
+});
+
+describe("BrowserPiSession terminal outcomes", () => {
+  it("surfaces the provider message when Pi ends the turn with an error", () => {
+    expect(() =>
+      assertTerminalAssistantSucceeded([
+        {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "OpenAI rejected this request",
+        },
+      ]),
+    ).toThrow("OpenAI rejected this request");
+  });
+
+  it("turns a Pi-aborted assistant outcome into an AbortError", () => {
+    expect.assertions(2);
+    try {
+      assertTerminalAssistantSucceeded([
+        {
+          role: "assistant",
+          stopReason: "aborted",
+          errorMessage: "Provider stream was cancelled",
+        },
+      ]);
+    } catch (error) {
+      expect(error).toBeInstanceOf(DOMException);
+      expect(error).toMatchObject({ name: "AbortError", message: "Provider stream was cancelled" });
+    }
   });
 });
 

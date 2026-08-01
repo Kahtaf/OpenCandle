@@ -170,6 +170,60 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("does not infer a missing quote and instrument currency from the lot currency", async () => {
+    vi.mocked(getQuote).mockResolvedValueOnce({
+      symbol: "AAPL",
+      name: "Apple Inc.",
+      price: 203,
+      change: 3,
+      changePercent: 1.5,
+      open: 198,
+      high: 204,
+      low: 197,
+      previousClose: 200,
+      volume: 2_000,
+      marketCap: 3_000_000,
+      pe: null,
+      week52High: 220,
+      week52Low: 160,
+      timestamp: "2026-07-31T20:00:00.000Z",
+      asOf: "2026-07-31T20:00:00.000Z",
+      currency: null,
+    });
+
+    const snapshot = await buildHostedMarketQuoteSnapshot({
+      portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],
+      portfolio: [
+        {
+          id: 5,
+          portfolioId: 2,
+          instrumentId: 4,
+          symbol: "AAPL",
+          quantity: 2,
+          avgCost: 180,
+          currency: "USD",
+          instrumentCurrency: null,
+        },
+      ],
+    });
+
+    expect(snapshot.portfolioQuotes[0]).toMatchObject({
+      status: "unavailable",
+      currentPrice: null,
+      marketValue: null,
+      totalCost: 360,
+      pnl: null,
+      includedInTotals: false,
+      reason: "Quote currency unavailable",
+    });
+    expect(snapshot.portfolioSummary).toMatchObject({
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 360,
+      totalPnl: null,
+    });
+  });
+
   it("keeps truly empty portfolio totals at zero", async () => {
     const snapshot = await buildHostedMarketQuoteSnapshot({
       portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],

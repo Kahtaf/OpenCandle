@@ -7,6 +7,17 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data?.type === "ACTIVATE_UPDATE") self.skipWaiting();
+  if (event.data?.type === "REPOPULATE_SHELL") {
+    event.waitUntil(
+      caches
+        .open(CACHE_NAME)
+        .then((cache) => cache.addAll(PRECACHE))
+        .then(
+          () => event.ports[0]?.postMessage({ ok: true }),
+          () => event.ports[0]?.postMessage({ ok: false }),
+        ),
+    );
+  }
 });
 
 self.addEventListener("activate", (event) => {

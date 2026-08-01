@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MARKET_STATE_POLL_MS,
   mergeMarketStateSnapshot,
+  mergeQuoteRefreshSnapshot,
   QUOTE_REFRESH_INTERVAL_MS,
 } from "../../../gui/web/src/hooks/useMarketState.jsx";
 
@@ -105,5 +106,108 @@ describe("mergeMarketStateSnapshot", () => {
     expect(next.quoteSnapshot.watchlistQuotes).toBe(current.quoteSnapshot.watchlistQuotes);
     expect(next.quoteSnapshot.portfolioQuotes).toEqual([]);
     expect(next.quoteSnapshot.portfolioSummary).toBeNull();
+  });
+});
+
+describe("mergeQuoteRefreshSnapshot", () => {
+  it("keeps last valid hosted values when a transient refresh is unavailable", () => {
+    const current = {
+      generatedAt: "2026-08-01T12:00:00.000Z",
+      watchlistQuotes: [
+        {
+          itemId: 1,
+          symbol: "AAPL",
+          status: "ok",
+          price: 190,
+          changePercent: 1.2,
+          fetchedAt: "2026-08-01T11:59:00.000Z",
+        },
+      ],
+      portfolioQuotes: [
+        {
+          lotId: 2,
+          portfolioId: 3,
+          symbol: "VTI",
+          status: "ok",
+          marketValue: 600,
+          totalCost: 500,
+          pnl: 100,
+          includedInTotals: true,
+          fetchedAt: "2026-08-01T11:59:00.000Z",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "ok",
+        totalValue: 600,
+        totalPnl: 100,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [
+        {
+          portfolioId: 3,
+          status: "ok",
+          totalValue: 600,
+          totalPnl: 100,
+          baseCurrency: "USD",
+        },
+      ],
+    };
+    const refreshed = {
+      generatedAt: "2026-08-01T12:05:00.000Z",
+      watchlistQuotes: [
+        { itemId: 1, symbol: "AAPL", status: "unavailable", reason: "relay timeout" },
+      ],
+      portfolioQuotes: [
+        {
+          lotId: 2,
+          portfolioId: 3,
+          symbol: "VTI",
+          status: "unavailable",
+          reason: "relay timeout",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "unavailable",
+        totalValue: null,
+        totalPnl: null,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [
+        {
+          portfolioId: 3,
+          status: "unavailable",
+          totalValue: null,
+          totalPnl: null,
+          baseCurrency: "USD",
+        },
+      ],
+    };
+
+    const merged = mergeQuoteRefreshSnapshot(current, refreshed);
+
+    expect(merged.watchlistQuotes[0]).toMatchObject({
+      status: "ok",
+      price: 190,
+      stale: true,
+      refreshStatus: "unavailable",
+      refreshReason: "relay timeout",
+      refreshFailedAt: "2026-08-01T12:05:00.000Z",
+    });
+    expect(merged.portfolioQuotes[0]).toMatchObject({
+      status: "ok",
+      marketValue: 600,
+      stale: true,
+      refreshStatus: "unavailable",
+    });
+    expect(merged.portfolioSummary).toMatchObject({
+      totalValue: 600,
+      totalPnl: 100,
+      stale: true,
+      refreshStatus: "unavailable",
+    });
+    expect(merged.generatedAt).toBe("2026-08-01T12:05:00.000Z");
+    expect(merged.lastSuccessfulGeneratedAt).toBe("2026-08-01T12:00:00.000Z");
   });
 });

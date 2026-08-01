@@ -978,6 +978,9 @@ describe("MarketStatePage rendering", () => {
     expect(normalizeExactHostedSymbol(" aapl ")).toBe("AAPL");
     expect(normalizeExactHostedSymbol("BRK.B")).toBe("BRK.B");
     expect(normalizeExactHostedSymbol("BTC-USD")).toBe("BTC-USD");
+    expect(normalizeExactHostedSymbol("ES=F")).toBe("ES=F");
+    expect(normalizeExactHostedSymbol("A".repeat(32))).toBe("A".repeat(32));
+    expect(normalizeExactHostedSymbol("A".repeat(33))).toBe("");
     expect(normalizeExactHostedSymbol("not a symbol")).toBe("");
     expect(normalizeExactHostedSymbol("../escape")).toBe("");
   });

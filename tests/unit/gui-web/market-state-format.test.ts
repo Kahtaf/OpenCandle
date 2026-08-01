@@ -74,6 +74,18 @@ describe("degradedQuoteBadge", () => {
       ),
     ).toBeNull();
     expect(degradedQuoteBadge([{ status: "unavailable" }], NOW)).toBe("Quotes unavailable");
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            refreshStatus: "unavailable",
+            fetchedAt: "2026-06-12T14:34:00Z",
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("Quotes unavailable · last updated 26m ago");
   });
 });
 

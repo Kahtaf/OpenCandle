@@ -226,7 +226,33 @@ export async function buildHostedMarketQuoteSnapshot(state: HostedMarketState) {
           sparkline,
         };
       }
-      const quoteCurrency = quote.currency ?? lot.instrumentCurrency ?? lot.currency;
+      const quoteCurrency = quote.currency ?? lot.instrumentCurrency;
+      if (!quoteCurrency) {
+        return {
+          lotId: lot.id,
+          portfolioId: lot.portfolioId,
+          instrumentId: lot.instrumentId,
+          symbol: lot.symbol,
+          status: "unavailable" as const,
+          currentPrice: null,
+          marketValue: null,
+          totalCost,
+          pnl: null,
+          pnlPercent: null,
+          currency: lot.currency,
+          includedInTotals: false,
+          reason: "Quote currency unavailable",
+          fetchedAt: quote.fetchedAt,
+          dataAsOf: quote.dataAsOf,
+          marketState: quote.marketState,
+          extendedPrice: quote.extendedPrice,
+          extendedChange: quote.extendedChange,
+          extendedChangePercent: quote.extendedChangePercent,
+          extendedAsOf: quote.extendedAsOf,
+          stale: quote.stale,
+          sparkline,
+        };
+      }
       if (quoteCurrency !== lot.currency) {
         return {
           lotId: lot.id,

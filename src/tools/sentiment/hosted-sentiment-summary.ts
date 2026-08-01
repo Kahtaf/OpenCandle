@@ -30,7 +30,7 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
   name: "get_sentiment_summary",
   label: "Sentiment Evidence",
   description:
-    "Collect recent web/news evidence, optional Finnhub company news, and current price context for a ticker or market topic. Hosted mode excludes X and Reddit.",
+    "Collect web/news evidence, optional Finnhub company news, and current price context for a ticker or market topic. Hosted mode excludes X and Reddit.",
   parameters: params,
   async execute(_toolCallId, args) {
     const hours = args.hours ?? 24;
@@ -66,7 +66,24 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
             results: web.value.data.results,
           }
         : null;
-    const evidenceHeading = webEvidence?.stale ? "Cached evidence" : "Recent evidence";
+    const finnhubArticles = finnhub.status === "fulfilled" ? finnhub.value : [];
+    const finnhubEvidence =
+      finnhubArticles.length > 0
+        ? {
+            freshness: "unknown" as const,
+            results: finnhubArticles.map((item) => ({
+              id: item.id,
+              headline: item.headline,
+              url: item.url,
+              publishedAt: finnhubPublishedAt(item.datetime),
+            })),
+          }
+        : null;
+    const evidenceHeading = webEvidence?.stale
+      ? "Cached evidence"
+      : webEvidence && !finnhubEvidence
+        ? "Recent evidence"
+        : "Evidence";
 
     const lines = [
       `**${evidenceHeading} for "${renderUntrustedText(args.query, 160)}"** (provider window: past ${providerWindow})`,
@@ -87,7 +104,14 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
 
     if (finnhub.status === "fulfilled") {
       for (const item of finnhub.value.slice(0, 10)) {
-        lines.push(`${renderNewsItem(item.headline, item.url, item.summary)} (Finnhub)`);
+        lines.push(
+          `${renderNewsItem(item.headline, item.url, item.summary, finnhubPublishedAt(item.datetime))} (Finnhub)`,
+        );
+      }
+      if (finnhubEvidence) {
+        warnings.push(
+          "Finnhub freshness is unknown; use the publication timestamps shown for each article.",
+        );
       }
     } else {
       warnings.push("Finnhub company news was unavailable.");
@@ -123,6 +147,7 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
         tickers,
         warnings,
         webEvidence,
+        finnhubEvidence,
         sources: {
           web: web.status === "fulfilled" && web.value.status === "ok",
           finnhub: finnhub.status === "fulfilled" && finnhub.value.length > 0,
@@ -153,4 +178,10 @@ function renderPublishedDate(raw: string): string {
   return Number.isFinite(timestamp)
     ? new Date(timestamp).toISOString()
     : renderUntrustedText(raw, 80);
+}
+
+function finnhubPublishedAt(datetime: number): string | null {
+  if (!Number.isFinite(datetime) || datetime <= 0) return null;
+  const date = new Date(datetime * 1000);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }

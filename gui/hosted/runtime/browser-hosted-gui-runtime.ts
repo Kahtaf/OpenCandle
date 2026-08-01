@@ -49,7 +49,20 @@ import type { BrowserModelCredentials } from "./browser-model-runtime.js";
 const MAX_SESSION_FILE_BYTES = 128 * 1_024 * 1_024;
 const SESSION_COMPLETION_RESERVE_BYTES = 8 * 1_024 * 1_024;
 const MAX_SESSION_FILES = 100;
+const MAX_HOSTED_ARCHIVE_BYTES = 240 * 1_024 * 1_024;
+const ARCHIVE_SESSION_GROWTH_MULTIPLIER = 4;
 export const MAX_COMPLETED_CHAT_RESULTS = 256;
+
+export function assertHostedBootstrapPersistable(
+  bootstrap: unknown,
+  maxArchiveBytes = MAX_HOSTED_ARCHIVE_BYTES,
+): void {
+  if (Buffer.byteLength(JSON.stringify(bootstrap)) > maxArchiveBytes) {
+    throw new Error(
+      "Hosted OpenCandle has reached its durable browser storage limit. Export or delete saved sessions before continuing.",
+    );
+  }
+}
 
 type CompletedChatResult = BrowserHostedBootstrap & {
   events: Array<Record<string, unknown>>;
@@ -80,6 +93,7 @@ export interface BrowserHostedGuiRuntimeOptions {
   modelCredentials?: BrowserModelCredentials;
   relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
+  maxArchiveBytes?: number;
 }
 
 interface HostedSessionCheckpoint {
@@ -209,6 +223,7 @@ export class BrowserHostedGuiRuntime {
   }
 
   async newSession(): Promise<BrowserHostedBootstrap> {
+    this.assertArchiveAdmission(await this.bootstrap(), SESSION_COMPLETION_RESERVE_BYTES);
     const existing = await SessionManager.list(this.options.cwd, this.options.sessionDir);
     if (new Set(existing.map((session) => session.id)).size >= MAX_SESSION_FILES) {
       throw new Error(`Hosted OpenCandle supports at most ${MAX_SESSION_FILES} saved sessions.`);
@@ -335,6 +350,10 @@ export class BrowserHostedGuiRuntime {
           "This session is too large for another durable turn. Start a new session and attach the saved context you need.",
         );
       }
+      this.assertArchiveAdmission(
+        await this.buildBootstrap(manager),
+        nextInputBytes + SESSION_COMPLETION_RESERVE_BYTES,
+      );
       await emit({ type: "run.started" });
       const createPiSession = this.options.createPiSession ?? BrowserPiSession.create;
       session = await createPiSession({
@@ -510,7 +529,7 @@ export class BrowserHostedGuiRuntime {
     });
     const providerReport = resolveHostedBrowserCapabilityReport(this.options.relayProviders);
     this.flushState();
-    return {
+    const bootstrap: BrowserHostedBootstrap = {
       role: "writer",
       sessionId,
       supportsSessionActions: true,
@@ -542,6 +561,11 @@ export class BrowserHostedGuiRuntime {
       },
       checkpoint: this.checkpoint(),
     };
+    assertHostedBootstrapPersistable(
+      bootstrap,
+      this.options.maxArchiveBytes ?? MAX_HOSTED_ARCHIVE_BYTES,
+    );
+    return bootstrap;
   }
 
   private checkpoint(): BrowserHostedBootstrap["checkpoint"] {
@@ -574,6 +598,17 @@ export class BrowserHostedGuiRuntime {
         contentBase64: Buffer.from(stateBytes).toString("base64"),
       },
     };
+  }
+
+  private assertArchiveAdmission(
+    bootstrap: BrowserHostedBootstrap,
+    additionalSessionBytes = 0,
+  ): void {
+    const maxArchiveBytes = this.options.maxArchiveBytes ?? MAX_HOSTED_ARCHIVE_BYTES;
+    assertHostedBootstrapPersistable(
+      bootstrap,
+      maxArchiveBytes - additionalSessionBytes * ARCHIVE_SESSION_GROWTH_MULTIPLIER,
+    );
   }
 
   private async listDisplaySessions(): Promise<SessionInfo[]> {

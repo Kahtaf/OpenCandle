@@ -1096,7 +1096,7 @@ export function normalizeExactHostedSymbol(value) {
   const symbol = String(value ?? "")
     .trim()
     .toUpperCase();
-  return /^[A-Z0-9][A-Z0-9.^/_-]{0,19}$/.test(symbol) ? symbol : "";
+  return /^[A-Z0-9][A-Z0-9.^/=_-]{0,31}$/.test(symbol) ? symbol : "";
 }
 
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
