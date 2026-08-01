@@ -28,6 +28,8 @@ export type ChatRunParseResult =
 const IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_SAVED_STATE_ATTACHMENTS = 8;
+const MAX_DISPATCHED_PROMPT_LENGTH = 64 * 1024;
 
 /** Shared local-GUI and hosted-web chat input contract. */
 export function parseChatRunBody(body: unknown): ChatRunParseResult {
@@ -69,6 +71,10 @@ export function parseChatRunBody(body: unknown): ChatRunParseResult {
     if (!Array.isArray(rawAttachments)) {
       return { ok: false, error: "attachments must be an array" };
     }
+    if (rawAttachments.length > MAX_SAVED_STATE_ATTACHMENTS) {
+      return { ok: false, error: "Attach up to 8 saved items" };
+    }
+    const identities = new Set<string>();
     for (const rawAttachment of rawAttachments) {
       const attachment = asRecord(rawAttachment);
       const kind = String(attachment.kind ?? "");
@@ -81,6 +87,10 @@ export function parseChatRunBody(body: unknown): ChatRunParseResult {
       } else {
         return { ok: false, error: "Unsupported attachment kind" };
       }
+      const normalized = attachments.at(-1);
+      const identity = normalized ? `${normalized.kind}:${normalized.id ?? "default"}` : "";
+      if (identities.has(identity)) return { ok: false, error: "Duplicate saved attachment" };
+      identities.add(identity);
     }
   }
 
@@ -102,7 +112,11 @@ export function buildDispatchedPromptFromState(
     if (lines.length === 0) throw new Error(`${attachment.kind} attachment was empty`);
     return `[Attached by user — ${attachment.kind}]\n${lines.join("\n")}`;
   });
-  return [parsed.prompt, ...blocks].join("\n\n");
+  const dispatched = [parsed.prompt, ...blocks].join("\n\n");
+  if (dispatched.length > MAX_DISPATCHED_PROMPT_LENGTH) {
+    throw new Error("Expanded prompt is too large");
+  }
+  return dispatched;
 }
 
 export function chatRunAttachmentLabel(attachment: ChatRunAttachmentInput): string {

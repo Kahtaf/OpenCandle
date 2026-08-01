@@ -343,13 +343,16 @@ export async function fetchSparklineSnapshot(symbol: string): Promise<MarketSpar
   const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
   if (result.status === "unavailable") return unavailableSparkline(result.reason);
 
-  const bars = result.data.filter((bar) => Number.isFinite(bar.close));
+  const bars = result.data.filter((bar) => Number.isFinite(bar.close) && bar.close > 0);
   const dataAsOf = bars.at(-1)?.date;
   if (result.stale) {
     return unavailableSparkline("Historical data is stale", dataAsOf, true);
   }
   if (bars.length < 2) {
     return unavailableSparkline("Not enough intraday history", dataAsOf);
+  }
+  if (bars.length !== result.data.length) {
+    return unavailableSparkline("Historical data contains invalid bars", dataAsOf);
   }
   return {
     status: "ok",

@@ -395,6 +395,16 @@ async function relayModelRequest(options: {
       await upstream.body?.cancel();
       return options.respondError(502, "upstream_redirect_rejected");
     }
+    if (!upstream.ok) {
+      await upstream.body?.cancel();
+      return new Response(JSON.stringify({ error: "model_provider_request_failed" }), {
+        status: upstream.status,
+        headers: modelResponseHeaders(
+          new Headers({ "content-type": "application/json; charset=utf-8" }),
+          options.corsOrigin,
+        ),
+      });
+    }
     clearTimeout(timeout);
     return new Response(
       guardedModelStream(

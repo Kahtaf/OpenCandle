@@ -6,6 +6,7 @@ import {
   decodeStateBase64,
   validateHostedArchive,
 } from "../../../gui/hosted/src/runtime/browser-data-store.js";
+import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 const session = {
   filename: "2026-07-31_session-1.jsonl",
@@ -161,6 +162,27 @@ describe("hosted browser archive", () => {
     expect(JSON.parse(files.get("checkpoint-v1.json"))).toMatchObject({
       currentSessionId: "session-1",
     });
+  });
+
+  it("rejects a current-version SQLite import with an incompatible OpenCandle schema", async () => {
+    const database = await createSqlJsStateDatabase();
+    database.exec(
+      "DROP TABLE portfolio_lots; CREATE TABLE portfolio_lots (id INTEGER PRIMARY KEY)",
+    );
+    const malformed = database.exportBytes();
+    database.close();
+    const archive = createHostedArchive({
+      sessions: [session],
+      stateBytes: malformed,
+      currentSessionId: "session-1",
+    });
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(new Map()),
+    });
+
+    await expect(store.importAll(JSON.stringify(archive))).rejects.toThrow(
+      "missing required portfolio_lots columns",
+    );
   });
 
   it("restores the pre-update backup when the current checkpoint is corrupt", async () => {

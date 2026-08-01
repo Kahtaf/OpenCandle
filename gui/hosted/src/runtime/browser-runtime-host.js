@@ -478,8 +478,12 @@ class BrowserRuntimeHost {
       this.fetchAssetText(
         `/runtime/runtime-files.json?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
       ),
-      this.fetchAssetBytes("/runtime/sql-wasm.wasm"),
-      this.fetchAssetText("/runtime/sql-wasm.cjs"),
+      this.fetchAssetBytes(
+        `/runtime/sql-wasm.wasm?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
+      ),
+      this.fetchAssetText(
+        `/runtime/sql-wasm.cjs?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
+      ),
       this.dataStore.readRuntimeSnapshot(),
     ]);
     const runtimeManifest = parseRuntimeManifest(runtimeManifestText);

@@ -96,17 +96,24 @@ class BrowserRuntimeCoordinator {
 
   async handleCommand(command) {
     await this.ready();
+    const purgesSecrets =
+      command?.type === "hosted.data.clear_secrets" || command?.type === "hosted.data.clear_all";
+    let value;
     if (this.role === "writer") {
-      const value = await this.host.handleCommand(command);
+      value = await this.host.handleCommand(command);
       this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
       this.broadcastStatus();
       this.broadcastInvalidation();
-      return value;
-    }
-    if (isCredentialBearingCommand(command)) {
+    } else if (isCredentialBearingCommand(command)) {
       throw new Error("Enter API keys in the active writer tab so credentials never cross tabs.");
+    } else {
+      value = await this.forward({ kind: "command", command });
     }
-    return this.forward({ kind: "command", command });
+    if (purgesSecrets) {
+      this.clearSessionCredential();
+      this.post({ type: "credentials-purged", epoch: this.epoch });
+    }
+    return value;
   }
 
   async streamRequest(operation, payload = {}, options = {}) {
@@ -268,6 +275,10 @@ class BrowserRuntimeCoordinator {
       return;
     }
     if (!isEpoch(message.epoch) || message.epoch !== this.epoch) return;
+    if (message.type === "credentials-purged") {
+      this.clearSessionCredential();
+      return;
+    }
     if (message.type === "cancel") {
       if (this.role === "writer" && message.target === this.tabId) {
         const active = this.activeForwardedStreams.get(message.requestId);
@@ -312,6 +323,11 @@ class BrowserRuntimeCoordinator {
       return;
     }
     if (message.type === "invalidate") this.notify({ type: "invalidate", epoch: this.epoch });
+  }
+
+  clearSessionCredential() {
+    this.sessionStorage?.removeItem(CREDENTIAL_KEY);
+    this.sessionCredential = null;
   }
 
   async handleForwardedRequest(message) {

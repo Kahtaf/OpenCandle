@@ -11,6 +11,24 @@ const MAX_STATE_BYTES = 32 * 1_024 * 1_024;
 const MAX_ARCHIVE_BYTES = 256 * 1_024 * 1_024;
 const MAX_ACTION_TIMESTAMP_SKEW_MS = 5 * 60 * 1_000;
 const SQLITE_SIGNATURE = "SQLite format 3\0";
+const REQUIRED_STATE_COLUMNS = {
+  instruments: ["id", "symbol", "asset_type", "provider", "created_at", "updated_at"],
+  watchlists: ["id", "name", "is_default", "created_at", "updated_at"],
+  watchlist_items: ["id", "watchlist_id", "instrument_id", "created_at", "updated_at"],
+  portfolios: ["id", "name", "base_currency", "is_default", "created_at", "updated_at"],
+  portfolio_lots: [
+    "id",
+    "portfolio_id",
+    "instrument_id",
+    "quantity",
+    "avg_cost",
+    "currency",
+    "created_at",
+    "updated_at",
+  ],
+  alert_rules: ["id", "condition_type", "condition_json", "enabled", "status"],
+  report_templates: ["id", "name", "report_type", "config_json", "enabled"],
+};
 
 export function createBrowserDataStore(options = {}) {
   return new BrowserDataStore(options);
@@ -220,6 +238,13 @@ async function validateStateDatabaseBytes(bytes) {
       throw new Error(
         `State snapshot uses newer schema version ${version}; this build supports version ${CURRENT_SCHEMA_VERSION}`,
       );
+    }
+    for (const [table, expectedColumns] of Object.entries(REQUIRED_STATE_COLUMNS)) {
+      const result = database.exec(`PRAGMA table_info(${table})`);
+      const columns = new Set(result[0]?.values.map((row) => row[1]));
+      if (expectedColumns.some((column) => !columns.has(column))) {
+        throw new Error(`State snapshot schema is missing required ${table} columns`);
+      }
     }
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("State snapshot")) throw error;

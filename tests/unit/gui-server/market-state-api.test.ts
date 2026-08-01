@@ -3,6 +3,7 @@ import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
   createSavedSymbolsMemo,
+  fetchSparklineSnapshot,
   getInstrumentOverviewSnapshot,
   getInstrumentQuoteSnapshot,
   resetInstrumentOverviewMemoForTests,
@@ -39,6 +40,27 @@ describe("market-state API helpers", () => {
     vi.useRealTimers();
     cache.clear();
     vi.clearAllMocks();
+  });
+
+  it("rejects zero-filled or sparse sparkline history", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      { date: "2026-08-01", close: 0 },
+      { date: "2026-08-01", close: 0 },
+    ] as never);
+    await expect(fetchSparklineSnapshot("AAPL")).resolves.toMatchObject({
+      status: "unavailable",
+      reason: "Not enough intraday history",
+    });
+
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      { date: "2026-08-01", close: 100 },
+      { date: "2026-08-01", close: Number.NaN },
+      { date: "2026-08-01", close: 101 },
+    ] as never);
+    await expect(fetchSparklineSnapshot("AAPL")).resolves.toMatchObject({
+      status: "unavailable",
+      reason: "Historical data contains invalid bars",
+    });
   });
 
   it("builds a durable market-state snapshot from SQLite", () => {

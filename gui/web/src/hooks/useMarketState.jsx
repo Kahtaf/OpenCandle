@@ -112,7 +112,13 @@ function mergeQuoteRows(currentRows = [], refreshedRows = [], identityKey, refre
   const currentById = new Map(currentRows.map((quote) => [quote?.[identityKey], quote]));
   return refreshedRows.map((quote) => {
     const current = currentById.get(quote?.[identityKey]);
-    if (quote?.status !== "unavailable" || current?.status !== "ok") return quote;
+    if (
+      quote?.status !== "unavailable" ||
+      current?.status !== "ok" ||
+      !isRetainableQuoteFailure(quote)
+    ) {
+      return quote;
+    }
     return {
       ...current,
       stale: true,
@@ -121,6 +127,10 @@ function mergeQuoteRows(currentRows = [], refreshedRows = [], identityKey, refre
       refreshFailedAt,
     };
   });
+}
+
+function isRetainableQuoteFailure(quote) {
+  return !/currency|fx conversion/i.test(String(quote?.reason ?? ""));
 }
 
 function mergePortfolioSummaries(

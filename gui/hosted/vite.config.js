@@ -29,6 +29,8 @@ const isolationHeaders = {
 const runtimeVersion = createHash("sha256")
   .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-files.json")))
   .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-bundle.mjs")))
+  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.cjs")))
+  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.wasm")))
   .digest("hex")
   .slice(0, 16);
 

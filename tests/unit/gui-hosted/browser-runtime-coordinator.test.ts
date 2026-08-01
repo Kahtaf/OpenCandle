@@ -207,6 +207,50 @@ describe("browser runtime coordinator", () => {
     await writer.dispose();
   });
 
+  it("purges session credentials from every open tab", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const firstSession = createStorage();
+    const secondSession = createStorage();
+    firstSession.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: { openai: { apiKey: "first", storageMode: "session" } },
+      }),
+    );
+    secondSession.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: { openai: { apiKey: "second", storageMode: "session" } },
+      }),
+    );
+    const base = {
+      createHost: () => ({
+        request: vi.fn(),
+        streamRequest: vi.fn(),
+        handleCommand: vi.fn(async () => ({ cleared: true })),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+    };
+    const first = createBrowserRuntimeCoordinator({ ...base, sessionStorage: firstSession });
+    const second = createBrowserRuntimeCoordinator({ ...base, sessionStorage: secondSession });
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+
+    await follower.handleCommand({ type: "hosted.data.clear_secrets" });
+    await settle();
+
+    expect(firstSession.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+    expect(secondSession.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("never forwards credential-bearing commands from a follower", async () => {
     FakeBroadcastChannel.channels.clear();
     FakeBroadcastChannel.messages = [];

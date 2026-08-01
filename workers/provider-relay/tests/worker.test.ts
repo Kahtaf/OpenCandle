@@ -170,6 +170,39 @@ describe("hosted provider relay", () => {
     expect(await response.text()).toBe('{"error":"upstream_unavailable"}');
   });
 
+  it("does not reflect model credentials from a non-success upstream body", async () => {
+    const credential = "model-credential-in-error-body";
+    let cancelled = false;
+    const relay = createProviderRelay({
+      fetchImpl: vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(`invalid key: ${credential}`));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 401 },
+        ),
+      ),
+    });
+    const response = await relay.fetch(
+      modelRelayRequest({
+        provider: "openai",
+        url: "https://api.openai.com/v1/responses",
+        headers: { authorization: `Bearer ${credential}` },
+        body: "{}",
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe('{"error":"model_provider_request_failed"}');
+    expect(cancelled).toBe(true);
+  });
+
   it("rejects an oversized model request before forwarding it", async () => {
     const upstreamFetch = vi.fn();
     const relay = createProviderRelay({ maxModelRequestBytes: 3, fetchImpl: upstreamFetch });

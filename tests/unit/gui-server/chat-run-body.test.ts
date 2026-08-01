@@ -7,6 +7,27 @@ import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 
 describe("GUI chat-run body parsing", () => {
+  it("bounds and deduplicates saved-state attachments", () => {
+    expect(
+      parseChatRunBody({
+        prompt: "review",
+        attachments: [
+          { kind: "report", id: "latest" },
+          { kind: "report", id: "latest" },
+        ],
+      }),
+    ).toEqual({ ok: false, error: "Duplicate saved attachment" });
+    expect(
+      parseChatRunBody({
+        prompt: "review",
+        attachments: Array.from({ length: 9 }, (_, index) => ({
+          kind: "report",
+          id: String(index),
+        })),
+      }),
+    ).toEqual({ ok: false, error: "Attach up to 8 saved items" });
+  });
+
   it("expands saved-context attachments as data-only user blocks", async () => {
     const originalHome = process.env.OPENCANDLE_HOME;
     const home = mkdtempSync(join(tmpdir(), "opencandle-chat-run-body-"));

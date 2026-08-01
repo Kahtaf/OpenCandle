@@ -443,4 +443,41 @@ describe("mergeQuoteRefreshSnapshot", () => {
       refreshStatus: "unavailable",
     });
   });
+
+  it("does not retain a previous portfolio quote after a structural currency failure", () => {
+    const current = {
+      generatedAt: "2026-08-01T12:00:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        { lotId: 1, portfolioId: 3, status: "ok", marketValue: 600, includedInTotals: true },
+      ],
+      portfolioSummary: { portfolioId: 3, status: "ok", totalValue: 600, baseCurrency: "USD" },
+      portfolioSummaries: [],
+    };
+    const refreshed = {
+      generatedAt: "2026-08-01T12:05:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        {
+          lotId: 1,
+          portfolioId: 3,
+          status: "unavailable",
+          reason: "No FX conversion from CAD to USD",
+          currency: "CAD",
+          includedInTotals: false,
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "unavailable",
+        totalValue: null,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [],
+    };
+
+    const merged = mergeQuoteRefreshSnapshot(current, refreshed);
+    expect(merged.portfolioQuotes[0]).toMatchObject({ status: "unavailable", currency: "CAD" });
+    expect(merged.portfolioQuotes[0]).not.toHaveProperty("marketValue");
+  });
 });
