@@ -5,11 +5,7 @@ import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
-import {
-  getHistory,
-  getQuote,
-  getYahooCompanyOverview,
-} from "../../src/providers/yahoo-finance.js";
+import { getQuote, getYahooCompanyOverview } from "../../src/providers/yahoo-finance.js";
 import {
   fetchHistoryWithFallback,
   HISTORY_INTERVALS,
@@ -213,23 +209,6 @@ export function resetInstrumentHistoryMemoForTests(): void {
   instrumentHistorySnapshotStore.clear();
 }
 
-export type MarketSparklineSnapshot =
-  | {
-      status: "ok";
-      source: "Yahoo Finance";
-      points: number[];
-      fetchedAt: string;
-      dataAsOf?: string;
-      stale: false;
-    }
-  | {
-      status: "unavailable";
-      source: "Yahoo Finance";
-      reason: string;
-      dataAsOf?: string;
-      stale?: boolean;
-    };
-
 export interface MarketStateSnapshot {
   instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
   watchlists: ReturnType<MarketStateService["listWatchlists"]>;
@@ -252,6 +231,7 @@ export interface MarketStateQuoteSnapshot {
     itemId: number;
     instrumentId: number;
     symbol: string;
+    assetType: string;
     name?: string;
     status: "ok" | "unavailable";
     price?: number;
@@ -272,13 +252,13 @@ export interface MarketStateQuoteSnapshot {
     extendedAsOf?: string;
     stale?: boolean;
     reason?: string;
-    sparkline: MarketSparklineSnapshot;
   }>;
   portfolioQuotes: Array<{
     lotId: number;
     portfolioId: number;
     instrumentId: number;
     symbol: string;
+    assetType: string;
     name?: string;
     status: "ok" | "unavailable";
     currentPrice?: number | null;
@@ -299,7 +279,6 @@ export interface MarketStateQuoteSnapshot {
     extendedAsOf?: string;
     stale?: boolean;
     reason?: string;
-    sparkline: MarketSparklineSnapshot;
   }>;
   portfolioSummary: {
     portfolioId: number;
@@ -427,16 +406,9 @@ export async function buildMarketStateQuoteSnapshot(
       ]),
     ];
     const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
-    const sparklineMap = new Map<string, MarketSparklineSnapshot>();
     for (const symbol of symbols) {
       const quote = await fetchQuoteSnapshot(symbol);
       quoteMap.set(symbol, quote);
-      sparklineMap.set(
-        symbol,
-        quote.status === "ok"
-          ? await fetchSparklineSnapshot(symbol)
-          : unavailableSparkline(quote.reason),
-      );
     }
 
     const generatedAt = new Date().toISOString();
@@ -447,15 +419,16 @@ export async function buildMarketStateQuoteSnapshot(
           itemId: item.id,
           instrumentId: item.instrumentId,
           symbol: item.symbol,
+          assetType: item.assetType,
           status: "unavailable" as const,
           reason: quote?.reason ?? "quote unavailable",
-          sparkline: sparklineMap.get(item.symbol) ?? unavailableSparkline("History unavailable"),
         };
       }
       return {
         itemId: item.id,
         instrumentId: item.instrumentId,
         symbol: item.symbol,
+        assetType: item.assetType,
         name: quote.name,
         status: "ok" as const,
         price: quote.price,
@@ -475,7 +448,6 @@ export async function buildMarketStateQuoteSnapshot(
         extendedChangePercent: quote.extendedChangePercent,
         extendedAsOf: quote.extendedAsOf,
         stale: quote.stale,
-        sparkline: sparklineMap.get(item.symbol) ?? unavailableSparkline("History unavailable"),
       };
     });
 
@@ -484,7 +456,6 @@ export async function buildMarketStateQuoteSnapshot(
         portfolio,
         lots: portfolioLots.filter((lot) => lot.portfolioId === portfolio.id),
         quoteMap,
-        sparklineMap,
       }),
     );
     const defaultPortfolio = portfolios.find((portfolio) => portfolio.isDefault) ?? portfolios[0];
@@ -507,12 +478,10 @@ function buildPortfolioQuoteResult({
   portfolio,
   lots,
   quoteMap,
-  sparklineMap,
 }: {
   portfolio: ReturnType<MarketStateService["listPortfolios"]>[number];
   lots: ReturnType<MarketStateService["listPortfolioLots"]>;
   quoteMap: Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>;
-  sparklineMap: Map<string, MarketSparklineSnapshot>;
 }): {
   quotes: MarketStateQuoteSnapshot["portfolioQuotes"];
   summary: MarketStateQuoteSnapshot["portfolioSummary"];
@@ -530,13 +499,13 @@ function buildPortfolioQuoteResult({
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        assetType: lot.assetType,
         name: quote.name,
         status: "unavailable" as const,
         totalCost,
         currency: lotCurrency,
         includedInTotals: false,
         reason: quote?.reason ?? "quote unavailable",
-        sparkline: sparklineMap.get(lot.symbol) ?? unavailableSparkline("History unavailable"),
       };
     }
     const resolvedQuoteCurrency = quote.currency ?? quoteCurrency;
@@ -546,6 +515,7 @@ function buildPortfolioQuoteResult({
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        assetType: lot.assetType,
         status: "unavailable" as const,
         currentPrice: null,
         marketValue: null,
@@ -563,7 +533,6 @@ function buildPortfolioQuoteResult({
         extendedChangePercent: quote.extendedChangePercent,
         extendedAsOf: quote.extendedAsOf,
         stale: quote.stale,
-        sparkline: sparklineMap.get(lot.symbol) ?? unavailableSparkline("History unavailable"),
       };
     }
     const marketValue = quote.price * lot.quantity;
@@ -572,6 +541,7 @@ function buildPortfolioQuoteResult({
       portfolioId: lot.portfolioId,
       instrumentId: lot.instrumentId,
       symbol: lot.symbol,
+      assetType: lot.assetType,
       name: quote.name,
       status: "ok" as const,
       currentPrice: quote.price,
@@ -590,7 +560,6 @@ function buildPortfolioQuoteResult({
       extendedChangePercent: quote.extendedChangePercent,
       extendedAsOf: quote.extendedAsOf,
       stale: quote.stale,
-      sparkline: sparklineMap.get(lot.symbol) ?? unavailableSparkline("History unavailable"),
       reason: includedInTotals
         ? undefined
         : `No FX conversion from ${lotCurrency === baseCurrency ? quoteCurrency : lotCurrency} to ${baseCurrency}`,
@@ -626,42 +595,6 @@ function buildPortfolioQuoteResult({
       totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
       excludedFromTotals,
     },
-  };
-}
-
-export async function fetchSparklineSnapshot(symbol: string): Promise<MarketSparklineSnapshot> {
-  const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
-  if (result.status === "unavailable") return unavailableSparkline(result.reason);
-
-  const bars = result.data.filter((bar) => Number.isFinite(bar.close));
-  const dataAsOf = bars.at(-1)?.date;
-  if (result.stale) {
-    return unavailableSparkline("Historical data is stale", dataAsOf, true);
-  }
-  if (bars.length < 2) {
-    return unavailableSparkline("Not enough intraday history", dataAsOf);
-  }
-  return {
-    status: "ok",
-    source: "Yahoo Finance",
-    points: bars.map((bar) => bar.close),
-    fetchedAt: result.timestamp,
-    dataAsOf,
-    stale: false,
-  };
-}
-
-function unavailableSparkline(
-  reason: string,
-  dataAsOf?: string,
-  stale?: boolean,
-): MarketSparklineSnapshot {
-  return {
-    status: "unavailable",
-    source: "Yahoo Finance",
-    reason,
-    dataAsOf,
-    stale,
   };
 }
 

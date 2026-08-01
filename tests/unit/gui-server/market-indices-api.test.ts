@@ -27,12 +27,9 @@ describe("market indices snapshot", () => {
       const url = new URL(String(input));
       const symbol = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
       const quote = fixture.quotes[symbol as keyof typeof fixture.quotes];
-      const closes = fixture.history[symbol as keyof typeof fixture.history];
-      const isHistory = url.searchParams.get("interval") === "5m";
       return {
         ok: true,
-        json: async () =>
-          yahooChartResponse(quote, isHistory ? closes : [quote.regularMarketPrice]),
+        json: async () => yahooChartResponse(quote, [quote.regularMarketPrice]),
       } as Response;
     });
   });
@@ -44,30 +41,25 @@ describe("market indices snapshot", () => {
     cache.clear();
   });
 
-  it("returns the fixed symbols in order with quote and sparkline data", async () => {
+  it("returns the fixed symbols in order with their Ticker Line asset types", async () => {
     const snapshot = await buildMarketIndicesSnapshot();
 
     expect(snapshot.generatedAt).toBe("2026-07-16T14:10:00.000Z");
     expect(snapshot.indices.map((index) => index.symbol)).toEqual([
       "^GSPC",
-      "^IXIC",
+      "^NDX",
       "^DJI",
       "BTC-USD",
     ]);
     expect(snapshot.indices).toHaveLength(4);
     expect(snapshot.indices[0]).toMatchObject({
       symbol: "^GSPC",
+      assetType: "index",
       name: "S&P 500",
       status: "ok",
       price: 6310.12,
       currency: null,
       marketState: "POST",
-      sparkline: {
-        status: "ok",
-        source: "Yahoo Finance",
-        points: [6290.1, 6302.4, 6310.12],
-        stale: false,
-      },
     });
     expect(snapshot.indices[0].change).toBeCloseTo(11.62, 2);
     expect(snapshot.indices.every((index) => index.status === "ok")).toBe(true);
@@ -77,7 +69,7 @@ describe("market indices snapshot", () => {
     const successfulFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = new URL(String(input));
-      if (decodeURIComponent(url.pathname).endsWith("/^IXIC")) {
+      if (decodeURIComponent(url.pathname).endsWith("/^NDX")) {
         return {
           ok: false,
           status: 404,
@@ -92,7 +84,8 @@ describe("market indices snapshot", () => {
     const snapshot = await buildMarketIndicesSnapshot();
 
     expect(snapshot.indices[1]).toMatchObject({
-      symbol: "^IXIC",
+      symbol: "^NDX",
+      assetType: "index",
       status: "unavailable",
       reason: "HTTP 404 Not Found",
     });

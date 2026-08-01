@@ -1,13 +1,17 @@
-import {
-  fetchQuoteSnapshot,
-  fetchSparklineSnapshot,
-  type MarketSparklineSnapshot,
-} from "./market-state-api.js";
+import { fetchQuoteSnapshot } from "./market-state-api.js";
 
-export const MARKET_INDEX_SYMBOLS = ["^GSPC", "^IXIC", "^DJI", "BTC-USD"] as const;
+export const MARKET_INDEX_SYMBOLS = ["^GSPC", "^NDX", "^DJI", "BTC-USD"] as const;
+
+const MARKET_INDEX_ASSET_TYPES = {
+  "^GSPC": "index",
+  "^NDX": "index",
+  "^DJI": "index",
+  "BTC-USD": "crypto",
+} as const;
 
 export interface MarketIndexSnapshotEntry {
   symbol: (typeof MARKET_INDEX_SYMBOLS)[number];
+  assetType: "index" | "crypto";
   name?: string;
   status: "ok" | "unavailable";
   reason?: string;
@@ -18,7 +22,6 @@ export interface MarketIndexSnapshotEntry {
   marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
   dataAsOf?: string;
   stale?: boolean;
-  sparkline?: MarketSparklineSnapshot;
 }
 
 export interface MarketIndicesSnapshot {
@@ -30,12 +33,14 @@ export async function buildMarketIndicesSnapshot(): Promise<MarketIndicesSnapsho
   const indices: MarketIndexSnapshotEntry[] = [];
   for (const symbol of MARKET_INDEX_SYMBOLS) {
     const quote = await fetchQuoteSnapshot(symbol);
+    const assetType = MARKET_INDEX_ASSET_TYPES[symbol];
     if (quote.status === "unavailable") {
-      indices.push({ symbol, status: "unavailable", reason: quote.reason });
+      indices.push({ symbol, assetType, status: "unavailable", reason: quote.reason });
       continue;
     }
     indices.push({
       symbol,
+      assetType,
       name: quote.name,
       status: "ok",
       price: quote.price,
@@ -45,7 +50,6 @@ export async function buildMarketIndicesSnapshot(): Promise<MarketIndicesSnapsho
       marketState: quote.marketState,
       dataAsOf: quote.dataAsOf,
       stale: quote.stale,
-      sparkline: await fetchSparklineSnapshot(symbol),
     });
   }
   return { generatedAt: new Date().toISOString(), indices };

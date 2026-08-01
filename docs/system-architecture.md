@@ -116,7 +116,8 @@ Useful local endpoints:
 - `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator.
 - `GET /api/instruments/overview` returns cached company profile and key stats for one symbol (backs the symbol pages).
 - `GET /api/instruments/history` returns validated range/interval history bars with request coalescing (backs the interactive charts).
-- `GET /api/market-state/indices` returns the cached dashboard indices snapshot with sparkline data.
+- `GET /api/market-state/indices` returns the cached dashboard indices snapshot, including each instrument's `assetType`; chart data is fetched separately.
+- `GET /api/market-state/sparkline?symbol=<symbol>&assetType=<type>` returns a size-bounded, validated Ticker Line SVG for a trusted GUI browser session. Add `metadata=1` to receive its source and exact data-as-of timestamp as JSON.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Local State

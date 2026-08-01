@@ -307,7 +307,7 @@ export function PortfolioPage({
                             {moneyOrDash(row.marketValue, row.currency)}
                           </td>
                           <td className="px-2 py-1.5">
-                            <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
+                            <MarketSparkline symbol={row.symbol} assetType={row.assetType} />
                           </td>
                           <td className="px-2 py-2.5 text-right">
                             <SignedPercent value={row.changePercent} />
@@ -444,7 +444,7 @@ function MobileHoldingRows({
                 />
               </button>
               <SymbolPageLink symbol={row.symbol} name={row.name} navigate={navigate} />
-              <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
+              <MarketSparkline symbol={row.symbol} assetType={row.assetType} />
               <span className="flex flex-col items-end gap-0.5 tabular-nums">
                 <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
                 <SignedPercent value={row.changePercent} />

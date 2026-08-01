@@ -55,6 +55,11 @@ describe("GUI server route guards", () => {
       guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
     },
     {
+      route: 'url.pathname === "/api/market-state/sparkline"',
+      handler: "await fetchTickerLineSparkline(",
+      guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',
+    },
+    {
       route: 'url.pathname === "/api/instruments/history"',
       handler: "await getInstrumentHistorySnapshot(",
       guard: 'allowTrustedGuiRequest(req, res, "Market-state API", options)',

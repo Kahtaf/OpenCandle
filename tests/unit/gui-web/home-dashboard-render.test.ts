@@ -15,18 +15,13 @@ describe("home dashboard widgets", () => {
   it("renders friendly market names with provider symbols as secondary text", () => {
     const html = renderToStaticMarkup(
       React.createElement(IndicesStrip, {
-        quotes: ["^GSPC", "^IXIC", "^DJI", "BTC-USD"].map((symbol) => ({
+        quotes: ["^GSPC", "^NDX", "^DJI", "BTC-USD"].map((symbol) => ({
           symbol,
+          assetType: symbol === "BTC-USD" ? "crypto" : "index",
           status: "ok",
           price: 6321.45,
           changePercent: 1.25,
           currency: null,
-          sparkline: {
-            status: "ok",
-            source: "Yahoo Finance",
-            points: [6300, 6310, 6321.45],
-            dataAsOf: "2026-07-17",
-          },
         })),
       }),
     );
@@ -35,14 +30,14 @@ describe("home dashboard widgets", () => {
     expect(html).toContain('aria-labelledby="home-indices-heading"');
     expect(html).toContain('href="/symbol/%5EGSPC"');
     expect(html).toContain("S&amp;P 500");
-    expect(html).toContain("Nasdaq Composite");
+    expect(html).toContain("Nasdaq 100");
     expect(html).toContain("Dow Jones");
     expect(html).toContain("Bitcoin");
     expect(html).toContain('title="^GSPC"');
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("tabular-nums");
     expect(html).toContain("+1.25%");
-    expect(html).toContain("^GSPC intraday price sparkline");
+    expect(html).toContain("Ticker Line · loading");
     expect(html).not.toContain("null");
 
     expect(renderToStaticMarkup(React.createElement(IndicesStrip, { unavailable: true }))).toBe("");
@@ -58,16 +53,11 @@ describe("home dashboard widgets", () => {
       ["SIXTH", 0.2],
     ].map(([symbol, changePercent], index) => ({
       symbol,
+      assetType: "equity",
       status: "ok",
       price: 100 + index,
       changePercent,
       fetchedAt: "2026-07-17T10:00:00.000Z",
-      sparkline: {
-        status: "ok",
-        source: "Yahoo Finance",
-        points: [99, 100 + index],
-        dataAsOf: "2026-07-17",
-      },
     }));
     const html = renderToStaticMarkup(
       React.createElement(WatchlistMovers, {
@@ -404,10 +394,10 @@ describe("home dashboard widgets", () => {
             quotes: [
               {
                 symbol: "BTC-USD",
+                assetType: "crypto",
                 status: "ok",
                 price: 120000,
                 changePercent: 1,
-                sparkline: { status: "unavailable", source: "Yahoo Finance" },
               },
             ],
           },
@@ -449,10 +439,10 @@ describe("home dashboard widgets", () => {
             quotes: [
               {
                 symbol: "^DJI",
+                assetType: "index",
                 status: "ok",
                 price: 45000,
                 changePercent: -0.5,
-                sparkline: { status: "unavailable", source: "Yahoo Finance" },
               },
             ],
           },
@@ -563,21 +553,16 @@ describe("home dashboard widgets", () => {
           watchlistQuotes: [
             {
               symbol: "DROP",
+              assetType: "equity",
               status: "ok",
               price: 95,
               changePercent: -3.2,
-              sparkline: {
-                status: "ok",
-                source: "Yahoo Finance",
-                points: [100, 95],
-                dataAsOf: "2026-07-17",
-              },
             },
           ],
         },
       }),
     );
-    expect(moversHtml).toContain("DROP intraday price sparkline");
+    expect(moversHtml).toContain("Ticker Line · loading");
     expect(moversHtml).toContain("↓");
   });
 });

@@ -77,7 +77,7 @@ export function WatchlistMovers({
                 </span>
                 <MarketSparkline
                   symbol={quote.symbol}
-                  sparkline={quote.sparkline}
+                  assetType={quote.assetType}
                   className="hidden sm:block"
                 />
                 <span className="tabular-nums text-sm font-medium text-foreground">

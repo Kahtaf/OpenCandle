@@ -109,6 +109,15 @@ describe("searchYahooInstruments", () => {
       provider: "yahoo",
     });
   });
+
+  it.each([
+    ["BTC-INR", "crypto"],
+    ["BRK-B", "equity"],
+  ])("infers %s as %s when resolving an exact Yahoo symbol", async (symbol, assetType) => {
+    vi.mocked(getQuote).mockResolvedValue(quote(symbol, 120));
+
+    await expect(resolveYahooInstrument(symbol)).resolves.toMatchObject({ symbol, assetType });
+  });
 });
 
 function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {

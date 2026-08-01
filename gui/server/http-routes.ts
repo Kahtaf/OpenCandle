@@ -44,6 +44,7 @@ import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
 import { listDisplaySessions } from "./session-list.js";
+import { fetchTickerLineSparkline } from "./ticker-line-sparkline.js";
 import { buildCatalog } from "./tool-metadata.js";
 import {
   acquireWriterLock,
@@ -231,6 +232,35 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/market-state/indices" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await options.indicesSnapshotStore.get());
+      return;
+    }
+
+    if (url.pathname === "/api/market-state/sparkline" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      const result = await fetchTickerLineSparkline(
+        url.searchParams.get("symbol") ?? "",
+        url.searchParams.get("assetType") ?? "",
+      );
+      if (result.status !== "ok") {
+        writeJson(res, { error: result.reason }, result.status === "invalid_request" ? 400 : 502);
+        return;
+      }
+      if (url.searchParams.get("metadata") === "1") {
+        if (!result.dataAsOf) {
+          writeJson(res, { error: "Ticker Line did not provide an as-of timestamp" }, 502);
+          return;
+        }
+        writeJson(res, { source: "Ticker Line", dataAsOf: result.dataAsOf });
+        return;
+      }
+      res.writeHead(200, {
+        "cache-control": "private, max-age=300",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        "content-type": "image/svg+xml",
+        "x-content-type-options": "nosniff",
+        ...(result.dataAsOf ? { "x-data-as-of": result.dataAsOf } : {}),
+      });
+      res.end(result.svg);
       return;
     }
 

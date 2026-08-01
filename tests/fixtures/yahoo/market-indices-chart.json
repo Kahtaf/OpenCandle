@@ -13,9 +13,9 @@
       "fiftyTwoWeekHigh": 6350.1,
       "fiftyTwoWeekLow": 4953.56
     },
-    "^IXIC": {
-      "symbol": "^IXIC",
-      "longName": "NASDAQ Composite",
+    "^NDX": {
+      "symbol": "^NDX",
+      "longName": "NASDAQ 100",
       "regularMarketPrice": 20580.44,
       "previousClose": 20490.2,
       "regularMarketOpen": 20505.8,
@@ -58,7 +58,7 @@
   },
   "history": {
     "^GSPC": [6290.1, 6302.4, 6310.12],
-    "^IXIC": [20420.2, 20510.5, 20580.44],
+    "^NDX": [20420.2, 20510.5, 20580.44],
     "^DJI": [44840.6, 44805.2, 44780.1],
     "BTC-USD": [118300.2, 118950.7, 119420.25]
   }

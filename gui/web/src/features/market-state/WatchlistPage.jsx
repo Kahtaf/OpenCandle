@@ -358,7 +358,7 @@ function MobileQuoteList({
               <span className="min-w-0 overflow-hidden">
                 <MarketSparkline
                   symbol={item.symbol}
-                  sparkline={quote?.sparkline}
+                  assetType={item.assetType ?? quote?.assetType}
                   className="max-w-full"
                 />
               </span>
@@ -454,7 +454,10 @@ function DesktopQuoteTable({
                 </div>
               </TableCell>
               <TableCell className="px-1 py-1.5 sm:px-3">
-                <MarketSparkline symbol={item.symbol} sparkline={quote?.sparkline} />
+                <MarketSparkline
+                  symbol={item.symbol}
+                  assetType={item.assetType ?? quote?.assetType}
+                />
               </TableCell>
               <TableCell className="w-[82px] px-2 py-2.5 text-right tabular-nums sm:w-auto sm:px-3">
                 {quote?.status === "ok" ? (
