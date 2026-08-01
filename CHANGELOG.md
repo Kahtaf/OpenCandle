@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- Hosted Vite configuration now defers hashing generated runtime assets until Vite invokes the config, so the clean-checkout unit-test job can import its helpers before the hosted runtime build runs.
 - Hosted OpenCandle now persists the durable watchlist, portfolio, alert, and report snapshot with each browser checkpoint and serves it read-only while offline, so saved market-state pages no longer reopen empty.
 - Compact dashboard, watchlist, and portfolio sparklines now use Ticker Line's market-aware stock, crypto, FX, index, and commodity URLs instead of fetching Yahoo intraday history per saved symbol; the local GUI's guarded proxy rejects stale fallbacks, enforces its SVG limit while streaming, preserves provider as-of metadata, retries one transient browser failure, and normalizes non-USD crypto pairs, while hosted web uses one validated CORS-enabled JSON response for both SVG and freshness. The fixed Nasdaq card now tracks the supported Nasdaq-100 rather than presenting Nasdaq-100 data as the Nasdaq Composite.
 - Hosted restore accepts supported pre-v7 SQLite snapshots before applying their normal migrations, while redacted model-provider failures preserve safe retry and request metadata for correct backoff and diagnostics.

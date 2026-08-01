@@ -26,22 +26,24 @@ const isolationHeaders = {
   "Content-Security-Policy":
     `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${relayConnectSource} https://ticker-line.com https://api.coingecko.com https://www.alphavantage.co https://gamma-api.polymarket.com https://*.webcontainer-api.io wss://*.webcontainer-api.io; frame-src https://stackblitz.com https://*.webcontainer-api.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
 };
-const runtimeVersion = createHash("sha256")
-  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-files.json")))
-  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-bundle.mjs")))
-  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.cjs")))
-  .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.wasm")))
-  .digest("hex")
-  .slice(0, 16);
+export default defineConfig(() => {
+  const runtimeVersion = createHash("sha256")
+    .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-files.json")))
+    .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-bundle.mjs")))
+    .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.cjs")))
+    .update(readFileSync(resolve(import.meta.dirname, "public/runtime/sql-wasm.wasm")))
+    .digest("hex")
+    .slice(0, 16);
 
-export default defineConfig({
-  define: {
-    __OPENCANDLE_RUNTIME_VERSION__: JSON.stringify(runtimeVersion),
-  },
-  server: { headers: isolationHeaders },
-  preview: { headers: isolationHeaders },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-  },
+  return {
+    define: {
+      __OPENCANDLE_RUNTIME_VERSION__: JSON.stringify(runtimeVersion),
+    },
+    server: { headers: isolationHeaders },
+    preview: { headers: isolationHeaders },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+    },
+  };
 });

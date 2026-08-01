@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { configuredRelayOrigin } from "../../../gui/hosted/vite.config.js";
+import hostedViteConfig, { configuredRelayOrigin } from "../../../gui/hosted/vite.config.js";
 
 const root = resolve(import.meta.dirname, "../../..");
 
 describe("hosted PWA assets", () => {
+  it("defers generated runtime asset reads until Vite invokes the config", () => {
+    expect(hostedViteConfig).toBeTypeOf("function");
+  });
+
   it("keeps production relay traffic same-origin and admits only loopback development origins", () => {
     expect(configuredRelayOrigin("https://web.opencandle.app/v1/provider-fetch")).toBe("");
     expect(configuredRelayOrigin("http://127.0.0.1:8787/v1/provider-fetch")).toBe(
