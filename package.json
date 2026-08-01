@@ -17,7 +17,8 @@
     "gui/server",
     "gui/web",
     "packages/ui",
-    "website"
+    "website",
+    "workers/provider-relay"
   ],
   "bin": {
     "opencandle": "dist/cli.js"
@@ -87,6 +88,12 @@
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
     "gui:hosted:build": "npm --workspace @opencandle/gui-hosted run build",
     "gui:hosted:dev": "npm --workspace @opencandle/gui-hosted run dev",
+    "relay:dev": "npm --workspace @opencandle/provider-relay run dev",
+    "relay:test": "npm --workspace @opencandle/provider-relay test",
+    "relay:typecheck": "npm --workspace @opencandle/provider-relay run typecheck",
+    "relay:types": "npm --workspace @opencandle/provider-relay run types",
+    "relay:smoke:live": "tsx workers/provider-relay/scripts/live-smoke.ts",
+    "relay:smoke:browser": "tsx workers/provider-relay/scripts/browser-live-smoke.ts",
     "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
@@ -94,7 +101,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "gates": "npm run typecheck && npx biome ci . && npm test && npm run test:agent-tools",
+    "gates": "npm run typecheck && npm run relay:typecheck && npx biome ci . && npm test && npm run relay:test && npm run test:agent-tools",
     "bootstrap:agent": "node scripts/agent-bootstrap.mjs",
     "pretest": "npm run check:node",
     "test": "vitest run",

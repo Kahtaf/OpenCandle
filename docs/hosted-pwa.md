@@ -5,9 +5,9 @@ description: Run OpenCandle as an installable browser app without an OpenCandle 
 
 # Hosted OpenCandle PWA
 
-The hosted PWA runs the Pi agent and OpenCandle runtime on your device. The published site serves static application files only. It does not send model keys, session transcripts, or saved market state to an OpenCandle application server.
+The hosted PWA runs the Pi agent and OpenCandle runtime on your device. The published app is static. It does not send model keys, session transcripts, or saved market state to an OpenCandle application server. A small, open source Cloudflare Worker relays only allowlisted provider HTTP calls that browsers cannot make directly.
 
-This is a smaller capability surface than the local GUI and terminal. Use the local interfaces when an investigation needs the full provider catalog, browser-cookie CLIs, background alerts, or closed-tab work.
+This is a smaller capability surface than the local GUI and terminal. Use the local interfaces when an investigation needs browser-cookie CLIs, background alerts, attachments, or closed-tab work.
 
 ## Requirements
 
@@ -22,22 +22,24 @@ The in-browser Node process is provided by [WebContainer](https://webcontainers.
 - The real Pi agent loop and canonical Pi JSONL sessions.
 - The same React transcript, tool, source, session, watchlist, portfolio, alert, report, and diagnostics surfaces as the local GUI.
 - Device-local SQLite market state and canonical session checkpoints in browser storage.
-- Direct Polymarket research. Tools without a fully browser-safe provider path are omitted and named in Diagnostics.
+- HTTP-backed market, crypto, fundamentals, macro, options, technical, portfolio-calculation, web-search, and hosted sentiment-evidence tools. Tools without a negotiated direct or relay path are omitted and named in Diagnostics.
 - Multiple open tabs. One tab owns the runtime; other tabs remain usable and forward actions to it.
 - Versioned export, validated import, separate key clearing, and full device-data clearing.
 - Installation as a standalone PWA and a read-only offline shell for previously saved research.
 
-Hosted mode does not currently support Yahoo Finance, SEC EDGAR, FRED, TradingView, Brave, Exa, LSE, X, Reddit, or other providers that require a proxy, native process, desktop cookie, or browser-blocked request. It does not run alerts, reports, or model work after every OpenCandle tab closes.
+CoinGecko, Alpha Vantage, and Polymarket run directly from the browser after passing hosted Chromium CORS proofs. The relay policy covers Yahoo Finance, FRED, Brave, Exa, TradingView, and Alternative.me. The PWA negotiates the policy version at startup and fails closed for relayed providers if the relay is missing, outdated, or unreachable. SEC EDGAR is disabled in hosted mode because its endpoints intermittently reject Cloudflare Worker egress. Finnhub and London Strategic Edge remain disabled until live credential-backed browser proofs pass. The local GUI and terminal retain all three providers. X and Reddit still require their local CLIs and a desktop browser session. Hosted mode also omits shell and dynamic-package tools, alert and notification delivery, scheduled reports, attachments, and work after every OpenCandle tab closes.
 
 Chat image and saved-state attachments are also unavailable in hosted mode. The attachment control is omitted rather than accepting content the browser runtime cannot pass to Pi. Use the local GUI for attachment-backed research.
 
 ## Keys and browser storage
 
-During setup, choose whether the OpenAI key remains on the device or only for the current browser session. Restored keys are never filled back into the password field and are excluded from OpenCandle exports.
+During model setup, choose whether the OpenAI key remains on the device or only for the current browser session. Provider keys saved through the provider catalog stay in browser storage. Restored keys are never filled back into password fields and all keys are excluded from OpenCandle exports, Pi sessions, and SQLite state.
 
 An open writer tab shares a session-only key transiently with its same-origin follower tabs so one of them can take over if the writer closes. The key is not written to durable OpenCandle state, and closing the final tab removes it.
 
-Browser storage is not a secure vault. Same-origin script compromise, a malicious browser extension, physical access to the browser profile, or a compromised dependency could expose a saved key. Use session-only storage on shared devices and use the hosted status menu to clear the model key when needed.
+Browser storage is not a secure vault. Same-origin script compromise, a malicious browser extension, physical access to the browser profile, or a compromised dependency could expose a saved key. Use session-only model storage on shared devices and clear secrets when needed.
+
+The relay has no KV, D1, R2, Durable Object, queue, analytics, cache, application log, or invocation-log sink. Requests and responses use `Cache-Control: no-store`; errors do not reflect URLs, bodies, upstream errors, or credentials. Cloudflare still terminates and processes relay traffic and may retain platform-level security or operational metadata under its own policies. The precise boundary and deployment instructions are in [Provider relay operations](./provider-relay.md).
 
 ## Data control and recovery
 
@@ -45,7 +47,7 @@ Open the hosted status menu in the lower-right corner:
 
 - **Export data** downloads one versioned JSON archive containing Pi sessions and SQLite state, but no model key.
 - **Import data** validates archive version, filenames, session identities, parent relationships, sizes, SQLite integrity, and supported schema version before stopping the runtime or replacing device data.
-- **Clear model key** removes persistent and session-only credentials, tears down the in-browser runtime so the old process cannot retain the key, and restarts without deleting research.
+- **Clear model key** removes model and provider credentials, tears down the in-browser runtime so the old process cannot retain them, and restarts without deleting research.
 - **Clear all** removes credentials, sessions, market state, runtime snapshots, and cached application data for this origin.
 
 Imports and installed updates preserve a recovery backup before replacing or migrating durable state. An older OpenCandle build refuses to open a database written by a newer schema instead of resetting it. An installed update waits while any runtime request is active, checkpoints the current session, writes a recovery backup, and only then activates the waiting service worker.

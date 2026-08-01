@@ -4,7 +4,11 @@ import { hasCredential } from "../../onboarding/providers.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
 import { searchWeb } from "../../providers/web-search.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
-import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
+import {
+  renderUntrustedText,
+  renderUntrustedUrl,
+  untrustedContentHeader,
+} from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Search query — ticker, topic, or question" }),
@@ -29,11 +33,6 @@ const params = Type.Object({
     }),
   ),
 });
-
-function safeUrl(url: string): string {
-  if (url.startsWith("https://") || url.startsWith("http://")) return url;
-  return `https://${url}`;
-}
 
 /**
  * Build soft-degradation tags for search providers whose credentials are
@@ -168,9 +167,11 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope | null> =
     const items = data.results.map((r) => {
       const title = renderUntrustedText(r.title);
       const snippet = renderUntrustedText(r.snippet);
-      const url = safeUrl(r.url);
-      const pub = r.published ? `Published: ${r.published}` : "Published: unknown";
-      return `• [${title}](${url}) — ${r.source}\n  ${snippet}\n  ${pub}`;
+      const source = renderUntrustedText(r.source, 120);
+      const url = renderUntrustedUrl(r.url);
+      const published = r.published ? renderUntrustedText(r.published, 80) : "unknown";
+      const heading = url ? `[${title}](${url})` : title;
+      return `• ${heading} — ${source}\n  ${snippet}\n  Published: ${published}`;
     });
     const body = shouldOmitResults
       ? "Non-official results were omitted from assistant-visible evidence for this Fed/FOMC announcement query. Verify against an official Federal Reserve or FOMC source before naming announcements or personnel changes."

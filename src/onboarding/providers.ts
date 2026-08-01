@@ -12,7 +12,13 @@ import { getConfig, loadFileConfig } from "../config.js";
 
 export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa" | "lse";
 export type ExternalToolProviderId = "twitter" | "reddit";
-export type PublicHttpProviderId = "polymarket" | "tradingview" | "yahoo";
+export type PublicHttpProviderId =
+  | "coingecko"
+  | "fear_greed"
+  | "polymarket"
+  | "sec_edgar"
+  | "tradingview"
+  | "yahoo";
 export type ProviderId = ApiKeyProviderId | ExternalToolProviderId | PublicHttpProviderId;
 
 export type ProviderCategory =
@@ -122,9 +128,13 @@ export const PROVIDERS = [
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, signup opens in your browser",
     browserTransport: {
-      mode: "proxy",
-      reason:
-        "The production API has not passed the hosted Chromium CORS and secret-handling proof.",
+      mode: "direct",
+      reason: "The production API passes the hosted Chromium CORS and live-key response proof.",
+      proof: {
+        browser: "chromium",
+        test: "gui/hosted/tests/hosted-pwa.e2e.mjs",
+        verifiedAt: "2026-07-31",
+      },
     },
   },
   {
@@ -250,6 +260,62 @@ export const PROVIDERS = [
       mode: "proxy",
       reason:
         "London Strategic Edge has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
+  },
+  {
+    id: "coingecko",
+    kind: "public-http",
+    displayName: "CoinGecko",
+    category: "market",
+    tier: "hard",
+    aliases: ["coingecko", "crypto-market-data"],
+    probeUrl: "https://api.coingecko.com/api/v3/coins/bitcoin",
+    unlocks: ["cryptocurrency prices", "cryptocurrency price history"],
+    fallbackDescription: null,
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks the public CoinGecko API",
+    browserTransport: {
+      mode: "direct",
+      reason: "The public API passes the hosted Chromium CORS and bounded-response proof.",
+      proof: {
+        browser: "chromium",
+        test: "gui/hosted/tests/hosted-pwa.e2e.mjs",
+        verifiedAt: "2026-07-31",
+      },
+    },
+  },
+  {
+    id: "sec_edgar",
+    kind: "public-http",
+    displayName: "SEC EDGAR",
+    category: "fundamentals",
+    tier: "hard",
+    aliases: ["sec", "edgar", "sec-filings"],
+    probeUrl: "https://www.sec.gov/files/company_tickers.json",
+    unlocks: ["SEC filing search", "company submissions", "filing documents"],
+    fallbackDescription: null,
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks the public SEC EDGAR endpoints",
+    browserTransport: {
+      mode: "proxy",
+      reason: "SEC EDGAR requires an identified server-side request path.",
+    },
+  },
+  {
+    id: "fear_greed",
+    kind: "public-http",
+    displayName: "Fear & Greed Index",
+    category: "sentiment",
+    tier: "soft",
+    aliases: ["fear-greed", "fear-and-greed"],
+    probeUrl: "https://api.alternative.me/fng/?limit=1",
+    unlocks: ["crypto market fear and greed index"],
+    fallbackDescription: "Other market and sentiment tools continue when the index is unavailable",
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks the public Alternative.me API",
+    browserTransport: {
+      mode: "proxy",
+      reason: "The index endpoint has not passed a stable direct-browser CORS proof.",
     },
   },
   {
@@ -393,6 +459,26 @@ export function getHostedBrowserCapabilityReport(): {
   return {
     direct,
     unavailable: PROVIDERS.filter((provider) => provider.browserTransport.mode !== "direct"),
+  };
+}
+
+export function resolveHostedBrowserCapabilityReport(relayProviders: readonly string[] = []): {
+  direct: readonly ProviderDescriptor[];
+  relayed: readonly ProviderDescriptor[];
+  available: readonly ProviderDescriptor[];
+  unavailable: readonly ProviderDescriptor[];
+} {
+  const relay = new Set(relayProviders);
+  const direct = PROVIDERS.filter((provider) => provider.browserTransport.mode === "direct");
+  const relayed = PROVIDERS.filter(
+    (provider) => provider.browserTransport.mode === "proxy" && relay.has(provider.id),
+  );
+  const availableIds = new Set([...direct, ...relayed].map((provider) => provider.id));
+  return {
+    direct,
+    relayed,
+    available: PROVIDERS.filter((provider) => availableIds.has(provider.id)),
+    unavailable: PROVIDERS.filter((provider) => !availableIds.has(provider.id)),
   };
 }
 

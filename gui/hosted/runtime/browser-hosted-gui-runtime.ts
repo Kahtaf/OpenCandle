@@ -15,7 +15,11 @@ import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 import { projectDashboard } from "../../../gui/server/projector.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { getHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
+import {
+  isApiKeyProvider,
+  resolveHostedBrowserCapabilityReport,
+  type ProviderDescriptor,
+} from "../../../src/onboarding/providers.js";
 import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import {
   createSqlJsStateDatabase,
@@ -34,6 +38,7 @@ export interface BrowserHostedGuiRuntimeOptions {
   currentSessionId?: string;
   modelId?: string;
   apiKey?: string;
+  relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
 }
 
@@ -71,10 +76,24 @@ export interface BrowserHostedBootstrap {
     tools: Array<{ name: string; label: string; description: string }>;
     workflows: [];
     providers: Array<{
-      id: "polymarket";
-      name: "Polymarket";
-      status: "ready";
-      browserTransport: "direct";
+      id: string;
+      name: string;
+      displayName: string;
+      kind: ProviderDescriptor["kind"];
+      category: ProviderDescriptor["category"];
+      tier: ProviderDescriptor["tier"];
+      unlocks: readonly string[];
+      fallbackDescription: string | null;
+      instructionsHint: string;
+      status: "file" | "absent" | "reachable";
+      browserTransport: "direct" | "relayed";
+      hosted: true;
+      configured?: boolean;
+      source?: "file" | "absent";
+      signupUrl?: string;
+      freeTier?: boolean;
+      envVar?: string;
+      maskedKeyHint?: string;
     }>;
   };
   askUserPrompts: [];
@@ -207,6 +226,9 @@ export class BrowserHostedGuiRuntime {
         stateDatabase: this.stateDatabase,
         modelId: this.options.modelId,
         apiKey: this.options.apiKey,
+        toolDefinitions: getHostedOpenCandleToolDefinitions({
+          relayProviders: this.options.relayProviders,
+        }),
         onDurableEvents: async (events) => {
           for (const event of events) await emit(event as Record<string, unknown>);
         },
@@ -331,8 +353,10 @@ export class BrowserHostedGuiRuntime {
     const symbols = marketState
       .listWatchlistItems(defaultWatchlist.id)
       .map((item) => item.symbol);
-    const tools = getHostedOpenCandleToolDefinitions();
-    const providers = getHostedBrowserCapabilityReport().direct;
+    const tools = getHostedOpenCandleToolDefinitions({
+      relayProviders: this.options.relayProviders,
+    });
+    const providerReport = resolveHostedBrowserCapabilityReport(this.options.relayProviders);
     this.flushState();
     return {
       role: "writer",
@@ -347,12 +371,7 @@ export class BrowserHostedGuiRuntime {
       catalog: {
         tools: tools.map(({ name, label, description }) => ({ name, label, description })),
         workflows: [],
-        providers: providers.map((provider) => ({
-          id: provider.id,
-          name: provider.displayName,
-          status: "ready",
-          browserTransport: "direct",
-        })),
+        providers: providerReport.available.map(serializeHostedProvider),
       },
       askUserPrompts: [],
       snapshot: {
@@ -415,6 +434,36 @@ export class BrowserHostedGuiRuntime {
   private flushState(): void {
     writeFileSync(this.options.stateFile, this.stateDatabase.exportBytes());
   }
+}
+
+function serializeHostedProvider(
+  provider: ProviderDescriptor,
+): BrowserHostedBootstrap["catalog"]["providers"][number] {
+  const credential = isApiKeyProvider(provider) ? process.env[provider.envVar]?.trim() : undefined;
+  return {
+    id: provider.id,
+    name: provider.displayName,
+    displayName: provider.displayName,
+    kind: provider.kind,
+    category: provider.category,
+    tier: provider.tier,
+    unlocks: provider.unlocks,
+    fallbackDescription: provider.fallbackDescription,
+    instructionsHint: provider.instructionsHint,
+    status: isApiKeyProvider(provider) ? (credential ? "file" : "absent") : "reachable",
+    browserTransport: provider.browserTransport.mode === "direct" ? "direct" : "relayed",
+    hosted: true,
+    ...(isApiKeyProvider(provider)
+      ? {
+          configured: Boolean(credential),
+          source: credential ? ("file" as const) : ("absent" as const),
+          signupUrl: provider.signupUrl,
+          freeTier: provider.freeTier,
+          envVar: provider.envVar,
+          ...(credential ? { maskedKeyHint: `…${credential.slice(-4)}` } : {}),
+        }
+      : {}),
+  };
 }
 
 export function selectSessionCheckpoints(

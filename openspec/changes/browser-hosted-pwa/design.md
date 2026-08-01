@@ -234,6 +234,9 @@ browser extensions, physical access, and compromised dependencies. The PWA:
   preview bridge permits inline bootstrap scripts because the runtime injects
   one; that document contains no product UI or secrets and still enforces exact
   origin, source window, runtime epoch, request ID, and operation allowlists;
+- configures WebContainer with a public build-time client ID before boot and
+  uses `strict-origin-when-cross-origin` so StackBlitz receives only the hosted
+  origin required to authorize its iframe, never a path or query;
 - never logs or renders raw credentials;
 - clears secrets separately and verifies clearing in browser tests;
 - discloses the WebContainer/StackBlitz dependency and never calls itself

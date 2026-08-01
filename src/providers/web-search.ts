@@ -1,5 +1,4 @@
-import type { NewsResult, SearchResult } from "ddg-kit";
-import { SafeSearchType, SearchTimeType, search, searchNews } from "ddg-kit";
+import type { NewsResult, SearchResult, SearchTimeType } from "ddg-kit";
 import { getConfig } from "../config.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
@@ -39,13 +38,13 @@ function stripHtmlTags(text: string): string {
 function mapFreshness(freshness: WebSearchOpts["freshness"]): SearchTimeType {
   switch (freshness) {
     case "hours":
-      return SearchTimeType.DAY; // closest available
+      return "d" as SearchTimeType; // closest available
     case "day":
-      return SearchTimeType.DAY;
+      return "d" as SearchTimeType;
     case "week":
-      return SearchTimeType.WEEK;
+      return "w" as SearchTimeType;
     case "month":
-      return SearchTimeType.MONTH;
+      return "m" as SearchTimeType;
   }
 }
 
@@ -91,6 +90,7 @@ export async function ddgSearch(query: string, opts: WebSearchOpts): Promise<Web
 
   try {
     await rateLimiter.acquire("ddg");
+    const { SafeSearchType, search, searchNews } = await import("ddg-kit");
 
     let results: WebSearchResult[];
 

@@ -77,6 +77,7 @@ export class BrowserOpenCandleExtensionHost {
     private readonly model: Model<string>,
     routerLlmClient: RouterLlmClient,
     stateDatabase: StateDatabase,
+    toolDefinitions: ToolDefinition[] = getHostedOpenCandleToolDefinitions(),
   ) {
     const api = {
       on: (event: string, handler: ExtensionHandler) => {
@@ -169,7 +170,7 @@ export class BrowserOpenCandleExtensionHost {
     openCandleExtensionCore(this.api, {
       routerLlmClient,
       stateDatabaseFactory: () => stateDatabase,
-      toolDefinitions: getHostedOpenCandleToolDefinitions(),
+      toolDefinitions,
       titleCompletion: async () => "OpenCandle research",
     });
   }

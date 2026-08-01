@@ -4,6 +4,7 @@ import initSqlJs from "sql.js";
 import { Agent } from "../../../node_modules/@earendil-works/pi-agent-core/dist/agent.js";
 import type { Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { convertToLlm } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/messages.js";
 import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
@@ -52,6 +53,7 @@ export interface BrowserPiSessionOptions {
   modelId: string;
   apiKey: string;
   onDurableEvents?: (events: ChatEvent[]) => void | Promise<void>;
+  toolDefinitions?: ToolDefinition[];
 }
 
 export class BrowserPiSession {
@@ -104,6 +106,7 @@ export class BrowserPiSession {
       model,
       createBrowserPiRouterClient("openai", options.modelId, options.apiKey),
       stateDatabase,
+      options.toolDefinitions,
     );
     const agent = new Agent({
       initialState: {

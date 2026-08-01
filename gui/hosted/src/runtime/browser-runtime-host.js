@@ -2,8 +2,18 @@ import { createBrowserDataStore } from "./browser-data-store.js";
 
 const BRIDGE_CHANNEL = "opencandle-browser-runtime-v1";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
+const PROVIDER_CREDENTIAL_KEY = "opencandle.hosted.provider-credentials.v1";
 const CURRENT_SESSION_KEY = "opencandle.hosted.current-session.v1";
+const RELAY_CLIENT_KEY = "opencandle.hosted.relay-client.v1";
 const REQUEST_TIMEOUT_MS = 180_000;
+const PROVIDER_ENV_BY_ID = Object.freeze({
+  alpha_vantage: "ALPHA_VANTAGE_API_KEY",
+  fred: "FRED_API_KEY",
+  finnhub: "FINNHUB_API_KEY",
+  brave: "BRAVE_API_KEY",
+  exa: "EXA_API_KEY",
+  lse: "LSE_API_KEY",
+});
 
 export function createBrowserRuntimeHost(options = {}) {
   return new BrowserRuntimeHost(options);
@@ -12,9 +22,21 @@ export function createBrowserRuntimeHost(options = {}) {
 class BrowserRuntimeHost {
   constructor(options = {}) {
     this.WebContainerImpl = options.WebContainerImpl;
+    this.configureWebContainerApiKey = options.configureWebContainerApiKey;
+    this.webContainerApiKey = String(
+      options.webContainerApiKey ?? import.meta.env?.VITE_WEBCONTAINER_API_KEY ?? "",
+    ).trim();
+    this.webContainerApiConfigured = false;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.storage = options.storage ?? globalThis.localStorage;
     this.sessionStorage = options.sessionStorage ?? globalThis.sessionStorage;
+    this.relayUrl = hostedRelayUrl(
+      options.relayUrl ??
+        import.meta.env?.VITE_PROVIDER_RELAY_URL ??
+        (globalThis.location?.origin ? `${globalThis.location.origin}/v1/provider-fetch` : ""),
+      globalThis.location?.origin,
+    );
+    this.relayClientId = getOrCreateRelayClientId(this.storage);
     this.dataStore = options.dataStore ?? createBrowserDataStore();
     this.volatileCredential = normalizeCredential(options.sessionCredential);
     this.bridgeFrame =
@@ -81,6 +103,35 @@ class BrowserRuntimeHost {
       case "model.setup.select_model":
       case "model.setup.refresh":
         return { modelSetup: this.getModelSetup() };
+      case "provider.save_api_key": {
+        const providerId = String(command.providerId ?? "").trim();
+        if (!Object.hasOwn(PROVIDER_ENV_BY_ID, providerId)) {
+          throw new Error("This provider does not accept an API key in hosted OpenCandle.");
+        }
+        const apiKey = String(command.apiKey ?? "").trim();
+        if (!apiKey || apiKey.length > 8_192) throw new Error("Enter a valid provider API key.");
+        const validation = await this.request("gui", {
+          action: "validate_provider_key",
+          providerId,
+          apiKey,
+        });
+        if (validation?.status === "invalid") {
+          throw new Error("The provider rejected this key. Your existing key was not changed.");
+        }
+        const current = this.readProviderCredentials();
+        this.storage.setItem(
+          PROVIDER_CREDENTIAL_KEY,
+          JSON.stringify({
+            version: 1,
+            credentials: { ...current, [providerId]: apiKey },
+          }),
+        );
+        await this.stopRuntime();
+        if (navigator.onLine) await this.ensureBooted();
+        return { saved: true, providerId };
+      }
+      case "provider.status.check":
+        return this.request("gui", { action: "diagnostics" });
       case "hosted.data.export":
         return { archive: await this.dataStore.exportAll() };
       case "hosted.data.import": {
@@ -286,8 +337,17 @@ class BrowserRuntimeHost {
   }
 
   async boot() {
-    const WebContainerImpl =
-      this.WebContainerImpl ?? (await import("@webcontainer/api")).WebContainer;
+    let WebContainerImpl = this.WebContainerImpl;
+    let configureWebContainerApiKey = this.configureWebContainerApiKey;
+    if (!WebContainerImpl || (this.webContainerApiKey && !configureWebContainerApiKey)) {
+      const webContainerApi = await import("@webcontainer/api");
+      WebContainerImpl ??= webContainerApi.WebContainer;
+      configureWebContainerApiKey ??= webContainerApi.configureAPIKey;
+    }
+    if (this.webContainerApiKey && !this.webContainerApiConfigured) {
+      configureWebContainerApiKey(this.webContainerApiKey);
+      this.webContainerApiConfigured = true;
+    }
     const container = await WebContainerImpl.boot({ coep: "require-corp" });
     this.container = container;
     const [runtimeBundle, sqlWasm, sqlCommonJs, persisted] = await Promise.all([
@@ -332,11 +392,24 @@ class BrowserRuntimeHost {
     const port = 10_000 + Math.floor(Math.random() * 40_000);
     this.runtimeEpoch = randomRequestId();
     const credential = this.readCredential();
+    const providerCredentials = this.readProviderCredentials();
     const environment = {
       PORT: String(port),
       OPENCANDLE_SPIKE_HOST_ORIGIN: globalThis.location.origin,
       OPENCANDLE_RUNTIME_EPOCH: this.runtimeEpoch,
+      ...(this.relayUrl
+        ? {
+            OPENCANDLE_PROVIDER_RELAY_URL: this.relayUrl,
+            OPENCANDLE_PROVIDER_RELAY_CLIENT_ID: this.relayClientId,
+          }
+        : {}),
       ...(credential?.apiKey ? { OPENAI_API_KEY: credential.apiKey } : {}),
+      ...Object.fromEntries(
+        Object.entries(providerCredentials).map(([providerId, apiKey]) => [
+          PROVIDER_ENV_BY_ID[providerId],
+          apiKey,
+        ]),
+      ),
       ...(currentSessionId
         ? {
             OPENCANDLE_CURRENT_SESSION_ID: currentSessionId,
@@ -517,6 +590,11 @@ class BrowserRuntimeHost {
     this.volatileCredential = null;
     this.storage.removeItem(CREDENTIAL_KEY);
     this.sessionStorage.removeItem(CREDENTIAL_KEY);
+    this.storage.removeItem(PROVIDER_CREDENTIAL_KEY);
+  }
+
+  readProviderCredentials() {
+    return parseProviderCredentials(this.storage.getItem(PROVIDER_CREDENTIAL_KEY));
   }
 
   getSessionCredential() {
@@ -545,6 +623,36 @@ class BrowserRuntimeHost {
     if (!response.ok) throw new Error(`Hosted runtime asset is unavailable: ${path}`);
     return response.text();
   }
+}
+
+function hostedRelayUrl(value, hostOrigin) {
+  const candidate = String(value ?? "").trim();
+  const origin = String(hostOrigin ?? "").trim();
+  if (!candidate || !origin) return "";
+  try {
+    const target = new URL(candidate, origin);
+    const host = new URL(origin);
+    if (target.origin === host.origin) return target.href;
+    if (isLoopback(target) && isLoopback(host)) return target.href;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function isLoopback(url) {
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    (url.hostname === "127.0.0.1" || url.hostname === "localhost")
+  );
+}
+
+function getOrCreateRelayClientId(storage) {
+  const existing = storage.getItem(RELAY_CLIENT_KEY) ?? "";
+  if (/^[a-f0-9]{32}$/.test(existing)) return existing;
+  const value = crypto.randomUUID().replaceAll("-", "");
+  storage.setItem(RELAY_CLIENT_KEY, value);
+  return value;
 }
 
 export function createDurableSseGate(controller) {
@@ -619,6 +727,27 @@ function parseCredential(serialized) {
     return value;
   } catch {
     return null;
+  }
+}
+
+function parseProviderCredentials(serialized) {
+  if (!serialized) return {};
+  try {
+    const value = JSON.parse(serialized);
+    if (value?.version !== 1 || !value.credentials || typeof value.credentials !== "object") {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(value.credentials).filter(
+        ([providerId, apiKey]) =>
+          Object.hasOwn(PROVIDER_ENV_BY_ID, providerId) &&
+          typeof apiKey === "string" &&
+          apiKey.trim().length > 0 &&
+          apiKey.length <= 8_192,
+      ),
+    );
+  } catch {
+    return {};
   }
 }
 

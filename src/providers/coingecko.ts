@@ -4,6 +4,10 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 import type { CryptoPrice, OHLCV } from "../types/market.js";
 
 const BASE_URL = "https://api.coingecko.com/api/v3";
+const COINGECKO_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": "OpenCandle/1.0 (financial analysis agent)",
+};
 
 interface CoinGeckoDetailResponse {
   id: string;
@@ -34,7 +38,7 @@ export async function getCryptoPrice(id: string): Promise<CryptoPrice> {
     await rateLimiter.acquire("coingecko");
 
     const url = `${BASE_URL}/coins/${encodeURIComponent(id)}?localization=false&tickers=false&community_data=false&developer_data=false`;
-    const data = await httpGet<CoinGeckoDetailResponse>(url);
+    const data = await httpGet<CoinGeckoDetailResponse>(url, { headers: COINGECKO_HEADERS });
 
     const md = data.market_data;
     const result: CryptoPrice = {
@@ -74,7 +78,7 @@ export async function getCryptoHistory(id: string, days: number = 180): Promise<
     await rateLimiter.acquire("coingecko");
 
     const url = `${BASE_URL}/coins/${encodeURIComponent(id)}/ohlc?vs_currency=usd&days=${days}`;
-    const data = await httpGet<number[][]>(url);
+    const data = await httpGet<number[][]>(url, { headers: COINGECKO_HEADERS });
 
     const ohlcv: OHLCV[] = data.map(([ts, open, high, low, close]) => ({
       date: new Date(ts).toISOString().split("T")[0],

@@ -17,6 +17,7 @@ const result = await build({
   metafile: true,
   sourcemap: false,
   legalComments: "none",
+  minify: true,
   plugins: [
     {
       name: "hosted-pi-child-process-boundary",
@@ -43,6 +44,8 @@ const result = await build({
     },
   ],
   alias: {
+    "safe-buffer": resolve(hostedRoot, "runtime/safer-buffer-browser.ts"),
+    "safer-buffer": resolve(hostedRoot, "runtime/safer-buffer-browser.ts"),
     "@earendil-works/pi-coding-agent": resolve(
       hostedRoot,
       "runtime/pi-coding-agent-browser.ts",

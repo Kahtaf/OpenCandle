@@ -1,10 +1,22 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { configuredRelayOrigin } from "../../../gui/hosted/vite.config.js";
 
 const root = resolve(import.meta.dirname, "../../..");
 
 describe("hosted PWA assets", () => {
+  it("keeps production relay traffic same-origin and admits only loopback development origins", () => {
+    expect(configuredRelayOrigin("https://web.opencandle.app/v1/provider-fetch")).toBe("");
+    expect(configuredRelayOrigin("http://127.0.0.1:8787/v1/provider-fetch")).toBe(
+      "http://127.0.0.1:8787",
+    );
+    expect(configuredRelayOrigin("javascript:alert(1)")).toBe("");
+    expect(configuredRelayOrigin("ftp://localhost/v1/provider-fetch")).toBe("");
+    expect(configuredRelayOrigin("https://relay.example/v1/provider-fetch")).toBe("");
+    expect(configuredRelayOrigin("not a URL")).toBe("");
+  });
+
   it("declares an installable standalone application with required icons", () => {
     const manifest = JSON.parse(
       readFileSync(resolve(root, "gui/hosted/public/manifest.webmanifest"), "utf8"),
@@ -42,12 +54,21 @@ describe("hosted PWA assets", () => {
     expect(headers).toContain("'wasm-unsafe-eval'");
     expect(headers).not.toContain("script-src 'self' 'unsafe-eval'");
     expect(headers).toContain("connect-src 'self'");
+    expect(headers).toContain("https://api.coingecko.com");
+    expect(headers).toContain("https://www.alphavantage.co");
     expect(headers).toContain("https://gamma-api.polymarket.com");
     expect(headers).toContain("https://*.webcontainer-api.io");
     expect(headers).toContain("object-src 'none'");
     expect(headers).toContain("frame-ancestors 'none'");
+    expect(headers).toContain("Referrer-Policy: strict-origin-when-cross-origin");
+    expect(headers).not.toContain("Referrer-Policy: no-referrer");
     expect(headers).toContain("/runtime/*");
     expect(headers).toContain("Cache-Control: public, max-age=31536000, immutable");
+  });
+
+  it("sends only the hosted origin when WebContainer authorizes its iframe", () => {
+    const html = readFileSync(resolve(root, "gui/hosted/index.html"), "utf8");
+    expect(html).toContain('<meta name="referrer" content="strict-origin-when-cross-origin" />');
   });
 
   it("versions the shell cache from asset contents and excludes host configuration", () => {
@@ -78,6 +99,27 @@ describe("hosted PWA assets", () => {
     );
     expect(host).not.toContain('import { WebContainer } from "@webcontainer/api"');
     expect(host).toContain('await import("@webcontainer/api")');
+  });
+
+  it("installs the relay transport only inside the hosted runtime", () => {
+    const server = readFileSync(resolve(root, "gui/hosted/runtime/server.ts"), "utf8");
+    expect(server).toContain("globalThis.fetch = createHostedProviderFetch");
+    expect(server).toContain('relayManifest ? providerRelayUrl : ""');
+    expect(server).toContain("OPENCANDLE_PROVIDER_RELAY_URL");
+    const localServer = readFileSync(resolve(root, "gui/server/server.ts"), "utf8");
+    expect(localServer).not.toContain("createHostedProviderFetch");
+    expect(localServer).not.toContain("OPENCANDLE_PROVIDER_RELAY_URL");
+  });
+
+  it("proves Yahoo quote and history through the relay in the hosted browser smoke", () => {
+    const smoke = readFileSync(resolve(root, "gui/hosted/tests/hosted-pwa.e2e.mjs"), "utf8");
+    expect(smoke).toContain("OPENCANDLE_PROVIDER_RELAY_E2E");
+    expect(smoke).toContain("get_stock_quote");
+    expect(smoke).toContain("get_stock_history");
+    expect(smoke).toContain('waitForText(page, "Stock quote"');
+    expect(smoke).toContain('waitForText(page, "Price history"');
+    expect(smoke).toContain('waitForText(restored, "Stock quote"');
+    expect(smoke).toContain('waitForText(restored, "Price history"');
   });
 
   it("marks diagnostic provider evidence as untrusted before model synthesis", () => {

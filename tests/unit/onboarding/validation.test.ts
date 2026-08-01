@@ -206,12 +206,13 @@ describe("validateCredential", () => {
       expect(result.status).toBe("invalid");
     });
 
-    it("sends the key via x-api-key header on a POST body", async () => {
+    it("sends the key via the same bearer header used by Exa search", async () => {
       const getRequest = mockFetchOnce({ status: 200, body: "{}" });
       await validateCredential("exa", "exa-key");
       const req = getRequest();
       expect(req.method).toBe("POST");
-      expect(req.headers.get("x-api-key")).toBe("exa-key");
+      expect(req.headers.get("authorization")).toBe("Bearer exa-key");
+      expect(req.headers.get("x-api-key")).toBeNull();
       expect(req.url).not.toContain("exa-key");
     });
   });

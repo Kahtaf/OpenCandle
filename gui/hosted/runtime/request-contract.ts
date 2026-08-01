@@ -33,6 +33,11 @@ export type GuiRequest =
       modelId: "gpt-4.1-mini";
       apiKey: string;
     }
+  | {
+      action: "validate_provider_key";
+      providerId: "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa" | "lse";
+      apiKey: string;
+    }
   | { action: "load_session" | "delete_session"; sessionId: string }
   | { action: "rename_session"; sessionId: string; name: string }
   | {
@@ -246,6 +251,23 @@ export function parseGuiRequest(value: unknown): GuiRequest {
         modelId: MODEL_ENVIRONMENT.openai.modelId,
         apiKey: request.apiKey,
       };
+    }
+    case "validate_provider_key": {
+      const providerId = request.providerId;
+      if (
+        providerId !== "alpha_vantage" &&
+        providerId !== "fred" &&
+        providerId !== "finnhub" &&
+        providerId !== "brave" &&
+        providerId !== "exa" &&
+        providerId !== "lse"
+      ) {
+        throw new Error("Unsupported hosted provider");
+      }
+      if (typeof request.apiKey !== "string" || !request.apiKey.trim() || request.apiKey.length > 8_192) {
+        throw new Error("Hosted provider key is invalid");
+      }
+      return { action: request.action, providerId, apiKey: request.apiKey.trim() };
     }
     case "instrument_search": {
       const query = parseBoundedString(request.query, "query", 120);

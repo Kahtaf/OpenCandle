@@ -2,6 +2,27 @@ import { describe, expect, it } from "vitest";
 import { parseGuiRequest } from "../../../gui/hosted/runtime/request-contract.js";
 
 describe("hosted GUI request contract", () => {
+  it("accepts only bounded hosted provider credential validation requests", () => {
+    expect(
+      parseGuiRequest({
+        action: "validate_provider_key",
+        providerId: "fred",
+        apiKey: "candidate-key",
+      }),
+    ).toEqual({
+      action: "validate_provider_key",
+      providerId: "fred",
+      apiKey: "candidate-key",
+    });
+    expect(() =>
+      parseGuiRequest({
+        action: "validate_provider_key",
+        providerId: "unknown",
+        apiKey: "candidate-key",
+      }),
+    ).toThrow("provider");
+  });
+
   it("rejects attachments explicitly instead of silently discarding them", () => {
     expect(() =>
       parseGuiRequest({

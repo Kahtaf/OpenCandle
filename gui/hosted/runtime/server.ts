@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { searchPredictionMarkets } from "../../../src/providers/polymarket.js";
-import { getHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
+import { resolveHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
+import { validateCredential } from "../../../src/onboarding/validation.js";
 import { route } from "../../../src/routing/router.js";
 import {
   renderUntrustedText,
@@ -10,6 +11,19 @@ import {
 import { runBrowserPiSession } from "./browser-pi-session.js";
 import { createBrowserPiRouterClient } from "./browser-pi-router-client.js";
 import { BrowserHostedGuiRuntime } from "./browser-hosted-gui-runtime.js";
+import {
+  buildHostedMarketIndicesSnapshot,
+  buildHostedMarketQuoteSnapshot,
+  buildHostedUnavailableMarketQuoteSnapshot,
+  getHostedInstrumentHistorySnapshot,
+  getHostedInstrumentOverviewSnapshot,
+  getHostedInstrumentQuoteSnapshot,
+  searchHostedInstrumentCandidates,
+} from "./hosted-market-data-api.js";
+import {
+  createHostedProviderFetch,
+  fetchHostedRelayManifest,
+} from "./provider-relay-fetch.js";
 import {
   createBridgeDocument,
   createBridgePolicy,
@@ -37,17 +51,36 @@ const MODEL_KEYS = [
   process.env.ANTHROPIC_API_KEY,
 ];
 const trustedHostOrigin = parseTrustedHostOrigin(process.env.OPENCANDLE_SPIKE_HOST_ORIGIN);
+const providerRelayUrl = process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ?? "";
+const providerRelayClientId = process.env.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID?.trim() ?? "";
+if (providerRelayUrl && !/^[a-f0-9]{32}$/.test(providerRelayClientId)) {
+  throw new Error("OPENCANDLE_PROVIDER_RELAY_CLIENT_ID is invalid");
+}
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const hostedRelayManifestPromise = providerRelayUrl
+  ? fetchHostedRelayManifest({ relayUrl: providerRelayUrl, fetchImpl: nativeFetch }).catch(
+      () => undefined,
+    )
+  : Promise.resolve(undefined);
 const runtimeEpoch = process.env.OPENCANDLE_RUNTIME_EPOCH;
 if (!runtimeEpoch || !/^[a-f0-9]{32}$/.test(runtimeEpoch)) {
   throw new Error("OPENCANDLE_RUNTIME_EPOCH is invalid");
 }
-const hostedGuiRuntimePromise = BrowserHostedGuiRuntime.create({
-  cwd: process.cwd(),
-  sessionDir: `${process.cwd()}/sessions`,
-  stateFile: `${process.cwd()}/state/current.sqlite3`,
-  currentSessionId: process.env.OPENCANDLE_CURRENT_SESSION_ID,
-  modelId: "gpt-4.1-mini",
-  apiKey: process.env.OPENAI_API_KEY,
+const hostedGuiRuntimePromise = hostedRelayManifestPromise.then((relayManifest) => {
+  globalThis.fetch = createHostedProviderFetch({
+    relayUrl: relayManifest ? providerRelayUrl : "",
+    clientId: providerRelayClientId,
+    fetchImpl: nativeFetch,
+  });
+  return BrowserHostedGuiRuntime.create({
+    cwd: process.cwd(),
+    sessionDir: `${process.cwd()}/sessions`,
+    stateFile: `${process.cwd()}/state/current.sqlite3`,
+    currentSessionId: process.env.OPENCANDLE_CURRENT_SESSION_ID,
+    modelId: "gpt-4.1-mini",
+    apiKey: process.env.OPENAI_API_KEY,
+    relayProviders: relayManifest?.providers ?? [],
+  });
 });
 
 function isolationHeaders(contentType: string): Record<string, string> {
@@ -159,6 +192,8 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
     case "configure_model":
       runtime.configureModel(request.modelId, request.apiKey);
       return runtime.bootstrap();
+    case "validate_provider_key":
+      return validateCredential(request.providerId, request.apiKey);
     case "new_session":
       return runtime.newSession();
     case "load_session":
@@ -185,24 +220,57 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
     case "diagnostics":
       return buildHostedDiagnostics();
     case "market_quotes":
+      return (await hasRelayProvider("yahoo"))
+        ? buildHostedMarketQuoteSnapshot(runtime.marketState())
+        : buildHostedUnavailableMarketQuoteSnapshot(
+            runtime.marketState(),
+            "Audited provider relay is unavailable",
+          );
     case "market_indices":
+      return (await hasRelayProvider("yahoo"))
+        ? buildHostedMarketIndicesSnapshot()
+        : { generatedAt: new Date().toISOString(), indices: [] };
     case "instrument_history":
+      await requireRelayProvider("yahoo", "Instrument history");
+      return getHostedInstrumentHistorySnapshot(request.symbol, request.range);
     case "instrument_search":
+      await requireRelayProvider("yahoo", "Instrument search");
+      return searchHostedInstrumentCandidates(request.query);
     case "instrument_quote":
+      await requireRelayProvider("yahoo", "Instrument quotes");
+      return getHostedInstrumentQuoteSnapshot(request.symbol);
     case "instrument_endpoint":
-      throw new Error(
-        "Live quotes and instrument lookup do not have a proven direct-browser provider yet. Use the local GUI or TUI for this capability.",
-      );
+      await requireRelayProvider("yahoo", "Instrument details");
+      if (request.endpoint !== "overview") {
+        throw new Error(`Unsupported hosted instrument endpoint: ${request.endpoint}`);
+      }
+      return getHostedInstrumentOverviewSnapshot(request.symbol);
   }
 }
 
-function buildHostedDiagnostics(): Record<string, unknown> {
-  const providers = getHostedBrowserCapabilityReport();
+async function hasRelayProvider(provider: string): Promise<boolean> {
+  const manifest = await hostedRelayManifestPromise;
+  return manifest?.providers.includes(provider) === true;
+}
+
+async function requireRelayProvider(provider: string, capability: string): Promise<void> {
+  if (await hasRelayProvider(provider)) return;
+  throw new Error(
+    `${capability} requires the audited provider relay, which is unavailable or incompatible.`,
+  );
+}
+
+async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
+  const relayManifest = await hostedRelayManifestPromise;
+  const providers = resolveHostedBrowserCapabilityReport(relayManifest?.providers);
+  const relayReady = Boolean(relayManifest);
   return {
     runtime: "hosted-web",
     nodeVersion: process.version,
-    status: "degraded",
-    summary: "The browser runtime is ready. Capabilities without a proven direct path are disabled.",
+    status: relayReady ? "ready" : "degraded",
+    summary: relayReady
+      ? "The browser runtime and audited provider relay are ready. Native-only capabilities remain disabled."
+      : "The browser runtime is ready. Relayed and native-only capabilities are disabled.",
     capabilities: CAPABILITIES,
     sections: [
       {
@@ -222,6 +290,14 @@ function buildHostedDiagnostics(): Record<string, unknown> {
             status: "skip",
             detail: "Unavailable in hosted mode. Use the local GUI or TUI for an always-running process.",
           },
+          {
+            id: "provider-relay",
+            label: "Audited provider relay",
+            status: relayReady ? "pass" : "skip",
+            detail: relayReady
+              ? `Policy v${relayManifest?.version}; ${relayManifest?.providers.length ?? 0} allowed providers.`
+              : "Unavailable or incompatible. Relayed tools fail closed.",
+          },
         ],
       },
       {
@@ -234,6 +310,12 @@ function buildHostedDiagnostics(): Record<string, unknown> {
             label: provider.displayName,
             status: "pass",
             detail: provider.browserTransport.reason,
+          })),
+          ...providers.relayed.map((provider) => ({
+            id: `provider-${provider.id}`,
+            label: provider.displayName,
+            status: "pass",
+            detail: "Available through the audited OpenCandle provider relay.",
           })),
           ...providers.unavailable.map((provider) => ({
             id: `provider-${provider.id}`,

@@ -11,8 +11,10 @@ const port = process.env.OPENCANDLE_HOSTED_TEST_PORT
   ? Number.parseInt(process.env.OPENCANDLE_HOSTED_TEST_PORT, 10)
   : 30_000 + (process.pid % 20_000);
 const origin = `http://127.0.0.1:${port}`;
-const prompt =
-  'I am a conservative long-term investor. Use get_event_probabilities to search Polymarket for "SpaceX". Report one returned market and its probability in one sentence.';
+const relayE2e = process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1";
+const prompt = relayE2e
+  ? "Use both get_stock_quote and get_stock_history for AAPL. Tell me its current price and whether it rose or fell over the last five trading days."
+  : 'I am a conservative long-term investor. Use get_event_probabilities to search Polymarket for "SpaceX". Report one returned market and its probability in one sentence.';
 const require = createRequire(import.meta.url);
 const viteEntry = fileURLToPath(new URL("../../../node_modules/vite/bin/vite.js", import.meta.url));
 const server = spawn(
@@ -78,12 +80,21 @@ try {
     "credential-holding shell CSP",
   );
   assert(await page.evaluate(() => globalThis.crossOriginIsolated), "cross-origin isolation");
-  await waitForText(page, "Add an OpenAI key to run the model directly in this browser", 120_000);
+  await waitForText(page, "Connect an AI model", 120_000);
   // Let the first WebContainer boot settle before checking PWA registration.
   // A newly opened page below proves service-worker control without replacing
   // the tab that owns the active WebContainer runtime.
   await assertInstallable(page);
   await assertNoHorizontalOverflow(page, "desktop first launch");
+
+  if (relayE2e) {
+    stage = "provider relay negotiation";
+    await page.getByRole("link", { name: "Diagnostics" }).click();
+    await waitForText(page, "Audited provider relay", 30_000);
+    await waitForText(page, "Policy v1", 30_000);
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await waitForText(page, "Connect an AI model", 30_000);
+  }
 
   stage = "direct browser provider proof";
   const polymarketProof = await page.evaluate(async () => {
@@ -101,6 +112,42 @@ try {
   assert(polymarketProof.ok, "Polymarket direct-browser response");
   assert(polymarketProof.bounded, "Polymarket bounded direct-browser response");
   assert(polymarketProof.hasMarkets, "Polymarket direct-browser market payload");
+
+  const coinGeckoProof = await page.evaluate(async () => {
+    const response = await fetch(
+      "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false",
+      { credentials: "omit" },
+    );
+    const body = await response.json();
+    return {
+      ok: response.ok,
+      bounded: JSON.stringify(body).length < 1_000_000,
+      hasMarketData: body?.id === "bitcoin" && typeof body?.market_data === "object",
+    };
+  });
+  assert(coinGeckoProof.ok, "CoinGecko direct-browser response");
+  assert(coinGeckoProof.bounded, "CoinGecko bounded direct-browser response");
+  assert(coinGeckoProof.hasMarketData, "CoinGecko direct-browser market payload");
+
+  const alphaVantageKey = String(process.env.ALPHA_VANTAGE_API_KEY || "").trim();
+  if (alphaVantageKey) {
+    const alphaVantageProof = await page.evaluate(async (apiKey) => {
+      const url = new URL("https://www.alphavantage.co/query");
+      url.search = new URLSearchParams({
+        function: "OVERVIEW",
+        symbol: "AAPL",
+        apikey: apiKey,
+      }).toString();
+      const response = await fetch(url, { credentials: "omit" });
+      const body = await response.json();
+      return {
+        ok: response.ok,
+        hasOverview: body?.Symbol === "AAPL" && typeof body?.Name === "string",
+      };
+    }, alphaVantageKey);
+    assert(alphaVantageProof.ok, "Alpha Vantage direct-browser response");
+    assert(alphaVantageProof.hasOverview, "Alpha Vantage direct-browser company payload");
+  }
 
   const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
   let completedLiveTurn = false;
@@ -122,12 +169,22 @@ try {
     await page.getByRole("textbox", { name: "Message OpenCandle" }).fill(prompt);
     await page.getByRole("button", { name: "Send message" }).click();
     await waitForCount(page.locator("[data-chat-row-id]"), initialRows + 2, 180_000);
-    await waitForText(page, "event probabilities", 180_000);
-    await waitFor(
-      async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("%"),
-      180_000,
-      "a probability-backed assistant answer",
-    );
+    if (relayE2e) {
+      await waitForText(page, "Stock quote", 180_000);
+      await waitForText(page, "Price history", 180_000);
+      await waitFor(
+        async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("AAPL"),
+        180_000,
+        "an AAPL quote-and-history assistant answer",
+      );
+    } else {
+      await waitForText(page, "event probabilities", 180_000);
+      await waitFor(
+        async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("%"),
+        180_000,
+        "a probability-backed assistant answer",
+      );
+    }
     await page.waitForURL(/\/sessions\//, { timeout: 30_000 });
     completedLiveTurn = true;
 
@@ -136,7 +193,12 @@ try {
     await restored.goto(page.url(), { waitUntil: "domcontentloaded" });
     await waitForText(restored, "Connected to the active tab", 120_000);
     await waitForText(restored, prompt, 120_000);
-    await waitForText(restored, "event probabilities", 120_000);
+    if (relayE2e) {
+      await waitForText(restored, "Stock quote", 120_000);
+      await waitForText(restored, "Price history", 120_000);
+    } else {
+      await waitForText(restored, "event probabilities", 120_000);
+    }
     await page.close();
     page = restored;
     await waitForText(page, "Running on this device", 120_000);
@@ -486,6 +548,19 @@ function assert(condition, label) {
 }
 
 function redact(value) {
-  const key = String(process.env.OPENAI_API_KEY || "").trim();
-  return key ? String(value).split(key).join("[redacted]") : String(value);
+  const secrets = [
+    process.env.OPENAI_API_KEY,
+    process.env.ALPHA_VANTAGE_API_KEY,
+    process.env.FRED_API_KEY,
+    process.env.FINNHUB_API_KEY,
+    process.env.BRAVE_API_KEY,
+    process.env.EXA_API_KEY,
+    process.env.LSE_API_KEY,
+  ]
+    .map((secret) => String(secret || "").trim())
+    .filter(Boolean);
+  return secrets.reduce(
+    (redacted, secret) => redacted.split(secret).join("[redacted]"),
+    String(value),
+  );
 }

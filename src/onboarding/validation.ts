@@ -144,7 +144,7 @@ export async function validateCredential(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": key,
+          Authorization: `Bearer ${key}`,
         },
         body: JSON.stringify({ query: "test", numResults: 1 }),
       });

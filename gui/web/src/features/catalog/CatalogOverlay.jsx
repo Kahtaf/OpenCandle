@@ -841,7 +841,7 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
           {envBlocked
             ? `Currently set via ${provider.envVar}. Unset that variable to manage the key here.`
             : status === "file"
-              ? `Saved to ~/.opencandle/config.json${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
+              ? `${provider.hosted ? "Saved only in this browser" : "Saved to ~/.opencandle/config.json"}${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
               : provider.instructionsHint || "Saved to ~/.opencandle/config.json."}
         </p>
       </div>

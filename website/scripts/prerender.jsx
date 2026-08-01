@@ -90,6 +90,11 @@ const sourcePages = [
     section: "Guides",
   },
   { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Reference" },
+  {
+    source: "docs/provider-relay.md",
+    output: "docs/provider-relay.html",
+    section: "Reference",
+  },
   { source: "docs/configuration.md", output: "docs/configuration.html", section: "Reference" },
   {
     source: "docs/system-architecture.md",

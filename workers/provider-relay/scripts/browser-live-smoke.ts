@@ -1,0 +1,50 @@
+import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { chromium } from "playwright-core";
+
+const relayUrl =
+  process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ||
+  "https://web.opencandle.app/v1/provider-fetch";
+const args = {
+  clientId: randomBytes(16).toString("hex"),
+  keys: {
+    alphaVantage: String(process.env.ALPHA_VANTAGE_API_KEY || "").trim(),
+    brave: String(process.env.BRAVE_API_KEY || "").trim(),
+    exa: String(process.env.EXA_API_KEY || "").trim(),
+    fred: String(process.env.FRED_API_KEY || "").trim(),
+  },
+  relayUrl,
+};
+
+interface BrowserProof {
+  provider: string;
+  status: "PASS" | "FAIL" | "SKIP";
+  reason?: string;
+}
+
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage();
+  await page.setContent("<!doctype html><title>OpenCandle relay proof</title>");
+  const serializedArgs = JSON.stringify(args).replaceAll("<", "\\u003c");
+  await page.evaluate(`globalThis.__opencandleRelayProofArgs = ${serializedArgs}`);
+  const browserProgram = await readFile(
+    new URL("./browser-live-smoke-page.js", import.meta.url),
+    "utf8",
+  );
+  const proofs = (await page.evaluate(browserProgram)) as BrowserProof[];
+
+  for (const proof of proofs) {
+    process.stdout.write(
+      `${proof.status.padEnd(4)} ${proof.provider}${proof.reason ? ` ${proof.reason}` : ""}\n`,
+    );
+  }
+  const failures = proofs.filter((proof) => proof.status === "FAIL");
+  const skipped = proofs.filter((proof) => proof.status === "SKIP");
+  process.stdout.write(
+    `SUMMARY pass=${proofs.length - failures.length - skipped.length} fail=${failures.length} skip=${skipped.length}\n`,
+  );
+  if (failures.length > 0) process.exitCode = 1;
+} finally {
+  await browser.close();
+}

@@ -34,6 +34,9 @@ describe("coingecko provider", () => {
       expect(crypto.asOf).toBe("2026-07-03T18:50:00.000Z");
       expect(crypto.circulatingSupply).toBe(19625000);
       expect(crypto.totalSupply).toBe(21000000);
+      const init = vi.mocked(globalThis.fetch).mock.calls[0]?.[1];
+      expect(new Headers(init?.headers).get("accept")).toBe("application/json");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("OpenCandle/");
     });
 
     it("caches results", async () => {
