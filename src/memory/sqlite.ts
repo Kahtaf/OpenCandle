@@ -343,12 +343,22 @@ export function initDatabase(path: string): Database.Database {
   }
   const NativeDatabase = loadNativeDatabaseConstructor();
   const db = new NativeDatabase(path);
-  db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
-  db.pragma("foreign_keys = ON");
-  initializeStateDatabase(db);
-
-  return db;
+  try {
+    const currentVersion = readSchemaVersion(db);
+    if (currentVersion !== null && currentVersion > CURRENT_SCHEMA_VERSION) {
+      throw new Error(
+        `State database uses newer OpenCandle schema version ${currentVersion}; this build supports version ${CURRENT_SCHEMA_VERSION}. Update OpenCandle before opening this data.`,
+      );
+    }
+    db.pragma("journal_mode = WAL");
+    db.pragma("busy_timeout = 5000");
+    db.pragma("foreign_keys = ON");
+    initializeStateDatabase(db);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 function loadNativeDatabaseConstructor(): NativeDatabaseConstructor {

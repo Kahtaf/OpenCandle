@@ -27,7 +27,16 @@ interface BrowserProof {
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
-  await page.goto(hostedAppUrl, { waitUntil: "domcontentloaded" });
+  const proofPageUrl = new URL("/__opencandle-relay-smoke__", hostedAppUrl).toString();
+  await page.route(proofPageUrl, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>OpenCandle relay smoke</title>",
+    }),
+  );
+  await page.goto(proofPageUrl, { waitUntil: "domcontentloaded" });
+  await page.unroute(proofPageUrl);
   const serializedArgs = JSON.stringify(args).replaceAll("<", "\\u003c");
   await page.evaluate(`globalThis.__opencandleRelayProofArgs = ${serializedArgs}`);
   const browserProgram = await readFile(

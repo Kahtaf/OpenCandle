@@ -214,7 +214,7 @@ describe("browser runtime host", () => {
     expect(createBackup).toHaveBeenCalledOnce();
   });
 
-  it("clears the stream startup timer on the first valid stream message", () => {
+  it("preserves the overall stream deadline after the first valid stream message", () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
@@ -246,9 +246,40 @@ describe("browser runtime host", () => {
       event: { type: "tool.started" },
     });
 
-    expect(clearTimeout).toHaveBeenCalledTimes(1);
-    expect(clearTimeout).toHaveBeenCalledWith(42);
+    expect(clearTimeout).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it("times out and cancels a stream that emits once and then stalls", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const response = await host.streamRequest("chat", {}, { timeoutMs: 20 });
+    const reader = response.body.getReader();
+    const requestId = [...host.pendingRequests.keys()][0];
+    host.handleRuntimeMessage({
+      type: "stream-event",
+      requestId,
+      runtimeEpoch: host.runtimeEpoch,
+      event: { type: "run.started" },
+    });
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+
+    await vi.advanceTimersByTimeAsync(21);
+    await expect(reader.read()).rejects.toThrow("timed out");
+    expect(write).toHaveBeenLastCalledWith(expect.stringContaining('"type":"cancel"'));
   });
 
   it("cancels and unregisters a Pi stream when its browser consumer closes", async () => {

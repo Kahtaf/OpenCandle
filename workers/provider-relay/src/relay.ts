@@ -157,7 +157,12 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
         );
       }
 
-      const validated = validateProviderRequest(envelope);
+      let validated: ReturnType<typeof validateProviderRequest>;
+      try {
+        validated = validateProviderRequest(envelope);
+      } catch {
+        return respondError(400, "invalid_request");
+      }
       if (!validated) return respondError(403, "provider_request_not_allowed");
 
       const controller = new AbortController();

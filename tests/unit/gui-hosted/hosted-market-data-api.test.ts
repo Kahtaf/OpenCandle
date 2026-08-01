@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildHostedMarketQuoteSnapshot,
   buildHostedUnavailableMarketQuoteSnapshot,
+  getHostedInstrumentHistorySnapshot,
   getHostedInstrumentQuoteSnapshot,
 } from "../../../gui/hosted/runtime/hosted-market-data-api.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
@@ -142,6 +143,56 @@ describe("hosted market data API", () => {
     expect(snapshot.watchlistQuotes[0]?.sparkline).toMatchObject({
       status: "unavailable",
       reason: "Not enough intraday history",
+    });
+  });
+
+  it("rejects zero-filled and malformed history instead of returning an OK chart", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_000,
+        open: 0,
+        high: 0,
+        low: 0,
+        close: 0,
+        volume: 0,
+      },
+    ]);
+    await expect(getHostedInstrumentHistorySnapshot("AAPL", "1D")).resolves.toMatchObject({
+      status: "unavailable",
+    });
+
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_000,
+        open: 198,
+        high: Number.NaN,
+        low: 197,
+        close: 200,
+        volume: 1_000,
+      },
+    ]);
+    await expect(getHostedInstrumentHistorySnapshot("AAPL", "1D")).resolves.toMatchObject({
+      status: "unavailable",
+    });
+  });
+
+  it("does not invent midnight timestamps for malformed intraday history", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: Number.NaN,
+        open: 198,
+        high: 202,
+        low: 197,
+        close: 200,
+        volume: 1_000,
+      },
+    ]);
+
+    await expect(getHostedInstrumentHistorySnapshot("AAPL", "1D")).resolves.toMatchObject({
+      status: "unavailable",
     });
   });
 

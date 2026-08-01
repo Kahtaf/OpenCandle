@@ -97,6 +97,7 @@ export interface PublicHttpProviderDescriptor extends BaseProviderDescriptor {
   readonly id: PublicHttpProviderId;
   readonly kind: "public-http";
   readonly probeUrl: string;
+  readonly probeHeaders?: Readonly<Record<string, string>>;
 }
 
 export type ProviderDescriptor =
@@ -292,6 +293,7 @@ export const PROVIDERS = [
     tier: "hard",
     aliases: ["sec", "edgar", "sec-filings"],
     probeUrl: "https://www.sec.gov/files/company_tickers.json",
+    probeHeaders: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
     unlocks: ["SEC filing search", "company submissions", "filing documents"],
     fallbackDescription: null,
     snoozeDurationDays: 7,

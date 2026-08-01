@@ -224,6 +224,24 @@ describe("hosted provider relay", () => {
     expect(upstreamFetch).not.toHaveBeenCalled();
   });
 
+  it("returns a bounded client error for an invalid allowed header value", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "yahoo",
+        url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+        method: "GET",
+        headers: { accept: "application/json\r\nx-injected: true" },
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_request" });
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
   it("cancels an oversized upstream response without returning partial data", async () => {
     const relay = createProviderRelay({
       maxResponseBytes: 3,

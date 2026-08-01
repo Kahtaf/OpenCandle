@@ -81,6 +81,7 @@ interface InFlightChatResult {
 interface CachedToolActionResult {
   fingerprint: string;
   operation: Promise<Record<string, unknown>>;
+  settled: boolean;
 }
 
 export interface BrowserHostedGuiRuntimeOptions {
@@ -469,14 +470,26 @@ export class BrowserHostedGuiRuntime {
       this.flushState();
       return { result };
     });
-    this.actionResults.set(key, { fingerprint, operation });
-    if (this.actionResults.size > 256) {
-      this.actionResults.delete(this.actionResults.keys().next().value as string);
-    }
-    operation.catch(() => {
-      if (this.actionResults.get(key)?.operation === operation) this.actionResults.delete(key);
-    });
+    this.actionResults.set(key, { fingerprint, operation, settled: false });
+    void operation.then(
+      () => {
+        const cached = this.actionResults.get(key);
+        if (cached?.operation === operation) cached.settled = true;
+        this.pruneSettledActionResults();
+      },
+      () => {
+        if (this.actionResults.get(key)?.operation === operation) this.actionResults.delete(key);
+      },
+    );
     return operation;
+  }
+
+  private pruneSettledActionResults(): void {
+    while (this.actionResults.size > 256) {
+      const settled = [...this.actionResults].find(([, result]) => result.settled);
+      if (!settled) return;
+      this.actionResults.delete(settled[0]);
+    }
   }
 
   dispose(): void {

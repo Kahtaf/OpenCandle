@@ -197,7 +197,8 @@ class BrowserRuntimeCoordinator {
     });
     const timer = setTimeout(() => {
       this.pending.delete(requestId);
-      streamController.error(new Error("The active hosted tab did not start the stream"));
+      this.post({ type: "cancel", epoch: this.epoch, requestId, target: this.writerId });
+      streamController.error(new Error("The active hosted tab did not complete the stream"));
     }, this.requestTimeoutMs);
     const abort = () => {
       clearTimeout(timer);
@@ -289,8 +290,6 @@ class BrowserRuntimeCoordinator {
       if (!pending?.streamController) return;
       if (message.type === "stream-chunk") {
         if (isByteArray(message.value)) {
-          clearTimeout(pending.timer);
-          pending.timer = null;
           pending.streamController.enqueue(Uint8Array.from(message.value));
         }
         return;
@@ -336,7 +335,7 @@ class BrowserRuntimeCoordinator {
         value,
       });
       this.broadcastStatus();
-      this.broadcastInvalidation();
+      if (forwardedRequestMutates(message)) this.broadcastInvalidation();
     } catch (error) {
       this.post({
         type: "response",
@@ -491,9 +490,27 @@ class BrowserRuntimeCoordinator {
   }
 }
 
+const READ_ONLY_GUI_ACTIONS = new Set([
+  "bootstrap",
+  "get",
+  "market_state",
+  "market_quotes",
+  "market_indices",
+  "instrument_history",
+  "instrument_search",
+  "instrument_quote",
+  "instrument_endpoint",
+  "diagnostics",
+]);
+
 function isMutatingRequest(operation, payload) {
   if (operation !== "gui") return false;
-  return !["bootstrap", "market_state", "diagnostics"].includes(payload?.action);
+  return !READ_ONLY_GUI_ACTIONS.has(payload?.action);
+}
+
+function forwardedRequestMutates(message) {
+  if (message.kind === "command") return true;
+  return message.kind === "request" && isMutatingRequest(message.operation, message.payload ?? {});
 }
 
 function isMessage(value) {

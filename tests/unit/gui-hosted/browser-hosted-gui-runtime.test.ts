@@ -223,6 +223,33 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     database.close();
   });
 
+  it("never evicts an in-flight tool action from the idempotency map", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+    const pending = new Promise<Record<string, unknown>>(() => {});
+    (runtime as any).actionResults.set("session-1:pending", {
+      fingerprint: "pending",
+      operation: pending,
+      settled: false,
+    });
+    for (let index = 0; index < 256; index += 1) {
+      (runtime as any).actionResults.set(`session-1:settled-${index}`, {
+        fingerprint: String(index),
+        operation: Promise.resolve({ result: index }),
+        settled: true,
+      });
+    }
+
+    await runtime.invokeTool("session-1", "action-new", "manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    });
+
+    expect((runtime as any).actionResults.get("session-1:pending")?.operation).toBe(pending);
+    expect((runtime as any).actionResults.size).toBeLessThanOrEqual(257);
+    database.close();
+  });
+
   it("gives Pi chat the same stateful tool contracts exposed by the hosted GUI", async () => {
     const createPiSession = vi.fn(async () => ({
       prompt: vi.fn(async () => ({ sessionId: "session-1" })),

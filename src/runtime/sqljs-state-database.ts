@@ -114,7 +114,24 @@ class SqlJsStateStatement implements StateStatement {
 }
 
 function normalizeParameters(params: unknown[]): BindParams {
+  if (params.length === 1 && isPlainObject(params[0])) {
+    return Object.fromEntries(
+      Object.entries(params[0]).map(([key, value]) => [
+        /^[$:@]/.test(key) ? key : `$${key}`,
+        normalizeValue(value),
+      ]),
+    );
+  }
   return params.map(normalizeValue);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    !(value instanceof Uint8Array)
+  );
 }
 
 function normalizeValue(value: unknown): SqlValue {

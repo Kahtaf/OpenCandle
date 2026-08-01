@@ -277,8 +277,8 @@ describe("portfolioTrackerTool", () => {
       "Quote unavailable: Yahoo returned no valid market data.",
     );
     expect(result.details).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      totalValue: null,
+      totalCost: 500,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -316,8 +316,8 @@ describe("portfolioTrackerTool", () => {
       "Quote unavailable: provider returned stale market data",
     );
     expect(result.details).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      totalValue: null,
+      totalCost: 500,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -453,7 +453,7 @@ describe("portfolioTrackerTool", () => {
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(view.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
     expect(view.details).toMatchObject({
-      totalValue: 0,
+      totalValue: null,
       positions: [
         expect.objectContaining({
           symbol: "SHOP.TO",

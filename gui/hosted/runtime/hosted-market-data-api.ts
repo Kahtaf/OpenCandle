@@ -116,13 +116,27 @@ export async function getHostedInstrumentHistorySnapshot(
   if (!source) {
     return { status: "unavailable" as const, reason: "History provider attribution is unavailable" };
   }
-  const bars = result.data.flatMap((bar) => {
-    const time = Number.isFinite(bar.timestamp)
+  const allowsDailyDateFallback = ["1d", "1wk", "1mo"].includes(resolved.interval);
+  const bars = result.data.map((bar) => {
+    const time = Number.isFinite(bar.timestamp) && bar.timestamp > 0
       ? bar.timestamp
-      : Date.parse(`${bar.date}T00:00:00Z`) / 1_000;
-    if (!Number.isFinite(time)) return [];
-    return [{ time, open: bar.open, high: bar.high, low: bar.low, close: bar.close, volume: bar.volume }];
+      : allowsDailyDateFallback
+        ? Date.parse(`${bar.date}T00:00:00Z`) / 1_000
+        : Number.NaN;
+    const prices = [bar.open, bar.high, bar.low, bar.close];
+    if (
+      !Number.isFinite(time) ||
+      !prices.every((price) => Number.isFinite(price) && price > 0) ||
+      !Number.isFinite(bar.volume) ||
+      bar.volume < 0
+    ) {
+      return null;
+    }
+    return { time, open: bar.open, high: bar.high, low: bar.low, close: bar.close, volume: bar.volume };
   });
+  if (bars.length === 0 || bars.some((bar) => bar == null)) {
+    return { status: "unavailable" as const, reason: "History contains no usable price bars" };
+  }
   return {
     status: "ok" as const,
     symbol: normalized,

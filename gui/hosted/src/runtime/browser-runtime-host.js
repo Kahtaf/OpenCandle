@@ -644,7 +644,6 @@ class BrowserRuntimeHost {
         typeof message.event !== "object" ||
         typeof message.event.type !== "string"
       ) return;
-      clearStreamStartupTimer(pending);
       if (
         message.event?.type === "ask_user.prompt" ||
         message.event?.type === "ask_user.resolved"
@@ -659,7 +658,6 @@ class BrowserRuntimeHost {
     if (message.type === "stream-chunk" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
       if (!pending?.streamController || !isByteArray(message.value)) return;
-      clearStreamStartupTimer(pending);
       pending.sseGate.push(Uint8Array.from(message.value));
       return;
     }

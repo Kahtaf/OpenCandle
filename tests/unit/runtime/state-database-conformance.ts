@@ -55,6 +55,19 @@ export function runStateDatabaseConformance(
     }
   });
 
+  it("supports named-object bind parameters", async () => {
+    const database = await createDatabase();
+    try {
+      expect(
+        database
+          .prepare<{ id: number }, { value: string }>("SELECT 'named' AS value WHERE 1 = $id")
+          .get({ id: 1 }),
+      ).toEqual({ value: "named" });
+    } finally {
+      database.close();
+    }
+  });
+
   it("enforces production foreign-key cascades", async () => {
     const database = await createDatabase();
     try {

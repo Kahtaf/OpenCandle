@@ -19,8 +19,16 @@ export type PortfolioPositionSummary = Position & {
   exclusionReason?: string;
 };
 
-export type ResolvedPortfolioSummary = Omit<PortfolioSummary, "positions"> & {
+export type ResolvedPortfolioSummary = Omit<
+  PortfolioSummary,
+  "positions" | "totalValue" | "totalCost" | "totalPnl" | "totalPnlPercent"
+> & {
   positions: PortfolioPositionSummary[];
+  totalValue: number | null;
+  totalCost: number;
+  totalPnl: number | null;
+  totalPnlPercent: number | null;
+  totalsStatus: "empty" | "ok" | "unavailable";
 };
 
 export async function buildPortfolioView(
@@ -35,9 +43,10 @@ export async function buildPortfolioView(
       const lotCurrency = lot.currency || baseCurrency;
       const quoteCurrency =
         quote.status === "ok"
-          ? (quote.currency ?? lot.instrumentCurrency ?? lotCurrency)
-          : (lot.instrumentCurrency ?? lotCurrency);
-      const canValueRow = quote.status === "ok" && quoteCurrency === lotCurrency;
+          ? (quote.currency ?? lot.instrumentCurrency ?? null)
+          : (lot.instrumentCurrency ?? null);
+      const canValueRow =
+        quote.status === "ok" && quoteCurrency != null && quoteCurrency === lotCurrency;
       const currentPrice = canValueRow ? quote.price : null;
       const marketValue = currentPrice == null ? null : currentPrice * lot.quantity;
       const includedInTotals = canValueRow && lotCurrency === baseCurrency;
@@ -46,9 +55,11 @@ export async function buildPortfolioView(
           ? `Quote unavailable: ${quote.reason}`
           : includedInTotals
             ? undefined
-            : canValueRow
-              ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
-              : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
+            : quoteCurrency == null
+              ? "Quote currency unavailable"
+              : canValueRow
+                ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
+                : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
       return {
         symbol: lot.symbol,
         shares: lot.quantity,
@@ -80,15 +91,23 @@ export async function buildPortfolioView(
       reason:
         position.exclusionReason ?? `No FX conversion from ${position.currency} to ${baseCurrency}`,
     }));
-  const totalValue = included.reduce((sum, position) => sum + (position.marketValue ?? 0), 0);
-  const totalCost = included.reduce((sum, position) => sum + position.totalCost, 0);
+  const totalsStatus = lots.length === 0 ? "empty" : included.length > 0 ? "ok" : "unavailable";
+  const totalValue =
+    totalsStatus === "unavailable"
+      ? null
+      : included.reduce((sum, position) => sum + (position.marketValue ?? 0), 0);
+  const totalCost = positions
+    .filter((position) => position.currency === baseCurrency)
+    .reduce((sum, position) => sum + position.totalCost, 0);
   return {
     positions,
     baseCurrency,
     totalValue,
     totalCost,
-    totalPnl: totalValue - totalCost,
-    totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+    totalPnl: totalValue == null ? null : totalValue - totalCost,
+    totalPnlPercent:
+      totalValue == null ? null : totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+    totalsStatus,
     excludedFromTotals,
   };
 }
@@ -97,7 +116,10 @@ export function renderPortfolioView(
   displayPortfolioName: string,
   summary: ResolvedPortfolioSummary,
 ): string {
-  const header = `**${displayPortfolioName}** — ${summary.positions.length} positions | Value: ${formatMoney(summary.totalValue, summary.baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, summary.baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
+  const header =
+    summary.totalsStatus === "unavailable"
+      ? `**${displayPortfolioName}** — ${summary.positions.length} positions | Value: unavailable | P&L: unavailable`
+      : `**${displayPortfolioName}** — ${summary.positions.length} positions | Value: ${formatMoney(summary.totalValue ?? 0, summary.baseCurrency)} | P&L: ${formatMoney(summary.totalPnl ?? 0, summary.baseCurrency)} (${(summary.totalPnlPercent ?? 0) >= 0 ? "+" : ""}${(summary.totalPnlPercent ?? 0).toFixed(2)}%)`;
   const rows = summary.positions.map((position) => {
     const excluded = position.includedInTotals
       ? ""

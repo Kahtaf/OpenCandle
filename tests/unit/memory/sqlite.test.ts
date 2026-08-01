@@ -245,6 +245,9 @@ describe("initDatabase", () => {
 
     expect(() => initDatabase(dbPath)).toThrow("newer OpenCandle schema version 999");
 
+    expect(existsSync(`${dbPath}-wal`)).toBe(false);
+    expect(existsSync(`${dbPath}-shm`)).toBe(false);
+
     const untouched = new Database(dbPath);
     expect(untouched.prepare("SELECT value FROM newer_state").get()).toEqual({ value: "keep-me" });
     expect(untouched.prepare("SELECT version FROM schema_version").get()).toEqual({ version: 999 });

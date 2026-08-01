@@ -468,7 +468,7 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
-  it("does not apply the stream startup timeout after the first forwarded chunk", async () => {
+  it("preserves the overall deadline after the first forwarded chunk", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -510,12 +510,47 @@ describe("browser runtime coordinator", () => {
     const firstChunk = await reader.read();
     expect(new TextDecoder().decode(firstChunk.value)).toBe("first");
     await new Promise((resolve) => setTimeout(resolve, 50));
+    await expect(reader.read()).rejects.toThrow("did not complete the stream");
     finishStream();
 
-    const secondChunk = await reader.read();
-    expect(new TextDecoder().decode(secondChunk.value)).toBe("second");
-    await expect(reader.read()).resolves.toMatchObject({ done: true });
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
 
+  it("does not invalidate followers after a read-only forwarded bootstrap", async () => {
+    FakeBroadcastChannel.channels.clear();
+    FakeBroadcastChannel.messages = [];
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(async () => ({
+          sessionId: "session-1",
+          sessions: [],
+          snapshot: {},
+          checkpoint: {},
+        })),
+        streamRequest: vi.fn(),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+    FakeBroadcastChannel.messages = [];
+
+    await follower.request("gui", { action: "bootstrap" });
+    await follower.request("gui", { action: "market_quotes" });
+    await settle();
+
+    expect(
+      FakeBroadcastChannel.messages.filter((message: any) => message.type === "invalidate"),
+    ).toHaveLength(0);
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
