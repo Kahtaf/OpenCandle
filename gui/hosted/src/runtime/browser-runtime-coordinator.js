@@ -231,9 +231,17 @@ class BrowserRuntimeCoordinator {
     if (!isMessage(message) || message.from === this.tabId || this.disposed) return;
     if (message.type === "hello") {
       if (this.role === "writer") {
-        this.broadcastStatus();
         this.captureAndBroadcastSessionCredential(message.from);
+        this.broadcastStatus();
       }
+      return;
+    }
+    if (message.type === "session-credential") {
+      if (message.target && message.target !== this.tabId) return;
+      if (!isEpoch(message.epoch) || message.epoch < this.epoch) return;
+      if (message.epoch > this.epoch && message.target !== this.tabId) return;
+      this.sessionCredential = normalizeSessionCredential(message.credential);
+      if (!this.sessionCredential) this.sessionStorage?.removeItem(CREDENTIAL_KEY);
       return;
     }
     if (message.type === "writer-status") {
@@ -252,12 +260,6 @@ class BrowserRuntimeCoordinator {
       return;
     }
     if (!isEpoch(message.epoch) || message.epoch !== this.epoch) return;
-    if (message.type === "session-credential") {
-      if (message.target && message.target !== this.tabId) return;
-      this.sessionCredential = normalizeSessionCredential(message.credential);
-      if (!this.sessionCredential) this.sessionStorage?.removeItem(CREDENTIAL_KEY);
-      return;
-    }
     if (message.type === "cancel") {
       if (this.role === "writer" && message.target === this.tabId) {
         this.activeForwardedStreams.get(message.requestId)?.abort();

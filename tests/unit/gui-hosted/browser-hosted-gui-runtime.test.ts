@@ -7,6 +7,27 @@ import {
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 describe("BrowserHostedGuiRuntime action safety", () => {
+  it("rejects deleting a session while its chat run is active", async () => {
+    let finishPrompt!: () => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<{ sessionId: string }>((resolve) => {
+          finishPrompt = () => resolve({ sessionId: "session-1" });
+        }),
+    );
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    const run = runtime.chatRun("session-1", chatInput("First"), "run-1");
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+
+    await expect(runtime.deleteSession("session-1")).rejects.toThrow("active");
+
+    finishPrompt();
+    await run;
+  });
+
   it("rejects a second paid run for the same session while one is active", async () => {
     let finishPrompt!: () => void;
     const prompt = vi.fn(
@@ -124,13 +145,48 @@ describe("BrowserHostedGuiRuntime action safety", () => {
       symbol: "AAPL",
     });
     const retry = await runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+      symbol: "AAPL",
       action: "add",
-      symbol: "MSFT",
     });
 
     expect(retry).toBe(first);
     expect(runtime.marketState().watchlist).toHaveLength(1);
     expect(runtime.marketState().watchlist[0]).toMatchObject({ symbol: "AAPL" });
+    database.close();
+  });
+
+  it("rejects in-flight action id reuse with changed tool arguments", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+
+    const first = runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    });
+
+    await expect(
+      runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+        action: "add",
+        symbol: "MSFT",
+      }),
+    ).rejects.toThrow("different input");
+    await first;
+    expect(runtime.marketState().watchlist).toHaveLength(1);
+    database.close();
+  });
+
+  it("rejects completed action id reuse with a different tool", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+
+    await runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    });
+
+    await expect(
+      runtime.invokeTool("session-1", "action-1", "track_portfolio", { action: "view" }),
+    ).rejects.toThrow("different input");
     database.close();
   });
 

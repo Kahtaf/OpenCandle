@@ -64,6 +64,7 @@ class BrowserRuntimeHost {
     this.processWriter = null;
     this.runtimeEpoch = "";
     this.bootPromise = null;
+    this.preserveRecoveryBackupUntilBoot = false;
     this.lastBootError = "";
     this.pendingRequests = new Map();
     this.subscribers = new Set();
@@ -185,6 +186,7 @@ class BrowserRuntimeHost {
         }
         await this.stopRuntime();
         const restored = await this.dataStore.importAll(archive);
+        this.preserveRecoveryBackupUntilBoot = true;
         if (restored.currentSessionId) {
           this.storage.setItem(CURRENT_SESSION_KEY, restored.currentSessionId);
         } else {
@@ -385,6 +387,10 @@ class BrowserRuntimeHost {
     this.bootPromise ??= this.boot();
     try {
       await this.bootPromise;
+      if (this.preserveRecoveryBackupUntilBoot) {
+        await this.dataStore.createBackup();
+        this.preserveRecoveryBackupUntilBoot = false;
+      }
       this.lastBootError = "";
     } catch (error) {
       this.lastBootError = scrubSecrets(
@@ -429,7 +435,7 @@ class BrowserRuntimeHost {
       ]),
     );
     const { sessions: sessionFiles, stateBytes, currentSessionId } = persisted;
-    if (stateBytes) await this.dataStore.createBackup();
+    if (stateBytes && !this.preserveRecoveryBackupUntilBoot) await this.dataStore.createBackup();
     const runtimeFiles = {
       ...Object.fromEntries(
         runtimeModules.map(([filename, contents]) => [filename, { file: { contents } }]),

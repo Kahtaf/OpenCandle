@@ -111,6 +111,10 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
     async fetch(request: Request, env: ProviderRelayEnv): Promise<Response> {
       const requestUrl = new URL(request.url);
       const requestOrigin = request.headers.get("origin");
+      // The relay is intentionally public infrastructure. Origin filtering is
+      // a CORS/drive-by-browser guard, not authentication: non-browser callers
+      // can omit or spoof Origin and remain bounded by the exact provider
+      // allowlist, body/time limits, and server-observed network rate limit.
       const corsOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : null;
       const respondJson = (status: number, body: unknown) =>
         jsonResponse(status, body, corsOrigin);

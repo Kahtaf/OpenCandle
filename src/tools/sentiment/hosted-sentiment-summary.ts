@@ -56,15 +56,30 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
       tickers[0] ? wrapProvider("yahoo", () => getQuote(tickers[0])) : Promise.resolve(undefined),
     ]);
 
+    const webEvidence =
+      web.status === "fulfilled" && web.value.status === "ok"
+        ? {
+            provider: web.value.provider ?? web.value.data.provider,
+            timestamp: web.value.timestamp,
+            stale: web.value.stale === true,
+            fetchedAt: web.value.data.fetchedAt,
+            results: web.value.data.results,
+          }
+        : null;
+    const evidenceHeading = webEvidence?.stale ? "Cached evidence" : "Recent evidence";
+
     const lines = [
-      `**Recent evidence for "${renderUntrustedText(args.query, 160)}"** (provider window: past ${providerWindow})`,
+      `**${evidenceHeading} for "${renderUntrustedText(args.query, 160)}"** (provider window: past ${providerWindow})`,
       "",
       untrustedContentHeader("Hosted web and company-news results"),
     ];
 
     if (web.status === "fulfilled" && web.value.status === "ok") {
       for (const item of web.value.data.results.slice(0, 10)) {
-        lines.push(renderNewsItem(item.title, item.url, item.snippet));
+        lines.push(renderNewsItem(item.title, item.url, item.snippet, item.published));
+      }
+      if (web.value.stale) {
+        warnings.push(`Web/news evidence came from stale cache as of ${web.value.timestamp}.`);
       }
     } else {
       warnings.push("Web/news search was unavailable.");
@@ -107,6 +122,7 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
         hours,
         tickers,
         warnings,
+        webEvidence,
         sources: {
           web: web.status === "fulfilled" && web.value.status === "ok",
           finnhub: finnhub.status === "fulfilled" && finnhub.value.length > 0,
@@ -117,11 +133,24 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
   },
 };
 
-function renderNewsItem(title: string, rawUrl: string, snippet: string): string {
+function renderNewsItem(
+  title: string,
+  rawUrl: string,
+  snippet: string,
+  published?: string | null,
+): string {
   const renderedTitle = renderUntrustedText(title, 180);
   const renderedSnippet = renderUntrustedText(snippet, 260);
   const url = renderUntrustedUrl(rawUrl);
+  const publishedSuffix = published ? ` Published: ${renderPublishedDate(published)}` : "";
   return url
-    ? `- [${renderedTitle}](${url}) — ${renderedSnippet}`
-    : `- ${renderedTitle} — ${renderedSnippet}`;
+    ? `- [${renderedTitle}](${url}) — ${renderedSnippet}${publishedSuffix}`
+    : `- ${renderedTitle} — ${renderedSnippet}${publishedSuffix}`;
+}
+
+function renderPublishedDate(raw: string): string {
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp)
+    ? new Date(timestamp).toISOString()
+    : renderUntrustedText(raw, 80);
 }

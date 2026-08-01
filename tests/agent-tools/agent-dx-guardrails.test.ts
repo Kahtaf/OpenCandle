@@ -76,7 +76,7 @@ describe("agent developer guardrails", () => {
       "npm --workspace @opencandle/provider-relay run typecheck",
     );
     expect(packageJson.scripts.gates).toBe(
-      "npm run typecheck && npm run relay:typecheck && npx biome ci . && npm test && npm run relay:test && npm run test:agent-tools",
+      "npm run typecheck && npm run relay:typecheck && npx biome ci . && npm run gui:hosted:build && npm test && npm run relay:test && npm run test:agent-tools",
     );
     expect(packageJson.scripts["bootstrap:agent"]).toBe("node scripts/agent-bootstrap.mjs");
     expect(packageJson.scripts["review:pr"]).toContain("npm run gates");

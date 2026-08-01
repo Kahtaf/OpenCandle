@@ -53,6 +53,9 @@ server-observed network identifier, return `Cache-Control: no-store`, and avoid
 using client-supplied installation ids, provider credentials, prompts, symbols,
 or URLs as rate-limit keys. The raw network identifier MUST remain request-local
 and MUST NOT be logged, persisted, reflected, or passed to the rate-limit binding.
+The relay SHALL be documented and operated as public infrastructure rather than
+as an authenticated OpenCandle-only endpoint. Origin validation is only a CORS
+and drive-by-browser control. Production routes MUST match HTTPS only.
 
 #### Scenario: Response exceeds the configured bound
 
@@ -64,6 +67,13 @@ and MUST NOT be logged, persisted, reflected, or passed to the rate-limit bindin
 
 - **WHEN** the rate-limit binding rejects the pseudonymous network identifier
 - **THEN** the relay returns HTTP 429 without calling the upstream provider
+
+#### Scenario: Non-browser caller omits Origin
+
+- **WHEN** a non-browser caller sends an otherwise valid originless request
+- **THEN** the request remains subject to the exact provider policy and the
+  server-observed network rate limit
+- **AND** documentation does not claim that Origin authenticates the caller
 
 ### Requirement: Hosted transport preserves provider Fetch behavior
 

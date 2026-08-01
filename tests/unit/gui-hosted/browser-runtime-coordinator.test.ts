@@ -3,6 +3,7 @@ import { createBrowserRuntimeCoordinator } from "../../../gui/hosted/src/runtime
 
 class FakeBroadcastChannel {
   static channels = new Map<string, Set<FakeBroadcastChannel>>();
+  static messages: unknown[] = [];
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
   constructor(private readonly name: string) {
@@ -12,6 +13,7 @@ class FakeBroadcastChannel {
   }
 
   postMessage(data: unknown) {
+    FakeBroadcastChannel.messages.push(structuredClone(data));
     for (const peer of FakeBroadcastChannel.channels.get(this.name) ?? []) {
       if (peer !== this) queueMicrotask(() => peer.onmessage?.({ data: structuredClone(data) }));
     }
@@ -168,6 +170,42 @@ describe("browser runtime coordinator", () => {
       },
     });
     await follower.dispose();
+  });
+
+  it("sends the targeted session credential before announcing writer readiness to a new follower", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(),
+        handleCommand: vi.fn(),
+        getSessionCredential: () => ({
+          version: 2,
+          credentials: {
+            openai: { apiKey: "session-only-key", storageMode: "session" },
+          },
+        }),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+    };
+    const writer = createBrowserRuntimeCoordinator(options);
+    await writer.ready();
+    FakeBroadcastChannel.messages = [];
+
+    const follower = createBrowserRuntimeCoordinator(options);
+    await follower.ready();
+    await settle();
+
+    const replyTypes = FakeBroadcastChannel.messages
+      .map((message) => (message as { type?: string }).type)
+      .filter((type) => type === "session-credential" || type === "writer-status");
+    expect(replyTypes.slice(0, 2)).toEqual(["session-credential", "writer-status"]);
+
+    await Promise.all([writer.dispose(), follower.dispose()]);
   });
 
   it("purges a follower's stale session credential when the writer reports it cleared", async () => {

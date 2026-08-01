@@ -53,6 +53,80 @@ describe("browser runtime host", () => {
     expect(host.stopRuntime).not.toHaveBeenCalled();
   });
 
+  it("does not overwrite the pre-import recovery backup when the imported runtime fails to boot", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const createBackup = vi.fn(async () => true);
+    const dataStore = {
+      validateImportForRestore: vi.fn(async () => ({})),
+      importAll: vi.fn(async () => ({ currentSessionId: "imported-session" })),
+      readRuntimeSnapshot: vi.fn(async () => ({
+        sessions: [],
+        stateBytes: new Uint8Array([1]),
+        currentSessionId: "imported-session",
+      })),
+      createBackup,
+    };
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore,
+      WebContainerImpl: {
+        boot: vi.fn(async () => ({ mount: vi.fn(async () => {}), teardown: vi.fn() })),
+      },
+    });
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {
+      throw new Error("imported runtime failed");
+    });
+
+    await expect(
+      host.handleCommand({ type: "hosted.data.import", archive: "validated archive" }),
+    ).rejects.toThrow("imported runtime failed");
+
+    expect(createBackup).not.toHaveBeenCalled();
+  });
+
+  it("advances the recovery backup only after the imported runtime boots successfully", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const events: string[] = [];
+    const dataStore = {
+      validateImportForRestore: vi.fn(async () => ({})),
+      importAll: vi.fn(async () => ({ currentSessionId: "imported-session" })),
+      createBackup: vi.fn(async () => {
+        events.push("backup");
+        return true;
+      }),
+    };
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore,
+    });
+    host.stopRuntime = vi.fn(async () => {});
+    host.boot = vi.fn(async () => {
+      events.push("booted");
+    });
+
+    await host.handleCommand({ type: "hosted.data.import", archive: "validated archive" });
+
+    expect(events).toEqual(["booted", "backup"]);
+  });
+
   it("waits for non-stream mutations before preparing an update", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("addEventListener", vi.fn());

@@ -30,8 +30,8 @@ describe("provider relay privacy audit", () => {
       readFileSync(resolve(root, "wrangler.jsonc"), "utf8"),
     ) as { routes?: Array<{ pattern?: string }> };
     expect(config.routes?.map((route) => route.pattern)).toEqual([
-      "web.opencandle.app/v1/provider-fetch",
-      "web.opencandle.app/v1/health",
+      "https://web.opencandle.app/v1/provider-fetch",
+      "https://web.opencandle.app/v1/health",
     ]);
   });
 

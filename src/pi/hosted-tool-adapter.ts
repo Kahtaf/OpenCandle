@@ -59,6 +59,20 @@ const DAILY_ONLY_STOCK_HISTORY = withParameters(
   ]),
 );
 
+const DAILY_ONLY_PRICE_COMPARISON = withParameters(
+  agentToolToPiTool(priceComparisonTool),
+  Type.Composite([
+    Type.Omit(priceComparisonTool.parameters, ["interval"]),
+    Type.Object({
+      interval: Type.Optional(
+        Type.Union([Type.Literal("1d"), Type.Literal("1wk"), Type.Literal("1mo")], {
+          description: "Data interval: 1d, 1wk, or 1mo. Default: 1d",
+        }),
+      ),
+    }),
+  ]),
+);
+
 const HOSTED_SCREEN_STOCKS = withParameters(
   agentToolToPiTool(screenStocksTool),
   Type.Composite([
@@ -118,7 +132,10 @@ export function getHostedOpenCandleToolDefinitions(
   const hasIntradayHistory = available.has("yahoo") || available.has("lse");
   return HOSTED_TOOLS.filter(({ anyProviders }) =>
     anyProviders.some((provider) => available.has(provider)),
-  ).map(({ tool }) =>
-    tool.name === "get_stock_history" && !hasIntradayHistory ? DAILY_ONLY_STOCK_HISTORY : tool,
-  );
+  ).map(({ tool }) => {
+    if (hasIntradayHistory) return tool;
+    if (tool.name === "get_stock_history") return DAILY_ONLY_STOCK_HISTORY;
+    if (tool.name === "get_price_comparison") return DAILY_ONLY_PRICE_COMPARISON;
+    return tool;
+  });
 }

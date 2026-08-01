@@ -14,6 +14,49 @@ import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { hostedSentimentSummaryTool } from "../../../src/tools/sentiment/hosted-sentiment-summary.js";
 
 describe("hosted sentiment summary", () => {
+  it("preserves stale web provenance and published dates without calling it recent", async () => {
+    vi.mocked(searchWeb).mockResolvedValue({
+      status: "ok",
+      provider: "brave",
+      timestamp: "2026-07-31T17:00:00.000Z",
+      stale: true,
+      data: {
+        query: "semiconductors",
+        resultCount: 1,
+        fetchedAt: "2026-07-30T12:00:00.000Z",
+        provider: "brave",
+        results: [
+          {
+            title: "Chip demand update",
+            url: "https://example.com/chips",
+            snippet: "Demand remains mixed.",
+            source: "example.com",
+            published: "2026-07-29T08:30:00.000Z",
+            category: "news",
+          },
+        ],
+      },
+    });
+    vi.mocked(wrapProvider).mockResolvedValue(undefined as never);
+
+    const result = await hostedSentimentSummaryTool.execute("call-stale-web", {
+      query: "semiconductors",
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain("Cached evidence");
+    expect(text).toContain("Published: 2026-07-29T08:30:00.000Z");
+    expect(text).not.toContain("Recent evidence");
+    expect(result.details).toMatchObject({
+      webEvidence: {
+        provider: "brave",
+        timestamp: "2026-07-31T17:00:00.000Z",
+        stale: true,
+        results: [{ published: "2026-07-29T08:30:00.000Z" }],
+      },
+    });
+  });
+
   it("labels stale price evidence and does not interpolate unsafe result URLs", async () => {
     vi.mocked(searchWeb).mockResolvedValue({
       status: "ok",

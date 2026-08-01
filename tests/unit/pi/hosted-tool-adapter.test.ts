@@ -33,6 +33,22 @@ describe("hosted tool adapter", () => {
     expect(Value.Check(relayedHistory?.parameters, { symbol: "AAPL", interval: "1m" })).toBe(true);
   });
 
+  it("advertises only daily price comparisons until an intraday-capable relay is available", () => {
+    const directComparison = getHostedOpenCandleToolDefinitions().find(
+      (tool) => tool.name === "get_price_comparison",
+    );
+    const relayedComparison = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["yahoo"],
+    }).find((tool) => tool.name === "get_price_comparison");
+    const dailyArgs = { symbols: ["AAPL", "MSFT"], range: "1mo", interval: "1wk" };
+    const intradayArgs = { symbols: ["AAPL", "MSFT"], range: "1d", interval: "1m" };
+
+    expect(directComparison).toBeDefined();
+    expect(Value.Check(directComparison?.parameters, dailyArgs)).toBe(true);
+    expect(Value.Check(directComparison?.parameters, intradayArgs)).toBe(false);
+    expect(Value.Check(relayedComparison?.parameters, intradayArgs)).toBe(true);
+  });
+
   it("does not advertise DCF until its required Yahoo quote path is available", () => {
     const directNames = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
     const yahooNames = getHostedOpenCandleToolDefinitions({ relayProviders: ["yahoo"] }).map(
@@ -93,6 +109,7 @@ describe("hosted tool adapter", () => {
     const localTools = getOpenCandleToolDefinitions();
     const localNames = localTools.map((tool) => tool.name);
     const localHistory = localTools.find((tool) => tool.name === "get_stock_history");
+    const localComparison = localTools.find((tool) => tool.name === "get_price_comparison");
     const localScreener = localTools.find((tool) => tool.name === "screen_stocks");
 
     expect(localNames).toContain("get_event_probabilities");
@@ -100,6 +117,13 @@ describe("hosted tool adapter", () => {
     expect(localNames).toContain("get_reddit_sentiment");
     expect(localNames.length).toBeGreaterThan(20);
     expect(Value.Check(localHistory?.parameters, { symbol: "AAPL", interval: "1m" })).toBe(true);
+    expect(
+      Value.Check(localComparison?.parameters, {
+        symbols: ["AAPL", "MSFT"],
+        range: "1d",
+        interval: "1m",
+      }),
+    ).toBe(true);
     expect(Value.Check(localScreener?.parameters, { market: "germany" })).toBe(true);
   });
 });

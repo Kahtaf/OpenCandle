@@ -68,6 +68,10 @@ jobs:
         if: matrix.node-version == '24.x'
         run: npm run test:gui:release-smoke
 
+      - name: Run hosted PWA browser smoke
+        if: matrix.node-version == '24.x'
+        run: npm run test:gui:hosted
+
       - name: Packed install smoke
         run: npm run test:packed-install
 

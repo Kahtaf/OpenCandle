@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { refreshHostedRuntimeStatus } from "../../../gui/hosted/src/HostedRuntimePanel.jsx";
+import { refreshHostedRuntimeStatus } from "../../../gui/hosted/src/hosted-runtime-status.js";
 
 describe("hosted runtime status", () => {
   it("keeps an action error visible across background coordination refreshes", () => {

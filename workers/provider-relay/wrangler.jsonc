@@ -7,11 +7,11 @@
   "preview_urls": false,
   "routes": [
     {
-      "pattern": "web.opencandle.app/v1/provider-fetch",
+      "pattern": "https://web.opencandle.app/v1/provider-fetch",
       "zone_name": "opencandle.app"
     },
     {
-      "pattern": "web.opencandle.app/v1/health",
+      "pattern": "https://web.opencandle.app/v1/health",
       "zone_name": "opencandle.app"
     }
   ],

@@ -93,7 +93,22 @@ function manageWatchlist(service: MarketStateService, args: Record<string, unkno
       "item_id is required for remove action. Use check to find the stable watchlist item id.",
     );
   }
-  if (action === "check") providerUnavailable("live watchlist quotes");
+  if (action === "check") {
+    const items = service.listWatchlistItems(watchlist.id);
+    if (items.length === 0) {
+      return result(`${watchlist.name} is empty. Use add action to add symbols.`, {
+        watchlist,
+        items,
+      });
+    }
+    const rows = items.map((item) => `  ${item.symbol} [item ${item.id}]`);
+    return result(
+      [`${watchlist.name} has ${items.length} symbol${items.length === 1 ? "" : "s"}.`, ...rows].join(
+        "\n",
+      ),
+      { watchlist, items },
+    );
+  }
   throw new Error("Unsupported watchlist action.");
 }
 
@@ -126,6 +141,8 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
   }
   if (action === "update") {
     const id = positiveInteger(args.lot_id, "lot_id");
+    const selected = service.listPortfolioLots(portfolio.id).find((lot) => lot.id === id);
+    if (!selected) throw new Error(`Portfolio lot ${id} was not found in ${portfolio.name}.`);
     const value = service.updatePortfolioLot(id, {
       ...(args.shares == null ? {} : { quantity: positiveNumber(args.shares, "shares") }),
       ...(args.avg_cost == null ? {} : { avgCost: positiveNumber(args.avg_cost, "avg_cost") }),
@@ -139,6 +156,10 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
   if (action === "remove") {
     if (args.lot_id != null) {
       const id = positiveInteger(args.lot_id, "lot_id");
+      const selected = service.listPortfolioLots(portfolio.id).find((lot) => lot.id === id);
+      if (!selected) {
+        return result(`Portfolio lot ${id} was not found in ${portfolio.name}.`, null);
+      }
       const value = service.removePortfolioLot(id);
       return result(value ? `Removed portfolio lot ${id}.` : `Portfolio lot ${id} was not found.`, value);
     }
@@ -148,7 +169,19 @@ function trackPortfolio(service: MarketStateService, args: Record<string, unknow
   }
   if (action === "view") {
     const lots = service.listPortfolioLots(portfolio.id);
-    return result(`${portfolio.name} has ${lots.length} lot${lots.length === 1 ? "" : "s"}.`, lots);
+    if (lots.length === 0) {
+      return result(`${portfolio.name} is empty. Use add action to add positions.`, lots);
+    }
+    const rows = lots.map(
+      (lot) =>
+        `  ${lot.symbol} [lot ${lot.id}]: ${lot.quantity} @ ${lot.avgCost} ${lot.currency}`,
+    );
+    return result(
+      [`${portfolio.name} has ${lots.length} lot${lots.length === 1 ? "" : "s"}.`, ...rows].join(
+        "\n",
+      ),
+      lots,
+    );
   }
   throw new Error("Unsupported portfolio action.");
 }

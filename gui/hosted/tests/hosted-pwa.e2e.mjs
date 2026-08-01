@@ -336,7 +336,11 @@ try {
   await waitForText(follower, "Connected to the active tab", 120_000);
   await waitForText(follower, "AAPL", 30_000);
   await follower.getByRole("button", { name: "New chat", exact: true }).click();
-  await waitForText(follower, "What are we watching?", 30_000);
+  await waitForText(
+    follower,
+    completedLiveTurn ? "What are we watching?" : "Connect an AI model",
+    30_000,
+  );
 
   const mobile = await context.newPage();
   stage = "mobile layout";

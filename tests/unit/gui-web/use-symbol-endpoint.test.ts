@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSymbolEndpoint } from "../../../gui/web/src/features/symbol/use-symbol-data.js";
+import { RuntimeTransportContext } from "../../../gui/web/src/runtime/runtime-transport-context.js";
 
 let latestResult: { snapshot: unknown; loading: boolean; error: string | null } | undefined;
 let root: Root;
@@ -14,8 +15,15 @@ function Probe({ symbol }: { symbol: string }) {
   return null;
 }
 
-async function render(symbol: string) {
-  await act(async () => root.render(React.createElement(Probe, { symbol })));
+async function render(symbol: string, transport?: Record<string, unknown>) {
+  const probe = React.createElement(Probe, { symbol });
+  await act(async () =>
+    root.render(
+      transport
+        ? React.createElement(RuntimeTransportContext.Provider, { value: transport }, probe)
+        : probe,
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -33,6 +41,23 @@ afterEach(async () => {
 });
 
 describe("useSymbolEndpoint", () => {
+  it("routes quote reads through the canonical instrument quote transport", async () => {
+    const getInstrumentQuote = vi.fn(async () => ({ symbol: "AAPL", status: "ok", price: 200 }));
+    const getInstrumentEndpoint = vi.fn(async () => {
+      throw new Error("instrument_endpoint quote is unsupported");
+    });
+
+    await render("AAPL", { getInstrumentQuote, getInstrumentEndpoint });
+
+    expect(latestResult).toMatchObject({
+      snapshot: { symbol: "AAPL", price: 200 },
+      loading: false,
+      error: null,
+    });
+    expect(getInstrumentQuote).toHaveBeenCalledWith("AAPL");
+    expect(getInstrumentEndpoint).not.toHaveBeenCalled();
+  });
+
   it("hides the previous ticker snapshot synchronously and keeps it hidden on failure", async () => {
     vi.stubGlobal(
       "fetch",

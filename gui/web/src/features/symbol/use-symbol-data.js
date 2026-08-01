@@ -82,7 +82,10 @@ export function useSymbolEndpoint(endpoint, symbol) {
     const run = async () => {
       setState({ key: requestKey, snapshot: null, loading: true, error: null });
       try {
-        const data = await transport.getInstrumentEndpoint(endpoint, symbol);
+        const data =
+          endpoint === "quote"
+            ? await transport.getInstrumentQuote(symbol)
+            : await transport.getInstrumentEndpoint(endpoint, symbol);
         if (!disposed) setState({ key: requestKey, snapshot: data, loading: false, error: null });
       } catch (err) {
         if (!disposed) {

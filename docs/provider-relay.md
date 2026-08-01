@@ -13,13 +13,15 @@ The Worker stores no credentials, request or response bodies, sessions, or user 
 
 Provider credentials still pass through Cloudflare in transit because the Worker must forward them to the selected provider. Cloudflare terminates and processes those requests and may retain platform-level security or operational metadata under its own policies. OpenCandle does not claim that Cloudflare observes nothing.
 
+The relay is deliberately public infrastructure because a browser-only application cannot hold an unforgeable shared secret. `Origin` filtering prevents unapproved websites from invoking it through a visitor's browser, but it is CORS policy, not client authentication: a non-browser caller can omit or spoof that header. Safety therefore comes from the fixed provider allowlist, strict request shape, byte and time bounds, and a server-observed per-network rate limit. It must never be described or operated as an authenticated OpenCandle-only endpoint.
+
 ## Guardrails
 
 - Exact provider host, path, method, and header policies; HTTPS on port 443 only.
 - No redirects, URL credentials, fragments, arbitrary destinations, or arbitrary headers.
 - Requests capped at 256 KiB, upstream responses at 4 MiB, and upstream time at 15 seconds.
 - A 120-request-per-minute Workers Rate Limiting binding keyed by a SHA-256 digest of Cloudflare's server-observed client IP. The raw address is not logged, persisted by OpenCandle, or passed to the binding.
-- Browser requests are accepted only from `https://web.opencandle.app`; the Worker rejects other browser origins before rate limiting or reading a request body and echoes the approved origin instead of using wildcard CORS.
+- Browser requests are accepted only from `https://web.opencandle.app`; the Worker rejects other browser origins before rate limiting or reading a request body and echoes the approved origin instead of using wildcard CORS. Originless non-browser requests are public and receive the same allowlist and abuse controls.
 - `Cache-Control: no-store` on every Worker response.
 - A versioned health manifest. Hosted OpenCandle enables relayed tools only when the version matches.
 
@@ -32,7 +34,7 @@ npm --workspace @opencandle/provider-relay exec wrangler deploy --dry-run
 npm --workspace @opencandle/provider-relay run deploy
 ```
 
-`wrangler.jsonc` routes only the exact `web.opencandle.app/v1/provider-fetch` and `web.opencandle.app/v1/health` endpoints to the Worker. `workers.dev` and preview URLs are disabled. Review the policy table and privacy audit before every deployment.
+`wrangler.jsonc` routes only the exact HTTPS `web.opencandle.app/v1/provider-fetch` and `web.opencandle.app/v1/health` endpoints to the Worker. `workers.dev` and preview URLs are disabled. Review the policy table and privacy audit before every deployment.
 
 Production hosted builds accept only the same-origin relay route. Cross-origin relay URLs fail closed so the static production CSP and runtime policy cannot drift. Loopback cross-origin URLs remain available for local Wrangler development.
 

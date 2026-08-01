@@ -65,6 +65,11 @@ interface InFlightChatResult {
   operation: Promise<CompletedChatResult>;
 }
 
+interface CachedToolActionResult {
+  fingerprint: string;
+  operation: Promise<Record<string, unknown>>;
+}
+
 export interface BrowserHostedGuiRuntimeOptions {
   cwd: string;
   sessionDir: string;
@@ -157,7 +162,7 @@ export class BrowserHostedGuiRuntime {
   private readonly activeSessionRuns = new Set<string>();
   private readonly completedChatResults = new Map<string, CachedChatResult>();
   private readonly inFlightChatResults = new Map<string, InFlightChatResult>();
-  private readonly actionResults = new Map<string, Promise<Record<string, unknown>>>();
+  private readonly actionResults = new Map<string, CachedToolActionResult>();
   private readonly activeEventEmitters = new Map<
     string,
     (event: Record<string, unknown>) => void | Promise<void>
@@ -229,11 +234,14 @@ export class BrowserHostedGuiRuntime {
   }
 
   async deleteSession(sessionId: string): Promise<BrowserHostedBootstrap> {
-    const manager = await this.resolveManager(sessionId);
+    const guardedSessionId = requireSessionId(sessionId);
+    this.requireInactiveSession(guardedSessionId);
+    const manager = await this.resolveManager(guardedSessionId);
+    this.requireInactiveSession(guardedSessionId);
     const sessionFile = manager.getSessionFile();
     if (!sessionFile) throw new Error("Saved session file is unavailable");
     unlinkSync(sessionFile);
-    if (this.currentSessionId === sessionId) this.currentSessionId = undefined;
+    if (this.currentSessionId === guardedSessionId) this.currentSessionId = undefined;
     return this.bootstrap();
   }
 
@@ -430,19 +438,25 @@ export class BrowserHostedGuiRuntime {
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const key = `${requireSessionId(sessionId)}:${requireActionId(actionId)}`;
+    const fingerprint = fingerprintToolInvocation(toolName, args);
     const existing = this.actionResults.get(key);
-    if (existing) return existing;
+    if (existing) {
+      requireMatchingActionInput(existing.fingerprint, fingerprint);
+      return existing.operation;
+    }
     const operation = Promise.resolve().then(() => {
       const service = new MarketStateService(this.stateDatabase);
       const result = invokeHostedMarketStateTool(service, toolName, args);
       this.flushState();
       return { result };
     });
-    this.actionResults.set(key, operation);
+    this.actionResults.set(key, { fingerprint, operation });
     if (this.actionResults.size > 256) {
       this.actionResults.delete(this.actionResults.keys().next().value as string);
     }
-    operation.catch(() => this.actionResults.delete(key));
+    operation.catch(() => {
+      if (this.actionResults.get(key)?.operation === operation) this.actionResults.delete(key);
+    });
     return operation;
   }
 
@@ -587,6 +601,12 @@ export class BrowserHostedGuiRuntime {
       throw new Error("Unknown ask_user prompt");
     }
   }
+
+  private requireInactiveSession(sessionId: string): void {
+    if (this.activeSessionRuns.has(sessionId)) {
+      throw new Error("Cannot delete a session while its research run is active.");
+    }
+  }
 }
 
 function serializeHostedProvider(
@@ -650,7 +670,32 @@ function fingerprintChatInput(input: ParsedChatRunBody): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
+function fingerprintToolInvocation(toolName: string, args: Record<string, unknown>): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ toolName, args: canonicalizeJson(args) }))
+    .digest("hex");
+}
+
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => entry !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalizeJson(entry)]),
+    );
+  }
+  return value;
+}
+
 function requireMatchingChatInput(expected: string, candidate: string): void {
+  if (expected !== candidate) {
+    throw new Error("The actionId was already used with different input.");
+  }
+}
+
+function requireMatchingActionInput(expected: string, candidate: string): void {
   if (expected !== candidate) {
     throw new Error("The actionId was already used with different input.");
   }
