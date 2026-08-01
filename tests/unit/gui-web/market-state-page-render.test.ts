@@ -112,6 +112,7 @@ describe("MarketStatePage rendering", () => {
                 watchlistId: 1,
                 instrumentId: 4,
                 symbol: "AAPL",
+                assetType: "equity",
                 name: "Apple Inc.",
                 exchange: "NMS",
               },
@@ -134,6 +135,7 @@ describe("MarketStatePage rendering", () => {
                   itemId: 10,
                   instrumentId: 4,
                   symbol: "AAPL",
+                  assetType: "equity",
                   name: "Apple Inc. quote name",
                   status: "ok",
                   price: 190,
@@ -149,14 +151,6 @@ describe("MarketStatePage rendering", () => {
                   extendedChange: -0.53,
                   extendedChangePercent: -0.64,
                   extendedAsOf: "2026-06-12T20:14:00.000Z",
-                  sparkline: {
-                    status: "ok",
-                    source: "Yahoo Finance",
-                    points: [188, 189.5, 187.75, 190],
-                    fetchedAt: "2026-06-12T20:20:00.000Z",
-                    dataAsOf: "2026-06-12",
-                    stale: false,
-                  },
                 },
               ],
               portfolioQuotes: [],
@@ -175,14 +169,13 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("24 hr sparkline");
     expect(html).toContain('data-slot="market-sparkline"');
-    expect(html).toContain(
-      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
-    );
-    expect(html).toContain('data-source="Yahoo Finance"');
-    expect(html).toContain("Yahoo · 2026-06-12");
+    expect(html).toContain('alt="AAPL 24-hour price sparkline from Ticker Line"');
+    expect(html).toContain('data-source="Ticker Line"');
+    expect(html).toContain("Ticker Line · 1D");
     expect(html).toContain('data-slot="mobile-watchlist-row"');
     expect(html).toContain('data-slot="watchlist-inspector-sheet"');
-    expect(html).not.toContain("ticker-line.com");
+    expect(html).toContain("/api/market-state/sparkline");
+    expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain("Price");
     expect(html).toContain("Change");
     expect(html).toContain("Volume");
@@ -290,6 +283,7 @@ describe("MarketStatePage rendering", () => {
               id: 1,
               portfolioId: 1,
               symbol: "AAPL",
+              assetType: "equity",
               name: "Apple Inc.",
               quantity: 2,
               avgCost: 100,
@@ -299,6 +293,7 @@ describe("MarketStatePage rendering", () => {
               id: 2,
               portfolioId: 1,
               symbol: "NVDA",
+              assetType: "equity",
               name: "NVIDIA Corporation",
               quantity: 1,
               avgCost: 100,
@@ -309,6 +304,7 @@ describe("MarketStatePage rendering", () => {
             portfolioQuotes: [
               {
                 lotId: 1,
+                assetType: "equity",
                 name: "Apple Inc. quote name",
                 status: "ok",
                 includedInTotals: true,
@@ -323,17 +319,10 @@ describe("MarketStatePage rendering", () => {
                 extendedPrice: 151.25,
                 extendedChange: 1.25,
                 extendedChangePercent: 0.83,
-                sparkline: {
-                  status: "ok",
-                  source: "Yahoo Finance",
-                  points: [148, 149.25, 147.5, 150],
-                  fetchedAt: "2026-06-12T20:20:00.000Z",
-                  dataAsOf: "2026-06-12",
-                  stale: false,
-                },
               },
               {
                 lotId: 2,
+                assetType: "equity",
                 name: "NVIDIA Corporation quote name",
                 status: "ok",
                 includedInTotals: true,
@@ -392,10 +381,9 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('aria-label="Remove AAPL lot"');
     expect(html).toContain("min-h-10 min-w-10");
     expect(html).not.toContain("font-mono");
-    expect(html).toContain(
-      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
-    );
-    expect(html).not.toContain("ticker-line.com");
+    expect(html).toContain('alt="AAPL 24-hour price sparkline from Ticker Line"');
+    expect(html).toContain("/api/market-state/sparkline");
+    expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain('data-slot="avg-cost-basis"');
     expect(html).toContain('data-slot="mobile-portfolio-holding"');
     expect(html).toContain("focus-visible:ring-inset");

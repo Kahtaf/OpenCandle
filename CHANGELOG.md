@@ -19,6 +19,7 @@
 
 ### Fixed
 
+- Compact dashboard, watchlist, and portfolio sparklines now use Ticker Line's market-aware stock, crypto, FX, index, and commodity URLs instead of fetching Yahoo intraday history per saved symbol; the fixed Nasdaq card now tracks the supported Nasdaq-100 rather than presenting Nasdaq-100 data as the Nasdaq Composite.
 - Homepage social previews now use a purpose-built 1200×630 Open Graph card with concise metadata and an authentic OpenCandle comparison result, while the desktop hero heading scales down enough to stay clear of the product demo at constrained widths.
 - Documentation accuracy corrections from a full docs review: Exa web search is documented as keyless by default (MCP endpoint) with the API key as an upgrade, the DCF fallback chain includes its Yahoo Finance tail, configuration docs cover the sentiment tuning keys and `OPENCANDLE_EXTERNAL_TOOL_BIN_DIR`, stale references to the GUI financial context panel removed in 0.12 are gone, the build-a-tool registration snippet matches the current `getAllTools` signature, `.env.example` includes `LSE_API_KEY`, and the agent harness README documents the `send` subcommand, the bounded `run` follow-up window, and the full list of captured `opencandle-*` session entries.
 - Homepage demo arrow-key navigation now switches interfaces without also scrolling the page.

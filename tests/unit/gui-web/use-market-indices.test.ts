@@ -22,7 +22,7 @@ describe("MarketIndicesStore", () => {
         generatedAt: "2026-07-16T14:10:00.000Z",
         indices: [
           { symbol: "^GSPC", status: "ok", price: 6310.12 },
-          { symbol: "^IXIC", status: "unavailable", reason: "missing" },
+          { symbol: "^NDX", status: "unavailable", reason: "missing" },
         ],
       }),
     });

@@ -81,7 +81,7 @@ export function IndicesStrip({
                   </div>
                   <MarketSparkline
                     symbol={quote.symbol}
-                    sparkline={quote.sparkline}
+                    assetType={quote.assetType}
                     className="shrink-0"
                   />
                 </a>

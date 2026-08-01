@@ -1,6 +1,6 @@
 const MARKET_DISPLAY_NAMES = new Map([
   ["^GSPC", "S&P 500"],
-  ["^IXIC", "Nasdaq Composite"],
+  ["^NDX", "Nasdaq 100"],
   ["^DJI", "Dow Jones"],
   ["BTC-USD", "Bitcoin"],
 ]);
