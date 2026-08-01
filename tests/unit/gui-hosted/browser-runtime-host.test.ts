@@ -288,7 +288,7 @@ describe("browser runtime host", () => {
     expect(persistCheckpoint).toHaveBeenCalledOnce();
   });
 
-  it("times out and cancels a stream that emits once and then stalls", async () => {
+  it("refreshes the inactivity timeout when a stream makes progress", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -315,7 +315,17 @@ describe("browser runtime host", () => {
     });
     await expect(reader.read()).resolves.toMatchObject({ done: false });
 
-    await vi.advanceTimersByTimeAsync(21);
+    await vi.advanceTimersByTimeAsync(15);
+    host.handleRuntimeMessage({
+      type: "stream-event",
+      requestId,
+      runtimeEpoch: host.runtimeEpoch,
+      event: { type: "tool.started" },
+    });
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+    await vi.advanceTimersByTimeAsync(15);
+    expect(host.pendingRequests.has(requestId)).toBe(true);
+    await vi.advanceTimersByTimeAsync(6);
     await expect(reader.read()).rejects.toThrow("timed out");
     expect(write).toHaveBeenLastCalledWith(expect.stringContaining('"type":"cancel"'));
   });

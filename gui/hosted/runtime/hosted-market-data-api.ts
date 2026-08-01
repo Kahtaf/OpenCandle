@@ -95,6 +95,8 @@ export async function getHostedInstrumentHistorySnapshot(symbol: string, rangeLa
     if (
       !Number.isFinite(time) ||
       !prices.every((price) => Number.isFinite(price) && price > 0) ||
+      bar.low > Math.min(bar.open, bar.close) ||
+      bar.high < Math.max(bar.open, bar.close) ||
       !Number.isFinite(bar.volume) ||
       bar.volume < 0
     ) {

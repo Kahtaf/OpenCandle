@@ -25,12 +25,13 @@ describe("provider relay privacy audit", () => {
     }
   });
 
-  it("routes only the two exact production endpoints", () => {
+  it("routes only the three exact production endpoints", () => {
     const config = JSON.parse(
       readFileSync(resolve(root, "wrangler.jsonc"), "utf8"),
     ) as { routes?: Array<{ pattern?: string }> };
     expect(config.routes?.map((route) => route.pattern)).toEqual([
       "https://web.opencandle.app/v1/provider-fetch",
+      "https://web.opencandle.app/v1/model-fetch",
       "https://web.opencandle.app/v1/health",
     ]);
   });

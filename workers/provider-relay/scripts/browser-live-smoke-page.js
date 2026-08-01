@@ -1,5 +1,5 @@
 (async () => {
-  const { clientId, keys, relayUrl } = globalThis.__opencandleRelayProofArgs;
+  const { clientId, keys, openaiModel, relayUrl } = globalThis.__opencandleRelayProofArgs;
   const results = [];
 
   const record = async (provider, available, run) => {
@@ -48,6 +48,28 @@
       upstreamStatus: Number(envelope.status),
       body,
     };
+  };
+
+  const modelRelay = async (input) => {
+    const endpoint = new URL(relayUrl);
+    endpoint.pathname = "/v1/model-fetch";
+    endpoint.search = "";
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        ...(input.headers ?? {}),
+        "content-type": "application/json",
+        "x-opencandle-client": clientId,
+        "x-opencandle-provider": input.provider,
+        "x-opencandle-upstream-method": input.method ?? "POST",
+        "x-opencandle-upstream-url": input.url,
+      },
+      ...(input.body ? { body: input.body } : {}),
+      cache: "no-store",
+      credentials: "omit",
+      redirect: "error",
+    });
+    return { status: response.status, body: await response.text() };
   };
 
   await record("manifest", true, async () => {
@@ -130,6 +152,21 @@
       body: JSON.stringify({ query: "Apple earnings", type: "auto", numResults: 2 }),
     });
     return response.upstreamStatus === 200 && Array.isArray(response.body.results);
+  });
+  await record("openai_model", Boolean(keys.openai), async () => {
+    const response = await modelRelay({
+      provider: "openai",
+      url: "https://api.openai.com/v1/responses",
+      headers: { authorization: `Bearer ${keys.openai}` },
+      body: JSON.stringify({
+        model: openaiModel,
+        input: "Reply with exactly OK.",
+        max_output_tokens: 32,
+        store: false,
+        stream: true,
+      }),
+    });
+    return response.status === 200 && response.body.includes("response.completed");
   });
 
   await record("coingecko", true, async () => {

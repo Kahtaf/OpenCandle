@@ -6,10 +6,22 @@ export const QUOTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 export function createLatestRequestGate() {
   let generation = 0;
+  let activeController = null;
   return {
     start() {
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
       const requestGeneration = ++generation;
-      return { isLatest: () => requestGeneration === generation };
+      return {
+        signal: controller.signal,
+        isLatest: () => requestGeneration === generation && !controller.signal.aborted,
+      };
+    },
+    cancel() {
+      activeController?.abort();
+      activeController = null;
+      generation += 1;
     },
   };
 }
@@ -225,20 +237,22 @@ export function useMarketState({
     }
   }, [transport]);
 
-  const refreshQuotes = useCallback(async () => {
+  const refreshQuotes = useCallback(() => {
     const request = quoteRefreshGate.current.start();
-    try {
-      const quoteSnapshot = await transport.getMarketQuotes();
-      if (!request.isLatest()) return;
-      setState((current) => ({
-        ...current,
-        quoteSnapshot: mergeQuoteRefreshSnapshot(current.quoteSnapshot, quoteSnapshot),
-      }));
-      setError("");
-    } catch (err) {
-      if (!request.isLatest()) return;
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    return transport.getMarketQuotes(request.signal).then(
+      (quoteSnapshot) => {
+        if (!request.isLatest()) return;
+        setState((current) => ({
+          ...current,
+          quoteSnapshot: mergeQuoteRefreshSnapshot(current.quoteSnapshot, quoteSnapshot),
+        }));
+        setError("");
+      },
+      (err) => {
+        if (!request.isLatest()) return;
+        setError(err instanceof Error ? err.message : String(err));
+      },
+    );
   }, [transport]);
 
   useEffect(() => {
@@ -250,6 +264,7 @@ export function useMarketState({
     const timer = window.setInterval(run, pollMs);
     return () => {
       disposed = true;
+      quoteRefreshGate.current.cancel();
       window.clearInterval(timer);
     };
   }, [pollMs, refresh]);

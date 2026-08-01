@@ -22,6 +22,8 @@ describe("createLatestRequestGate", () => {
 
     expect(first.isLatest()).toBe(false);
     expect(second.isLatest()).toBe(true);
+    expect(first.signal.aborted).toBe(true);
+    expect(second.signal.aborted).toBe(false);
   });
 });
 

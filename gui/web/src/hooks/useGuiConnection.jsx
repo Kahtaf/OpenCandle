@@ -568,7 +568,9 @@ export function useGuiConnection() {
       if (!targetSessionId) return false;
       try {
         const data = await transport.loadSession(targetSessionId);
-        setSupportsSessionActions(true);
+        setSupportsSessionActions(
+          resolveSupportsSessionActions(data.supportsSessionActions, data.role, data.coordination),
+        );
         return applyBootstrap(data, targetSessionId, {
           updateCurrentSessionId: false,
           updateRole: false,

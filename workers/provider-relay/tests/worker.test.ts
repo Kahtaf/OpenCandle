@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createProviderRelay } from "../src/relay.js";
 
 const endpoint = "https://relay.test/v1/provider-fetch";
+const modelEndpoint = "https://relay.test/v1/model-fetch";
 
 describe("hosted provider relay", () => {
   it("rejects untrusted browser origins before rate limiting", async () => {
@@ -79,6 +80,130 @@ describe("hosted provider relay", () => {
 
     expect(response.status).toBe(200);
     expect(upstreamFetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      "openai",
+      "https://api.openai.com/v1/responses",
+      { authorization: "Bearer openai-secret", "content-type": "application/json" },
+    ],
+    [
+      "anthropic",
+      "https://api.anthropic.com/v1/messages",
+      {
+        "x-api-key": "anthropic-secret",
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+    ],
+    [
+      "google",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+      { "x-goog-api-key": "google-secret", "content-type": "application/json" },
+    ],
+  ] as const)("streams the audited %s model API without buffering", async (provider, url, headers) => {
+    const upstreamFetch = vi.fn(async (request: Request) => {
+      expect(request.url).toBe(url);
+      expect(request.method).toBe("POST");
+      for (const [name, value] of Object.entries(headers)) {
+        expect(request.headers.get(name)).toBe(value);
+      }
+      await expect(request.text()).resolves.toBe('{"stream":true}');
+      return new Response('data: {"type":"response.completed"}\n\n', {
+        headers: {
+          "content-type": "text/event-stream",
+          "x-request-id": "request-1",
+          "set-cookie": "must-not-leak=1",
+        },
+      });
+    });
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      modelRelayRequest({ provider, url, headers, body: '{"stream":true}' }),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    expect(response.headers.get("x-request-id")).toBe("request-1");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    await expect(response.text()).resolves.toContain("response.completed");
+  });
+
+  it.each([
+    ["openai", "https://attacker.example/v1/responses"],
+    ["openai", "https://api.openai.com/v1/files"],
+    ["anthropic", "https://api.anthropic.com/v1/admin"],
+    ["google", "https://generativelanguage.googleapis.com/v1beta/files"],
+  ])("rejects model relay destination %s %s", async (provider, url) => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      modelRelayRequest({ provider, url, headers: {}, body: "{}" }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not reflect model credentials when an upstream request fails", async () => {
+    const credential = "model-credential-canary";
+    const relay = createProviderRelay({
+      fetchImpl: vi.fn(async () => {
+        throw new Error(credential);
+      }),
+    });
+    const response = await relay.fetch(
+      modelRelayRequest({
+        provider: "openai",
+        url: "https://api.openai.com/v1/responses",
+        headers: { authorization: `Bearer ${credential}` },
+        body: "{}",
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe('{"error":"upstream_unavailable"}');
+  });
+
+  it("rejects an oversized model request before forwarding it", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ maxModelRequestBytes: 3, fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      modelRelayRequest({
+        provider: "openai",
+        url: "https://api.openai.com/v1/responses",
+        headers: { authorization: "Bearer test" },
+        body: "four",
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toEqual({ error: "request_too_large" });
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("terminates an oversized streamed model response", async () => {
+    const relay = createProviderRelay({
+      maxModelResponseBytes: 3,
+      fetchImpl: vi.fn(async () => new Response("four")),
+    });
+    const response = await relay.fetch(
+      modelRelayRequest({
+        provider: "openai",
+        url: "https://api.openai.com/v1/models",
+        headers: { authorization: "Bearer test" },
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).rejects.toBeDefined();
   });
 
   it.each(["america", "global"])(
@@ -175,6 +300,46 @@ describe("hosted provider relay", () => {
     expect(upstreamFetch).toHaveBeenCalledOnce();
   });
 
+  it("carries Yahoo cookies outside browser-forbidden header fields", async () => {
+    const upstreamFetch = vi.fn(async (request: Request) => {
+      expect(request.headers.get("cookie")).toBe("A3=session-cookie");
+      return new Response("ok", { headers: { "set-cookie": "A3=next-cookie; Path=/" } });
+    });
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "yahoo",
+        url: "https://query2.finance.yahoo.com/v1/test/getcrumb",
+        method: "GET",
+        upstreamCookie: "A3=session-cookie",
+      }),
+      environment(),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      headers: {},
+      upstreamSetCookie: "A3=next-cookie; Path=/",
+    });
+  });
+
+  it("rejects cookie side channels for non-Yahoo providers", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "fred",
+        url: "https://api.stlouisfed.org/fred/series?series_id=GDP",
+        method: "GET",
+        upstreamCookie: "secret",
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
   it("rejects an arbitrary destination before fetch", async () => {
     const upstreamFetch = vi.fn();
     const relay = createProviderRelay({ fetchImpl: upstreamFetch });
@@ -197,6 +362,7 @@ describe("hosted provider relay", () => {
 
   it.each([
     ["GET", "/v1/provider-fetch", 405],
+    ["GET", "/v1/model-fetch", 405],
     ["POST", "/not-a-relay", 404],
   ])("rejects %s %s", async (method, path, status) => {
     const relay = createProviderRelay({ fetchImpl: vi.fn() });
@@ -461,6 +627,26 @@ function relayRequest(
       ...(origin ? { origin } : {}),
     },
     body: JSON.stringify({ version: 1, ...body }),
+  });
+}
+
+function modelRelayRequest(input: {
+  provider: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+}): Request {
+  return new Request(modelEndpoint, {
+    method: "POST",
+    headers: {
+      ...input.headers,
+      "x-opencandle-client": "0123456789abcdef0123456789abcdef",
+      "x-opencandle-provider": input.provider,
+      "x-opencandle-upstream-method": input.body === undefined ? "GET" : "POST",
+      "x-opencandle-upstream-url": input.url,
+      "cf-connecting-ip": "203.0.113.10",
+    },
+    body: input.body,
   });
 }
 

@@ -11,6 +11,10 @@
       "zone_name": "opencandle.app"
     },
     {
+      "pattern": "https://web.opencandle.app/v1/model-fetch",
+      "zone_name": "opencandle.app"
+    },
+    {
       "pattern": "https://web.opencandle.app/v1/health",
       "zone_name": "opencandle.app"
     }

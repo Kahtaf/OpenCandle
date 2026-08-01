@@ -273,7 +273,9 @@ export function validateHostedArchive(value) {
   if (value.currentSessionId && !sessionIds.has(value.currentSessionId)) {
     throw new Error("Current session is absent from hosted archive");
   }
-  if (value.bootstrap !== undefined) validateBootstrap(value.bootstrap);
+  if (value.bootstrap !== undefined) {
+    validateBootstrap(value.bootstrap, value.currentSessionId, sessionIds);
+  }
   if (byteLength(JSON.stringify(value)) > MAX_ARCHIVE_BYTES) {
     throw new Error("Hosted archive is too large");
   }
@@ -389,6 +391,8 @@ function validateStateBytes(bytes) {
 
 function sanitizeBootstrap(value) {
   if (!isRecord(value)) return undefined;
+  const snapshot = isRecord(value.snapshot) ? value.snapshot : {};
+  const catalog = isRecord(value.catalog) ? value.catalog : {};
   const modelSetup = isRecord(value.modelSetup)
     ? {
         requirement: stringOrEmpty(value.modelSetup.requirement),
@@ -403,16 +407,56 @@ function sanitizeBootstrap(value) {
     role: stringOrEmpty(value.role) || "writer",
     sessionId: stringOrEmpty(value.sessionId),
     sessions: safeArray(value.sessions),
-    snapshot: isRecord(value.snapshot) ? value.snapshot : {},
+    snapshot: {
+      sessionId: stringOrEmpty(snapshot.sessionId) || stringOrEmpty(value.sessionId),
+      entries: safeArray(snapshot.entries),
+      events: safeArray(snapshot.events),
+      state: isRecord(snapshot.state) ? structuredClone(snapshot.state) : {},
+    },
     coordination: isRecord(value.coordination) ? value.coordination : {},
-    catalog: isRecord(value.catalog) ? value.catalog : {},
+    catalog: {
+      tools: safeArray(catalog.tools),
+      workflows: safeArray(catalog.workflows),
+      providers: safeArray(catalog.providers),
+    },
     modelSetup,
     supportsSessionActions: value.supportsSessionActions !== false,
   });
 }
 
-function validateBootstrap(value) {
+function validateBootstrap(value, currentSessionId, archiveSessionIds) {
   if (!isRecord(value) || typeof value.sessionId !== "string" || !Array.isArray(value.sessions)) {
+    throw new Error("Offline bootstrap snapshot is invalid");
+  }
+  if (
+    value.sessionId.length > 220 ||
+    (currentSessionId && value.sessionId !== currentSessionId) ||
+    (value.sessionId && !archiveSessionIds.has(value.sessionId)) ||
+    typeof value.role !== "string" ||
+    value.sessions.some(
+      (session) =>
+        !isRecord(session) ||
+        typeof session.id !== "string" ||
+        !session.id ||
+        session.id.length > 220 ||
+        !archiveSessionIds.has(session.id) ||
+        (session.name !== undefined && typeof session.name !== "string"),
+    ) ||
+    !isRecord(value.snapshot) ||
+    (value.snapshot.sessionId !== undefined && value.snapshot.sessionId !== value.sessionId) ||
+    !Array.isArray(value.snapshot.entries) ||
+    !Array.isArray(value.snapshot.events) ||
+    !isRecord(value.snapshot.state) ||
+    !isRecord(value.coordination) ||
+    (value.coordination.writable !== undefined &&
+      typeof value.coordination.writable !== "boolean") ||
+    !isRecord(value.catalog) ||
+    !Array.isArray(value.catalog.tools) ||
+    !Array.isArray(value.catalog.workflows) ||
+    !Array.isArray(value.catalog.providers) ||
+    (value.supportsSessionActions !== undefined &&
+      typeof value.supportsSessionActions !== "boolean")
+  ) {
     throw new Error("Offline bootstrap snapshot is invalid");
   }
   const serialized = JSON.stringify(value);

@@ -205,6 +205,25 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("rejects internally inconsistent OHLC bars", async () => {
+    vi.mocked(getHistory).mockResolvedValueOnce([
+      {
+        date: "2026-07-31",
+        timestamp: 1_754_000_000,
+        open: 198,
+        high: 197,
+        low: 196,
+        close: 200,
+        volume: 1_000,
+      },
+    ]);
+
+    await expect(getHostedInstrumentHistorySnapshot("AAPL", "1D")).resolves.toMatchObject({
+      status: "unavailable",
+      reason: "History contains no usable price bars",
+    });
+  });
+
   it("does not invent midnight timestamps for malformed intraday history", async () => {
     vi.mocked(getHistory).mockResolvedValueOnce([
       {

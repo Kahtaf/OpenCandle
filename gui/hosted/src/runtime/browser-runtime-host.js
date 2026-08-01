@@ -375,13 +375,15 @@ class BrowserRuntimeHost {
       },
     });
     const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
-    const timer = globalThis.setTimeout(() => {
+    const onTimeout = () => {
+      options.signal?.removeEventListener("abort", abort);
       this.pendingRequests.delete(requestId);
       streamController.error(new Error("Hosted runtime stream timed out"));
       void this.writeProcessMessage({ type: "cancel", requestId });
-    }, timeoutMs);
+    };
+    let timer = globalThis.setTimeout(onTimeout, timeoutMs);
     const abort = (reportToConsumer = true) => {
-      globalThis.clearTimeout(timer);
+      globalThis.clearTimeout(this.pendingRequests.get(requestId)?.timer ?? timer);
       this.pendingRequests.delete(requestId);
       void this.writeProcessMessage({ type: "cancel", requestId });
       if (reportToConsumer) {
@@ -396,16 +398,19 @@ class BrowserRuntimeHost {
     if (options.signal?.aborted) abort();
     else {
       options.signal?.addEventListener("abort", abort, { once: true });
-      this.pendingRequests.set(requestId, {
+      const pending = {
         streamController,
         sseGate: createDurableSseGate(streamController),
         operation: `${operation}-stream`,
         timer,
+        timeoutMs,
+        onTimeout,
         signal: options.signal,
         abort,
         blocksUpdate: true,
         runtimeEpoch: this.runtimeEpoch,
-      });
+      };
+      this.pendingRequests.set(requestId, pending);
       try {
         await this.writeProcessMessage({
           type: "request",
@@ -695,12 +700,14 @@ class BrowserRuntimeHost {
       pending.sseGate.push(
         new TextEncoder().encode(`data: ${JSON.stringify(message.event)}\n\n`),
       );
+      refreshStreamInactivityTimer(pending);
       return;
     }
     if (message.type === "stream-chunk" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
       if (!pending?.streamController || !isByteArray(message.value)) return;
       pending.sseGate.push(Uint8Array.from(message.value));
+      refreshStreamInactivityTimer(pending);
       return;
     }
     if (message.type === "stream-end" && typeof message.requestId === "string") {
@@ -901,6 +908,16 @@ function clearStreamStartupTimer(pending) {
   if (pending.timer == null) return;
   globalThis.clearTimeout(pending.timer);
   pending.timer = null;
+}
+
+function refreshStreamInactivityTimer(pending) {
+  if (
+    !pending?.streamController ||
+    typeof pending.timeoutMs !== "number" ||
+    typeof pending.onTimeout !== "function"
+  ) return;
+  globalThis.clearTimeout(pending.timer);
+  pending.timer = globalThis.setTimeout(pending.onTimeout, pending.timeoutMs);
 }
 
 async function repopulateServiceWorkerShell() {

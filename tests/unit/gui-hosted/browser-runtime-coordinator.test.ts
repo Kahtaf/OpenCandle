@@ -510,7 +510,7 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
-  it("preserves the overall deadline after the first forwarded chunk", async () => {
+  it("uses an inactivity deadline for forwarded stream chunks", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -551,9 +551,11 @@ describe("browser runtime coordinator", () => {
 
     const firstChunk = await reader.read();
     expect(new TextDecoder().decode(firstChunk.value)).toBe("first");
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    await expect(reader.read()).rejects.toThrow("did not complete the stream");
+    await new Promise((resolve) => setTimeout(resolve, 20));
     finishStream();
+    const secondChunk = await reader.read();
+    expect(new TextDecoder().decode(secondChunk.value)).toBe("second");
+    await expect(reader.read()).resolves.toMatchObject({ done: true });
 
     await Promise.all([first.dispose(), second.dispose()]);
   });

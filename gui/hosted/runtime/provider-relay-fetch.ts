@@ -1,10 +1,21 @@
-const RELAY_CONTRACT_VERSION = 1;
+import {
+  isModelRelayProvider,
+  MODEL_RELAY_HEADERS,
+  MODEL_RELAY_PATH,
+  type ModelRelayProvider,
+  modelRelayProviderForUrl,
+  PROVIDER_RELAY_CONTRACT_VERSION,
+  PROVIDER_RELAY_HEALTH_PATH,
+} from "../../../src/runtime/provider-relay-contract.js";
+
+const RELAY_CONTRACT_VERSION = PROVIDER_RELAY_CONTRACT_VERSION;
 const MAX_RELAY_ENVELOPE_BYTES = 6 * 1024 * 1024;
 const DEFAULT_RELAY_HEALTH_TIMEOUT_MS = 5_000;
 const DEFAULT_RELAY_MANIFEST_MAX_AGE_MS = 60_000;
 const ABORTED = Symbol("aborted");
 
 type RelayProvider =
+  | ModelRelayProvider
   | "brave"
   | "exa"
   | "fear_greed"
@@ -26,6 +37,7 @@ interface RelayResponseEnvelope {
   status: number;
   statusText: string;
   headers: Record<string, string>;
+  upstreamSetCookie?: string;
   bodyBase64: string;
 }
 
@@ -73,7 +85,7 @@ export async function fetchHostedRelayManifest(options: {
 }): Promise<HostedRelayManifest> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const healthUrl = new URL(options.relayUrl);
-  healthUrl.pathname = "/v1/health";
+  healthUrl.pathname = PROVIDER_RELAY_HEALTH_PATH;
   healthUrl.search = "";
   healthUrl.hash = "";
   const controller = new AbortController();
@@ -137,6 +149,31 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
     if (!provider) return fetchImpl(input, init);
     if (!options.relayUrl) throw new Error("Hosted provider relay is unavailable");
 
+    if (isModelRelayProvider(provider)) {
+      const request = new Request(input, init);
+      const relayEndpoint = new URL(options.relayUrl);
+      relayEndpoint.pathname = MODEL_RELAY_PATH;
+      relayEndpoint.search = "";
+      relayEndpoint.hash = "";
+      const headers = new Headers(request.headers);
+      headers.set(MODEL_RELAY_HEADERS.client, options.clientId);
+      headers.set(MODEL_RELAY_HEADERS.provider, provider);
+      headers.set(MODEL_RELAY_HEADERS.upstreamMethod, request.method);
+      headers.set(MODEL_RELAY_HEADERS.upstreamUrl, request.url);
+      const body = request.body ? await request.arrayBuffer() : undefined;
+      return fetchImpl(relayEndpoint, {
+        method: "POST",
+        headers,
+        ...(body?.byteLength ? { body } : {}),
+        signal: request.signal,
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+      });
+    }
+
+    const upstreamCookie = readHeader(init?.headers, "cookie") ??
+      (input instanceof Request ? input.headers.get("cookie") : null);
     const request = new Request(input, init);
     const body = request.body ? new Uint8Array(await request.arrayBuffer()) : undefined;
     const envelope = {
@@ -145,8 +182,11 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
       url: request.url,
       method: request.method,
       headers: Object.fromEntries(
-        [...request.headers.entries()].map(([name, value]) => [name.toLowerCase(), value]),
+        [...request.headers.entries()]
+          .filter(([name]) => name.toLowerCase() !== "cookie")
+          .map(([name, value]) => [name.toLowerCase(), value]),
       ),
+      ...(upstreamCookie ? { upstreamCookie } : {}),
       ...(body?.byteLength ? { bodyBase64: encodeBase64(body) } : {}),
     };
 
@@ -169,15 +209,21 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
     }
     const response = parseRelayResponse(serialized);
     const bytes = decodeBase64(response.bodyBase64);
+    const headers = new Headers(response.headers);
+    if (response.upstreamSetCookie) {
+      headers.set("x-opencandle-upstream-set-cookie", response.upstreamSetCookie);
+    }
     return new Response(bytes.byteLength === 0 ? null : bytes, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers,
     });
   };
 }
 
 export function relayProviderForUrl(url: URL): RelayProvider | undefined {
+  const modelProvider = modelRelayProviderForUrl(url);
+  if (modelProvider) return modelProvider;
   switch (url.hostname) {
     case "api.search.brave.com":
       return "brave";
@@ -290,11 +336,27 @@ function parseRelayResponse(serialized: string): RelayResponseEnvelope {
     value.status > 599 ||
     typeof value.statusText !== "string" ||
     !isStringRecord(value.headers) ||
+    (value.upstreamSetCookie !== undefined &&
+      (typeof value.upstreamSetCookie !== "string" ||
+        value.upstreamSetCookie.length === 0 ||
+        value.upstreamSetCookie.length > 8_192 ||
+        /[\r\n]/.test(value.upstreamSetCookie))) ||
     typeof value.bodyBase64 !== "string"
   ) {
     throw new Error("Hosted provider relay returned an invalid envelope");
   }
   return value as unknown as RelayResponseEnvelope;
+}
+
+function readHeader(headers: HeadersInit | undefined, wantedName: string): string | null {
+  if (!headers) return null;
+  const normalized = wantedName.toLowerCase();
+  if (headers instanceof Headers) return headers.get(normalized);
+  if (Array.isArray(headers)) {
+    return headers.find(([name]) => name.toLowerCase() === normalized)?.[1] ?? null;
+  }
+  const match = Object.entries(headers).find(([name]) => name.toLowerCase() === normalized);
+  return match?.[1] == null ? null : String(match[1]);
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

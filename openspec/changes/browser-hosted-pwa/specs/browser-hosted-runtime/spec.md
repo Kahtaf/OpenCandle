@@ -89,6 +89,12 @@ capability, but MUST NOT maintain hosted-only model IDs, provider protocols, or
 fallback routing. The selected provider and model SHALL drive both OpenCandle
 routing and Pi agent streaming.
 
+When a supported model API lacks browser CORS, hosted web SHALL route Pi's
+unchanged provider request through the negotiated fixed relay's raw streaming
+endpoint. The relay SHALL enforce exact model host, path, method, header,
+credential, origin, size, time, and rate-limit policies and SHALL NOT persist or
+interpret the request, response, credential, or session.
+
 #### Scenario: Browser-safe provider exposes its Pi models
 
 - **WHEN** a first-class OpenCandle model provider is proven executable in the
@@ -104,6 +110,14 @@ routing and Pi agent streaming.
 - **THEN** the OpenCandle router and Pi agent stream both execute through that
   selected Pi model
 - **AND** no OpenAI-only or hosted-only fallback silently handles either call
+
+#### Scenario: Pi model stream crosses the fixed relay
+
+- **WHEN** Pi sends an OpenAI, Anthropic, or Google model request from hosted web
+- **THEN** the shared hosted fetch adapter carries that request through the
+  provider-restricted raw relay endpoint
+- **AND** Pi consumes the upstream stream with its normal provider, retry,
+  cancellation, thinking, and error behavior intact
 
 #### Scenario: Unproven Pi provider fails closed
 

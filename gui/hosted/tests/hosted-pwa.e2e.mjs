@@ -14,7 +14,7 @@ const origin = `http://127.0.0.1:${port}`;
 const relayE2e = process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1";
 const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-5-mini");
 const prompt = relayE2e
-  ? "Use both get_stock_quote and get_stock_history for AAPL. Tell me its current price and whether it rose or fell over the last five trading days."
+  ? "Use get_stock_quote, get_stock_history, and get_options_chain for AAPL. Report its price, five-day direction, and one current option quote."
   : 'I am a conservative long-term investor. Use get_event_probabilities to search Polymarket for "SpaceX". Report one returned market and its probability in one sentence.';
 const require = createRequire(import.meta.url);
 const viteEntry = fileURLToPath(new URL("../../../node_modules/vite/bin/vite.js", import.meta.url));
@@ -206,10 +206,10 @@ try {
       30_000,
       "Pi reasoning level selection",
     );
-    const offReasoning = page.getByRole("button", { name: "off", exact: true });
-    await offReasoning.click();
+    const lowestReasoning = page.getByRole("button", { name: /^(?:off|minimal)$/i });
+    await lowestReasoning.click();
     await waitFor(
-      async () => (await offReasoning.getAttribute("aria-pressed")) === "true",
+      async () => (await lowestReasoning.getAttribute("aria-pressed")) === "true",
       30_000,
       "Pi reasoning level reset",
     );
@@ -223,6 +223,7 @@ try {
     if (relayE2e) {
       await waitForText(page, "Stock quote", 180_000);
       await waitForText(page, "Price history", 180_000);
+      await waitForText(page, "Options chain", 180_000);
       await waitFor(
         async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("AAPL"),
         180_000,
@@ -288,6 +289,7 @@ try {
     if (relayE2e) {
       await waitForText(restored, "Stock quote", 120_000);
       await waitForText(restored, "Price history", 120_000);
+      await waitForText(restored, "Options chain", 120_000);
     } else {
       await waitForText(restored, "event probabilities", 120_000);
     }

@@ -199,13 +199,15 @@ class BrowserRuntimeCoordinator {
         streamController = controller;
       },
     });
-    const timer = setTimeout(() => {
+    const onTimeout = () => {
+      signal?.removeEventListener("abort", abort);
       this.pending.delete(requestId);
       this.post({ type: "cancel", epoch: this.epoch, requestId, target: this.writerId });
       streamController.error(new Error("The active hosted tab did not complete the stream"));
-    }, this.requestTimeoutMs);
+    };
+    const timer = setTimeout(onTimeout, this.requestTimeoutMs);
     const abort = () => {
-      clearTimeout(timer);
+      clearTimeout(this.pending.get(requestId)?.timer ?? timer);
       this.pending.delete(requestId);
       this.post({ type: "cancel", epoch: this.epoch, requestId, target: this.writerId });
       streamController.error(new DOMException("The operation was aborted", "AbortError"));
@@ -213,7 +215,14 @@ class BrowserRuntimeCoordinator {
     if (signal?.aborted) abort();
     else {
       signal?.addEventListener("abort", abort, { once: true });
-      this.pending.set(requestId, { streamController, timer, signal, abort });
+      this.pending.set(requestId, {
+        streamController,
+        timer,
+        timeoutMs: this.requestTimeoutMs,
+        onTimeout,
+        signal,
+        abort,
+      });
       this.post({
         type: "request",
         epoch: this.epoch,
@@ -286,6 +295,7 @@ class BrowserRuntimeCoordinator {
       if (message.type === "stream-chunk") {
         if (isByteArray(message.value)) {
           pending.streamController.enqueue(Uint8Array.from(message.value));
+          refreshStreamInactivityTimer(pending);
         }
         return;
       }
@@ -471,6 +481,16 @@ class BrowserRuntimeCoordinator {
   post(message) {
     this.channel.postMessage({ channel: CHANNEL_NAME, from: this.tabId, ...message });
   }
+}
+
+function refreshStreamInactivityTimer(pending) {
+  if (
+    !pending?.streamController ||
+    typeof pending.timeoutMs !== "number" ||
+    typeof pending.onTimeout !== "function"
+  ) return;
+  clearTimeout(pending.timer);
+  pending.timer = setTimeout(pending.onTimeout, pending.timeoutMs);
 }
 
 function isCredentialBearingCommand(command) {

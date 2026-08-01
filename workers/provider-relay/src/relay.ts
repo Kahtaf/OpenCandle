@@ -1,7 +1,21 @@
-const CONTRACT_VERSION = 1 as const;
+import {
+  isModelRelayProvider,
+  MODEL_RELAY_HEADERS,
+  MODEL_RELAY_PATH,
+  MODEL_RELAY_PROVIDER_IDS,
+  type ModelRelayProvider,
+  PROVIDER_RELAY_CONTRACT_VERSION,
+  PROVIDER_RELAY_HEALTH_PATH,
+  PROVIDER_RELAY_PATH,
+} from "../../../src/runtime/provider-relay-contract.js";
+
+const CONTRACT_VERSION = PROVIDER_RELAY_CONTRACT_VERSION;
 const DEFAULT_MAX_REQUEST_BYTES = 256 * 1024;
 const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_MODEL_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_MAX_MODEL_REQUEST_BYTES = 32 * 1024 * 1024;
+const DEFAULT_MAX_MODEL_RESPONSE_BYTES = 32 * 1024 * 1024;
 const CLIENT_ID_PATTERN = /^[a-f0-9]{32}$/;
 
 type RelayProvider =
@@ -11,7 +25,6 @@ type RelayProvider =
   | "fred"
   | "tradingview"
   | "yahoo";
-
 type RelayMethod = "GET" | "POST";
 
 interface RelayRequestEnvelope {
@@ -20,6 +33,7 @@ interface RelayRequestEnvelope {
   url: string;
   method: RelayMethod;
   headers?: Record<string, string>;
+  upstreamCookie?: string;
   bodyBase64?: string;
 }
 
@@ -29,7 +43,10 @@ interface ProviderRelayOptions {
   fetchImpl?: (request: Request) => Promise<Response>;
   maxRequestBytes?: number;
   maxResponseBytes?: number;
+  maxModelRequestBytes?: number;
+  maxModelResponseBytes?: number;
   timeoutMs?: number;
+  modelTimeoutMs?: number;
   allowedOrigins?: readonly string[];
 }
 
@@ -39,6 +56,13 @@ interface ProviderPolicy {
   readonly methods: readonly RelayMethod[];
   readonly allowedHeaders: ReadonlySet<string>;
   matches(url: URL): boolean;
+}
+
+interface ModelProviderPolicy {
+  readonly methods: readonly RelayMethod[];
+  matches(url: URL, method: RelayMethod): boolean;
+  allowsHeader(name: string): boolean;
+  hasCredential(headers: Headers): boolean;
 }
 
 const COMMON_GET_HEADERS = new Set(["accept", "user-agent"]);
@@ -71,7 +95,7 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
   ),
   yahoo: policy(
     ["GET"],
-    new Set([...COMMON_GET_HEADERS, "cookie"]),
+    COMMON_GET_HEADERS,
     (url) => {
       if (exact(url, "fc.yahoo.com", "/t")) return true;
       if (exact(url, "query2.finance.yahoo.com", "/v1/test/getcrumb")) return true;
@@ -95,16 +119,82 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
   ),
 };
 
+const MODEL_PROVIDER_POLICIES: Readonly<Record<ModelRelayProvider, ModelProviderPolicy>> = {
+  openai: modelPolicy(
+    (url, method) =>
+      exactMethod(url, method, "api.openai.com", "/v1/models", "GET") ||
+      exactMethod(url, method, "api.openai.com", "/v1/responses", "POST") ||
+      exactMethod(url, method, "api.openai.com", "/v1/chat/completions", "POST"),
+    new Set([
+      "accept",
+      "authorization",
+      "content-type",
+      "openai-organization",
+      "openai-project",
+      "user-agent",
+      "x-client-request-id",
+    ]),
+    ["x-stainless-"],
+    (headers) => /^Bearer\s+\S+$/i.test(headers.get("authorization") ?? ""),
+  ),
+  anthropic: modelPolicy(
+    (url, method) =>
+      exactMethod(url, method, "api.anthropic.com", "/v1/models", "GET") ||
+      exactMethod(url, method, "api.anthropic.com", "/v1/messages", "POST") ||
+      exactMethod(url, method, "api.anthropic.com", "/v1/messages/count_tokens", "POST"),
+    new Set([
+      "accept",
+      "anthropic-beta",
+      "anthropic-dangerous-direct-browser-access",
+      "anthropic-version",
+      "authorization",
+      "content-type",
+      "user-agent",
+      "x-api-key",
+      "x-app",
+      "x-session-affinity",
+    ]),
+    ["x-stainless-"],
+    (headers) =>
+      Boolean(headers.get("x-api-key")) || /^Bearer\s+\S+$/i.test(headers.get("authorization") ?? ""),
+  ),
+  google: modelPolicy(
+    (url, method) => {
+      if (exactMethod(url, method, "generativelanguage.googleapis.com", "/v1beta/models", "GET")) {
+        return true;
+      }
+      return (
+        method === "POST" &&
+        pathMatches(
+          url,
+          "generativelanguage.googleapis.com",
+          /^\/v1beta\/models\/[A-Za-z0-9._-]+:(?:streamGenerateContent|generateContent|countTokens)$/,
+        )
+      );
+    },
+    new Set(["accept", "content-type", "user-agent", "x-goog-api-client", "x-goog-api-key"]),
+    [],
+    (headers) => Boolean(headers.get("x-goog-api-key")),
+  ),
+};
+
 export const RELAY_POLICY_MANIFEST = Object.freeze({
   version: CONTRACT_VERSION,
-  providers: Object.freeze(Object.keys(PROVIDER_POLICIES).sort()),
+  providers: Object.freeze(
+    [...Object.keys(PROVIDER_POLICIES), ...MODEL_RELAY_PROVIDER_IDS].sort(),
+  ),
 });
 
 export function createProviderRelay(options: ProviderRelayOptions = {}) {
   const fetchImpl = options.fetchImpl ?? ((request: Request) => fetch(request));
   const maxRequestBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
+  const maxModelRequestBytes =
+    options.maxModelRequestBytes ?? DEFAULT_MAX_MODEL_REQUEST_BYTES;
+  const maxModelResponseBytes =
+    options.maxModelResponseBytes ?? DEFAULT_MAX_MODEL_RESPONSE_BYTES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const modelTimeoutMs = options.modelTimeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
   const allowedOrigins = new Set(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
 
   return {
@@ -120,12 +210,14 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
         jsonResponse(status, body, corsOrigin);
       const respondError = (status: number, error: string) =>
         errorResponse(status, error, corsOrigin);
-      if (requestUrl.pathname === "/v1/health") {
+      if (requestUrl.pathname === PROVIDER_RELAY_HEALTH_PATH) {
         if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
         if (request.method !== "GET") return respondError(405, "method_not_allowed");
         return respondJson(200, RELAY_POLICY_MANIFEST);
       }
-      if (requestUrl.pathname !== "/v1/provider-fetch") {
+      const isProviderFetch = requestUrl.pathname === PROVIDER_RELAY_PATH;
+      const isModelFetch = requestUrl.pathname === MODEL_RELAY_PATH;
+      if (!isProviderFetch && !isModelFetch) {
         return respondError(404, "not_found");
       }
       if (requestOrigin && !corsOrigin) return respondError(403, "origin_not_allowed");
@@ -145,6 +237,18 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
         key: await pseudonymousRateLimitKey(connectingIp),
       });
       if (!rate.success) return respondError(429, "relay_rate_limited");
+
+      if (isModelFetch) {
+        return relayModelRequest({
+          request,
+          fetchImpl,
+          timeoutMs: modelTimeoutMs,
+          maxRequestBytes: maxModelRequestBytes,
+          maxResponseBytes: maxModelResponseBytes,
+          corsOrigin,
+          respondError,
+        });
+      }
 
       let envelope: RelayRequestEnvelope;
       try {
@@ -189,6 +293,7 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
             status: upstream.status,
             statusText: "",
             headers: responseHeaders(upstream.headers),
+            ...upstreamCookieResponse(envelope.provider, upstream.headers),
             bodyBase64: "",
           });
         }
@@ -198,6 +303,7 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
           status: upstream.status,
           statusText: upstream.statusText,
           headers: responseHeaders(upstream.headers),
+          ...upstreamCookieResponse(envelope.provider, upstream.headers),
           bodyBase64: encodeBase64(body),
         });
       } catch (error) {
@@ -213,6 +319,116 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
   };
 }
 
+async function relayModelRequest(options: {
+  request: Request;
+  fetchImpl: (request: Request) => Promise<Response>;
+  timeoutMs: number;
+  maxRequestBytes: number;
+  maxResponseBytes: number;
+  corsOrigin: string | null;
+  respondError: (status: number, error: string) => Response;
+}): Promise<Response> {
+  const provider = options.request.headers.get(MODEL_RELAY_HEADERS.provider);
+  const method = options.request.headers.get(MODEL_RELAY_HEADERS.upstreamMethod);
+  const target = options.request.headers.get(MODEL_RELAY_HEADERS.upstreamUrl);
+  if (!isModelRelayProvider(provider) || (method !== "GET" && method !== "POST") || !target) {
+    return options.respondError(400, "invalid_request");
+  }
+
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return options.respondError(400, "invalid_request");
+  }
+  if (!isSafeHttpsUrl(url) || hasCredentialQuery(url)) {
+    return options.respondError(403, "provider_request_not_allowed");
+  }
+  const policy = MODEL_PROVIDER_POLICIES[provider];
+  if (!policy.methods.includes(method) || !policy.matches(url, method)) {
+    return options.respondError(403, "provider_request_not_allowed");
+  }
+
+  const upstreamHeaders = new Headers();
+  for (const [name, value] of options.request.headers) {
+    const normalized = name.toLowerCase();
+    if (!policy.allowsHeader(normalized)) continue;
+    if (value.length > 8_192 || /[\r\n]/.test(value)) {
+      return options.respondError(400, "invalid_request");
+    }
+    upstreamHeaders.set(normalized, value);
+  }
+  if (!policy.hasCredential(upstreamHeaders)) {
+    return options.respondError(400, "missing_model_credential");
+  }
+  if (method === "GET" && options.request.body) {
+    return options.respondError(400, "invalid_request");
+  }
+
+  let body: Uint8Array | undefined;
+  if (method === "POST" && options.request.body) {
+    try {
+      body = await readBounded(options.request.body, options.maxRequestBytes);
+    } catch (error) {
+      return options.respondError(
+        error instanceof RequestTooLargeError ? 413 : 400,
+        error instanceof RequestTooLargeError ? "request_too_large" : "invalid_request",
+      );
+    }
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  options.request.signal.addEventListener("abort", () => controller.abort(), { once: true });
+  try {
+    const init: RequestInit & { duplex?: "half" } = {
+      method,
+      headers: upstreamHeaders,
+      ...(method === "POST" && body
+        ? { body, duplex: "half" as const }
+        : {}),
+      redirect: "manual",
+      signal: controller.signal,
+    };
+    const upstream = await options.fetchImpl(new Request(url, init));
+    if (upstream.status >= 300 && upstream.status < 400) {
+      await upstream.body?.cancel();
+      return options.respondError(502, "upstream_redirect_rejected");
+    }
+    clearTimeout(timeout);
+    return new Response(boundedPassThrough(upstream.body, options.maxResponseBytes), {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: modelResponseHeaders(upstream.headers, options.corsOrigin),
+    });
+  } catch {
+    if (controller.signal.aborted) return options.respondError(504, "upstream_timeout");
+    return options.respondError(502, "upstream_unavailable");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function boundedPassThrough(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): ReadableStream<Uint8Array> | null {
+  if (!stream) return null;
+  let total = 0;
+  return stream.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > maxBytes) {
+          controller.error(new RequestTooLargeError());
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+}
+
 async function pseudonymousRateLimitKey(connectingIp: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(connectingIp));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -224,6 +440,47 @@ function policy(
   matches: (url: URL) => boolean,
 ): ProviderPolicy {
   return { methods, allowedHeaders, matches };
+}
+
+function modelPolicy(
+  matches: (url: URL, method: RelayMethod) => boolean,
+  allowedHeaders: ReadonlySet<string>,
+  allowedPrefixes: readonly string[],
+  hasCredential: (headers: Headers) => boolean,
+): ModelProviderPolicy {
+  return {
+    methods: ["GET", "POST"],
+    matches,
+    allowsHeader: (name) =>
+      allowedHeaders.has(name) || allowedPrefixes.some((prefix) => name.startsWith(prefix)),
+    hasCredential,
+  };
+}
+
+function exactMethod(
+  url: URL,
+  method: RelayMethod,
+  hostname: string,
+  pathname: string,
+  expectedMethod: RelayMethod,
+): boolean {
+  return method === expectedMethod && exact(url, hostname, pathname);
+}
+
+function isSafeHttpsUrl(url: URL): boolean {
+  return (
+    url.protocol === "https:" &&
+    (url.port === "" || url.port === "443") &&
+    url.username === "" &&
+    url.password === "" &&
+    url.hash === ""
+  );
+}
+
+function hasCredentialQuery(url: URL): boolean {
+  return [...url.searchParams.keys()].some((name) =>
+    /^(?:api[_-]?key|access[_-]?token|authorization|key)$/i.test(name),
+  );
 }
 
 function exact(url: URL, hostname: string, pathname: string): boolean {
@@ -244,6 +501,7 @@ function parseEnvelope(raw: string): RelayRequestEnvelope {
     !(record.provider in PROVIDER_POLICIES) ||
     typeof record.url !== "string" ||
     (record.method !== "GET" && record.method !== "POST") ||
+    (record.upstreamCookie !== undefined && typeof record.upstreamCookie !== "string") ||
     (record.bodyBase64 !== undefined && typeof record.bodyBase64 !== "string") ||
     !isStringRecord(record.headers)
   ) {
@@ -303,6 +561,10 @@ function validateProviderRequest(envelope: RelayRequestEnvelope): {
     }
     headers.set(normalized, value);
   }
+  if (envelope.upstreamCookie !== undefined) {
+    if (envelope.provider !== "yahoo" || !isSafeCookie(envelope.upstreamCookie)) return null;
+    headers.set("cookie", envelope.upstreamCookie);
+  }
 
   if (envelope.method === "GET" && envelope.bodyBase64 !== undefined) return null;
   let body: Uint8Array | undefined;
@@ -348,13 +610,43 @@ async function readBounded(
 }
 
 function responseHeaders(headers: Headers): Record<string, string> {
-  const allowed = ["content-type", "retry-after", "set-cookie", "x-data-bytes"];
+  const allowed = ["content-type", "retry-after", "x-data-bytes"];
   return Object.fromEntries(
     allowed.flatMap((name) => {
       const value = headers.get(name);
       return value === null ? [] : [[name, value]];
     }),
   );
+}
+
+function modelResponseHeaders(headers: Headers, origin: string | null): Headers {
+  const response = new Headers(corsHeaders(origin));
+  response.delete("content-type");
+  for (const name of [
+    "content-type",
+    "retry-after",
+    "request-id",
+    "x-request-id",
+    "openai-processing-ms",
+    "openai-version",
+  ]) {
+    const value = headers.get(name);
+    if (value !== null) response.set(name, value);
+  }
+  return response;
+}
+
+function upstreamCookieResponse(
+  provider: RelayProvider,
+  headers: Headers,
+): { upstreamSetCookie?: string } {
+  if (provider !== "yahoo") return {};
+  const value = headers.get("set-cookie");
+  return value && isSafeCookie(value) ? { upstreamSetCookie: value } : {};
+}
+
+function isSafeCookie(value: string): boolean {
+  return value.length > 0 && value.length <= 8_192 && !/[\r\n]/.test(value);
 }
 
 function encodeBase64(bytes: Uint8Array): string {
@@ -374,7 +666,21 @@ function corsHeaders(origin: string | null): Record<string, string> {
   return {
     ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-OpenCandle-Client",
+    "Access-Control-Allow-Headers": [
+      "Accept",
+      "Anthropic-Beta",
+      "Anthropic-Dangerous-Direct-Browser-Access",
+      "Anthropic-Version",
+      "Authorization",
+      "Content-Type",
+      "X-Api-Key",
+      "X-Goog-Api-Client",
+      "X-Goog-Api-Key",
+      "X-OpenCandle-Client",
+      "X-OpenCandle-Provider",
+      "X-OpenCandle-Upstream-Method",
+      "X-OpenCandle-Upstream-URL",
+    ].join(", "),
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
     "X-Content-Type-Options": "nosniff",

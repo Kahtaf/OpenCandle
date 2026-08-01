@@ -15,6 +15,10 @@ import {
   getQuote,
 } from "../../../src/providers/yahoo-finance.js";
 import { createHostedProviderFetch } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
+import {
+  createFirstClassModelProviders,
+  modelSetupProviders,
+} from "../../../src/pi/model-provider-catalog.js";
 
 const relayUrl =
   process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ||
@@ -177,6 +181,31 @@ async function main(): Promise<void> {
     });
     return response.provider === "exa" && response.results.length > 0;
   });
+
+  const modelProviders = createFirstClassModelProviders();
+  for (const setup of modelSetupProviders) {
+    const apiKey = process.env[setup.envVar]?.trim();
+    await check(`${setup.id}_model`, "live", Boolean(apiKey), async () => {
+      const provider = modelProviders.find((candidate) => candidate.id === setup.id);
+      const overrideName = `OPENCANDLE_RELAY_SMOKE_${setup.id.toUpperCase()}_MODEL`;
+      const smokeDefault = setup.id === "openai" ? "gpt-5.4-mini" : setup.defaultModel;
+      const modelId = process.env[overrideName]?.trim() || smokeDefault;
+      const model = provider?.getModels().find((candidate) => candidate.id === modelId);
+      if (!provider || !model || !apiKey) return false;
+      const response = await provider
+        .streamSimple(
+          model,
+          {
+            messages: [{ role: "user", content: "Reply with exactly OK.", timestamp: Date.now() }],
+          },
+          { apiKey, maxTokens: 32 },
+        )
+        .result();
+      return response.stopReason !== "error" && response.content.some(
+        (content) => content.type === "text" && content.text.trim().toUpperCase() === "OK",
+      );
+    });
+  }
 
   await check("finnhub", "disabled", true, async () => {
     const status = await relayStatus({

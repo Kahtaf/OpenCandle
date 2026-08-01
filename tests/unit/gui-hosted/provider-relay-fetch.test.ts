@@ -17,13 +17,15 @@ describe("hosted provider relay fetch", () => {
         method: "GET",
         url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
         headers: { "user-agent": "OpenCandle/1.0" },
+        upstreamCookie: "A3=session-cookie",
       });
       return new Response(
         JSON.stringify({
           version: 1,
           status: 200,
           statusText: "OK",
-          headers: { "content-type": "application/json", "set-cookie": "A=1" },
+          headers: { "content-type": "application/json" },
+          upstreamSetCookie: "A=1",
           bodyBase64: Buffer.from('{"chart":{"result":[]}}').toString("base64"),
         }),
       );
@@ -36,11 +38,12 @@ describe("hosted provider relay fetch", () => {
 
     const response = await hostedFetch(
       "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
-      { headers: { "User-Agent": "OpenCandle/1.0" } },
+      { headers: { "User-Agent": "OpenCandle/1.0", Cookie: "A3=session-cookie" } },
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toBe("A=1");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("x-opencandle-upstream-set-cookie")).toBe("A=1");
     await expect(response.json()).resolves.toEqual({ chart: { result: [] } });
     expect(relayFetch).toHaveBeenCalledOnce();
   });
@@ -49,9 +52,7 @@ describe("hosted provider relay fetch", () => {
     "https://gamma-api.polymarket.com/public-search?q=fed",
     "https://api.coingecko.com/api/v3/coins/bitcoin",
     "https://www.alphavantage.co/query?function=OVERVIEW&symbol=AAPL&apikey=test",
-    "https://api.openai.com/v1/responses",
-    "https://api.anthropic.com/v1/messages",
-  ])("leaves direct and model requests direct: %s", async (url) => {
+  ])("leaves browser-compatible providers direct: %s", async (url) => {
     const directFetch = vi.fn(async () => new Response("direct"));
     const hostedFetch = createHostedProviderFetch({
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
@@ -61,6 +62,83 @@ describe("hosted provider relay fetch", () => {
 
     await expect(hostedFetch(url)).resolves.toBeInstanceOf(Response);
     expect(directFetch).toHaveBeenCalledWith(url, undefined);
+  });
+
+  it.each([
+    [
+      "openai",
+      "https://api.openai.com/v1/responses",
+      { Authorization: "Bearer openai-secret", "Content-Type": "application/json" },
+    ],
+    [
+      "anthropic",
+      "https://api.anthropic.com/v1/messages",
+      { "X-Api-Key": "anthropic-secret", "Anthropic-Version": "2023-06-01" },
+    ],
+    [
+      "google",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+      { "X-Goog-Api-Key": "google-secret", "Content-Type": "application/json" },
+    ],
+  ] as const)("streams %s model traffic through the raw relay", async (provider, url, headers) => {
+    const relayFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe("https://web.opencandle.app/v1/model-fetch");
+      expect(request.headers.get("x-opencandle-client")).toBe("0123456789abcdef0123456789abcdef");
+      expect(request.headers.get("x-opencandle-provider")).toBe(provider);
+      expect(request.headers.get("x-opencandle-upstream-url")).toBe(url);
+      expect(request.headers.get("authorization")).toBe(
+        provider === "openai" ? "Bearer openai-secret" : null,
+      );
+      expect(request.headers.get("x-api-key")).toBe(
+        provider === "anthropic" ? "anthropic-secret" : null,
+      );
+      expect(request.headers.get("x-goog-api-key")).toBe(
+        provider === "google" ? "google-secret" : null,
+      );
+      await expect(request.text()).resolves.toBe('{"stream":true}');
+      return new Response('data: {"type":"response.completed"}\n\n', {
+        headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
+      });
+    });
+    const hostedFetch = createHostedProviderFetch({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      clientId: "0123456789abcdef0123456789abcdef",
+      fetchImpl: relayFetch,
+    });
+
+    const response = await hostedFetch(url, {
+      method: "POST",
+      headers,
+      body: '{"stream":true}',
+    });
+
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    expect(response.headers.get("x-request-id")).toBe("request-1");
+    await expect(response.text()).resolves.toContain("response.completed");
+  });
+
+  it("routes model-key probes through the same model relay boundary", async () => {
+    const relayFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe("https://web.opencandle.app/v1/model-fetch");
+      expect(request.headers.get("x-opencandle-provider")).toBe("openai");
+      expect(request.headers.get("x-opencandle-upstream-method")).toBe("GET");
+      expect(request.headers.get("authorization")).toBe("Bearer key");
+      expect(request.body).toBeNull();
+      return new Response('{"data":[]}');
+    });
+    const hostedFetch = createHostedProviderFetch({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      clientId: "0123456789abcdef0123456789abcdef",
+      fetchImpl: relayFetch,
+    });
+
+    await expect(
+      hostedFetch("https://api.openai.com/v1/models", {
+        headers: { authorization: "Bearer key" },
+      }),
+    ).resolves.toBeInstanceOf(Response);
   });
 
   it("fails closed when a proxy provider has no configured relay", async () => {

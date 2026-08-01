@@ -76,6 +76,28 @@ describe("yahoo-finance options provider", () => {
   });
 
   describe("getYahooCrumb", () => {
+    it("accepts the hosted relay cookie side channel", async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: new Headers({
+            "x-opencandle-upstream-set-cookie": "A3=d=hostedcookie; Path=/",
+          }),
+          text: () => Promise.resolve(""),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve("hostedCrumb"),
+        });
+
+      await expect(getYahooCrumb()).resolves.toEqual({
+        crumb: "hostedCrumb",
+        cookie: "A3=d=hostedcookie",
+      });
+      expect((fetch as any).mock.calls[1][1]?.headers.Cookie).toBe("A3=d=hostedcookie");
+    });
+
     it("extracts crumb from consent redirect", async () => {
       globalThis.fetch = vi
         .fn()

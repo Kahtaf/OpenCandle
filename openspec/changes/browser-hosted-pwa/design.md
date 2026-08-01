@@ -11,8 +11,9 @@ The completed `spikes/browser-runtime` work established the following on
 - Chromium 145 booted WebContainer Node v22.22.3 and ran a prebuilt OpenCandle
   bundle without installing packages at runtime.
 - The real Polymarket provider returned five bounded evidence items.
-- A live OpenAI key completed the real OpenCandle router through a narrow
-  browser-safe Pi adapter using `gpt-4.1-mini`.
+- A direct OpenAI fetch from the hosted browser was rejected by provider CORS.
+  A live OpenAI key completed the real OpenCandle router only after the fixed,
+  no-storage relay carried Pi's native streaming request.
 - SQLite WASM 3.53.0 persisted through OPFS across reload and reset.
 - Credential restoration, clearing, forged-message validation, and secret-leak
   checks passed in a real browser.
@@ -75,8 +76,9 @@ Worker.
 
 - An OpenCandle-hosted application API, credential storage, general-purpose
   proxy, account system, cloud sync, multi-user collaboration, billing, or
-  server database. The separate audited provider relay has a fixed allowlist
-  and receives credentials only when an upstream provider requires them.
+  server database. The separate audited relay has fixed data and model endpoint
+  allowlists and receives credentials only when an upstream provider requires
+  them.
 - Browser support for Yahoo, FRED, SEC, TradingView, Brave, Exa, LSE, X, or
   Reddit until each has a direct browser-safe provider path.
 - Closed-tab alerts, automations, reports, or background model execution.
@@ -260,6 +262,13 @@ Google. Every model in Pi's installed catalog for those providers is exposed;
 there is no literal hosted default such as `gpt-4.1-mini`. Providers that
 require OAuth callbacks, native processes, cloud credential chains, or other
 unproven browser capabilities remain absent with an explicit reason.
+
+The provider-specific request and stream implementations still come directly
+from Pi. A single shared fetch adapter routes only the three proven model API
+origins through the Worker's raw streaming endpoint because those origins do
+not provide the required browser CORS contract. The Worker validates exact
+host, path, method, headers, credential placement, size, time, origin, and rate
+limits; it never interprets model payloads or implements a second model client.
 
 The selected Pi model is the single source of truth for both the OpenCandle
 router and the Pi agent stream. Credentials are keyed by provider so switching

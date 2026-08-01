@@ -14,7 +14,10 @@ const args = {
     brave: String(process.env.BRAVE_API_KEY || "").trim(),
     exa: String(process.env.EXA_API_KEY || "").trim(),
     fred: String(process.env.FRED_API_KEY || "").trim(),
+    openai: String(process.env.OPENAI_API_KEY || "").trim(),
   },
+  openaiModel:
+    String(process.env.OPENCANDLE_RELAY_SMOKE_OPENAI_MODEL || "").trim() || "gpt-5.4-mini",
   relayUrl,
 };
 

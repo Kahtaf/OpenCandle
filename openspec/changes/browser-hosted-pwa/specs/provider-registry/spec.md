@@ -13,23 +13,24 @@ treated as `blocked`.
 - **THEN** its browser transport is `blocked`
 - **AND** the reason identifies the native CLI or desktop-session dependency
 
-#### Scenario: Proxy-only provider remains unavailable
+#### Scenario: Proxy-only provider requires a negotiated relay
 
 - **WHEN** a provider requires forbidden CORS access, custom headers, or a
   credential relay
 - **THEN** its browser transport is `proxy`
-- **AND** the serverless hosted build treats it as unavailable
+- **AND** the hosted build enables it only when the fixed relay manifest declares support
+- **AND** it remains unavailable when relay negotiation is absent or incompatible
 
 ### Requirement: Hosted tool registration is capability filtered
 
 Hosted Pi tool construction SHALL receive the provider capability manifest and
-MUST omit a tool when no complete direct-browser provider path can execute it.
-Runtime provider checks SHALL remain as defense in depth.
+MUST omit a tool when no complete direct-browser or negotiated fixed-relay path
+can execute it. Runtime provider checks SHALL remain as defense in depth.
 
 #### Scenario: Unsupported tool is absent from Pi
 
-- **WHEN** hosted mode builds the tool set and a tool depends only on proxy or
-  blocked providers
+- **WHEN** hosted mode builds the tool set and a tool depends only on blocked
+  providers or proxy providers absent from the negotiated relay manifest
 - **THEN** that tool is absent from the model-visible definitions
 - **AND** a user-facing capability report explains why it is unavailable
 
@@ -50,4 +51,3 @@ bounded response, and secret handling.
 - **WHEN** provider documentation says browser access is supported but the live
   browser proof is absent or failing
 - **THEN** the provider remains `proxy` or `blocked`
-

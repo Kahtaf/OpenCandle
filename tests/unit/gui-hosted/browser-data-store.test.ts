@@ -265,13 +265,57 @@ describe("hosted browser archive", () => {
       bootstrap: {
         role: "writer",
         sessionId: "session-1",
-        sessions: [],
+        sessions: [{ id: "session-1" }],
         snapshot: { entries: [], events: [], state: {} },
       },
     });
     archive.bootstrap.snapshot.apiKey = "must-not-persist";
 
     expect(() => validateHostedArchive(archive)).toThrow("credential-bearing data");
+  });
+
+  it("rejects malformed or mismatched offline bootstrap session state", () => {
+    const archive = createHostedArchive({
+      sessions: [session],
+      currentSessionId: "session-1",
+      bootstrap: {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [{ id: "session-1", name: "Research" }],
+        snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+        coordination: { writable: true },
+        catalog: { tools: [], workflows: [], providers: [] },
+      },
+    });
+
+    const malformedSession = structuredClone(archive);
+    malformedSession.bootstrap.sessions = [null];
+    expect(() => validateHostedArchive(malformedSession)).toThrow("Offline bootstrap");
+
+    const mismatchedSession = structuredClone(archive);
+    mismatchedSession.bootstrap.sessionId = "session-other";
+    expect(() => validateHostedArchive(mismatchedSession)).toThrow("Offline bootstrap");
+
+    const malformedSnapshot = structuredClone(archive);
+    malformedSnapshot.bootstrap.snapshot.entries = {};
+    expect(() => validateHostedArchive(malformedSnapshot)).toThrow("Offline bootstrap");
+  });
+
+  it("allows the durable current session to be hidden from the empty-session display list", () => {
+    const archive = createHostedArchive({
+      sessions: [session],
+      currentSessionId: "session-1",
+      bootstrap: {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [],
+        snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+        coordination: { writable: true },
+        catalog: { tools: [], workflows: [], providers: [] },
+      },
+    });
+
+    expect(validateHostedArchive(archive)).toEqual(archive);
   });
 
   it("rejects corrupt session trees, state, paths, and archive versions", () => {

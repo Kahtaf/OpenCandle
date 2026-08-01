@@ -711,7 +711,10 @@ export async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }
     headers: { "User-Agent": BROWSER_UA },
     signal: yahooRawFetchSignal(),
   });
-  const setCookie = cookieRes.headers.get("set-cookie") ?? "";
+  const setCookie =
+    cookieRes.headers.get("set-cookie") ??
+    cookieRes.headers.get("x-opencandle-upstream-set-cookie") ??
+    "";
   const cookie = setCookie.split(";")[0]; // Extract just the cookie value
   if (!cookie) {
     if (!cookieRes.ok) {
