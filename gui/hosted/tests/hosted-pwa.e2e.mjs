@@ -157,7 +157,7 @@ try {
   if (apiKey) {
     stage = "model setup";
     await page
-      .getByRole("radio", { name: /Only for this browser session/ })
+      .getByRole("radio", { name: /Keep on this device/ })
       .evaluate((control) => control.click());
     await page.getByRole("textbox", { name: "OpenAI API key" }).fill(apiKey);
     await page

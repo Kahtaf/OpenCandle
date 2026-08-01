@@ -1236,6 +1236,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   const cooldownId = useId();
   const isEditing = Boolean(alert);
   const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
+  const unverifiedExactRef = useRef(false);
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
     draft;
@@ -1261,7 +1262,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
           action: isEditing ? "update" : condition,
           id: alert?.id,
           condition_action: isEditing ? condition : undefined,
-          symbol: resolvedSymbol,
+          ...alertInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
           threshold: fields.threshold && threshold ? Number(threshold) : undefined,
           period: fields.period ? numberOrUndefined(period) : undefined,
           fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
@@ -1285,6 +1286,9 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
         disabled={disabled}
         onQueryChange={(value) => setDraftField("query", value)}
         onSelectedChange={(value) => setDraftField("selected", value)}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -1406,6 +1410,13 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
       </Button>
     </form>
   );
+}
+
+export function alertInstrumentArgs(symbol, unverifiedExactSymbol) {
+  return {
+    symbol,
+    ...(unverifiedExactSymbol ? { unverified_exact_symbol: true } : {}),
+  };
 }
 
 function readOnlyMessage(role) {

@@ -31,6 +31,7 @@ const DEFAULT_HISTORY_RANGE_MAP: Record<
 };
 
 const MARKET_INDEX_SYMBOLS = ["^GSPC", "^IXIC", "^DJI", "BTC-USD"] as const;
+const DAILY_OR_LONGER_INTERVALS = new Set<HistoryInterval>(["1d", "1wk", "1mo"]);
 
 type HostedMarketState = {
   watchlists?: Array<{ id: number; isDefault?: boolean; name?: string }>;
@@ -146,7 +147,7 @@ export async function getHostedInstrumentHistorySnapshot(
     fetchedAt: result.timestamp,
     dataAsOf: result.data.at(-1)?.date,
     stale: result.stale === true,
-    prevClose: resolved.interval === "1d" && result.data.length >= 2
+    prevClose: DAILY_OR_LONGER_INTERVALS.has(resolved.interval) && result.data.length >= 2
       ? result.data.at(-2)?.close ?? null
       : null,
     bars,

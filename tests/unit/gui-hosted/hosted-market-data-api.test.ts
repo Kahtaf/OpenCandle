@@ -196,6 +196,14 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("keeps a previous-period close for weekly and monthly history", async () => {
+    const weekly = await getHostedInstrumentHistorySnapshot("AAPL", "5Y");
+    expect(weekly).toMatchObject({ status: "ok", interval: "1wk", prevClose: 200 });
+
+    const monthly = await getHostedInstrumentHistorySnapshot("AAPL", "MAX");
+    expect(monthly).toMatchObject({ status: "ok", interval: "1mo", prevClose: 200 });
+  });
+
   it("does not calculate portfolio valuation or P&L across mismatched currencies", async () => {
     vi.mocked(getQuote).mockResolvedValueOnce({
       symbol: "SHOP.TO",

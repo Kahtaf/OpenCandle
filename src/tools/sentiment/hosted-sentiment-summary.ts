@@ -127,9 +127,11 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
     if (validPriceResult) {
       const value = validPriceResult.data;
       const label = validPriceResult.stale ? "Cached price context" : "Price context";
+      const symbol = renderUntrustedText(value.symbol, 40);
+      const currency = renderUntrustedText(value.currency ?? "", 16);
       lines.push(
         "",
-        `${label} (Yahoo Finance, as of ${validPriceResult.timestamp}): ${value.symbol} ${value.price.toFixed(2)} ${value.currency ?? ""}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
+        `${label} (Yahoo Finance, as of ${validPriceResult.timestamp}): ${symbol} ${value.price.toFixed(2)} ${currency}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
       );
     } else if (tickers[0]) {
       warnings.push(`Price context was unavailable for ${tickers[0]}.`);

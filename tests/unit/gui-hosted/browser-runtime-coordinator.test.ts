@@ -126,7 +126,7 @@ describe("browser runtime coordinator", () => {
     await follower.dispose();
   });
 
-  it("hands a session-only credential to an already-open follower before failover", async () => {
+  it("does not hand a session-only credential to an independently opened follower", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -161,18 +161,12 @@ describe("browser runtime coordinator", () => {
     await settle();
 
     expect(follower.getRole()).toBe("writer");
-    expect(createHost).toHaveBeenLastCalledWith({
-      sessionCredential: {
-        version: 2,
-        credentials: {
-          openai: { apiKey: "session-only-key", storageMode: "session" },
-        },
-      },
-    });
+    expect(createHost).toHaveBeenLastCalledWith({ sessionCredential: null });
+    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain("session-only-key");
     await follower.dispose();
   });
 
-  it("sends the targeted session credential before announcing writer readiness to a new follower", async () => {
+  it("never sends credentials in response to an unauthenticated hello", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -196,19 +190,24 @@ describe("browser runtime coordinator", () => {
     await writer.ready();
     FakeBroadcastChannel.messages = [];
 
-    const follower = createBrowserRuntimeCoordinator(options);
-    await follower.ready();
+    const attacker = new FakeBroadcastChannel("opencandle-hosted-coordination-v1");
+    attacker.postMessage({
+      channel: "opencandle-hosted-coordination-v1",
+      from: "attacker-controlled-tab",
+      type: "hello",
+    });
     await settle();
 
-    const replyTypes = FakeBroadcastChannel.messages
-      .map((message) => (message as { type?: string }).type)
-      .filter((type) => type === "session-credential" || type === "writer-status");
-    expect(replyTypes.slice(0, 2)).toEqual(["session-credential", "writer-status"]);
+    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain("session-only-key");
+    expect(FakeBroadcastChannel.messages).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "session-credential" })]),
+    );
 
-    await Promise.all([writer.dispose(), follower.dispose()]);
+    attacker.close();
+    await writer.dispose();
   });
 
-  it("purges a follower's stale session credential when the writer reports it cleared", async () => {
+  it("uses only the promoted tab's own session credential", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -222,12 +221,13 @@ describe("browser runtime coordinator", () => {
         },
       }),
     );
-    const createHost = () => ({
+    const createHost = vi.fn((options = {}) => ({
       request: vi.fn(),
       handleCommand: vi.fn(),
       getSessionCredential: () => null,
       dispose: vi.fn(),
-    });
+      options,
+    }));
     const sharedOptions = {
       createHost,
       lockManager: locks,
@@ -247,9 +247,19 @@ describe("browser runtime coordinator", () => {
     await settle();
 
     expect(follower.getRole()).toBe("follower");
-    expect(followerSessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+    await writer.dispose();
+    await settle();
+    expect(follower.getRole()).toBe("writer");
+    expect(createHost).toHaveBeenLastCalledWith({
+      sessionCredential: {
+        version: 2,
+        credentials: {
+          openai: { apiKey: "stale-session-key", storageMode: "session" },
+        },
+      },
+    });
 
-    await Promise.all([writer.dispose(), follower.dispose()]);
+    await follower.dispose();
   });
 
   it("rejects an in-flight follower action immediately when the writer epoch changes", async () => {

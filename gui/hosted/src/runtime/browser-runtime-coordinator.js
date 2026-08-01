@@ -27,7 +27,7 @@ class BrowserRuntimeCoordinator {
     this.writerId = "";
     this.host = null;
     this.cachedModelSetup = null;
-    this.sessionCredential = null;
+    this.sessionCredential = readSessionCredential(this.sessionStorage);
     this.pending = new Map();
     this.completed = new Map();
     this.activeForwardedStreams = new Map();
@@ -97,7 +97,6 @@ class BrowserRuntimeCoordinator {
     if (this.role === "writer") {
       const value = await this.host.handleCommand(command);
       this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
-      this.captureAndBroadcastSessionCredential();
       this.broadcastStatus();
       this.broadcastInvalidation();
       return value;
@@ -232,17 +231,8 @@ class BrowserRuntimeCoordinator {
     if (!isMessage(message) || message.from === this.tabId || this.disposed) return;
     if (message.type === "hello") {
       if (this.role === "writer") {
-        this.captureAndBroadcastSessionCredential(message.from);
         this.broadcastStatus();
       }
-      return;
-    }
-    if (message.type === "session-credential") {
-      if (message.target && message.target !== this.tabId) return;
-      if (!isEpoch(message.epoch) || message.epoch < this.epoch) return;
-      if (message.epoch > this.epoch && message.target !== this.tabId) return;
-      this.sessionCredential = normalizeSessionCredential(message.credential);
-      if (!this.sessionCredential) this.sessionStorage?.removeItem(CREDENTIAL_KEY);
       return;
     }
     if (message.type === "writer-status") {
@@ -325,7 +315,6 @@ class BrowserRuntimeCoordinator {
     try {
       const value = await operation;
       this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
-      this.captureAndBroadcastSessionCredential();
       this.post({
         type: "response",
         epoch: this.epoch,
@@ -428,17 +417,6 @@ class BrowserRuntimeCoordinator {
       epoch: this.epoch,
       writerId: this.tabId,
       modelSetup: this.getModelSetup(),
-    });
-  }
-
-  captureAndBroadcastSessionCredential(target) {
-    if (this.role !== "writer") return;
-    this.sessionCredential = normalizeSessionCredential(this.host?.getSessionCredential?.());
-    this.post({
-      type: "session-credential",
-      epoch: this.epoch,
-      ...(target ? { target } : {}),
-      credential: this.sessionCredential,
     });
   }
 
@@ -560,6 +538,15 @@ function normalizeSessionCredential(value) {
       ]),
   );
   return Object.keys(credentials).length > 0 ? { version: 2, credentials } : null;
+}
+
+function readSessionCredential(storage) {
+  try {
+    const serialized = storage?.getItem(CREDENTIAL_KEY);
+    return serialized ? normalizeSessionCredential(JSON.parse(serialized)) : null;
+  } catch {
+    return null;
+  }
 }
 
 function randomId() {

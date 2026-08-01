@@ -280,7 +280,10 @@ async function manageAlerts(
   let symbol = instrumentId == null ? "" : (service.getInstrument(instrumentId)?.symbol ?? "");
   if (args.symbol != null || instrumentId == null) {
     symbol = normalizedSymbol(args.symbol);
-    const resolved = await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
+    const resolved =
+      args.unverified_exact_symbol === true
+        ? { status: "resolved" as const, instrument: hostedInstrument(symbol) }
+        : await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
     if (resolved.status === "needs_selection") {
       return result(
         `Could not verify ${resolved.query}. Choose one of the returned candidates before creating the alert.`,

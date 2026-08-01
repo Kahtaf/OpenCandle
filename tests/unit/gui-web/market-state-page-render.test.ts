@@ -6,6 +6,7 @@ import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPag
 import {
   AlertCreateForm,
   alertConditionFormFields,
+  alertInstrumentArgs,
   ContextPanel,
   clampComboboxActiveIndex,
   getHoldingAutofillValues,
@@ -1074,6 +1075,14 @@ describe("MarketStatePage rendering", () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(refreshQuotes).not.toHaveBeenCalled();
     expect(setToast).toHaveBeenCalledWith("Choose a listing.", { destructive: true });
+  });
+
+  it("propagates the hosted exact-symbol verification state from alert forms", async () => {
+    expect(alertInstrumentArgs("AAPL", true)).toEqual({
+      symbol: "AAPL",
+      unverified_exact_symbol: true,
+    });
+    expect(alertInstrumentArgs("AAPL", false)).toEqual({ symbol: "AAPL" });
   });
 
   it("unwraps an acknowledged tool result before handling semantic validation", async () => {

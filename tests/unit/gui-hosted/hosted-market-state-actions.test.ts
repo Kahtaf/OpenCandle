@@ -84,6 +84,31 @@ describe("hosted market-state actions", () => {
     expect(service.listWatchlistItems()[0]).toMatchObject({ symbol: "AAPL", currency: null });
   });
 
+  it("stores an explicitly confirmed hosted alert symbol without provider resolution", async () => {
+    const resolveInstrument = vi.fn(async () => {
+      throw new Error("provider resolution should not run for an explicit hosted fallback");
+    });
+
+    const created = await invokeHostedMarketStateTool(
+      service,
+      "manage_alerts",
+      {
+        action: "create_price_above",
+        symbol: "AAPL",
+        threshold: 200,
+        unverified_exact_symbol: true,
+      },
+      "hosted-alert-exact",
+      { resolveInstrument },
+    );
+
+    expect(resolveInstrument).not.toHaveBeenCalled();
+    expect(created.result.details).toMatchObject({ conditionType: "price_crosses_above" });
+    expect(
+      service.getInstrument((created.result.details as { instrumentId: number }).instrumentId),
+    ).toMatchObject({ symbol: "AAPL", currency: null });
+  });
+
   it("lists stable portfolio lot ids in assistant-visible view content", async () => {
     const added = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "add",
