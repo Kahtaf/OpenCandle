@@ -1,8 +1,13 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
 import type { RouterLlmClient } from "./router-types.js";
 
-type CompleteSimpleResponse = Awaited<ReturnType<typeof completeSimple>>;
+export type PiModelCompletion = typeof import("@earendil-works/pi-ai/compat").completeSimple;
+type CompleteSimpleResponse = Awaited<ReturnType<PiModelCompletion>>;
+
+const defaultPiModelCompletion: PiModelCompletion = async (...args) => {
+  const { completeSimple } = await import("@earendil-works/pi-ai/compat");
+  return completeSimple(...args);
+};
 
 /**
  * Build a router LLM client backed by pi-ai's `completeSimple`. The client
@@ -14,6 +19,7 @@ type CompleteSimpleResponse = Awaited<ReturnType<typeof completeSimple>>;
  */
 export function createPiAiRouterClient(
   model: Model<"anthropic-messages"> | Model<Api>,
+  complete: PiModelCompletion = defaultPiModelCompletion,
 ): RouterLlmClient {
   return {
     async complete(prompt: string): Promise<string> {
@@ -29,17 +35,21 @@ export function createPiAiRouterClient(
         tools: [],
       };
       const options = {
-        temperature: 0,
+        ...(model.reasoning ? {} : { temperature: 0 }),
         maxTokens: 2000,
         reasoning: "minimal" as const,
       };
       let response: CompleteSimpleResponse;
       try {
-        response = await completeSimple(model, request, options);
+        response = await complete(model, request, options);
       } catch (error) {
         if (!isUnsupportedTemperatureError(error)) throw error;
         const { temperature: _temperature, ...retryOptions } = options;
-        response = await completeSimple(model, request, retryOptions);
+        response = await complete(model, request, retryOptions);
+      }
+      if (response.stopReason === "error" && isUnsupportedTemperatureError(response.errorMessage)) {
+        const { temperature: _temperature, ...retryOptions } = options;
+        response = await complete(model, request, retryOptions);
       }
 
       if (response.stopReason === "error" || response.stopReason === "aborted") {

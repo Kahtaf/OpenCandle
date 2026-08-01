@@ -18,10 +18,12 @@ describe("BrowserHostedGuiRuntime action safety", () => {
       createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
     });
 
-    const first = runtime.chatRun("session-1", "First", "run-1");
+    const first = runtime.chatRun("session-1", chatInput("First"), "run-1");
     await Promise.resolve();
 
-    await expect(runtime.chatRun("session-1", "Second", "run-2")).rejects.toThrow("already active");
+    await expect(runtime.chatRun("session-1", chatInput("Second"), "run-2")).rejects.toThrow(
+      "already active",
+    );
     expect(prompt).toHaveBeenCalledTimes(1);
 
     finishPrompt();
@@ -34,8 +36,8 @@ describe("BrowserHostedGuiRuntime action safety", () => {
       createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
     });
 
-    const first = await runtime.chatRun("session-1", "First", "run-1");
-    const retry = await runtime.chatRun("session-1", "First", "run-1");
+    const first = await runtime.chatRun("session-1", chatInput("First"), "run-1");
+    const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1");
 
     expect(retry).toBe(first);
     expect(prompt).toHaveBeenCalledTimes(1);
@@ -60,6 +62,79 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     database.close();
   });
 
+  it("gives Pi chat the same stateful tool contracts exposed by the hosted GUI", async () => {
+    const createPiSession = vi.fn(async () => ({
+      prompt: vi.fn(async () => ({ sessionId: "session-1" })),
+      dispose: vi.fn(),
+    }));
+    const runtime = createRuntime({ createPiSession });
+
+    await runtime.chatRun("session-1", chatInput("Add AAPL to my watchlist"), "run-state-tools");
+
+    const toolNames = createPiSession.mock.calls[0]?.[0].toolDefinitions.map(
+      (tool: { name: string }) => tool.name,
+    );
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        "manage_watchlist",
+        "track_portfolio",
+        "manage_alerts",
+        "daily_watchlist_report",
+        "manage_notifications",
+      ]),
+    );
+  });
+
+  it("forwards validated images into the Pi agent prompt", async () => {
+    const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+    const image = { data: Buffer.from("png").toString("base64"), mimeType: "image/png" };
+
+    await runtime.chatRun(
+      "session-1",
+      { prompt: "Review this", images: [image], attachments: [] },
+      "run-image",
+    );
+
+    expect(prompt).toHaveBeenCalledWith("Review this", undefined, [{ type: "image", ...image }]);
+  });
+
+  it("round-trips ask_user through the same GUI prompt contract", async () => {
+    let sessionOptions: any;
+    const createPiSession = vi.fn(async (options) => {
+      sessionOptions = options;
+      return {
+        prompt: vi.fn(async () => {
+          const result = await options.askUserHandler({
+            question: "Which ticker?",
+            questionType: "text",
+            reason: "A ticker is required",
+          });
+          expect(result).toEqual({ answer: "AAPL", cancelled: false });
+          return { sessionId: "session-1" };
+        }),
+        dispose: vi.fn(),
+      };
+    });
+    const runtime = createRuntime({ createPiSession });
+    const streamed: Record<string, any>[] = [];
+
+    const run = runtime.chatRun("session-1", chatInput("Analyze it"), "run-ask-user", (event) =>
+      streamed.push(event),
+    );
+    await vi.waitFor(() => {
+      expect(streamed.some((event) => event.type === "ask_user.prompt")).toBe(true);
+    });
+    const prompt = streamed.find((event) => event.type === "ask_user.prompt")?.prompt;
+    expect(sessionOptions.askUserHandler).toBeTypeOf("function");
+
+    await runtime.answerAskUser("session-1", prompt.id, "AAPL");
+    await run;
+    expect(streamed.some((event) => event.type === "ask_user.resolved")).toBe(true);
+  });
+
   it("always checkpoints the current session within the bounded archive", () => {
     const sessions = Array.from({ length: 101 }, (_, index) => ({
       sessionId: `session-${index}`,
@@ -74,6 +149,10 @@ describe("BrowserHostedGuiRuntime action safety", () => {
   });
 });
 
+function chatInput(prompt: string) {
+  return { prompt, images: [], attachments: [] };
+}
+
 function createRuntime(
   overrides: Record<string, unknown> = {},
   database: any = { exportBytes: vi.fn(() => new Uint8Array()), close: vi.fn() },
@@ -83,8 +162,9 @@ function createRuntime(
       cwd: "/workspace",
       sessionDir: "/sessions",
       stateFile: "/state/current.sqlite3",
-      modelId: "gpt-4.1-mini",
-      apiKey: "test-key",
+      modelProvider: "openai",
+      modelId: "gpt-5-mini",
+      modelCredentials: { openai: "test-key" },
       ...overrides,
     },
     database,

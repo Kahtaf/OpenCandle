@@ -67,7 +67,7 @@ class BrowserRuntimeCoordinator {
   getModelSetup() {
     return this.host?.getModelSetup?.() ?? this.cachedModelSetup ?? {
       requirement: "api_key",
-      providers: [],
+      providers: modelSetupProviders.map((provider) => ({ ...provider, authState: "missing" })),
       availableModels: [],
       hosted: true,
     };
@@ -502,19 +502,42 @@ function isByteArray(value) {
 
 function normalizeSessionCredential(value) {
   if (
-    value?.version !== 1 ||
-    value.provider !== "openai" ||
-    value.modelId !== "gpt-4.1-mini" ||
-    typeof value.apiKey !== "string" ||
-    !value.apiKey.trim() ||
-    value.storageMode !== "session"
+    value?.version === 1 &&
+    value.provider === "openai" &&
+    typeof value.apiKey === "string" &&
+    value.apiKey.trim() &&
+    value.storageMode === "session"
   ) {
+    return {
+      version: 2,
+      credentials: { openai: { apiKey: value.apiKey.trim(), storageMode: "session" } },
+    };
+  }
+  if (value?.version !== 2 || !value.credentials || typeof value.credentials !== "object") {
     return null;
   }
-  return { ...value, apiKey: value.apiKey.trim() };
+  const credentials = Object.fromEntries(
+    Object.entries(value.credentials)
+      .filter(
+        ([provider, credential]) =>
+          isFirstClassModelProvider(provider) &&
+          typeof credential?.apiKey === "string" &&
+          credential.apiKey.trim().length > 0 &&
+          credential.storageMode === "session",
+      )
+      .map(([provider, credential]) => [
+        provider,
+        { apiKey: credential.apiKey.trim(), storageMode: "session" },
+      ]),
+  );
+  return Object.keys(credentials).length > 0 ? { version: 2, credentials } : null;
 }
 
 function randomId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+import {
+  isFirstClassModelProvider,
+  modelSetupProviders,
+} from "../../../../src/pi/model-provider-metadata.js";

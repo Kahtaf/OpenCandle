@@ -4,7 +4,7 @@ const FORBIDDEN_DEPENDENCY_MARKERS = [
   "twitter-cli",
   "rdt-cli",
 ];
-const APPROVED_PI_PROVIDERS = new Set(["openai"]);
+const APPROVED_PI_PROVIDERS = new Set(["anthropic", "google", "openai"]);
 const PI_PROVIDER_PATH =
   /@earendil-works\/pi-ai\/dist\/providers\/(?:data\/)?([^/.]+?)(?:\.models)?\.(?:js|json)$/;
 
@@ -21,14 +21,30 @@ export function auditRuntimeComposition({
 
   const compositionText = JSON.stringify(metafile).toLowerCase();
   const auditText = `${output}\n${compositionText}`.toLowerCase();
+  const dependencyReferences = Object.entries(metafile.inputs).flatMap(([input, metadata]) => [
+    input,
+    ...(metadata.imports ?? []).map((dependency) => dependency.path),
+  ]);
   const forbidden = FORBIDDEN_DEPENDENCY_MARKERS.filter((marker) =>
-    compositionText.includes(marker),
+    dependencyReferences.some((reference) => reference.toLowerCase().includes(marker)),
   );
   if (Object.keys(metafile.inputs).some((path) => path.endsWith(".node"))) {
     forbidden.push("native .node addon");
   }
   if (forbidden.length > 0) {
-    throw new Error(`Forbidden runtime dependency found: ${forbidden.join(", ")}`);
+    const matchingInputs = Object.keys(metafile.inputs).filter((path) =>
+      FORBIDDEN_DEPENDENCY_MARKERS.some((marker) => path.toLowerCase().includes(marker)),
+    );
+    const matchingImports = Object.entries(metafile.inputs).flatMap(([input, metadata]) =>
+      (metadata.imports ?? [])
+        .filter((dependency) =>
+          FORBIDDEN_DEPENDENCY_MARKERS.some((marker) => dependency.path.toLowerCase().includes(marker)),
+        )
+        .map((dependency) => `${input}->${dependency.path}`),
+    );
+    throw new Error(
+      `Forbidden runtime dependency found: ${forbidden.join(", ")} (${[...matchingInputs, ...matchingImports].join(", ")})`,
+    );
   }
 
   for (const value of sensitiveValues) {

@@ -14,13 +14,21 @@ before or during a turn. Unavailable tools MUST NOT be presented as executable.
   OpenCandle surface when appropriate
 - **AND** it does not fabricate data or silently substitute an unrelated tool
 
-#### Scenario: Hosted chat attachments are unavailable
+### Requirement: Hosted attachments use the shared GUI contract
 
-- **WHEN** the hosted runtime cannot carry image or saved-state attachments
-  through the Pi prompt contract
-- **THEN** the composer omits attachment controls and the runtime rejects any
-  attachment-bearing request explicitly
-- **AND** it never silently discards attached content
+Hosted web SHALL validate image and saved-state attachments with the same
+bounded request contract as local web. Saved-state context SHALL be expanded
+from the browser-owned SQLite database and images SHALL be passed to Pi's agent
+prompt without a hosted-only conversion format.
+
+#### Scenario: Hosted user submits attached context
+
+- **WHEN** a hosted user sends supported images or a saved portfolio,
+  watchlist, or report attachment
+- **THEN** the browser runtime passes that context through the same Pi prompt
+  contract used by local web
+- **AND** malformed, oversized, or unsupported attachments fail before a model
+  call instead of being silently discarded
 
 ### Requirement: Offline mode separates reading from research
 

@@ -66,6 +66,11 @@ describe("hosted runtime transport", () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });
 
+    expect(transport.initialModelSetup).toMatchObject({
+      requirement: "ready",
+      currentModel: "openai/gpt-4.1-mini",
+    });
+
     await expect(transport.bootstrap()).resolves.toMatchObject({
       role: "writer",
       sessionId: "session-1",

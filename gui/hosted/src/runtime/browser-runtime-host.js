@@ -1,7 +1,13 @@
 import { createBrowserDataStore } from "./browser-data-store.js";
+import {
+  isFirstClassModelProvider,
+  modelSetupProviders,
+} from "../../../../src/pi/model-provider-metadata.js";
+import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generated.js";
 
-const BRIDGE_CHANNEL = "opencandle-browser-runtime-v1";
+const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
+const MODEL_SELECTION_KEY = "opencandle.hosted.model-selection.v1";
 const PROVIDER_CREDENTIAL_KEY = "opencandle.hosted.provider-credentials.v1";
 const CURRENT_SESSION_KEY = "opencandle.hosted.current-session.v1";
 const RELAY_CLIENT_KEY = "opencandle.hosted.relay-client.v1";
@@ -23,9 +29,12 @@ class BrowserRuntimeHost {
   constructor(options = {}) {
     this.WebContainerImpl = options.WebContainerImpl;
     this.configureWebContainerApiKey = options.configureWebContainerApiKey;
-    this.webContainerApiKey = String(
+    const configuredWebContainerApiKey = String(
       options.webContainerApiKey ?? import.meta.env?.VITE_WEBCONTAINER_API_KEY ?? "",
     ).trim();
+    this.webContainerApiKey = isLoopbackOrigin(globalThis.location?.origin)
+      ? ""
+      : configuredWebContainerApiKey;
     this.webContainerApiConfigured = false;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.storage = options.storage ?? globalThis.localStorage;
@@ -39,68 +48,90 @@ class BrowserRuntimeHost {
     this.relayClientId = getOrCreateRelayClientId(this.storage);
     this.dataStore = options.dataStore ?? createBrowserDataStore();
     this.volatileCredential = normalizeCredential(options.sessionCredential);
-    this.bridgeFrame =
-      options.bridgeFrame ?? document.getElementById("opencandle-runtime-bridge");
     this.container = null;
     this.process = null;
-    this.previewOrigin = "";
+    this.processWriter = null;
     this.runtimeEpoch = "";
     this.bootPromise = null;
+    this.lastBootError = "";
     this.pendingRequests = new Map();
-    this.handleBridgeMessage = this.handleBridgeMessage.bind(this);
-    globalThis.addEventListener("message", this.handleBridgeMessage);
+    this.subscribers = new Set();
+  }
+
+  subscribe(callback) {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
   }
 
   getModelSetup() {
-    const credential = this.readCredential();
-    const configured = Boolean(credential?.apiKey);
+    const credentials = this.readModelCredentials();
+    const configuredProviders = new Set(Object.keys(credentials));
+    const selection = this.readModelSelection(credentials);
+    const configured = Boolean(selection && credentials[selection.provider]?.apiKey);
+    const availableModels = firstClassModelCatalog.filter((model) =>
+      configuredProviders.has(model.provider),
+    );
     return {
-      requirement: configured ? "ready" : "api_key",
-      providers: [
-        {
-          id: "openai",
-          label: "OpenAI",
-          envVar: "OPENAI_API_KEY",
-          defaultModel: "gpt-4.1-mini",
-          signupUrl: "https://platform.openai.com/api-keys",
-          authState: configured ? "configured" : "missing",
-        },
-      ],
-      availableModels: configured
-        ? [
-            {
-              provider: "openai",
-              id: "gpt-4.1-mini",
-              label: "OpenAI GPT-4.1 mini",
-            },
-          ]
-        : [],
-      currentModel: configured ? "openai/gpt-4.1-mini" : "",
-      storageMode: credential?.storageMode || "persistent",
-      supportsAttachments: false,
+      requirement: configured ? "ready" : availableModels.length > 0 ? "select_model" : "api_key",
+      providers: modelSetupProviders.map((provider) => ({
+        ...provider,
+        authState: configuredProviders.has(provider.id) ? "configured" : "missing",
+      })),
+      availableModels,
+      currentModel: configured ? `${selection.provider}/${selection.modelId}` : "",
+      storageMode: selection ? credentials[selection.provider]?.storageMode ?? "persistent" : "persistent",
+      supportsAttachments: true,
       hosted: true,
+      ...(this.lastBootError ? { error: this.lastBootError } : {}),
     };
   }
 
   async handleCommand(command) {
     switch (command?.type) {
       case "model.setup.save_api_key": {
-        if (command.provider !== "openai") {
-          throw new Error("Hosted OpenCandle currently supports OpenAI model keys only.");
-        }
+        const provider = isFirstClassModelProvider(command.provider) ? command.provider : undefined;
+        if (!provider) throw new Error("Unsupported model provider.");
         const apiKey = String(command.apiKey ?? "").trim();
-        if (!apiKey || apiKey.length > 512) throw new Error("Enter a valid OpenAI API key.");
+        if (!apiKey || apiKey.length > 512) throw new Error("Enter a valid model API key.");
+        const setup = modelSetupProviders.find((candidate) => candidate.id === provider);
+        const requestedModel = String(command.modelId ?? setup?.defaultModel ?? "");
+        const model = resolveCatalogModel(provider, requestedModel);
+        if (!model) throw new Error("Unsupported provider or model.");
         const storageMode = command.storageMode === "session" ? "session" : "persistent";
-        this.writeCredential({ apiKey, storageMode });
+        const validation = await this.request("gui", {
+          action: "validate_model_key",
+          provider,
+          apiKey,
+        });
+        if (validation?.status === "invalid") {
+          throw new Error(`The ${setup?.label ?? provider} key was rejected. Your existing key was not changed.`);
+        }
+        this.writeCredential({ provider, modelId: model.id, apiKey, storageMode });
         await this.request("gui", {
           action: "configure_model",
-          provider: "openai",
-          modelId: "gpt-4.1-mini",
+          provider,
+          modelId: model.id,
           apiKey,
         });
         return { modelSetup: this.getModelSetup() };
       }
-      case "model.setup.select_model":
+      case "model.setup.select_model": {
+        const provider = isFirstClassModelProvider(command.provider) ? command.provider : undefined;
+        const modelId = String(command.modelId ?? "");
+        if (!provider || !resolveCatalogModel(provider, modelId)) {
+          throw new Error("Unsupported provider or model.");
+        }
+        const credential = this.readModelCredentials()[provider];
+        if (!credential?.apiKey) throw new Error(`Connect ${provider} before selecting this model.`);
+        this.writeModelSelection({ provider, modelId });
+        await this.request("gui", {
+          action: "configure_model",
+          provider,
+          modelId,
+          apiKey: credential.apiKey,
+        });
+        return { modelSetup: this.getModelSetup() };
+      }
       case "model.setup.refresh":
         return { modelSetup: this.getModelSetup() };
       case "provider.save_api_key": {
@@ -182,6 +213,19 @@ class BrowserRuntimeHost {
           action: "delete_session",
           sessionId: String(command.path || command.sessionId || ""),
         });
+      case "ask_user.answer":
+        return this.request("gui", {
+          action: "ask_user.answer",
+          sessionId: String(command.sessionId || ""),
+          id: String(command.id || ""),
+          answer: String(command.answer || ""),
+        });
+      case "ask_user.cancel":
+        return this.request("gui", {
+          action: "ask_user.cancel",
+          sessionId: String(command.sessionId || ""),
+          id: String(command.id || ""),
+        });
       default:
         throw new Error(
           `This action is unavailable in hosted OpenCandle: ${String(command?.type || "unknown").slice(0, 80)}`,
@@ -213,9 +257,7 @@ class BrowserRuntimeHost {
       );
     }
     await this.ensureBooted();
-    if (!this.previewOrigin || !this.bridgeFrame?.contentWindow) {
-      throw new Error("Hosted runtime bridge is unavailable");
-    }
+    if (!this.processWriter) throw new Error("Hosted runtime process is unavailable");
     const requestId = randomRequestId();
     const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
     const result = await new Promise((resolve, reject) => {
@@ -226,6 +268,7 @@ class BrowserRuntimeHost {
       const abort = () => {
         globalThis.clearTimeout(timer);
         this.pendingRequests.delete(requestId);
+        void this.writeProcessMessage({ type: "cancel", requestId });
         reject(new DOMException("The operation was aborted", "AbortError"));
       };
       if (options.signal?.aborted) {
@@ -236,15 +279,25 @@ class BrowserRuntimeHost {
       this.pendingRequests.set(requestId, {
         resolve,
         reject,
+        operation: operation === "gui" ? payload?.action : operation,
         timer,
         signal: options.signal,
         abort,
         blocksUpdate: requestBlocksUpdate(operation, payload),
       });
-      this.bridgeFrame.contentWindow.postMessage(
-        { channel: BRIDGE_CHANNEL, runtimeEpoch: this.runtimeEpoch, operation, requestId, payload },
-        this.previewOrigin,
-      );
+      void this.writeProcessMessage({
+        type: "request",
+        runtimeEpoch: this.runtimeEpoch,
+        operation,
+        requestId,
+        payload,
+      }).catch((error) => {
+        const pending = this.pendingRequests.get(requestId);
+        if (!pending) return;
+        globalThis.clearTimeout(pending.timer);
+        this.pendingRequests.delete(requestId);
+        reject(error);
+      });
     });
     if (operation === "gui") await this.persistCheckpoint(result);
     if (operation === "gui" && payload?.action === "diagnostics") {
@@ -262,9 +315,7 @@ class BrowserRuntimeHost {
       throw new Error("OpenCandle is offline. Research needs a network connection.");
     }
     await this.ensureBooted();
-    if (!this.previewOrigin || !this.bridgeFrame?.contentWindow) {
-      throw new Error("Hosted runtime bridge is unavailable");
-    }
+    if (!this.processWriter) throw new Error("Hosted runtime process is unavailable");
     const requestId = randomRequestId();
     let streamController;
     const stream = new ReadableStream({
@@ -276,18 +327,12 @@ class BrowserRuntimeHost {
     const timer = globalThis.setTimeout(() => {
       this.pendingRequests.delete(requestId);
       streamController.error(new Error("Hosted runtime stream timed out"));
-      this.bridgeFrame?.contentWindow?.postMessage(
-        { channel: BRIDGE_CHANNEL, runtimeEpoch: this.runtimeEpoch, type: "cancel", requestId },
-        this.previewOrigin,
-      );
+      void this.writeProcessMessage({ type: "cancel", requestId });
     }, timeoutMs);
     const abort = () => {
       globalThis.clearTimeout(timer);
       this.pendingRequests.delete(requestId);
-      this.bridgeFrame?.contentWindow?.postMessage(
-        { channel: BRIDGE_CHANNEL, runtimeEpoch: this.runtimeEpoch, type: "cancel", requestId },
-        this.previewOrigin,
-      );
+      void this.writeProcessMessage({ type: "cancel", requestId });
       streamController.error(new DOMException("The operation was aborted", "AbortError"));
     };
     if (options.signal?.aborted) abort();
@@ -296,21 +341,19 @@ class BrowserRuntimeHost {
       this.pendingRequests.set(requestId, {
         streamController,
         sseGate: createDurableSseGate(streamController),
+        operation: `${operation}-stream`,
         timer,
         signal: options.signal,
         abort,
         blocksUpdate: true,
       });
-      this.bridgeFrame.contentWindow.postMessage(
-        {
-          channel: BRIDGE_CHANNEL,
-          runtimeEpoch: this.runtimeEpoch,
-          operation: `${operation}-stream`,
-          requestId,
-          payload,
-        },
-        this.previewOrigin,
-      );
+      await this.writeProcessMessage({
+        type: "request",
+        runtimeEpoch: this.runtimeEpoch,
+        operation: `${operation}-stream`,
+        requestId,
+        payload,
+      });
     }
     return new Response(stream, {
       status: 200,
@@ -322,7 +365,6 @@ class BrowserRuntimeHost {
   }
 
   async dispose() {
-    globalThis.removeEventListener("message", this.handleBridgeMessage);
     await this.stopRuntime();
   }
 
@@ -330,8 +372,14 @@ class BrowserRuntimeHost {
     this.bootPromise ??= this.boot();
     try {
       await this.bootPromise;
+      this.lastBootError = "";
     } catch (error) {
       this.bootPromise = null;
+      this.lastBootError = scrubSecrets(
+        error instanceof Error ? error.message : String(error),
+        Object.values(this.readModelCredentials()).map((credential) => credential.apiKey),
+      ).slice(0, 500);
+      console.error(`Hosted runtime boot failed: ${this.lastBootError}`);
       throw error;
     }
   }
@@ -350,18 +398,29 @@ class BrowserRuntimeHost {
     }
     const container = await WebContainerImpl.boot({ coep: "require-corp" });
     this.container = container;
-    const [runtimeBundle, sqlWasm, sqlCommonJs, persisted] = await Promise.all([
+    const [runtimeManifestText, sqlWasm, sqlCommonJs, persisted] = await Promise.all([
       this.fetchAssetText(
-        `/runtime/runtime-bundle.mjs?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
+        `/runtime/runtime-files.json?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
       ),
       this.fetchAssetBytes("/runtime/sql-wasm.wasm"),
       this.fetchAssetText("/runtime/sql-wasm.cjs"),
       this.dataStore.readRuntimeSnapshot(),
     ]);
+    const runtimeManifest = parseRuntimeManifest(runtimeManifestText);
+    const runtimeModules = await Promise.all(
+      runtimeManifest.files.map(async (filename) => [
+        filename,
+        await this.fetchAssetText(
+          `/runtime/${filename}?v=${encodeURIComponent(__OPENCANDLE_RUNTIME_VERSION__)}`,
+        ),
+      ]),
+    );
     const { sessions: sessionFiles, stateBytes, currentSessionId } = persisted;
     if (stateBytes) await this.dataStore.createBackup();
     const runtimeFiles = {
-      "runtime-bundle.mjs": { file: { contents: runtimeBundle } },
+      ...Object.fromEntries(
+        runtimeModules.map(([filename, contents]) => [filename, { file: { contents } }]),
+      ),
       "package.json": { file: { contents: '{"type":"module","private":true}' } },
       "sql-wasm.cjs": { file: { contents: sqlCommonJs } },
       "sql-wasm.wasm": { file: { contents: sqlWasm } },
@@ -385,16 +444,20 @@ class BrowserRuntimeHost {
     }
     await container.mount(runtimeFiles);
 
-    await this.startProcess(container, currentSessionId || this.storage.getItem(CURRENT_SESSION_KEY) || "");
+    await this.startProcess(
+      container,
+      currentSessionId || this.storage.getItem(CURRENT_SESSION_KEY) || "",
+      runtimeManifest.entry,
+    );
   }
 
-  async startProcess(container, currentSessionId = "") {
-    const port = 10_000 + Math.floor(Math.random() * 40_000);
+  async startProcess(container, currentSessionId = "", runtimeEntry = "runtime-bundle.mjs") {
     this.runtimeEpoch = randomRequestId();
-    const credential = this.readCredential();
+    const modelCredentials = this.readModelCredentials();
+    const selection = this.readModelSelection(modelCredentials);
     const providerCredentials = this.readProviderCredentials();
     const environment = {
-      PORT: String(port),
+      OPENCANDLE_RUNTIME_TRANSPORT: "stdio",
       OPENCANDLE_SPIKE_HOST_ORIGIN: globalThis.location.origin,
       OPENCANDLE_RUNTIME_EPOCH: this.runtimeEpoch,
       ...(this.relayUrl
@@ -403,7 +466,18 @@ class BrowserRuntimeHost {
             OPENCANDLE_PROVIDER_RELAY_CLIENT_ID: this.relayClientId,
           }
         : {}),
-      ...(credential?.apiKey ? { OPENAI_API_KEY: credential.apiKey } : {}),
+      ...Object.fromEntries(
+        modelSetupProviders.flatMap((provider) => {
+          const key = modelCredentials[provider.id]?.apiKey;
+          return key ? [[provider.envVar, key]] : [];
+        }),
+      ),
+      ...(selection
+        ? {
+            OPENCANDLE_MODEL_PROVIDER: selection.provider,
+            OPENCANDLE_MODEL_ID: selection.modelId,
+          }
+        : {}),
       ...Object.fromEntries(
         Object.entries(providerCredentials).map(([providerId, apiKey]) => [
           PROVIDER_ENV_BY_ID[providerId],
@@ -416,23 +490,43 @@ class BrowserRuntimeHost {
           }
         : {}),
     };
-    const serverReady = new Promise((resolve) => {
-      const unsubscribe = container.on("server-ready", (readyPort, url) => {
-        if (readyPort !== port) return;
-        unsubscribe?.();
-        resolve(url);
-      });
-    });
-    this.process = await container.spawn("node", ["runtime-bundle.mjs"], {
+    this.process = await container.spawn("node", [runtimeEntry], {
       env: environment,
-      output: false,
+      output: true,
     });
-    const previewUrl = await withTimeout(
-      serverReady,
-      90_000,
-      "Hosted runtime did not become ready",
+    const runtimeReady = new Promise((resolve, reject) => {
+      this.runtimeReady = { resolve, reject };
+    });
+    const processOutput = captureProcessOutput(this.process.output, (message) =>
+      this.handleRuntimeMessage(message),
     );
-    await this.connectBridge(previewUrl);
+    this.processWriter = this.process.input.getWriter();
+    const processExit = this.process.exit?.then(async (code) => {
+      const output = scrubSecrets(processOutput.snapshot(), Object.values(environment));
+      throw new Error(
+        `Hosted runtime exited before becoming ready (code ${code})${output ? `: ${output}` : ""}`,
+      );
+    }) ?? new Promise(() => {});
+    try {
+      await withTimeout(
+        Promise.race([runtimeReady, processExit]),
+        90_000,
+        "Hosted runtime did not become ready",
+      );
+    } catch (error) {
+      const output = scrubSecrets(processOutput.snapshot(), Object.values(environment));
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message}${output && !message.includes(output) ? `: ${output}` : ""}`);
+    }
+    void processExit.catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.lastBootError = message.slice(0, 500);
+      console.error(`Hosted runtime stopped after becoming ready: ${this.lastBootError}`);
+      for (const pending of this.pendingRequests.values()) {
+        pending.reject?.(error);
+        pending.streamController?.error(error);
+      }
+    });
   }
 
   async stopRuntime() {
@@ -446,59 +540,54 @@ class BrowserRuntimeHost {
     for (const [requestId, pending] of this.pendingRequests) {
       globalThis.clearTimeout(pending.timer);
       pending.signal?.removeEventListener("abort", pending.abort);
+      pending.controller?.abort(new Error("Hosted runtime restarted"));
       if (pending.streamController) {
         pending.streamController.error(new Error("Hosted runtime restarted"));
-      } else {
+      } else if (pending.reject) {
         pending.reject(new Error("Hosted runtime restarted"));
       }
       this.pendingRequests.delete(requestId);
     }
     this.process?.kill();
+    this.processWriter?.releaseLock?.();
     this.process = null;
-    this.previewOrigin = "";
+    this.processWriter = null;
     this.runtimeEpoch = "";
-    this.bridgeFrame?.removeAttribute("src");
   }
 
-  async connectBridge(previewUrl) {
-    if (!this.bridgeFrame) throw new Error("Hosted runtime bridge frame is missing");
-    const previewOrigin = new URL(previewUrl).origin;
-    this.previewOrigin = previewOrigin;
-    const ready = new Promise((resolve, reject) => {
-      const timer = globalThis.setTimeout(
-        () => reject(new Error("Hosted runtime bridge did not become ready")),
-        30_000,
-      );
-      this.bridgeReady = {
-        resolve: () => {
-          globalThis.clearTimeout(timer);
-          resolve();
-        },
-        reject,
-      };
-    });
-    this.bridgeFrame.src = `${previewOrigin}/bridge`;
-    await ready;
+  async writeProcessMessage(message) {
+    if (!this.processWriter) throw new Error("Hosted runtime process is unavailable");
+    await this.processWriter.write(`${JSON.stringify(message)}\n`);
   }
 
-  handleBridgeMessage(event) {
-    if (
-      !this.previewOrigin ||
-      event.origin !== this.previewOrigin ||
-      event.source !== this.bridgeFrame?.contentWindow
-    ) {
-      return;
-    }
-    const message = event.data;
+  handleRuntimeMessage(message) {
     if (
       !message ||
       typeof message !== "object" ||
-      message.channel !== BRIDGE_CHANNEL ||
       message.runtimeEpoch !== this.runtimeEpoch
     ) return;
     if (message.type === "ready") {
-      this.bridgeReady?.resolve();
-      this.bridgeReady = null;
+      this.runtimeReady?.resolve();
+      this.runtimeReady = null;
+      return;
+    }
+    if (message.type === "fatal") {
+      this.runtimeReady?.reject(new Error(String(message.error || "Hosted runtime failed")));
+      this.runtimeReady = null;
+      return;
+    }
+    if (message.type === "stream-event" && typeof message.requestId === "string") {
+      const pending = this.pendingRequests.get(message.requestId);
+      if (!pending?.streamController) return;
+      if (
+        message.event?.type === "ask_user.prompt" ||
+        message.event?.type === "ask_user.resolved"
+      ) {
+        for (const subscriber of this.subscribers) subscriber(message.event);
+      }
+      pending.sseGate.push(
+        new TextEncoder().encode(`data: ${JSON.stringify(message.event)}\n\n`),
+      );
       return;
     }
     if (message.type === "stream-chunk" && typeof message.requestId === "string") {
@@ -555,28 +644,44 @@ class BrowserRuntimeHost {
     }
   }
 
-  readCredential() {
-    if (this.volatileCredential) return this.volatileCredential;
-    const session = parseCredential(this.sessionStorage.getItem(CREDENTIAL_KEY));
-    if (session) return session;
-    return parseCredential(this.storage.getItem(CREDENTIAL_KEY));
+  readModelCredentials() {
+    const persistent = parseCredentialStore(this.storage.getItem(CREDENTIAL_KEY), "persistent");
+    const session = parseCredentialStore(this.sessionStorage.getItem(CREDENTIAL_KEY), "session");
+    const volatile = parseCredentialBundle(this.volatileCredential, "session");
+    return { ...persistent, ...session, ...volatile };
   }
 
   writeCredential(credential) {
-    this.storage.removeItem(CREDENTIAL_KEY);
-    this.sessionStorage.removeItem(CREDENTIAL_KEY);
-    this.volatileCredential = credential.storageMode === "session" ? normalizeCredential(credential) : null;
-    const target = credential.storageMode === "session" ? this.sessionStorage : this.storage;
-    target.setItem(
-      CREDENTIAL_KEY,
-      JSON.stringify({
-        version: 1,
-        provider: "openai",
-        modelId: "gpt-4.1-mini",
-        apiKey: credential.apiKey,
-        storageMode: credential.storageMode,
-      }),
-    );
+    const persistent = parseCredentialStore(this.storage.getItem(CREDENTIAL_KEY), "persistent");
+    const session = parseCredentialStore(this.sessionStorage.getItem(CREDENTIAL_KEY), "session");
+    delete persistent[credential.provider];
+    delete session[credential.provider];
+    const target = credential.storageMode === "session" ? session : persistent;
+    target[credential.provider] = {
+      apiKey: credential.apiKey,
+      storageMode: credential.storageMode,
+    };
+    writeCredentialStore(this.storage, persistent);
+    writeCredentialStore(this.sessionStorage, session);
+    this.volatileCredential = Object.keys(session).length > 0
+      ? { version: 2, credentials: session }
+      : null;
+    this.writeModelSelection({ provider: credential.provider, modelId: credential.modelId });
+  }
+
+  readModelSelection(credentials = this.readModelCredentials()) {
+    const stored = parseModelSelection(this.storage.getItem(MODEL_SELECTION_KEY));
+    if (stored && credentials[stored.provider] && resolveCatalogModel(stored.provider, stored.modelId)) {
+      return stored;
+    }
+    for (const provider of modelSetupProviders) {
+      if (credentials[provider.id]) return { provider: provider.id, modelId: provider.defaultModel };
+    }
+    return null;
+  }
+
+  writeModelSelection(selection) {
+    this.storage.setItem(MODEL_SELECTION_KEY, JSON.stringify({ version: 1, ...selection }));
   }
 
   async persistCheckpoint(value) {
@@ -598,8 +703,10 @@ class BrowserRuntimeHost {
   }
 
   getSessionCredential() {
-    const credential = this.readCredential();
-    return credential?.storageMode === "session" ? { ...credential } : null;
+    const credentials = Object.fromEntries(
+      Object.entries(this.readModelCredentials()).filter(([, credential]) => credential.storageMode === "session"),
+    );
+    return Object.keys(credentials).length > 0 ? { version: 2, credentials } : null;
   }
 
   async clearAll() {
@@ -640,11 +747,35 @@ function hostedRelayUrl(value, hostOrigin) {
   }
 }
 
+function parseRuntimeManifest(serialized) {
+  const value = JSON.parse(serialized);
+  if (
+    value?.version !== 1 ||
+    typeof value.entry !== "string" ||
+    !Array.isArray(value.files) ||
+    !value.files.includes(value.entry) ||
+    !value.files.every(
+      (filename) => typeof filename === "string" && /^[A-Za-z0-9._-]+\.mjs$/.test(filename),
+    )
+  ) {
+    throw new Error("Hosted runtime manifest is invalid");
+  }
+  return { entry: value.entry, files: [...new Set(value.files)] };
+}
+
 function isLoopback(url) {
   return (
     (url.protocol === "http:" || url.protocol === "https:") &&
     (url.hostname === "127.0.0.1" || url.hostname === "localhost")
   );
+}
+
+function isLoopbackOrigin(value) {
+  try {
+    return isLoopback(new URL(String(value ?? "")));
+  } catch {
+    return false;
+  }
 }
 
 function getOrCreateRelayClientId(storage) {
@@ -710,24 +841,54 @@ function isRunCompletedBlock(block) {
   }
 }
 
-function parseCredential(serialized) {
+function parseCredentialStore(serialized, storageMode) {
+  if (!serialized) return {};
+  try {
+    const value = JSON.parse(serialized);
+    if (value?.version === 1 && value.provider === "openai" && typeof value.apiKey === "string") {
+      const apiKey = value.apiKey.trim();
+      return apiKey && apiKey.length <= 512 ? { openai: { apiKey, storageMode } } : {};
+    }
+    return parseCredentialBundle(value, storageMode);
+  } catch {
+    return {};
+  }
+}
+
+function parseCredentialBundle(value, storageMode) {
+  if (value?.version !== 2 || !value.credentials || typeof value.credentials !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value.credentials).filter(
+      ([provider, credential]) =>
+        isFirstClassModelProvider(provider) &&
+        typeof credential?.apiKey === "string" &&
+        credential.apiKey.trim().length > 0 &&
+        credential.apiKey.length <= 512,
+    ).map(([provider, credential]) => [provider, { apiKey: credential.apiKey.trim(), storageMode }]),
+  );
+}
+
+function writeCredentialStore(storage, credentials) {
+  if (Object.keys(credentials).length === 0) storage.removeItem(CREDENTIAL_KEY);
+  else storage.setItem(CREDENTIAL_KEY, JSON.stringify({ version: 2, credentials }));
+}
+
+function parseModelSelection(serialized) {
   if (!serialized) return null;
   try {
     const value = JSON.parse(serialized);
-    if (
-      value?.version !== 1 ||
-      value.provider !== "openai" ||
-      value.modelId !== "gpt-4.1-mini" ||
-      typeof value.apiKey !== "string" ||
-      !value.apiKey.trim() ||
-      (value.storageMode !== "persistent" && value.storageMode !== "session")
-    ) {
-      return null;
-    }
-    return value;
+    return value?.version === 1 && resolveCatalogModel(value.provider, value.modelId)
+      ? { provider: value.provider, modelId: value.modelId }
+      : null;
   } catch {
     return null;
   }
+}
+
+function resolveCatalogModel(provider, modelId) {
+  return firstClassModelCatalog.find(
+    (model) => model.provider === provider && model.id === modelId,
+  );
 }
 
 function parseProviderCredentials(serialized) {
@@ -753,16 +914,19 @@ function parseProviderCredentials(serialized) {
 
 function normalizeCredential(value) {
   if (
-    value?.version !== 1 ||
-    value.provider !== "openai" ||
-    value.modelId !== "gpt-4.1-mini" ||
-    typeof value.apiKey !== "string" ||
-    !value.apiKey.trim() ||
-    value.storageMode !== "session"
+    value?.version === 1 &&
+    value.provider === "openai" &&
+    typeof value.apiKey === "string" &&
+    value.apiKey.trim() &&
+    value.storageMode === "session"
   ) {
-    return null;
+    return {
+      version: 2,
+      credentials: { openai: { apiKey: value.apiKey.trim(), storageMode: "session" } },
+    };
   }
-  return { ...value, apiKey: value.apiKey.trim() };
+  const credentials = parseCredentialBundle(value, "session");
+  return Object.keys(credentials).length > 0 ? { version: 2, credentials } : null;
 }
 
 function randomRequestId() {
@@ -815,4 +979,55 @@ async function waitFor(predicate, timeoutMs, message) {
     if (Date.now() - startedAt >= timeoutMs) throw new Error(message);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+}
+
+function captureProcessOutput(stream, onMessage = () => {}) {
+  let output = "";
+  if (stream?.getReader) {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    void (async () => {
+      let buffered = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffered += typeof value === "string" ? value : decoder.decode(value, { stream: true });
+          const lines = buffered.split("\n");
+          buffered = lines.pop() ?? "";
+          for (const line of lines) {
+            if (line.startsWith(PROCESS_FRAME_PREFIX)) {
+              try {
+                onMessage(JSON.parse(line.slice(PROCESS_FRAME_PREFIX.length)));
+              } catch {
+                output = `${output}${line}\n`.slice(-8_192);
+              }
+            } else if (!isEchoedProcessRequest(line)) {
+              output = `${output}${line}\n`.slice(-8_192);
+            }
+          }
+        }
+        buffered += decoder.decode();
+        if (buffered) output = `${output}${buffered}`.slice(-8_192);
+      } catch {
+        // Preserve the bounded output already received for the boot error.
+      }
+    })();
+  }
+  return { snapshot: () => output.trim() };
+}
+
+function isEchoedProcessRequest(line) {
+  try {
+    return JSON.parse(line)?.type === "request";
+  } catch {
+    return false;
+  }
+}
+
+function scrubSecrets(value, candidates) {
+  return candidates
+    .map((candidate) => String(candidate ?? "").trim())
+    .filter((candidate) => candidate.length >= 8)
+    .reduce((output, candidate) => output.replaceAll(candidate, "[redacted]"), String(value));
 }

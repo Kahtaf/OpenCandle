@@ -146,11 +146,10 @@ describe("browser runtime host", () => {
     const storage = memoryStorage();
     const sessionStorage = memoryStorage();
     const credential = {
-      version: 1,
-      provider: "openai",
-      modelId: "gpt-4.1-mini",
-      apiKey: "session-only-key",
-      storageMode: "session",
+      version: 2,
+      credentials: {
+        anthropic: { apiKey: "session-only-key", storageMode: "session" },
+      },
     };
     const host = createBrowserRuntimeHost({
       bridgeFrame: {},
@@ -163,10 +162,61 @@ describe("browser runtime host", () => {
     expect(host.getSessionCredential()).toEqual(credential);
     expect(host.getModelSetup()).toMatchObject({
       requirement: "ready",
-      supportsAttachments: false,
+      supportsAttachments: true,
+      currentModel: "anthropic/claude-haiku-4-5",
     });
     expect(storage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
     expect(sessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+  });
+
+  it("preserves provider credentials independently while switching Pi models", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const storage = memoryStorage();
+    const sessionStorage = memoryStorage();
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage,
+      sessionStorage,
+      dataStore: {},
+    });
+    host.request = vi.fn(async () => ({}));
+
+    await host.handleCommand({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      modelId: "gpt-5-mini",
+      apiKey: "openai-key",
+      storageMode: "persistent",
+    });
+    await host.handleCommand({
+      type: "model.setup.save_api_key",
+      provider: "anthropic",
+      modelId: "claude-haiku-4-5",
+      apiKey: "anthropic-key",
+      storageMode: "persistent",
+    });
+    await host.handleCommand({
+      type: "model.setup.select_model",
+      provider: "openai",
+      modelId: "gpt-5-mini",
+    });
+
+    const stored = JSON.parse(storage.getItem("opencandle.hosted.credentials.v1"));
+    expect(stored).toMatchObject({
+      version: 2,
+      credentials: {
+        openai: { apiKey: "openai-key" },
+        anthropic: { apiKey: "anthropic-key" },
+      },
+    });
+    expect(host.getModelSetup()).toMatchObject({ currentModel: "openai/gpt-5-mini" });
+    expect(host.request).toHaveBeenLastCalledWith("gui", {
+      action: "configure_model",
+      provider: "openai",
+      modelId: "gpt-5-mini",
+      apiKey: "openai-key",
+    });
   });
 
   it("stores provider keys only in browser storage and restarts the hosted process", async () => {
@@ -259,6 +309,41 @@ describe("browser runtime host", () => {
     expect(chunks.join("")).not.toContain("run.completed");
   });
 
+  it("calls the in-browser Pi process over WebContainer stdio", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { persistCheckpoint: vi.fn(async () => {}) },
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const response = host.request("gui", { action: "bootstrap" });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    const request = JSON.parse(write.mock.calls[0][0]);
+    host.handleRuntimeMessage({
+      type: "response",
+      runtimeEpoch: host.runtimeEpoch,
+      requestId: request.requestId,
+      ok: true,
+      result: { runtimeState: "ready" },
+    });
+    await expect(response).resolves.toEqual({
+      runtimeState: "ready",
+    });
+    expect(request).toMatchObject({
+      type: "request",
+      operation: "gui",
+      payload: { action: "bootstrap" },
+    });
+  });
+
   it("configures the WebContainer client before the first boot only", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -287,7 +372,15 @@ describe("browser runtime host", () => {
         }),
       },
     });
-    host.fetchAssetText = vi.fn(async () => "runtime");
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
     host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
     host.startProcess = vi.fn(async () => {});
 
@@ -304,16 +397,24 @@ describe("browser runtime host", () => {
     const storage = memoryStorage();
     const environments: Array<Record<string, string>> = [];
     const run = async () => {
-      let ready: ((port: number, url: string) => void) | undefined;
       const container = {
-        on: vi.fn((_event, callback) => {
-          ready = callback;
-          return vi.fn();
-        }),
         spawn: vi.fn(async (_command, _args, options) => {
           environments.push(options.env);
-          ready?.(Number(options.env.PORT), "https://runtime.example");
-          return { kill: vi.fn() };
+          return {
+            input: new WritableStream(),
+            output: new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  `@@OPENCANDLE@@${JSON.stringify({
+                    type: "ready",
+                    runtimeEpoch: options.env.OPENCANDLE_RUNTIME_EPOCH,
+                  })}\n`,
+                );
+              },
+            }),
+            exit: new Promise(() => {}),
+            kill: vi.fn(),
+          };
         }),
       };
       const host = createBrowserRuntimeHost({
@@ -323,7 +424,6 @@ describe("browser runtime host", () => {
         dataStore: {},
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
       });
-      host.connectBridge = vi.fn(async () => {});
       await host.startProcess(container);
     };
 

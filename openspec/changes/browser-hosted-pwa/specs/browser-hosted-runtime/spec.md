@@ -45,6 +45,15 @@ adapters.
   SQLite
 - **AND** it does not load browser runtime or PWA persistence dependencies
 
+#### Scenario: Browser-capable feature has one implementation
+
+- **WHEN** a GUI/TUI feature such as a tool workflow, ask-user prompt,
+  market-state command, attachment, action marker, or live event can execute
+  with hosted platform adapters
+- **THEN** hosted web uses the same shared command/session/event implementation
+- **AND** a browser capability filter may omit only the unavailable native or
+  background portion with an explicit reason
+
 ### Requirement: Hosted turns use the real Pi agent loop
 
 The hosted runtime SHALL run the real Pi model/agent loop and OpenCandle
@@ -60,18 +69,50 @@ generator.
   records tool and assistant entries, and streams canonical chat events
 - **AND** the resulting session can be replayed after reload
 
+### Requirement: Model discovery and execution use canonical Pi internals
+
+Hosted web, local web, and local TUI SHALL derive model choices from the same
+Pi-backed OpenCandle model catalog and SHALL use Pi provider implementations
+for model execution. Hosted web MAY filter providers by proven browser
+capability, but MUST NOT maintain hosted-only model IDs, provider protocols, or
+fallback routing. The selected provider and model SHALL drive both OpenCandle
+routing and Pi agent streaming.
+
+#### Scenario: Browser-safe provider exposes its Pi models
+
+- **WHEN** a first-class OpenCandle model provider is proven executable in the
+  hosted browser runtime
+- **THEN** hosted setup exposes every installed Pi catalog model for that
+  provider using the shared provider labels and defaults
+- **AND** no hosted source file must be edited when Pi adds another catalog
+  model for that provider
+
+#### Scenario: Selected model controls the complete turn
+
+- **WHEN** a hosted user selects a provider and model and submits a prompt
+- **THEN** the OpenCandle router and Pi agent stream both execute through that
+  selected Pi model
+- **AND** no OpenAI-only or hosted-only fallback silently handles either call
+
+#### Scenario: Unproven Pi provider fails closed
+
+- **WHEN** Pi supports a provider whose authentication or transport has not
+  passed the hosted real-browser proof
+- **THEN** local GUI and TUI retain their normal Pi support
+- **AND** hosted web omits that provider and reports the browser boundary
+  instead of exposing a choice that cannot execute
+
 ### Requirement: Browser runtime transport is fail closed
 
-The browser runtime transport SHALL authenticate every message by exact origin,
-exact source, allowlisted operation, bounded payload, runtime epoch, and
-unguessable request identifier. It MUST NOT use wildcard response targets or
+The browser runtime transport SHALL exchange messages only over the spawned
+WebContainer process pipes and SHALL validate the allowlisted operation,
+bounded payload, runtime epoch, and unguessable request identifier. It MUST NOT
 place secrets in URLs, command arguments, generated bundles, responses, DOM
 text, or logs.
 
-#### Scenario: Forged runtime message is ignored
+#### Scenario: Forged runtime frame is ignored
 
-- **WHEN** a message has the wrong origin, source, operation, epoch, or request
-  identifier
+- **WHEN** a process frame has the wrong operation, epoch, or request identifier
 - **THEN** the host and runtime ignore it without performing an action or
   returning sensitive state
 
@@ -80,4 +121,3 @@ text, or logs.
 - **WHEN** a sentinel key is saved, restored, used for a turn, and cleared
 - **THEN** it does not appear in the password field after restore, runtime
   health, chat events, logs, browser errors, URLs, or generated assets
-

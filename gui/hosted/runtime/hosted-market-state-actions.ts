@@ -24,8 +24,8 @@ export function invokeHostedMarketStateTool(
   service: MarketStateService,
   toolName: string,
   args: Record<string, unknown>,
+  toolCallId = `hosted-ui-${crypto.randomUUID()}`,
 ): HostedToolInvokeResult {
-  const toolCallId = `hosted-ui-${crypto.randomUUID()}`;
   const output =
     toolName === "manage_watchlist"
       ? manageWatchlist(service, args)

@@ -13,9 +13,11 @@ import {
 import { cleanupSessionResources } from "../../../node_modules/@earendil-works/pi-ai/dist/session-resources.js";
 import { isContextOverflow } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/overflow.js";
 import { isRetryableAssistantError } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/retry.js";
-import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
+import { createFirstClassModelProviders } from "../../../src/pi/model-provider-catalog.js";
 
-const provider = openaiProvider();
+const providers = new Map(
+  createFirstClassModelProviders().map((provider) => [provider.id, provider]),
+);
 
 export {
   clampThinkingLevel,
@@ -31,10 +33,14 @@ export function streamSimple(
   context: Context,
   options?: SimpleStreamOptions,
 ) {
+  const provider = providers.get(model.provider);
+  if (!provider) throw new Error(`Unsupported hosted model provider: ${model.provider}`);
   return provider.streamSimple(model, context, options);
 }
 
 export function stream(model: Model<Api>, context: Context, options?: StreamOptions) {
+  const provider = providers.get(model.provider);
+  if (!provider) throw new Error(`Unsupported hosted model provider: ${model.provider}`);
   return provider.stream(model, context, options);
 }
 
@@ -49,11 +55,10 @@ export async function completeSimple(
 export function resetApiProviders(): void {}
 
 export function getApiProvider(api: string) {
-  return api === "openai-responses"
-    ? {
-        api,
-        stream: provider.stream.bind(provider),
-        streamSimple: provider.streamSimple.bind(provider),
-      }
+  const provider = [...providers.values()].find((candidate) =>
+    candidate.getModels().some((model) => model.api === api),
+  );
+  return provider
+    ? { api, stream: provider.stream.bind(provider), streamSimple: provider.streamSimple.bind(provider) }
     : undefined;
 }

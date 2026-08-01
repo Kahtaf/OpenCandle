@@ -7,33 +7,39 @@ description: Run OpenCandle as an installable browser app without an OpenCandle 
 
 The hosted PWA runs the Pi agent and OpenCandle runtime on your device. The published app is static. It does not send model keys, session transcripts, or saved market state to an OpenCandle application server. A small, open source Cloudflare Worker relays only allowlisted provider HTTP calls that browsers cannot make directly.
 
-This is a smaller capability surface than the local GUI and terminal. Use the local interfaces when an investigation needs browser-cookie CLIs, background alerts, attachments, or closed-tab work.
+This is a smaller capability surface than the local GUI and terminal. Use the local interfaces when an investigation needs browser-cookie CLIs, background delivery, or closed-tab work.
 
 ## Requirements
 
 - A current Chromium-based desktop browser with Web Locks, BroadcastChannel, OPFS, service workers, and cross-origin isolation.
 - A network connection for model calls, providers, and the browser-hosted Node runtime.
-- An OpenAI API key. The first hosted release uses `gpt-4.1-mini`.
+- An API key from OpenAI, Anthropic, or Google. Hosted OpenCandle exposes the
+  installed Pi model catalog for each browser-safe provider.
 
 The in-browser Node process is provided by [WebContainer](https://webcontainers.io/) and depends on StackBlitz infrastructure. Privacy blockers that prevent that runtime from loading can also prevent hosted OpenCandle from starting.
 
 ## What works
 
 - The real Pi agent loop and canonical Pi JSONL sessions.
+- Pi's installed OpenAI, Anthropic, and Google model catalog through the same `ModelRuntime` used by the local GUI and TUI.
 - The same React transcript, tool, source, session, watchlist, portfolio, alert, report, and diagnostics surfaces as the local GUI.
+- Shared workflow metadata, interactive `ask_user` prompts, images, and saved portfolio, watchlist, and report attachments.
 - Device-local SQLite market state and canonical session checkpoints in browser storage.
 - HTTP-backed market, crypto, fundamentals, macro, options, technical, portfolio-calculation, web-search, and hosted sentiment-evidence tools. Tools without a negotiated direct or relay path are omitted and named in Diagnostics.
 - Multiple open tabs. One tab owns the runtime; other tabs remain usable and forward actions to it.
 - Versioned export, validated import, separate key clearing, and full device-data clearing.
 - Installation as a standalone PWA and a read-only offline shell for previously saved research.
 
-CoinGecko, Alpha Vantage, and Polymarket run directly from the browser after passing hosted Chromium CORS proofs. The relay policy covers Yahoo Finance, FRED, Brave, Exa, TradingView, and Alternative.me. The PWA negotiates the policy version at startup and fails closed for relayed providers if the relay is missing, outdated, or unreachable. SEC EDGAR is disabled in hosted mode because its endpoints intermittently reject Cloudflare Worker egress. Finnhub and London Strategic Edge remain disabled until live credential-backed browser proofs pass. The local GUI and terminal retain all three providers. X and Reddit still require their local CLIs and a desktop browser session. Hosted mode also omits shell and dynamic-package tools, alert and notification delivery, scheduled reports, attachments, and work after every OpenCandle tab closes.
-
-Chat image and saved-state attachments are also unavailable in hosted mode. The attachment control is omitted rather than accepting content the browser runtime cannot pass to Pi. Use the local GUI for attachment-backed research.
+CoinGecko, Alpha Vantage, and Polymarket run directly from the browser after passing hosted Chromium CORS proofs. The relay policy covers Yahoo Finance, FRED, Brave, Exa, TradingView, and Alternative.me. The PWA negotiates the policy version at startup and fails closed for relayed providers if the relay is missing, outdated, or unreachable. SEC EDGAR is disabled in hosted mode because its endpoints intermittently reject Cloudflare Worker egress. Finnhub and London Strategic Edge remain disabled until live credential-backed browser proofs pass. The local GUI and terminal retain all three providers. X and Reddit still require their local CLIs and a desktop browser session. Hosted mode also omits shell and dynamic-package tools, background alert and notification delivery, scheduled execution, and work after every OpenCandle tab closes.
 
 ## Keys and browser storage
 
-During model setup, choose whether the OpenAI key remains on the device or only for the current browser session. Provider keys saved through the provider catalog stay in browser storage. Restored keys are never filled back into password fields and all keys are excluded from OpenCandle exports, Pi sessions, and SQLite state.
+During model setup, choose whether each model-provider key remains on the device
+or only for the current browser session. Credentials are stored independently,
+so switching Pi models does not erase another provider's key. Provider keys
+saved through the provider catalog stay in browser storage. Restored keys are
+never filled back into password fields and all keys are excluded from
+OpenCandle exports, Pi sessions, and SQLite state.
 
 An open writer tab shares a session-only key transiently with its same-origin follower tabs so one of them can take over if the writer closes. The key is not written to durable OpenCandle state, and closing the final tab removes it.
 

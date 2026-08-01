@@ -14,8 +14,8 @@ The completed `spikes/browser-runtime` work established the following on
 - A live OpenAI key completed the real OpenCandle router through a narrow
   browser-safe Pi adapter using `gpt-4.1-mini`.
 - SQLite WASM 3.53.0 persisted through OPFS across reload and reset.
-- Credential restoration, clearing, bridge origin/source/request validation,
-  and secret-leak checks passed in a real browser.
+- Credential restoration, clearing, forged-message validation, and secret-leak
+  checks passed in a real browser.
 - Native `better-sqlite3`, Google auth's `child_process` dependency, X/Reddit
   desktop-cookie CLIs, custom forbidden headers, closed-tab work, and direct
   access to several provider origins did not work.
@@ -24,7 +24,9 @@ The completed `spikes/browser-runtime` work established the following on
 - The first full-turn composition uses Pi's real `Agent` loop and canonical
   `SessionManager` with the production OpenCandle extension lifecycle, while
   excluding Pi's coding-only `AgentSession` shell/TUI/package-discovery layer.
-  Its current audited runtime payload is 2,520,180 bytes. Chromium 151 completed
+  The production composition now instantiates Pi's concrete `ModelRuntime`,
+  not a hosted compatibility object, and filters a generated snapshot of Pi's
+  installed catalog to browser-proven providers. Chromium 151 completed
   a live OpenAI router call and assistant turn in WebContainer Node v22.22.3,
   registered the production browser-safe Polymarket tool through the shared
   tool adapter, and returned canonical Pi entries projected into ordered
@@ -71,8 +73,10 @@ Worker.
 
 **Non-Goals:**
 
-- An OpenCandle-hosted API, credential relay, CORS proxy, account system, cloud
-  sync, multi-user collaboration, billing, or server database.
+- An OpenCandle-hosted application API, credential storage, general-purpose
+  proxy, account system, cloud sync, multi-user collaboration, billing, or
+  server database. The separate audited provider relay has a fixed allowlist
+  and receives credentials only when an upstream provider requires them.
 - Browser support for Yahoo, FRED, SEC, TradingView, Brave, Exa, LSE, X, or
   Reddit until each has a direct browser-safe provider path.
 - Closed-tab alerts, automations, reports, or background model execution.
@@ -93,7 +97,7 @@ projection. Each surface supplies platform adapters:
 | --- | --- | --- | --- | --- |
 | Local TUI | native Node/Pi | Pi filesystem JSONL | `better-sqlite3` | in-process |
 | Local web | native Node/Pi writer | Pi filesystem JSONL | `better-sqlite3` | loopback HTTP/WS/SSE |
-| Hosted web | WebContainer Node/Pi writer | hydrated/checkpointed Pi JSONL in OPFS | WASM SQLite compatible adapter, checkpointed to OPFS | origin-checked iframe RPC/events |
+| Hosted web | WebContainer Node/Pi writer | hydrated/checkpointed Pi JSONL in OPFS | WASM SQLite compatible adapter, checkpointed to OPFS | epoch-scoped process stdin/stdout RPC and events |
 
 `gui/shared/chat-events.ts`, `gui/shared/event-reducer.ts`, and pure projector
 logic remain the presentation contract. The React app receives a
@@ -177,10 +181,11 @@ behavior-changing rewrite through memory, market state, workflows, and tools.
 - export/import/clear and runtime health.
 
 The transport uses the existing shared request/event shapes. The hosted
-implementation extends the spike's bridge: exact origin, exact `event.source`,
-allowlisted operations, 128-bit request IDs, bounded messages, an isolated
-bridge document, and no wildcard responses. Live events include session and run
-IDs and pass through the existing reducer unchanged.
+implementation uses WebContainer's process stdin/stdout pipes with an
+allowlisted operation set, runtime epoch, 128-bit request IDs, and bounded
+messages. It does not expose a preview iframe or runtime HTTP bridge. Live
+events include session and run IDs and pass through the existing reducer
+unchanged.
 
 ### 6. Provider and tool availability fail closed
 
@@ -216,7 +221,7 @@ The runtime epoch prevents late events from a dead writer from being applied.
 
 The service worker precaches versioned static assets, manifest, icons, and an
 offline route. It does not cache model responses, provider responses, keys, or
-runtime bridge traffic. Offline mode allows opening and exporting existing
+runtime process traffic. Offline mode allows opening and exporting existing
 local sessions but disables research actions with explicit reason text.
 
 Updates are user-visible. A new worker waits until the current run is idle and
@@ -230,10 +235,9 @@ browser extensions, physical access, and compromised dependencies. The PWA:
 
 - offers persistent and session-only key modes;
 - uses COOP/COEP isolation, no third-party scripts in the product page, pinned
-  dependencies, and bundle composition audits. The isolated WebContainer
-  preview bridge permits inline bootstrap scripts because the runtime injects
-  one; that document contains no product UI or secrets and still enforces exact
-  origin, source window, runtime epoch, request ID, and operation allowlists;
+  dependencies, and bundle composition audits. The host communicates with the
+  runtime only through spawned-process pipes using an epoch, request ID,
+  operation allowlist, and bounded frames;
 - configures WebContainer with a public build-time client ID before boot and
   uses `strict-origin-when-cross-origin` so StackBlitz receives only the hosted
   origin required to authorize its iframe, never a path or query;
@@ -241,6 +245,46 @@ browser extensions, physical access, and compromised dependencies. The PWA:
 - clears secrets separately and verifies clearing in browser tests;
 - discloses the WebContainer/StackBlitz dependency and never calls itself
   fully offline or infrastructure-free.
+
+### 10. Pi model setup is canonical across surfaces
+
+Model discovery, provider labels, default models, credential validation, and
+selection semantics come from one OpenCandle model-setup contract backed by
+Pi's model registry and provider implementations. Local GUI, local TUI, and
+hosted web may supply different credential stores and transport adapters, but
+they do not maintain independent model lists or reimplement provider protocols.
+
+Hosted web applies a capability filter after proving a Pi provider in a real
+browser. The initial browser-safe first-class set is OpenAI, Anthropic, and
+Google. Every model in Pi's installed catalog for those providers is exposed;
+there is no literal hosted default such as `gpt-4.1-mini`. Providers that
+require OAuth callbacks, native processes, cloud credential chains, or other
+unproven browser capabilities remain absent with an explicit reason.
+
+The selected Pi model is the single source of truth for both the OpenCandle
+router and the Pi agent stream. Credentials are keyed by provider so switching
+models does not erase unrelated provider setup. Model setup state and request
+shapes are shared where possible; only browser storage, process transport, and
+browser capability filtering are hosted adapters.
+
+Alternative considered: keep the spike's OpenAI-only compatibility module and
+add model IDs to a hosted array. Rejected because it duplicates Pi routing,
+drifts from the local GUI/TUI, and can silently use one model for routing and a
+different one for the answer.
+
+### 11. Feature parity is a shared-core requirement, not parallel implementations
+
+The hosted surface applies capability filters to canonical OpenCandle
+features. It does not maintain independent tool catalogs, workflows,
+market-state commands, ask-user state, action deduplication, live-event
+projection, attachment parsing, or transport payloads. Shared headless
+session and command cores own those behaviors; hosted adapters are limited to
+browser transport, secrets, OPFS checkpoints, SQLite WASM, provider capability
+filtering, and unavailable background/native execution.
+
+An unavailable browser capability is omitted with a reason. A capability that
+is available in the browser must reuse the local GUI/TUI implementation and
+its contract tests rather than a similar hosted implementation.
 
 ## Risks / Trade-offs
 
@@ -257,9 +301,10 @@ browser extensions, physical access, and compromised dependencies. The PWA:
   fail closed on missing proof.
 - **Reduced hosted tool surface** -> show the exact capability matrix before a
   turn and exclude unavailable tools from Pi rather than failing late.
-- **Browser key theft through XSS or dependency compromise** -> isolated bridge
-  policy, dependency/bundle audits, session-only option, and honest onboarding
-  copy; browser persistence is not represented as a secure vault.
+- **Browser key theft through XSS or dependency compromise** -> strict page
+  policy, process-frame validation, dependency/bundle audits, session-only
+  option, and honest onboarding copy; browser persistence is not represented
+  as a secure vault.
 - **Two writers corrupt OPFS or session history** -> Web Locks,
   BroadcastChannel epochs, exclusive checkpoints, and two-tab browser tests.
 - **PWA update crosses schema versions** -> backup before migration, atomic

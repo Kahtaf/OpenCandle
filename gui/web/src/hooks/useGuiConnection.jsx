@@ -12,6 +12,12 @@ const EMPTY_DASHBOARD = {
 
 const EMPTY_CATALOG = { tools: [], workflows: [], providers: [] };
 const EMPTY_MODEL_SETUP = { requirement: "unknown", providers: [], availableModels: [] };
+const GLOBAL_GUI_COMMANDS = new Set([
+  "model.setup.refresh",
+  "model.setup.save_api_key",
+  "model.setup.select_model",
+  "provider.save_api_key",
+]);
 
 export const TOOL_INVOKE_TIMEOUT_MESSAGE =
   "The operation is still running. OpenCandle will refresh state when the server finishes.";
@@ -131,7 +137,7 @@ export function createSessionActionId(prefix = "action") {
 export function buildSessionActionSocketMessage(type, payload = {}, currentSessionId = "") {
   const actionPrefix = type.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "action";
   const sessionId = String(payload.sessionId || currentSessionId || "").trim();
-  if (!sessionId) throw new Error("sessionId is required");
+  if (!sessionId && !GLOBAL_GUI_COMMANDS.has(type)) throw new Error("sessionId is required");
   return {
     type,
     ...payload,
@@ -189,11 +195,7 @@ export function useGuiConnection() {
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [coordination, setCoordination] = useState(null);
-  const [modelSetup, setModelSetup] = useState({
-    requirement: "unknown",
-    providers: [],
-    availableModels: [],
-  });
+  const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {

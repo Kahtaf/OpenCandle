@@ -67,6 +67,7 @@ export function createHostedRuntimeTransport({ host }) {
   const transport = {
     kind: "hosted",
     contractVersion: runtimeTransportContractVersion,
+    initialModelSetup: host.getModelSetup?.() || EMPTY_MODEL_SETUP,
 
     async bootstrap() {
       const bootstrap = withBrowserState(await requestGui({ action: "bootstrap" }));
@@ -79,8 +80,12 @@ export function createHostedRuntimeTransport({ host }) {
       subscribers.add(onMessage);
       let channelClosed = false;
       const unsubscribeHost = host.subscribe?.((message) => {
-        if (channelClosed || (message?.type !== "invalidate" && message?.type !== "coordination"))
+        if (channelClosed) return;
+        if (message?.type === "ask_user.prompt" || message?.type === "ask_user.resolved") {
+          publish(message);
           return;
+        }
+        if (message?.type !== "invalidate" && message?.type !== "coordination") return;
         void refresh().catch((error) => {
           publish({
             type: "error",

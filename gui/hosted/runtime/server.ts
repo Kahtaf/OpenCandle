@@ -1,15 +1,17 @@
-import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createInterface } from "node:readline";
 import { searchPredictionMarkets } from "../../../src/providers/polymarket.js";
 import { resolveHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
 import { validateCredential } from "../../../src/onboarding/validation.js";
+import { validateModelKey } from "../../../src/onboarding/validate-model-key.js";
 import { route } from "../../../src/routing/router.js";
 import {
   renderUntrustedText,
   untrustedContentHeader,
 } from "../../../src/tools/sentiment/untrusted-text.js";
 import { runBrowserPiSession } from "./browser-pi-session.js";
-import { createBrowserPiRouterClient } from "./browser-pi-router-client.js";
+import { createBrowserModelRuntime } from "./browser-model-runtime.js";
+import { createPiAiRouterClient } from "../../../src/routing/router-llm-client.js";
 import { BrowserHostedGuiRuntime } from "./browser-hosted-gui-runtime.js";
 import {
   buildHostedMarketIndicesSnapshot,
@@ -25,8 +27,6 @@ import {
   fetchHostedRelayManifest,
 } from "./provider-relay-fetch.js";
 import {
-  createBridgeDocument,
-  createBridgePolicy,
   type GuiRequest,
   parseGuiRequest,
   parseProbeRequest,
@@ -34,6 +34,11 @@ import {
   parseTrustedHostOrigin,
   serializeProbeError,
 } from "./request-contract.js";
+import { MODEL_ENVIRONMENT } from "./request-contract.js";
+import {
+  isFirstClassModelProvider,
+  type FirstClassModelProviderId,
+} from "../../../src/pi/model-provider-metadata.js";
 
 const RUNTIME_VERSION = "opencandle-hosted-web-v1";
 const MAX_BODY_BYTES = 8_192;
@@ -45,6 +50,7 @@ const CAPABILITIES = [
   "diagnostic-synthesis",
   "pi-agent-session",
 ] as const;
+const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const MODEL_KEYS = [
   process.env.GEMINI_API_KEY,
   process.env.OPENAI_API_KEY,
@@ -72,13 +78,24 @@ const hostedGuiRuntimePromise = hostedRelayManifestPromise.then((relayManifest) 
     clientId: providerRelayClientId,
     fetchImpl: nativeFetch,
   });
+  const selectedProvider = isFirstClassModelProvider(process.env.OPENCANDLE_MODEL_PROVIDER)
+    ? process.env.OPENCANDLE_MODEL_PROVIDER
+    : undefined;
+  const selectedModel = process.env.OPENCANDLE_MODEL_ID?.trim() || undefined;
+  const modelCredentials = Object.fromEntries(
+    (Object.keys(MODEL_ENVIRONMENT) as FirstClassModelProviderId[]).flatMap((providerId) => {
+      const key = process.env[MODEL_ENVIRONMENT[providerId].envVar]?.trim();
+      return key ? [[providerId, key]] : [];
+    }),
+  );
   return BrowserHostedGuiRuntime.create({
     cwd: process.cwd(),
     sessionDir: `${process.cwd()}/sessions`,
     stateFile: `${process.cwd()}/state/current.sqlite3`,
     currentSessionId: process.env.OPENCANDLE_CURRENT_SESSION_ID,
-    modelId: "gpt-4.1-mini",
-    apiKey: process.env.OPENAI_API_KEY,
+    modelProvider: selectedProvider,
+    modelId: selectedModel,
+    modelCredentials,
     relayProviders: relayManifest?.providers ?? [],
   });
 });
@@ -86,24 +103,16 @@ const hostedGuiRuntimePromise = hostedRelayManifestPromise.then((relayManifest) 
 function isolationHeaders(contentType: string): Record<string, string> {
   return {
     "Content-Type": contentType,
+    "Access-Control-Allow-Origin": trustedHostOrigin,
     "Cross-Origin-Embedder-Policy": "require-corp",
     "Cross-Origin-Resource-Policy": "cross-origin",
+    Vary: "Origin",
   };
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, isolationHeaders("application/json; charset=utf-8"));
   response.end(JSON.stringify(body));
-}
-
-function sendBridge(response: ServerResponse): void {
-  const nonce = randomBytes(18).toString("base64url");
-  response.writeHead(200, {
-    ...isolationHeaders("text/html; charset=utf-8"),
-    "Cache-Control": "no-store",
-    "Content-Security-Policy": createBridgePolicy(trustedHostOrigin, nonce),
-  });
-  response.end(createBridgeDocument(trustedHostOrigin, nonce, runtimeEpoch));
 }
 
 function writeSse(response: ServerResponse, event: unknown): void {
@@ -148,7 +157,10 @@ async function runProbe(body: unknown): Promise<unknown> {
         ? process.env.OPENAI_API_KEY
         : process.env.ANTHROPIC_API_KEY;
   if (!modelKey) throw new Error("Model probe requires a configured model key");
-  const client = createBrowserPiRouterClient(request.provider, request.modelId, modelKey);
+  const modelRuntime = await createBrowserModelRuntime({ [request.provider]: modelKey });
+  const model = modelRuntime.getModel(request.provider, request.modelId);
+  if (!model) throw new Error("Unsupported provider or model");
+  const client = createPiAiRouterClient(model, modelRuntime.completeSimple.bind(modelRuntime));
   const routeResult = await route(
     {
       text: request.question,
@@ -190,10 +202,12 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
     case "bootstrap":
       return runtime.bootstrap();
     case "configure_model":
-      runtime.configureModel(request.modelId, request.apiKey);
+      runtime.configureModel(request.provider, request.modelId, request.apiKey);
       return runtime.bootstrap();
     case "validate_provider_key":
       return validateCredential(request.providerId, request.apiKey);
+    case "validate_model_key":
+      return validateModelKey(request.provider, request.apiKey);
     case "new_session":
       return runtime.newSession();
     case "load_session":
@@ -202,10 +216,14 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
       return runtime.renameSession(request.sessionId, request.name);
     case "delete_session":
       return runtime.deleteSession(request.sessionId);
+    case "ask_user.answer":
+      return runtime.answerAskUser(request.sessionId, request.id, request.answer);
+    case "ask_user.cancel":
+      return runtime.cancelAskUser(request.sessionId, request.id);
     case "chat_run":
       return runtime.chatRun(
         request.sessionId,
-        request.prompt,
+        request,
         request.actionId,
       );
     case "tool_invoke":
@@ -330,8 +348,19 @@ async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
 }
 
 const server = createServer(async (request, response) => {
-  if (request.method === "GET" && request.url === "/bridge") {
-    sendBridge(response);
+  const requestOrigin = request.headers.origin;
+  if (requestOrigin && requestOrigin !== trustedHostOrigin) {
+    sendJson(response, 403, { error: "Origin is not authorized" });
+    return;
+  }
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, {
+      ...isolationHeaders("text/plain; charset=utf-8"),
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Max-Age": "600",
+    });
+    response.end();
     return;
   }
   if (request.method === "GET" && request.url === "/health") {
@@ -354,12 +383,12 @@ const server = createServer(async (request, response) => {
   if (request.method === "POST" && request.url === "/session") {
     try {
       const parsed = parseSessionRequest(await readJsonBody(request), process.env);
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = process.env[MODEL_ENVIRONMENT[parsed.provider].envVar];
       if (!apiKey) throw new Error("Pi session requires a configured model key");
       sendJson(
         response,
         200,
-        await runBrowserPiSession(parsed.question, parsed.modelId, apiKey),
+        await runBrowserPiSession(parsed.question, parsed.provider, parsed.modelId, apiKey),
       );
     } catch (error) {
       sendJson(response, 400, serializeProbeError(error, MODEL_KEYS));
@@ -395,7 +424,7 @@ const server = createServer(async (request, response) => {
       const runtime = await hostedGuiRuntimePromise;
       await runtime.chatRun(
         parsed.sessionId,
-        parsed.prompt,
+        parsed,
         parsed.actionId,
         (event) => writeSse(response, event),
         controller.signal,
@@ -414,4 +443,144 @@ const server = createServer(async (request, response) => {
 });
 
 const port = Number.parseInt(process.env.PORT ?? "4174", 10);
-server.listen(Number.isFinite(port) ? port : 4174, "0.0.0.0");
+if (process.env.OPENCANDLE_RUNTIME_TRANSPORT === "stdio") {
+  startStdioTransport();
+} else {
+  server.listen(Number.isFinite(port) ? port : 4174, "0.0.0.0");
+}
+
+function writeProcessFrame(frame: unknown): void {
+  process.stdout.write(`${PROCESS_FRAME_PREFIX}${JSON.stringify(frame)}\n`);
+}
+
+function startStdioTransport(): void {
+  const activeStreams = new Map<string, AbortController>();
+  process.stdin.setRawMode?.(true);
+  const input = createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY });
+  input.on("line", (line) => {
+    if (line.length > MAX_BODY_BYTES) return;
+    let message: Record<string, unknown>;
+    try {
+      message = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const requestId = typeof message.requestId === "string" ? message.requestId : "";
+    if (message.type === "cancel" && requestId) {
+      activeStreams.get(requestId)?.abort();
+      activeStreams.delete(requestId);
+      return;
+    }
+    if (
+      message.type !== "request" ||
+      message.runtimeEpoch !== runtimeEpoch ||
+      !/^[a-f0-9]{32}$/.test(requestId)
+    ) return;
+    void runStdioRequest(
+      requestId,
+      String(message.operation ?? ""),
+      message.payload,
+      activeStreams,
+    );
+  });
+  writeProcessFrame({ type: "ready", runtimeEpoch });
+  void hostedGuiRuntimePromise.catch((error) => {
+      writeProcessFrame({
+        type: "fatal",
+        runtimeEpoch,
+        error: serializeProbeError(error, MODEL_KEYS).error,
+      });
+      process.exitCode = 1;
+      input.close();
+    });
+}
+
+async function runStdioRequest(
+  requestId: string,
+  operation: string,
+  payload: unknown,
+  activeStreams: Map<string, AbortController>,
+): Promise<void> {
+  try {
+    if (operation === "health") {
+      writeProcessFrame({
+        type: "response",
+        runtimeEpoch,
+        requestId,
+        ok: true,
+        result: {
+          runtimeVersion: RUNTIME_VERSION,
+          nodeVersion: process.version,
+          modelKeyConfigured: MODEL_KEYS.some((value) => Boolean(value?.trim())),
+          capabilities: CAPABILITIES,
+        },
+      });
+      return;
+    }
+    if (operation === "probe") {
+      writeProcessFrame({
+        type: "response",
+        runtimeEpoch,
+        requestId,
+        ok: true,
+        result: await runProbe(payload),
+      });
+      return;
+    }
+    if (operation === "session") {
+      const parsed = parseSessionRequest(payload, process.env);
+      const apiKey = process.env[MODEL_ENVIRONMENT[parsed.provider].envVar];
+      if (!apiKey) throw new Error("Pi session requires a configured model key");
+      writeProcessFrame({
+        type: "response",
+        runtimeEpoch,
+        requestId,
+        ok: true,
+        result: await runBrowserPiSession(parsed.question, parsed.provider, parsed.modelId, apiKey),
+      });
+      return;
+    }
+    if (operation === "gui") {
+      writeProcessFrame({
+        type: "response",
+        runtimeEpoch,
+        requestId,
+        ok: true,
+        result: await runGuiRequest(parseGuiRequest(payload)),
+      });
+      return;
+    }
+    if (operation === "gui-stream") {
+      const parsed = parseGuiRequest(payload);
+      if (parsed.action !== "chat_run") throw new Error("Only chat runs may be streamed");
+      const controller = new AbortController();
+      activeStreams.set(requestId, controller);
+      const runtime = await hostedGuiRuntimePromise;
+      await runtime.chatRun(
+        parsed.sessionId,
+        parsed,
+        parsed.actionId,
+        (event) => writeProcessFrame({
+          type: "stream-event",
+          runtimeEpoch,
+          requestId,
+          event,
+        }),
+        controller.signal,
+      );
+      activeStreams.delete(requestId);
+      writeProcessFrame({ type: "stream-end", runtimeEpoch, requestId, ok: true });
+      return;
+    }
+    throw new Error("Unsupported hosted runtime operation");
+  } catch (error) {
+    activeStreams.delete(requestId);
+    writeProcessFrame({
+      type: operation === "gui-stream" ? "stream-end" : "response",
+      runtimeEpoch,
+      requestId,
+      ok: false,
+      error: serializeProbeError(error, MODEL_KEYS).error,
+    });
+  }
+}

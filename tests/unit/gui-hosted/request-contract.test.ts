@@ -2,6 +2,29 @@ import { describe, expect, it } from "vitest";
 import { parseGuiRequest } from "../../../gui/hosted/runtime/request-contract.js";
 
 describe("hosted GUI request contract", () => {
+  it("accepts any installed Pi model from each browser-safe first-class provider", () => {
+    for (const request of [
+      { provider: "openai", modelId: "gpt-5-mini" },
+      { provider: "anthropic", modelId: "claude-haiku-4-5" },
+      { provider: "google", modelId: "gemini-2.5-flash" },
+    ] as const) {
+      expect(
+        parseGuiRequest({ action: "configure_model", ...request, apiKey: "live-key" }),
+      ).toEqual({ action: "configure_model", ...request, apiKey: "live-key" });
+    }
+  });
+
+  it("rejects model ids that do not belong to the selected Pi provider", () => {
+    expect(() =>
+      parseGuiRequest({
+        action: "configure_model",
+        provider: "openai",
+        modelId: "claude-haiku-4-5",
+        apiKey: "live-key",
+      }),
+    ).toThrow("provider or model");
+  });
+
   it("accepts only bounded hosted provider credential validation requests", () => {
     expect(
       parseGuiRequest({
@@ -23,24 +46,51 @@ describe("hosted GUI request contract", () => {
     ).toThrow("provider");
   });
 
-  it("rejects attachments explicitly instead of silently discarding them", () => {
-    expect(() =>
+  it("accepts the shared GUI attachment contract", () => {
+    const image = Buffer.from("png").toString("base64");
+    expect(
       parseGuiRequest({
         action: "chat_run",
         sessionId: "session-1",
         actionId: "action-1",
         prompt: "Review this",
-        images: [{ data: "abc", mimeType: "image/png" }],
-      }),
-    ).toThrow("attachments");
-    expect(() =>
-      parseGuiRequest({
-        action: "chat_run",
-        sessionId: "session-1",
-        actionId: "action-1",
-        prompt: "Review this",
+        images: [{ data: image, mimeType: "image/png" }],
         attachments: [{ kind: "portfolio", id: "1" }],
       }),
-    ).toThrow("attachments");
+    ).toEqual({
+      action: "chat_run",
+      sessionId: "session-1",
+      actionId: "action-1",
+      prompt: "Review this",
+      images: [{ data: image, mimeType: "image/png" }],
+      attachments: [{ kind: "portfolio", id: "1" }],
+    });
+  });
+
+  it("accepts the same ask_user actions as the local GUI", () => {
+    expect(
+      parseGuiRequest({
+        action: "ask_user.answer",
+        sessionId: "session-1",
+        id: "ask-user-1",
+        answer: "AAPL",
+      }),
+    ).toEqual({
+      action: "ask_user.answer",
+      sessionId: "session-1",
+      id: "ask-user-1",
+      answer: "AAPL",
+    });
+    expect(
+      parseGuiRequest({
+        action: "ask_user.cancel",
+        sessionId: "session-1",
+        id: "ask-user-1",
+      }),
+    ).toEqual({
+      action: "ask_user.cancel",
+      sessionId: "session-1",
+      id: "ask-user-1",
+    });
   });
 });

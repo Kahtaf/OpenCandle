@@ -14,19 +14,33 @@ import type { SessionInfo } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 import { projectDashboard } from "../../../gui/server/projector.js";
+import {
+  createAskUserBridge,
+  type GuiAskUserPrompt,
+} from "../../../gui/shared/ask-user-bridge.js";
+import {
+  buildDispatchedPromptFromState,
+  type ParsedChatRunBody,
+} from "../../../gui/shared/chat-run-input.js";
+import {
+  inferToolDomain,
+  OPENCANDLE_WORKFLOWS,
+} from "../../../gui/shared/catalog-metadata.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import {
   isApiKeyProvider,
   resolveHostedBrowserCapabilityReport,
   type ProviderDescriptor,
 } from "../../../src/onboarding/providers.js";
-import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import {
   createSqlJsStateDatabase,
   type SqlJsStateDatabase,
 } from "../../../src/runtime/sqljs-state-database-node.js";
 import { BrowserPiSession } from "./browser-pi-session.js";
 import { invokeHostedMarketStateTool } from "./hosted-market-state-actions.js";
+import { getBrowserHostedToolDefinitions } from "./hosted-tool-composition.js";
+import type { FirstClassModelProviderId } from "../../../src/pi/model-provider-metadata.js";
+import type { BrowserModelCredentials } from "./browser-model-runtime.js";
 
 const MAX_SESSION_FILE_BYTES = 1_048_576;
 const MAX_SESSION_FILES = 100;
@@ -36,8 +50,9 @@ export interface BrowserHostedGuiRuntimeOptions {
   sessionDir: string;
   stateFile: string;
   currentSessionId?: string;
+  modelProvider?: FirstClassModelProviderId;
   modelId?: string;
-  apiKey?: string;
+  modelCredentials?: BrowserModelCredentials;
   relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
 }
@@ -73,8 +88,16 @@ export interface BrowserHostedBootstrap {
     firstMessage: string;
   }>;
   catalog: {
-    tools: Array<{ name: string; label: string; description: string }>;
-    workflows: [];
+    tools: Array<{
+      name: string;
+      label: string;
+      description: string;
+      parameters: unknown;
+      domain: string;
+      enabled: true;
+      defaults: Record<string, never>;
+    }>;
+    workflows: typeof OPENCANDLE_WORKFLOWS;
     providers: Array<{
       id: string;
       name: string;
@@ -96,7 +119,7 @@ export interface BrowserHostedBootstrap {
       maskedKeyHint?: string;
     }>;
   };
-  askUserPrompts: [];
+  askUserPrompts: GuiAskUserPrompt[];
   snapshot: {
     sessionId: string;
     entries: ReturnType<SessionManager["getEntries"]>;
@@ -117,6 +140,18 @@ export class BrowserHostedGuiRuntime {
     BrowserHostedBootstrap & { events: Array<Record<string, unknown>> }
   >();
   private readonly actionResults = new Map<string, Promise<Record<string, unknown>>>();
+  private readonly activeEventEmitters = new Map<
+    string,
+    (event: Record<string, unknown>) => void | Promise<void>
+  >();
+  private readonly askUserBridge = createAskUserBridge({
+    broadcast: (message) => {
+      const prompt = (message as { prompt?: GuiAskUserPrompt }).prompt;
+      if (!prompt) return;
+      void this.activeEventEmitters.get(prompt.sessionId)?.(message as Record<string, unknown>);
+    },
+    getSessionId: () => this.currentSessionId ?? "",
+  });
 
   private constructor(
     private readonly options: BrowserHostedGuiRuntimeOptions,
@@ -140,10 +175,14 @@ export class BrowserHostedGuiRuntime {
     return this.buildBootstrap(manager);
   }
 
-  configureModel(modelId: string, apiKey: string): void {
+  configureModel(provider: FirstClassModelProviderId, modelId: string, apiKey: string): void {
     const normalizedKey = apiKey.trim();
+    this.options.modelProvider = normalizedKey ? provider : undefined;
     this.options.modelId = normalizedKey ? modelId : undefined;
-    this.options.apiKey = normalizedKey || undefined;
+    this.options.modelCredentials = {
+      ...this.options.modelCredentials,
+      ...(normalizedKey ? { [provider]: normalizedKey } : {}),
+    };
   }
 
   async newSession(): Promise<BrowserHostedBootstrap> {
@@ -182,7 +221,7 @@ export class BrowserHostedGuiRuntime {
 
   async chatRun(
     sessionId: string,
-    prompt: string,
+    input: ParsedChatRunBody,
     actionId: string,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
@@ -209,12 +248,14 @@ export class BrowserHostedGuiRuntime {
       streamedEvents.push(sequenced);
       await onEvent?.(sequenced);
     };
+    this.activeEventEmitters.set(guardedSessionId, emit);
     try {
       const manager = await this.resolveManager(guardedSessionId);
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new Error("Saved session file is unavailable");
-      if (!this.options.apiKey || !this.options.modelId) {
-        throw new Error("Connect an OpenAI model before chat can run.");
+      const modelProvider = this.options.modelProvider;
+      if (!modelProvider || !this.options.modelId || !this.options.modelCredentials?.[modelProvider]) {
+        throw new Error("Connect an AI model before chat can run.");
       }
       await emit({ type: "run.started" });
       const createPiSession = this.options.createPiSession ?? BrowserPiSession.create;
@@ -224,16 +265,24 @@ export class BrowserHostedGuiRuntime {
         restoredSessionFile: sessionFile,
         stateFile: this.options.stateFile,
         stateDatabase: this.stateDatabase,
+        providerId: modelProvider,
         modelId: this.options.modelId,
-        apiKey: this.options.apiKey,
-        toolDefinitions: getHostedOpenCandleToolDefinitions({
+        credentials: this.options.modelCredentials,
+        toolDefinitions: getBrowserHostedToolDefinitions({
+          stateDatabase: this.stateDatabase,
           relayProviders: this.options.relayProviders,
         }),
+        askUserHandler: this.askUserBridge.askForSession(guardedSessionId),
         onDurableEvents: async (events) => {
           for (const event of events) await emit(event as Record<string, unknown>);
         },
       });
-      const result = await session.prompt(prompt, signal);
+      const dispatchedPrompt = buildDispatchedPromptFromState(
+        input,
+        new MarketStateService(this.stateDatabase),
+      );
+      const images = input.images.map((image) => ({ type: "image" as const, ...image }));
+      const result = await session.prompt(dispatchedPrompt, signal, images);
       this.currentSessionId = result.sessionId;
       await emit({ type: "run.completed" });
       const completedResult = {
@@ -256,8 +305,25 @@ export class BrowserHostedGuiRuntime {
       throw error;
     } finally {
       session?.dispose();
+      this.activeEventEmitters.delete(guardedSessionId);
       this.activeSessionRuns.delete(guardedSessionId);
     }
+  }
+
+  async answerAskUser(
+    sessionId: string,
+    id: string,
+    answer: string,
+  ): Promise<BrowserHostedBootstrap> {
+    this.requireAskUserPrompt(sessionId, id);
+    if (!this.askUserBridge.answer(id, answer)) throw new Error("Unknown ask_user prompt");
+    return this.buildBootstrap(await this.resolveManager(sessionId));
+  }
+
+  async cancelAskUser(sessionId: string, id: string): Promise<BrowserHostedBootstrap> {
+    this.requireAskUserPrompt(sessionId, id);
+    if (!this.askUserBridge.cancel(id)) throw new Error("Unknown ask_user prompt");
+    return this.buildBootstrap(await this.resolveManager(sessionId));
   }
 
   marketState(): Record<string, unknown> {
@@ -353,7 +419,8 @@ export class BrowserHostedGuiRuntime {
     const symbols = marketState
       .listWatchlistItems(defaultWatchlist.id)
       .map((item) => item.symbol);
-    const tools = getHostedOpenCandleToolDefinitions({
+    const tools = getBrowserHostedToolDefinitions({
+      stateDatabase: this.stateDatabase,
       relayProviders: this.options.relayProviders,
     });
     const providerReport = resolveHostedBrowserCapabilityReport(this.options.relayProviders);
@@ -369,11 +436,19 @@ export class BrowserHostedGuiRuntime {
       },
       sessions: (await this.listDisplaySessions()).map(toDisplaySession),
       catalog: {
-        tools: tools.map(({ name, label, description }) => ({ name, label, description })),
-        workflows: [],
+        tools: tools.map(({ name, label, description, parameters }) => ({
+          name,
+          label,
+          description,
+          parameters,
+          domain: inferToolDomain(name),
+          enabled: true as const,
+          defaults: {},
+        })),
+        workflows: OPENCANDLE_WORKFLOWS,
         providers: providerReport.available.map(serializeHostedProvider),
       },
-      askUserPrompts: [],
+      askUserPrompts: this.askUserBridge.getPrompts(),
       snapshot: {
         sessionId,
         entries,
@@ -433,6 +508,13 @@ export class BrowserHostedGuiRuntime {
 
   private flushState(): void {
     writeFileSync(this.options.stateFile, this.stateDatabase.exportBytes());
+  }
+
+  private requireAskUserPrompt(sessionId: string, id: string): void {
+    const prompt = this.askUserBridge.getPrompts().find((candidate) => candidate.id === id);
+    if (!prompt || prompt.sessionId !== requireSessionId(sessionId)) {
+      throw new Error("Unknown ask_user prompt");
+    }
   }
 }
 

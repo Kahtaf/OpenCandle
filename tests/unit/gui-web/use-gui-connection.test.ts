@@ -209,6 +209,21 @@ describe("useGuiConnection helpers", () => {
     );
   });
 
+  it("allows global model setup commands before a session bootstrap completes", () => {
+    expect(
+      buildSessionActionSocketMessage(
+        "model.setup.save_api_key",
+        { provider: "openai", apiKey: "test-key", storageMode: "session" },
+        "",
+      ),
+    ).toMatchObject({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      apiKey: "test-key",
+      storageMode: "session",
+    });
+  });
+
   it("does not send legacy active-session chat prompts from browser call sites", () => {
     const source = readSourceTree(resolve("gui/web/src"));
 

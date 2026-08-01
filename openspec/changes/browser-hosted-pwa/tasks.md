@@ -1,6 +1,6 @@
 ## 1. Consolidate the proven spike
 
-- [x] 1.1 Move the feasibility measurements, dependency audit, live OpenAI result, SQLite OPFS result, security bridge contract, and known blocked capabilities into the production change documentation and remove the ad hoc `plans/` artifacts.
+- [x] 1.1 Move the feasibility measurements, dependency audit, live OpenAI result, SQLite OPFS result, secure process-transport contract, and known blocked capabilities into the production change documentation and remove the ad hoc `plans/` artifacts.
 - [x] 1.2 Turn the standalone spike tests into reusable hosted-runtime contract fixtures without copying production routing, tool, provider, or event logic.
 - [x] 1.3 Add a build composition test that fails on native addons, `child_process`, external CLIs, unknown Pi providers, leaked credentials, or an unbounded runtime payload.
 
@@ -69,5 +69,24 @@
 - [x] 11.1 Run hosted PWA real-browser journeys for first launch, key setup, full Pi chat, direct tools, sessions, market state, reload, restart, offline shell, update, multi-tab, export/import, and clear at desktop and mobile viewports.
 - [x] 11.2 Run the existing local GUI real-browser suite plus characterization journeys for setup, chat, sessions, tools, market state, writer/follower behavior, and mobile layout.
 - [x] 11.3 Run the TUI harness against new and imported hosted sessions and prove local native persistence behavior is unchanged.
-- [x] 11.4 Run secret-leak, CSP, bridge forgery, dependency audit, PWA installability, accessibility, performance, root gates, and graph refresh checks; document exact supported and unavailable hosted capabilities.
+- [x] 11.4 Run secret-leak, CSP, process-frame forgery, dependency audit, PWA installability, accessibility, performance, root gates, and graph refresh checks; document exact supported and unavailable hosted capabilities.
 - [x] 11.5 Update the changelog and user documentation with honest no-OpenCandle-server, WebContainer dependency, offline, credential, provider, and background-execution boundaries.
+
+## 12. Consolidate Pi model setup across surfaces
+
+- [x] 12.1 Add failing contract tests for a shared Pi-backed model catalog and setup state used by hosted web, local web, and local TUI, with no hosted-only model literals.
+- [x] 12.2 Replace the hosted OpenAI-only compatibility path with Pi provider implementations for every browser-proven first-class OpenCandle model provider, and use the selected Pi model for both routing and agent streaming.
+- [x] 12.3 Persist credentials per model provider, preserve the selected provider/model across reload and writer failover, and keep all credentials out of exports, events, URLs, bundles, and logs.
+- [x] 12.4 Reuse shared GUI/TUI setup, validation, session, and runtime contracts where platform boundaries permit; document and test every intentional hosted-only boundary.
+- [x] 12.5 Run live browser turns for every configured browser-safe model provider, local GUI and TUI regression journeys, strict OpenSpec validation, graph refresh, root gates, and autoreview.
+
+## 13. Close remaining hosted/local feature-parity gaps
+
+- [x] 13.1 Replace hosted catalog and manual-tool metadata with the filtered canonical GUI/TUI catalog, including parameters, domains, defaults, workflows, and executable invocation.
+- [ ] 13.2 Reuse canonical market-state tool commands so hosted chat and manual actions can manage watchlists, portfolios, alerts, and reports while excluding only unavailable background delivery.
+- [x] 13.3 Add the shared ask-user command lifecycle and attachment parsing to the browser-safe session composition.
+- [ ] 13.8 Reuse the remaining JIT credential and thinking-level controls where they are available in the local GUI/TUI.
+- [ ] 13.4 Replace volatile hosted action deduplication with canonical persisted Pi action markers and prove exactly-once behavior across runtime epochs.
+- [ ] 13.5 Extract a shared headless Pi/OpenCandle session factory beneath local GUI, TUI, and hosted compositions; remove the partial hosted ExtensionAPI lifecycle.
+- [ ] 13.6 Reuse the canonical live chat-event adapter and assert equivalent ordered progress, tool, source, cancellation, and completion traces on hosted and local web.
+- [ ] 13.7 Consolidate hosted/local market snapshot builders, provider requirements, tool capability metadata, and typed transport requests so platform adapters only handle transport and persistence.

@@ -15,6 +15,9 @@ product surface without weakening the existing local products.
 - Establish explicit runtime adapters so hosted web, local web, and local TUI
   share routing, tools, evidence, chat events, and session semantics while
   retaining platform-appropriate persistence and transport.
+- Use Pi's provider implementations and canonical OpenCandle model catalog on
+  every surface. Hosted web filters that catalog only by proven browser
+  execution capability; it does not maintain a separate model list or route.
 - Add browser persistence for Pi-compatible session entries and OpenCandle
   market state, including reload recovery, export/import, clear, and schema
   migration behavior.

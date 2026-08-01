@@ -18,7 +18,7 @@ supported browsers can install it as an application.
 
 The service worker SHALL cache versioned static application assets and an
 offline route. It MUST NOT cache model requests, provider responses, runtime
-bridge traffic, credentials, or mutable session/state exports.
+runtime process traffic, credentials, or mutable session/state exports.
 
 #### Scenario: PWA opens offline
 
@@ -60,4 +60,3 @@ horizontal page overflow or inaccessible writer/runtime status.
 - **WHEN** the installed PWA opens at a mobile viewport
 - **THEN** the user can choose a session, read sources and tool results, submit
   a prompt, and see runtime/writer status using keyboard and touch
-

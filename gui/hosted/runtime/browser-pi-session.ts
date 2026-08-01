@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import initSqlJs from "sql.js";
 import { Agent } from "../../../node_modules/@earendil-works/pi-agent-core/dist/agent.js";
-import type { Model } from "@earendil-works/pi-ai";
+import type { ImageContent, Model } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { convertToLlm } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/messages.js";
@@ -15,8 +15,13 @@ import {
   type SqlJsStateDatabase,
 } from "../../../src/runtime/sqljs-state-database.js";
 import { BrowserOpenCandleExtensionHost } from "./browser-extension-host.js";
-import { createBrowserOpenAiModelRuntime } from "./browser-model-runtime.js";
-import { createBrowserPiRouterClient } from "./browser-pi-router-client.js";
+import {
+  createBrowserModelRuntime,
+  type BrowserModelCredentials,
+} from "./browser-model-runtime.js";
+import { createPiAiRouterClient } from "../../../src/routing/router-llm-client.js";
+import type { FirstClassModelProviderId } from "../../../src/pi/model-provider-metadata.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 
 const MAX_RETURNED_ENTRIES = 48;
 
@@ -50,10 +55,12 @@ export interface BrowserPiSessionOptions {
   stateFile?: string;
   stateDatabase?: SqlJsStateDatabase;
   writeCurrentAlias?: boolean;
+  providerId: FirstClassModelProviderId;
   modelId: string;
-  apiKey: string;
+  credentials: BrowserModelCredentials;
   onDurableEvents?: (events: ChatEvent[]) => void | Promise<void>;
   toolDefinitions?: ToolDefinition[];
+  askUserHandler?: AskUserHandler;
 }
 
 export class BrowserPiSession {
@@ -74,9 +81,13 @@ export class BrowserPiSession {
     const sessionDir = options.sessionDir ?? join(cwd, "sessions");
     mkdirSync(sessionDir, { recursive: true });
 
-    const modelRuntime = await createBrowserOpenAiModelRuntime(options.apiKey, options.modelId);
-    const model = modelRuntime.getModel("openai", options.modelId) as Model<string> | undefined;
-    if (!model) throw new Error(`Unsupported OpenAI model: ${options.modelId}`);
+    const modelRuntime = await createBrowserModelRuntime(options.credentials);
+    const model = modelRuntime.getModel(options.providerId, options.modelId) as
+      | Model<string>
+      | undefined;
+    if (!model || !modelRuntime.hasConfiguredAuth(model.provider)) {
+      throw new Error(`Model is not configured: ${options.providerId}/${options.modelId}`);
+    }
 
     const restoredFile = options.restoredSessionFile;
     const sessionManager =
@@ -84,8 +95,13 @@ export class BrowserPiSession {
         ? SessionManager.open(restoredFile, sessionDir, cwd)
         : SessionManager.create(cwd, sessionDir);
     const existing = sessionManager.buildSessionContext();
-    if (existing.messages.length === 0) {
+    if (
+      existing.model?.provider !== model.provider ||
+      existing.model?.modelId !== model.id
+    ) {
       sessionManager.appendModelChange(model.provider, model.id);
+    }
+    if (existing.messages.length === 0) {
       sessionManager.appendThinkingLevelChange("off");
     }
 
@@ -104,9 +120,10 @@ export class BrowserPiSession {
     const host = new BrowserOpenCandleExtensionHost(
       sessionManager,
       model,
-      createBrowserPiRouterClient("openai", options.modelId, options.apiKey),
+      createPiAiRouterClient(model, modelRuntime.completeSimple.bind(modelRuntime)),
       stateDatabase,
       options.toolDefinitions,
+      options.askUserHandler,
     );
     const agent = new Agent({
       initialState: {
@@ -155,7 +172,11 @@ export class BrowserPiSession {
     );
   }
 
-  async prompt(question: string, signal?: AbortSignal): Promise<BrowserPiSessionResult> {
+  async prompt(
+    question: string,
+    signal?: AbortSignal,
+    images: ImageContent[] = [],
+  ): Promise<BrowserPiSessionResult> {
     const abort = () => this.agent.abort();
     if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
     signal?.addEventListener("abort", abort, { once: true });
@@ -165,7 +186,7 @@ export class BrowserPiSession {
       throw new Error("Hosted Pi input was handled without producing a model turn");
     }
     this.agent.state.systemPrompt = await this.host.prepareSystemPrompt("");
-    await this.agent.prompt(input.text);
+    await this.agent.prompt(input.text, images);
     await this.agent.waitForIdle();
     const sessionFile = this.sessionManager.getSessionFile();
     if (!sessionFile || !existsSync(sessionFile)) {
@@ -223,6 +244,7 @@ export class BrowserPiSession {
 
 export async function runBrowserPiSession(
   question: string,
+  providerId: FirstClassModelProviderId,
   modelId: string,
   apiKey: string,
 ): Promise<BrowserPiSessionResult> {
@@ -233,8 +255,9 @@ export async function runBrowserPiSession(
     restoredSessionFile: join(cwd, "sessions", "current.jsonl"),
     stateFile: join(cwd, "state", "current.sqlite3"),
     writeCurrentAlias: true,
+    providerId,
     modelId,
-    apiKey,
+    credentials: { [providerId]: apiKey },
   });
   try {
     return await session.prompt(question);

@@ -10,6 +10,7 @@ import openCandleExtensionCore from "../../../src/pi/opencandle-extension-core.j
 import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import type { RouterLlmClient } from "../../../src/routing/router-types.js";
 import type { StateDatabase } from "../../../src/runtime/state-database.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 
 type ExtensionHandler = (
   event: unknown,
@@ -78,6 +79,7 @@ export class BrowserOpenCandleExtensionHost {
     routerLlmClient: RouterLlmClient,
     stateDatabase: StateDatabase,
     toolDefinitions: ToolDefinition[] = getHostedOpenCandleToolDefinitions(),
+    askUserHandler?: AskUserHandler,
   ) {
     const api = {
       on: (event: string, handler: ExtensionHandler) => {
@@ -171,6 +173,7 @@ export class BrowserOpenCandleExtensionHost {
       routerLlmClient,
       stateDatabaseFactory: () => stateDatabase,
       toolDefinitions,
+      askUserHandler,
       titleCompletion: async () => "OpenCandle research",
     });
   }

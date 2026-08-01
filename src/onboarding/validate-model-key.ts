@@ -28,7 +28,11 @@ const MODEL_KEY_PROBES: Record<ModelKeyProviderId, ModelKeyProbe> = {
   anthropic: {
     label: "Anthropic",
     url: "https://api.anthropic.com/v1/models",
-    headers: (key) => ({ "x-api-key": key, "anthropic-version": "2023-06-01" }),
+    headers: (key) => ({
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    }),
   },
 };
 

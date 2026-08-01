@@ -62,6 +62,10 @@ The hosted runtime SHALL store persistent provider/model credentials in a
 dedicated browser secret store and SHALL offer a session-only mode. Session and
 market-state exports MUST NOT contain credentials.
 
+Credentials SHALL be stored per model provider, while the selected Pi provider
+and model SHALL be durable non-secret setup state. Changing the selected model
+MUST NOT erase credentials for other configured providers.
+
 #### Scenario: Session-only key disappears
 
 - **WHEN** a user selects session-only credential storage and closes the final
@@ -90,6 +94,14 @@ market-state exports MUST NOT contain credentials.
 - **THEN** persistent and session-only credential storage are cleared
 - **AND** the credential-bearing browser runtime is torn down before a keyless
   runtime is made available
+
+#### Scenario: Multiple provider credentials survive model switching
+
+- **WHEN** a user configures two browser-safe model providers, switches between
+  their Pi models, and reloads the PWA
+- **THEN** the selected provider and model are restored
+- **AND** each provider retains its own configured or session-only credential
+  state without exposing either key
 
 ### Requirement: Users can export, import, clear, and recover
 

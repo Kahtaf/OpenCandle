@@ -1,3 +1,14 @@
+import { firstClassModelCatalog } from "../../../src/pi/model-catalog.generated.js";
+import {
+  isFirstClassModelProvider,
+  type FirstClassModelProviderId,
+} from "../../../src/pi/model-provider-metadata.js";
+import {
+  parseChatRunBody,
+  type ChatRunAttachmentInput,
+  type ChatRunImageInput,
+} from "../../shared/chat-run-input.js";
+
 export interface ProbeRequest {
   question: string;
   provider: "google" | "openai" | "anthropic";
@@ -9,8 +20,8 @@ export type ParsedProbeRequest = ProbeRequest;
 
 export interface SessionRequest {
   question: string;
-  provider: "openai";
-  modelId: "gpt-4.1-mini";
+  provider: FirstClassModelProviderId;
+  modelId: string;
 }
 
 export type GuiRequest =
@@ -29,8 +40,8 @@ export type GuiRequest =
   | { action: "instrument_endpoint"; endpoint: string; symbol: string }
   | {
       action: "configure_model";
-      provider: "openai";
-      modelId: "gpt-4.1-mini";
+      provider: FirstClassModelProviderId;
+      modelId: string;
       apiKey: string;
     }
   | {
@@ -38,8 +49,15 @@ export type GuiRequest =
       providerId: "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa" | "lse";
       apiKey: string;
     }
+  | {
+      action: "validate_model_key";
+      provider: FirstClassModelProviderId;
+      apiKey: string;
+    }
   | { action: "load_session" | "delete_session"; sessionId: string }
   | { action: "rename_session"; sessionId: string; name: string }
+  | { action: "ask_user.answer"; sessionId: string; id: string; answer: string }
+  | { action: "ask_user.cancel"; sessionId: string; id: string }
   | {
       action: "tool_invoke";
       toolName: string;
@@ -52,11 +70,13 @@ export type GuiRequest =
       sessionId: string;
       actionId: string;
       prompt: string;
+      images: ChatRunImageInput[];
+      attachments: ChatRunAttachmentInput[];
     };
 
-const MODEL_ENVIRONMENT = {
+export const MODEL_ENVIRONMENT = {
   google: { modelId: "gemini-2.5-flash", envVar: "GEMINI_API_KEY" },
-  openai: { modelId: "gpt-4.1-mini", envVar: "OPENAI_API_KEY" },
+  openai: { modelId: "gpt-5-mini", envVar: "OPENAI_API_KEY" },
   anthropic: { modelId: "claude-haiku-4-5", envVar: "ANTHROPIC_API_KEY" },
 } as const;
 
@@ -74,100 +94,6 @@ export function parseTrustedHostOrigin(value: string | undefined): string {
   }
 }
 
-export function createBridgePolicy(hostOrigin: string, nonce: string): string {
-  const trustedOrigin = parseTrustedHostOrigin(hostOrigin);
-  if (!/^[A-Za-z0-9_-]+$/.test(nonce)) throw new Error("Bridge nonce is invalid");
-  return [
-    "default-src 'none'",
-    // WebContainer injects its same-origin preview runtime and one inline bootstrap script.
-    // RPC authorization still fails closed on parent source, exact origin, channel, epoch,
-    // bounded request IDs, and the operation allowlist below.
-    "script-src 'self' 'unsafe-inline'",
-    "connect-src 'self'",
-    "base-uri 'none'",
-    "form-action 'none'",
-    `frame-ancestors ${trustedOrigin}`,
-  ].join("; ");
-}
-
-export function createBridgeDocument(hostOrigin: string, nonce: string, runtimeEpoch = "00000000000000000000000000000000"): string {
-  const trustedOrigin = parseTrustedHostOrigin(hostOrigin);
-  if (!/^[A-Za-z0-9_-]+$/.test(nonce)) throw new Error("Bridge nonce is invalid");
-  if (!/^[a-f0-9]{32}$/.test(runtimeEpoch)) throw new Error("Runtime epoch is invalid");
-  const originLiteral = JSON.stringify(trustedOrigin);
-  const epochLiteral = JSON.stringify(runtimeEpoch);
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>OpenCandle runtime bridge</title></head>
-<body>
-<script nonce="${nonce}">
-(() => {
-  "use strict";
-  const trustedHostOrigin = ${originLiteral};
-  const runtimeEpoch = ${epochLiteral};
-  const channel = "opencandle-browser-runtime-v1";
-  const maxResponseCharacters = 1500000;
-  const allowedOperations = new Set(["health", "probe", "session", "gui", "gui-stream"]);
-  const activeStreams = new Map();
-  const send = (message) => parent.postMessage({ channel, runtimeEpoch, ...message }, trustedHostOrigin);
-
-  addEventListener("message", async (event) => {
-    if (event.origin !== trustedHostOrigin || event.source !== parent) return;
-    const message = event.data;
-    if (!message || typeof message !== "object" || message.channel !== channel || message.runtimeEpoch !== runtimeEpoch) return;
-    if (message.type === "cancel" && typeof message.requestId === "string") {
-      activeStreams.get(message.requestId)?.abort();
-      activeStreams.delete(message.requestId);
-      return;
-    }
-    const { operation, requestId } = message;
-    if (!allowedOperations.has(operation)) return;
-    if (typeof requestId !== "string" || !/^[a-f0-9]{32}$/.test(requestId)) return;
-    try {
-      const controller = new AbortController();
-      if (operation === "gui-stream") activeStreams.set(requestId, controller);
-      const response = await fetch(operation === "health" ? "/health" : "/" + operation, {
-        method: operation === "health" ? "GET" : "POST",
-        credentials: "omit",
-        ...(operation !== "health" ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(message.payload),
-        } : {}),
-        signal: controller.signal,
-      });
-      if (operation === "gui-stream") {
-        if (response.ok && response.body) {
-          const reader = response.body.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            send({ type: "stream-chunk", requestId, value: Array.from(value) });
-          }
-          activeStreams.delete(requestId);
-          send({ type: "stream-end", requestId, ok: true });
-          return;
-        }
-        const failure = await response.json().catch(() => ({ error: "Runtime stream failed" }));
-        activeStreams.delete(requestId);
-        send({ type: "stream-end", requestId, ok: false, status: response.status, error: failure.error });
-        return;
-      }
-      const result = await response.json();
-      const serialized = JSON.stringify(result);
-      if (serialized.length > maxResponseCharacters) throw new Error("Runtime response is too large");
-      send({ type: "response", requestId, ok: response.ok, status: response.status, result });
-    } catch (error) {
-      activeStreams.delete(requestId);
-      const text = error instanceof Error ? error.message : "Bridge request failed";
-      send({ type: operation === "gui-stream" ? "stream-end" : "response", requestId, ok: false, status: 0, error: text.slice(0, 240) });
-    }
-  });
-
-  send({ type: "ready" });
-})();
-</script>
-</body></html>`;
-}
-
 export function parseProbeRequest(
   value: unknown,
   environment: Record<string, string | undefined>,
@@ -181,16 +107,10 @@ export function parseProbeRequest(
   if (question.length > 500) throw new Error("Question must be 500 characters or fewer");
   const provider = request.provider;
   const modelId = request.modelId;
-  if (
-    (provider !== "google" && provider !== "openai" && provider !== "anthropic") ||
-    modelId !== MODEL_ENVIRONMENT[provider].modelId
-  ) {
+  if (!isFirstClassModelProvider(provider) || !resolveFirstClassModel(provider, modelId)) {
     throw new Error("Unsupported provider or model");
   }
   const runModel = request.runModel === true;
-  if (runModel && provider !== "openai") {
-    throw new Error("Browser model probe currently supports OpenAI only");
-  }
   if (runModel && !environment[MODEL_ENVIRONMENT[provider].envVar]?.trim()) {
     throw new Error("Model probe requires a configured model key");
   }
@@ -212,16 +132,16 @@ export function parseSessionRequest(
   }
   const request = value as Record<string, unknown>;
   const question = parseQuestion(request.question);
-  if (request.provider !== "openai" || request.modelId !== MODEL_ENVIRONMENT.openai.modelId) {
-    throw new Error("Browser Pi session currently supports OpenAI only");
+  if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModel(request.provider, request.modelId)) {
+    throw new Error("Unsupported provider or model");
   }
-  if (!environment.OPENAI_API_KEY?.trim()) {
+  if (!environment[MODEL_ENVIRONMENT[request.provider].envVar]?.trim()) {
     throw new Error("Pi session requires a configured model key");
   }
   return {
     question,
-    provider: "openai",
-    modelId: MODEL_ENVIRONMENT.openai.modelId,
+    provider: request.provider,
+    modelId: request.modelId,
   };
 }
 
@@ -239,16 +159,16 @@ export function parseGuiRequest(value: unknown): GuiRequest {
     case "diagnostics":
       return { action: request.action };
     case "configure_model": {
-      if (request.provider !== "openai" || request.modelId !== MODEL_ENVIRONMENT.openai.modelId) {
-        throw new Error("Hosted model configuration supports OpenAI GPT-4.1 mini only");
+      if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModel(request.provider, request.modelId)) {
+        throw new Error("Unsupported provider or model");
       }
       if (typeof request.apiKey !== "string" || request.apiKey.length > 512) {
-        throw new Error("Hosted OpenAI key is invalid");
+        throw new Error("Hosted model key is invalid");
       }
       return {
         action: request.action,
-        provider: "openai",
-        modelId: MODEL_ENVIRONMENT.openai.modelId,
+        provider: request.provider,
+        modelId: request.modelId,
         apiKey: request.apiKey,
       };
     }
@@ -268,6 +188,15 @@ export function parseGuiRequest(value: unknown): GuiRequest {
         throw new Error("Hosted provider key is invalid");
       }
       return { action: request.action, providerId, apiKey: request.apiKey.trim() };
+    }
+    case "validate_model_key": {
+      if (!isFirstClassModelProvider(request.provider)) {
+        throw new Error("Unsupported model provider");
+      }
+      if (typeof request.apiKey !== "string" || !request.apiKey.trim() || request.apiKey.length > 512) {
+        throw new Error("Hosted model key is invalid");
+      }
+      return { action: request.action, provider: request.provider, apiKey: request.apiKey.trim() };
     }
     case "instrument_search": {
       const query = parseBoundedString(request.query, "query", 120);
@@ -304,13 +233,28 @@ export function parseGuiRequest(value: unknown): GuiRequest {
         name,
       };
     }
+    case "ask_user.answer": {
+      const id = parseBoundedString(request.id, "ask_user id", 200);
+      const answer = parseBoundedString(request.answer, "ask_user answer", 4_000);
+      return {
+        action: request.action,
+        sessionId: parseSessionId(request.sessionId),
+        id,
+        answer,
+      };
+    }
+    case "ask_user.cancel":
+      return {
+        action: request.action,
+        sessionId: parseSessionId(request.sessionId),
+        id: parseBoundedString(request.id, "ask_user id", 200),
+      };
     case "chat_run": {
-      if (request.images !== undefined || request.attachments !== undefined) {
-        throw new Error("Hosted OpenCandle does not support chat attachments yet");
+      const parsed = parseChatRunBody(request);
+      if (!parsed.ok) throw new Error(parsed.error);
+      if (parsed.value.prompt.length > 4_000) {
+        throw new Error("Question must be 4,000 characters or fewer");
       }
-      const prompt = typeof request.prompt === "string" ? request.prompt.trim() : "";
-      if (!prompt) throw new Error("Question must not be blank");
-      if (prompt.length > 4_000) throw new Error("Question must be 4,000 characters or fewer");
       const actionId =
         typeof request.actionId === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(request.actionId)
           ? request.actionId
@@ -320,7 +264,7 @@ export function parseGuiRequest(value: unknown): GuiRequest {
         action: request.action,
         sessionId: parseSessionId(request.sessionId),
         actionId,
-        prompt,
+        ...parsed.value,
       };
     }
     case "tool_invoke": {
@@ -384,4 +328,9 @@ function parseSessionId(value: unknown): string {
     throw new Error("Invalid sessionId");
   }
   return sessionId;
+}
+function resolveFirstClassModel(provider: unknown, modelId: unknown) {
+  return firstClassModelCatalog.find(
+    (model) => model.provider === provider && model.id === modelId,
+  );
 }

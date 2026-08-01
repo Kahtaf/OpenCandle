@@ -63,7 +63,7 @@ function ModelSetupHeader({ variant, hasReady, role, requirement, hosted }) {
             : requirement === "select_model"
               ? "OpenCandle found model credentials. Choose one model below and chat will be ready."
               : hosted
-                ? "Add an OpenAI key to run the model directly in this browser. OpenCandle never sends it to an OpenCandle server."
+                ? "Add an OpenAI, Anthropic, or Google key to run Pi models directly in this browser. OpenCandle never sends it to an OpenCandle server."
                 : "OpenCandle needs one model before chat can run. Paste a key below or use terminal sign-in, then start chatting from the same window."}
         </p>
       </div>
@@ -77,10 +77,10 @@ function ModelSetupHeader({ variant, hasReady, role, requirement, hosted }) {
           ? "Model setup is unavailable in this window while OpenCandle reconnects local setup access."
           : hasReady
             ? hosted
-              ? "Replace the model key kept by this browser. The saved key is never shown again."
+              ? "Add or replace model keys kept by this browser. Saved keys are never shown again."
               : "Add or switch the model that powers chat. Keys are saved locally in Pi's auth store."
             : hosted
-              ? "Paste an OpenAI API key and choose how long this browser should keep it."
+              ? "Paste an OpenAI, Anthropic, or Google API key and choose how long this browser should keep it."
               : "Paste a Google Gemini, OpenAI, or Anthropic API key. Keys are saved locally in Pi's auth store."}
       </p>
     </div>
@@ -205,7 +205,9 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
               </p>
             </div>
             <label className="grid gap-1.5" htmlFor={`${provider.id}-api-key`}>
-              <span className="text-xs font-medium text-muted-foreground">API key</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {provider.label} API key
+              </span>
               <Input
                 id={`${provider.id}-api-key`}
                 type="password"

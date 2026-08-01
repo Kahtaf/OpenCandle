@@ -158,7 +158,14 @@ describe("browser runtime coordinator", () => {
     await settle();
 
     expect(follower.getRole()).toBe("writer");
-    expect(createHost).toHaveBeenLastCalledWith({ sessionCredential: credential });
+    expect(createHost).toHaveBeenLastCalledWith({
+      sessionCredential: {
+        version: 2,
+        credentials: {
+          openai: { apiKey: "session-only-key", storageMode: "session" },
+        },
+      },
+    });
     await follower.dispose();
   });
 

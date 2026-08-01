@@ -12,6 +12,7 @@ const port = process.env.OPENCANDLE_HOSTED_TEST_PORT
   : 30_000 + (process.pid % 20_000);
 const origin = `http://127.0.0.1:${port}`;
 const relayE2e = process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1";
+const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-5-mini");
 const prompt = relayE2e
   ? "Use both get_stock_quote and get_stock_history for AAPL. Tell me its current price and whether it rose or fell over the last five trading days."
   : 'I am a conservative long-term investor. Use get_event_probabilities to search Polymarket for "SpaceX". Report one returned market and its probability in one sentence.';
@@ -150,20 +151,42 @@ try {
   }
 
   const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  const googleApiKey = String(process.env.GEMINI_API_KEY || "").trim();
   let completedLiveTurn = false;
   if (apiKey) {
     stage = "model setup";
     await page
       .getByRole("radio", { name: /Only for this browser session/ })
       .evaluate((control) => control.click());
-    await page.getByRole("textbox", { name: "API key" }).fill(apiKey);
-    await page.getByRole("button", { name: "Save key" }).click();
+    await page.getByRole("textbox", { name: "OpenAI API key" }).fill(apiKey);
+    await page
+      .getByRole("textbox", { name: "OpenAI API key" })
+      .locator("xpath=ancestor::div[contains(@class, 'content-start')]")
+      .getByRole("button", { name: "Save key" })
+      .click();
     await waitFor(
-      async () => (await page.getByRole("textbox", { name: "API key" }).count()) === 0,
+      async () =>
+        (await page.getByRole("textbox", { name: "OpenAI API key" }).count()) === 0 ||
+        browserErrors.some((message) => message.includes("Hosted runtime boot failed")),
       120_000,
       "credential field to clear after save",
     );
+    const bootFailure = browserErrors.findLast((message) =>
+      message.includes("Hosted runtime boot failed"),
+    );
+    if (bootFailure) throw new Error(bootFailure);
     await waitForEnabled(page.getByRole("textbox", { name: "Message OpenCandle" }), 120_000);
+    if (openAiModel !== "gpt-5-mini") {
+      await page.getByRole("button", { name: /gpt-5-mini/ }).click();
+      await page
+        .getByRole("menuitemradio", { name: new RegExp(openAiModel.replaceAll(".", "\\.")) })
+        .click();
+      await waitFor(
+        async () => (await page.getByRole("button", { name: new RegExp(openAiModel.replaceAll(".", "\\.")) }).count()) > 0,
+        120_000,
+        `OpenAI Pi model selection: ${openAiModel}`,
+      );
+    }
 
     const initialRows = await page.locator("[data-chat-row-id]").count();
     await page.getByRole("textbox", { name: "Message OpenCandle" }).fill(prompt);
@@ -187,6 +210,30 @@ try {
     }
     await page.waitForURL(/\/sessions\//, { timeout: 30_000 });
     completedLiveTurn = true;
+
+    if (googleApiKey) {
+      stage = "Pi model provider switch";
+      await page.getByRole("button", { name: new RegExp(openAiModel.replaceAll(".", "\\.")) }).click();
+      await page.getByRole("menuitem", { name: /Manage model keys/ }).click();
+      const googleKeyInput = page.getByRole("textbox", { name: "Google Gemini API key" });
+      await googleKeyInput.fill(googleApiKey);
+      await googleKeyInput
+        .locator("xpath=ancestor::div[contains(@class, 'content-start')]")
+        .getByRole("button", { name: "Save key" })
+        .click();
+      await waitFor(
+        async () => (await page.getByText("gemini-2.5-flash", { exact: true }).count()) > 0,
+        120_000,
+        "Google Pi model selection",
+      );
+      await page.keyboard.press("Escape");
+      const rowsBeforeGoogle = await page.locator("[data-chat-row-id]").count();
+      await page
+        .getByRole("textbox", { name: "Message OpenCandle" })
+        .fill("In one sentence, explain what a stock ticker is. Do not use tools.");
+      await page.getByRole("button", { name: "Send message" }).click();
+      await waitForCount(page.locator("[data-chat-row-id]"), rowsBeforeGoogle + 2, 180_000);
+    }
 
     stage = "session reload";
     const restored = await context.newPage();
@@ -237,6 +284,26 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForText(page, "MSFT", 120_000);
 
+  if (completedLiveTurn) {
+    stage = "saved-state attachment";
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await waitForEnabled(page.getByRole("textbox", { name: "Message OpenCandle" }), 120_000);
+    await page.getByRole("button", { name: "Attach context" }).click();
+    await page.getByRole("menuitem", { name: "Default", exact: true }).first().click();
+    await waitForText(page, "Portfolio: Default", 30_000);
+    const rowsBeforeAttachment = await page.locator("[data-chat-row-id]").count();
+    await page
+      .getByRole("textbox", { name: "Message OpenCandle" })
+      .fill("Name the ticker in the attached portfolio. Answer with the ticker only. Do not use tools.");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await waitForCount(page.locator("[data-chat-row-id]"), rowsBeforeAttachment + 2, 180_000);
+    await waitFor(
+      async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("MSFT"),
+      180_000,
+      "an answer grounded in the attached portfolio",
+    );
+  }
+
   stage = "watchlist reload";
   await page.getByRole("link", { name: "Watchlists" }).click();
   await waitForText(page, "AAPL", 30_000);
@@ -270,7 +337,8 @@ try {
   ]);
   await download.saveAs(exportPath);
   const exported = await readFile(exportPath, "utf8");
-  assert(!apiKey || !exported.includes(apiKey), "archive excludes model key");
+  assert(!apiKey || !exported.includes(apiKey), "archive excludes OpenAI model key");
+  assert(!googleApiKey || !exported.includes(googleApiKey), "archive excludes Google model key");
   const archive = JSON.parse(exported);
   assert(archive.version === 1, "archive version");
   assert(archive.sessions.length >= 1, "archive includes canonical Pi session");
@@ -388,8 +456,12 @@ try {
   assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
 
   const secretErrors = apiKey ? browserErrors.filter((message) => message.includes(apiKey)) : [];
+  if (googleApiKey) {
+    secretErrors.push(...browserErrors.filter((message) => message.includes(googleApiKey)));
+  }
   assert(secretErrors.length === 0, "model key absent from browser errors");
   assert(!apiKey || !serverOutput.includes(apiKey), "model key absent from static host logs");
+  assert(!googleApiKey || !serverOutput.includes(googleApiKey), "Google key absent from static host logs");
   process.stdout.write(
     `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} multiTab=PASS offline=PASS archive=PASS mobile=PASS\n`,
   );
@@ -397,7 +469,7 @@ try {
   const pageText = await page?.locator("body").innerText().catch(() => "");
   process.stderr.write(
     redact(
-      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
+      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
     ),
   );
   process.exitCode = 1;
@@ -550,6 +622,9 @@ function assert(condition, label) {
 function redact(value) {
   const secrets = [
     process.env.OPENAI_API_KEY,
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.ANTHROPIC_API_KEY,
     process.env.ALPHA_VANTAGE_API_KEY,
     process.env.FRED_API_KEY,
     process.env.FINNHUB_API_KEY,

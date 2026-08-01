@@ -1220,7 +1220,8 @@ export default function openCandleExtension(
     // default unrouted flow for the turn.
     const model = (ctx as { model?: unknown }).model;
     if (!model) return null;
-    return createPiAiRouterClient(model as Model<Api>);
+    const complete = options?.modelRuntime?.completeSimple.bind(options.modelRuntime);
+    return createPiAiRouterClient(model as Model<Api>, complete);
   }
 
   // System prompt assembly — delegate to coordinator. When a fallback context
