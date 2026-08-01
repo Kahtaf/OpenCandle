@@ -30,6 +30,7 @@ describe("MarketSparkline provenance", () => {
 
   it.each([
     ["BTC-USD", "crypto", { ticker: "BTC/USD", market: "crypto" }],
+    ["ETH-EUR", "crypto", { ticker: "ETH/EUR", market: "crypto" }],
     ["EURUSD=X", "unknown", { ticker: "EUR/USD", market: "forex" }],
     ["^GSPC", "index", { ticker: "SPX500/USD", market: "index" }],
     ["^NDX", "index", { ticker: "NAS100/USD", market: "index" }],

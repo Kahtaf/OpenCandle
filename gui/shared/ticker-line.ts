@@ -54,7 +54,7 @@ export function resolveTickerLineInstrument(
   }
 
   if (normalizedAssetType === "crypto") {
-    return { ticker: normalizeUsdPair(normalizedSymbol), market: "crypto" };
+    return { ticker: normalizeCryptoPair(normalizedSymbol), market: "crypto" };
   }
   if (normalizedAssetType === "forex" || normalizedAssetType === "fx") {
     const ticker = normalizeCurrencyPair(normalizedSymbol);
@@ -112,6 +112,12 @@ function normalizeUsdPair(symbol: string): string {
     return `${compact.slice(0, -3)}/USD`;
   }
   return symbol;
+}
+
+function normalizeCryptoPair(symbol: string): string {
+  const separated = symbol.match(/^([A-Z0-9]{2,10})[\s/_-]([A-Z0-9]{2,10})$/);
+  if (separated) return `${separated[1]}/${separated[2]}`;
+  return normalizeUsdPair(symbol);
 }
 
 function normalizeCommodity(symbol: string): string {

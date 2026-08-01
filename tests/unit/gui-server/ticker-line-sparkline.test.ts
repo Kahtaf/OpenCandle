@@ -13,13 +13,17 @@ describe("Ticker Line sparkline proxy", () => {
   it("fetches a market-aware SVG once and caches it", async () => {
     const providerFetch = vi.fn().mockResolvedValue(
       new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
-        headers: { "content-type": "image/svg+xml" },
+        headers: {
+          "content-type": "image/svg+xml",
+          "x-data-as-of": "2026-08-01T00:00:00.000Z",
+        },
       }),
     );
     vi.stubGlobal("fetch", providerFetch);
 
     await expect(fetchTickerLineSparkline("BTC-USD", "crypto")).resolves.toMatchObject({
       status: "ok",
+      dataAsOf: "2026-08-01T00:00:00.000Z",
     });
     await expect(fetchTickerLineSparkline("BTC-USD", "crypto")).resolves.toMatchObject({
       status: "ok",
@@ -68,5 +72,42 @@ describe("Ticker Line sparkline proxy", () => {
     });
     await fetchTickerLineSparkline("AAPL", "equity");
     expect(providerFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a stale provider fallback instead of presenting it as current", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<svg></svg>", {
+          headers: {
+            "x-cache": "STALE",
+            "x-data-as-of": "2026-07-30T20:00:00.000Z",
+          },
+        }),
+      ),
+    );
+
+    await expect(fetchTickerLineSparkline("AAPL", "equity")).resolves.toEqual({
+      status: "unavailable",
+      reason: "Ticker Line returned stale market data as of 2026-07-30T20:00:00.000Z",
+    });
+  });
+
+  it("stops streaming an SVG as soon as it exceeds the size limit", async () => {
+    const cancelStream = vi.fn();
+    const oversizedBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(300 * 1024));
+        controller.enqueue(new Uint8Array(300 * 1024));
+      },
+      cancel: cancelStream,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(oversizedBody)));
+
+    await expect(fetchTickerLineSparkline("AAPL", "equity")).resolves.toEqual({
+      status: "unavailable",
+      reason: "Ticker Line SVG exceeded the size limit",
+    });
+    expect(cancelStream).toHaveBeenCalledOnce();
   });
 });

@@ -101,7 +101,11 @@ describe("market indices HTTP route", () => {
   });
 
   it("serves a trusted, same-origin Ticker Line SVG with restrictive headers", async () => {
-    fetchTickerLineSparklineMock.mockResolvedValue({ status: "ok", svg: "<svg></svg>" });
+    fetchTickerLineSparklineMock.mockResolvedValue({
+      status: "ok",
+      svg: "<svg></svg>",
+      dataAsOf: "2026-08-01T00:00:00.000Z",
+    });
 
     const response = await fetch(
       `${endpoint}/api/market-state/sparkline?symbol=AAPL&assetType=equity`,
@@ -111,6 +115,7 @@ describe("market indices HTTP route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/svg+xml");
     expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(response.headers.get("x-data-as-of")).toBe("2026-08-01T00:00:00.000Z");
     expect(response.headers.get("content-security-policy")).toBe(
       "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     );

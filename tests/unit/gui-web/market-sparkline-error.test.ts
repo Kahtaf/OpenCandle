@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe("MarketSparkline failures", () => {
-  it("replaces a failed proxy image with the unavailable state", async () => {
+  it("retries a transient proxy failure once before showing a provider failure", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const container = document.createElement("div");
     document.body.append(container);
@@ -24,8 +24,14 @@ describe("MarketSparkline failures", () => {
 
     await act(async () => image?.dispatchEvent(new Event("error")));
 
+    const retryImage = container.querySelector("img");
+    expect(retryImage?.src).toContain("retry=1");
+
+    await act(async () => retryImage?.dispatchEvent(new Event("error")));
+
     expect(container.querySelector("img")).toBeNull();
-    expect(container.textContent).toContain("Ticker Line · unavailable");
+    expect(container.textContent).toContain("Ticker Line · provider unavailable");
+    expect(container.querySelector("figure")?.title).toBe("Ticker Line is temporarily unavailable");
     await act(async () => root.unmount());
   });
 });

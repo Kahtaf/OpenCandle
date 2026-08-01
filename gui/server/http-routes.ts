@@ -250,6 +250,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         "content-type": "image/svg+xml",
         "x-content-type-options": "nosniff",
+        ...(result.dataAsOf ? { "x-data-as-of": result.dataAsOf } : {}),
       });
       res.end(result.svg);
       return;
