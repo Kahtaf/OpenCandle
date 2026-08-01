@@ -17,7 +17,9 @@ own the browser runtime and checkpoint OPFS state.
 
 Follower tabs SHALL receive bootstrap state and ordered canonical chat events,
 and SHALL forward writer-only actions to the active writer with explicit
-acknowledgement and failure handling.
+acknowledgement and failure handling. Credential-bearing actions SHALL NOT be
+forwarded over the coordination channel; a follower MUST become the writer
+before accepting model or provider keys.
 
 #### Scenario: Follower submits a prompt
 
@@ -34,6 +36,12 @@ acknowledgement and failure handling.
   already-active error
 - **AND** retrying an already completed logical action id does not perform a
   second model call or state mutation
+
+#### Scenario: Follower attempts to save a credential
+
+- **WHEN** a follower submits a model or provider API key
+- **THEN** the action is rejected with guidance to use the active writer tab
+- **AND** the credential is never placed on the BroadcastChannel
 
 ### Requirement: Writer failover is epoch safe
 

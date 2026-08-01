@@ -239,6 +239,24 @@ describe("hosted runtime transport", () => {
     channel?.close();
   });
 
+  it("closes the hosted event channel immediately when initial bootstrap fails", async () => {
+    const host = createHost();
+    host.request.mockRejectedValueOnce(new Error("WebContainer unavailable"));
+    const transport = createHostedRuntimeTransport({ host });
+    const messages: Array<Record<string, unknown>> = [];
+    const onClose = vi.fn();
+    const channel = transport.openEventChannel({
+      onMessage: (message: string) => messages.push(JSON.parse(message)),
+      onClose,
+    });
+
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(channel?.readyState).toBe(3);
+    expect(messages).toContainEqual(
+      expect.objectContaining({ type: "error", message: "WebContainer unavailable" }),
+    );
+  });
+
   it("publishes hosted role changes without re-emitting boot on runtime invalidation", async () => {
     const host = createHost();
     let role = "writer";

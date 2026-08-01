@@ -803,12 +803,12 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
   const previousAutofillRef = useRef({
     shares: "",
     avg_cost: "",
-    currency: lot?.currency ?? "USD",
+    currency: lot?.currency ?? "",
   });
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
-    currency: lot?.currency ?? "USD",
+    currency: lot?.currency ?? "",
   });
   const [query, setQuery] = useState(lot?.symbol ?? "");
   const [selected, setSelected] = useState(lot?.symbol ?? "");
@@ -849,7 +849,7 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!resolvedSymbol || !values.shares || !values.avg_cost) return;
+    if (!resolvedSymbol || !values.shares || !values.avg_cost || !values.currency) return;
     setPending(true);
     try {
       await onSubmit({ ...values, symbol: resolvedSymbol });
@@ -908,10 +908,12 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
           id={currencyId}
           value={values.currency}
           disabled={disabled || pending}
+          required
           onChange={(event) =>
             setValues((current) => ({ ...current, currency: event.target.value }))
           }
         >
+          {!values.currency ? <option value="">Select currency</option> : null}
           {holdingCurrencyOptions(lot?.currency, values.currency).map((currency) => (
             <option key={currency} value={currency}>
               {currency}
@@ -921,7 +923,9 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
       </label>
       <PendingSubmitButton
         pending={pending}
-        disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}
+        disabled={
+          disabled || !resolvedSymbol || !values.shares || !values.avg_cost || !values.currency
+        }
       >
         Save
       </PendingSubmitButton>
@@ -961,7 +965,7 @@ function getHoldingAutofillDefaults({ selectedSymbol, selectedQuote }) {
   return {
     shares: "100",
     avg_cost: quote ? formatAutofillNumber(quote.price) : "",
-    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "USD",
+    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "",
   };
 }
 
@@ -978,8 +982,7 @@ export function getHoldingAutofillValues({
   };
   const defaults = getHoldingAutofillDefaults({ selectedSymbol, selectedQuote });
   const replaceableValue = (field) =>
-    current[field] === "" ||
-    current[field] === String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
+    current[field] === "" || current[field] === String(previousAutofill?.[field] ?? "");
 
   return {
     shares: defaults.shares && replaceableValue("shares") ? defaults.shares : current.shares,

@@ -25,8 +25,8 @@ import { optionChainTool } from "../tools/options/option-chain.js";
 import { correlationTool } from "../tools/portfolio/correlation.js";
 import { holdingsOverlapTool } from "../tools/portfolio/holdings-overlap.js";
 import { riskAnalysisTool } from "../tools/portfolio/risk-analysis.js";
-import { hostedSentimentSummaryTool } from "../tools/sentiment/hosted-sentiment-summary.js";
-import { webSearchTool } from "../tools/sentiment/web-search.js";
+import { createHostedSentimentSummaryTool } from "../tools/sentiment/hosted-sentiment-summary.js";
+import { createWebSearchTool, webSearchParameters } from "../tools/sentiment/web-search.js";
 import { backtestTool } from "../tools/technical/backtest.js";
 import { technicalIndicatorsTool } from "../tools/technical/indicators.js";
 import { agentToolToPiTool } from "./tool-adapter-core.js";
@@ -92,19 +92,20 @@ const HOSTED_SCREEN_STOCKS = withParameters(
 );
 
 function hostedWebSearchTool(available: ReadonlySet<string>) {
-  const providers = [
-    ...(available.has("exa") ? [Type.Literal("exa")] : []),
-    ...(available.has("brave") && hasCredential("brave") ? [Type.Literal("brave")] : []),
+  const allowedProviders = [
+    ...(available.has("exa") ? (["exa"] as const) : []),
+    ...(available.has("brave") && hasCredential("brave") ? (["brave"] as const) : []),
   ];
+  const providers = allowedProviders.map((provider) => Type.Literal(provider));
   if (providers.length === 0) return null;
   const providerSchema =
     providers.length === 1
       ? providers[0]
       : Type.Union(providers as [(typeof providers)[number], (typeof providers)[number]]);
-  return withParameters(
-    agentToolToPiTool(webSearchTool),
+  const tool = withParameters(
+    agentToolToPiTool(createWebSearchTool(allowedProviders)),
     Type.Composite([
-      Type.Omit(webSearchTool.parameters, ["provider"]),
+      Type.Omit(webSearchParameters, ["provider"]),
       Type.Object({
         provider: Type.Optional(
           Type.Intersect([providerSchema], {
@@ -114,6 +115,7 @@ function hostedWebSearchTool(available: ReadonlySet<string>) {
       }),
     ]),
   );
+  return Object.assign(tool, { __hostedAllowedProviders: allowedProviders });
 }
 
 /**
@@ -146,7 +148,6 @@ const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(correlationTool, ["yahoo"]),
   hosted(holdingsOverlapTool, ["yahoo"]),
   hosted(optionChainTool, ["yahoo"]),
-  hosted(hostedSentimentSummaryTool, ["exa", "brave"]),
 ];
 
 const ALPHA_VANTAGE_MARKET_TOOLS = new Set([
@@ -181,10 +182,28 @@ export function getHostedOpenCandleToolDefinitions(
     return tool;
   });
   const search = hostedWebSearchTool(available);
+  const sentimentProviders = [
+    ...(available.has("exa") ? (["exa"] as const) : []),
+    ...(available.has("brave") && hasCredential("brave") ? (["brave"] as const) : []),
+  ];
+  const sentiment =
+    sentimentProviders.length > 0
+      ? Object.assign(
+          agentToolToPiTool(
+            createHostedSentimentSummaryTool(
+              sentimentProviders,
+              available.has("yahoo") ? ["yahoo"] : [],
+            ),
+          ) as ReturnType<typeof agentToolToPiTool>,
+          {
+            __hostedAllowedProviders: sentimentProviders,
+            __hostedEvidenceProviders: available.has("yahoo") ? ["yahoo"] : [],
+          },
+        )
+      : null;
   if (search) {
-    const sentimentIndex = tools.findIndex((tool) => tool.name === "get_sentiment_summary");
-    if (sentimentIndex >= 0) tools.splice(sentimentIndex, 0, search);
-    else tools.push(search);
+    tools.push(search);
   }
+  if (sentiment) tools.push(sentiment);
   return tools;
 }

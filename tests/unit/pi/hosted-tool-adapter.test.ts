@@ -154,6 +154,26 @@ describe("hosted tool adapter", () => {
     );
   });
 
+  it("binds implicit hosted search execution to the negotiated providers", async () => {
+    hasCredential.mockImplementation((provider) => provider === "brave");
+    const search = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave"] }).find(
+      (tool) => tool.name === "search_web",
+    );
+    expect(search).toBeDefined();
+    expect((search as any).__hostedAllowedProviders).toEqual(["brave"]);
+
+    const sentiment = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave"] }).find(
+      (tool) => tool.name === "get_sentiment_summary",
+    );
+    expect((sentiment as any).__hostedAllowedProviders).toEqual(["brave"]);
+    expect((sentiment as any).__hostedEvidenceProviders).toEqual([]);
+
+    const yahooSentiment = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["brave", "yahoo"],
+    }).find((tool) => tool.name === "get_sentiment_summary");
+    expect((yahooSentiment as any).__hostedEvidenceProviders).toEqual(["yahoo"]);
+  });
+
   it("does not change the native local tool composition", () => {
     const localTools = getOpenCandleToolDefinitions();
     const localNames = localTools.map((tool) => tool.name);

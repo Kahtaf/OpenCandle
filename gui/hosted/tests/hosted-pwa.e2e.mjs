@@ -290,6 +290,7 @@ try {
   await waitForText(page, "Selected MSFT", 30_000);
   await page.getByRole("spinbutton", { name: "Quantity" }).fill("2");
   await page.getByRole("spinbutton", { name: "Average cost per share" }).fill("300");
+  await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
   await page.getByRole("button", { name: "Save" }).click();
   await waitFor(
     async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,

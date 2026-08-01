@@ -101,6 +101,9 @@ class BrowserRuntimeCoordinator {
       this.broadcastInvalidation();
       return value;
     }
+    if (isCredentialBearingCommand(command)) {
+      throw new Error("Enter API keys in the active writer tab so credentials never cross tabs.");
+    }
     return this.forward({ kind: "command", command });
   }
 
@@ -468,6 +471,10 @@ class BrowserRuntimeCoordinator {
   }
 }
 
+function isCredentialBearingCommand(command) {
+  return command?.type === "model.setup.save_api_key" || command?.type === "provider.save_api_key";
+}
+
 const READ_ONLY_GUI_ACTIONS = new Set([
   "bootstrap",
   "get",
@@ -479,6 +486,8 @@ const READ_ONLY_GUI_ACTIONS = new Set([
   "instrument_quote",
   "instrument_endpoint",
   "diagnostics",
+  "validate_model_key",
+  "validate_provider_key",
 ]);
 
 function isMutatingRequest(operation, payload) {

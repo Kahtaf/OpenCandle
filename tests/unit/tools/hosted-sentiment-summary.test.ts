@@ -14,12 +14,49 @@ vi.mock("../../../src/providers/wrap-provider.js", () => ({ wrapProvider: vi.fn(
 import { getCompanyNews } from "../../../src/providers/finnhub.js";
 import { searchWeb } from "../../../src/providers/web-search.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
-import { hostedSentimentSummaryTool } from "../../../src/tools/sentiment/hosted-sentiment-summary.js";
+import {
+  createHostedSentimentSummaryTool,
+  hostedSentimentSummaryTool,
+} from "../../../src/tools/sentiment/hosted-sentiment-summary.js";
 
 describe("hosted sentiment summary", () => {
   beforeEach(() => {
     config.current = {};
     vi.clearAllMocks();
+  });
+
+  it("passes the negotiated hosted providers to web search", async () => {
+    vi.mocked(searchWeb).mockResolvedValue({
+      status: "unavailable",
+      reason: "test",
+      provider: "brave",
+    });
+    vi.mocked(wrapProvider).mockResolvedValue(undefined as never);
+
+    await createHostedSentimentSummaryTool(["brave"]).execute("call-policy", {
+      query: "markets",
+    });
+
+    expect(searchWeb).toHaveBeenCalledWith(
+      "markets",
+      expect.objectContaining({ allowedProviders: ["brave"] }),
+    );
+  });
+
+  it("does not call quote or company-news providers outside the negotiated policy", async () => {
+    config.current = { finnhubApiKey: "test-key" };
+    vi.mocked(searchWeb).mockResolvedValue({
+      status: "unavailable",
+      reason: "test",
+      provider: "brave",
+    });
+
+    await createHostedSentimentSummaryTool(["brave"], []).execute("call-provider-policy", {
+      query: "AAPL",
+    });
+
+    expect(getCompanyNews).not.toHaveBeenCalled();
+    expect(wrapProvider).not.toHaveBeenCalled();
   });
 
   it("preserves stale web provenance and published dates without calling it recent", async () => {

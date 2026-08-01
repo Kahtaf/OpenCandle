@@ -207,6 +207,38 @@ describe("browser runtime coordinator", () => {
     await writer.dispose();
   });
 
+  it("never forwards credential-bearing commands from a follower", async () => {
+    FakeBroadcastChannel.channels.clear();
+    FakeBroadcastChannel.messages = [];
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+
+    await expect(
+      follower.handleCommand({
+        type: "model.setup.save_api_key",
+        provider: "openai",
+        apiKey: "must-never-be-broadcast",
+      }),
+    ).rejects.toThrow("active writer tab");
+    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain("must-never-be-broadcast");
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("uses only the promoted tab's own session credential", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();

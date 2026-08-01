@@ -10,7 +10,7 @@ import {
   untrustedContentHeader,
 } from "./untrusted-text.js";
 
-const params = Type.Object({
+export const webSearchParameters = Type.Object({
   query: Type.String({ description: "Search query — ticker, topic, or question" }),
   category: Type.Optional(
     Type.Union([Type.Literal("news"), Type.Literal("general")], {
@@ -110,78 +110,93 @@ function isOfficialFedSource(value: string): boolean {
   return lower.includes("federalreserve.gov") || lower.includes("fomc.gov");
 }
 
-export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope | null> = {
-  name: "search_web",
-  label: "Web Search",
-  description:
-    "Search the web for financial news, earnings context, company events, regulatory developments, or general information. " +
-    "NOT for real-time prices, historical data, fundamentals, macro data, SEC filings, or social sentiment — those have dedicated tools.",
-  parameters: params,
+export function createWebSearchTool(
+  allowedProviders?: readonly ("exa" | "brave" | "ddg")[],
+): AgentTool<typeof webSearchParameters, WebSearchEnvelope | null> & {
+  __hostedAllowedProviders?: readonly string[];
+} {
+  return {
+    name: "search_web",
+    label: "Web Search",
+    description:
+      "Search the web for financial news, earnings context, company events, regulatory developments, or general information. " +
+      "NOT for real-time prices, historical data, fundamentals, macro data, SEC filings, or social sentiment — those have dedicated tools.",
+    parameters: webSearchParameters,
+    ...(allowedProviders ? { __hostedAllowedProviders: [...allowedProviders] } : {}),
 
-  async execute(_toolCallId, args) {
-    const query = args.query?.trim();
-    if (!query) {
-      return {
-        content: [{ type: "text", text: "⚠ Cannot search with an empty query." }],
-        details: null,
-      };
-    }
+    async execute(_toolCallId, args) {
+      const query = args.query?.trim();
+      if (!query) {
+        return {
+          content: [{ type: "text", text: "⚠ Cannot search with an empty query." }],
+          details: null,
+        };
+      }
 
-    const category = args.category ?? "news";
-    const freshness = args.freshness ?? "day";
-    const limit = Math.max(1, Math.min(args.limit ?? 10, 20));
+      const category = args.category ?? "news";
+      const freshness = args.freshness ?? "day";
+      const limit = Math.max(1, Math.min(args.limit ?? 10, 20));
 
-    const provider = args.provider;
-    const result = await searchWeb(query, { category, freshness, limit, provider });
+      const provider = args.provider;
+      const result = await searchWeb(query, {
+        category,
+        freshness,
+        limit,
+        provider,
+        allowedProviders,
+      });
 
-    if (result.status === "unavailable") {
-      return {
-        content: [{ type: "text", text: `⚠ Web search unavailable (${result.reason}).` }],
-        details: null,
-      };
-    }
+      if (result.status === "unavailable") {
+        return {
+          content: [{ type: "text", text: `⚠ Web search unavailable (${result.reason}).` }],
+          details: null,
+        };
+      }
 
-    const data = result.data;
+      const data = result.data;
 
-    if (data.resultCount === 0) {
-      const zeroPrefix = buildSoftDegradedPrefix(data);
+      if (data.resultCount === 0) {
+        const zeroPrefix = buildSoftDegradedPrefix(data);
+        const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${zeroPrefix}${sourceGapPrefix}No results found for "${query}" (${category}, past ${freshness}).`,
+            },
+          ],
+          details: data,
+        };
+      }
+
+      const stalePrefix = result.stale ? `⚠ Using cached data from ${result.timestamp}\n\n` : "";
+
+      const softDegradedPrefix = buildSoftDegradedPrefix(data);
       const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);
+      const shouldOmitResults = hasOfficialFedSourceGap(query, data);
+
+      const header = `**Web Search** — ${data.resultCount} results for "${query}" (${category}, past ${freshness}, via ${data.provider})`;
+      const items = data.results.map((r) => {
+        const title = renderUntrustedText(r.title);
+        const snippet = renderUntrustedText(r.snippet);
+        const source = renderUntrustedText(r.source, 120);
+        const url = renderUntrustedUrl(r.url);
+        const published = r.published ? renderUntrustedText(r.published, 80) : "unknown";
+        const heading = url ? `[${title}](${url})` : title;
+        return `• ${heading} — ${source}\n  ${snippet}\n  Published: ${published}`;
+      });
+      const body = shouldOmitResults
+        ? "Non-official results were omitted from assistant-visible evidence for this Fed/FOMC announcement query. Verify against an official Federal Reserve or FOMC source before naming announcements or personnel changes."
+        : `${untrustedContentHeader("web search results")}\n\n${items.join("\n\n")}`;
+
+      const text = `${softDegradedPrefix}${sourceGapPrefix}${stalePrefix}${header}\n\n${body}`;
+
       return {
-        content: [
-          {
-            type: "text",
-            text: `${zeroPrefix}${sourceGapPrefix}No results found for "${query}" (${category}, past ${freshness}).`,
-          },
-        ],
+        content: [{ type: "text", text }],
         details: data,
       };
-    }
+    },
+  };
+}
 
-    const stalePrefix = result.stale ? `⚠ Using cached data from ${result.timestamp}\n\n` : "";
-
-    const softDegradedPrefix = buildSoftDegradedPrefix(data);
-    const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);
-    const shouldOmitResults = hasOfficialFedSourceGap(query, data);
-
-    const header = `**Web Search** — ${data.resultCount} results for "${query}" (${category}, past ${freshness}, via ${data.provider})`;
-    const items = data.results.map((r) => {
-      const title = renderUntrustedText(r.title);
-      const snippet = renderUntrustedText(r.snippet);
-      const source = renderUntrustedText(r.source, 120);
-      const url = renderUntrustedUrl(r.url);
-      const published = r.published ? renderUntrustedText(r.published, 80) : "unknown";
-      const heading = url ? `[${title}](${url})` : title;
-      return `• ${heading} — ${source}\n  ${snippet}\n  Published: ${published}`;
-    });
-    const body = shouldOmitResults
-      ? "Non-official results were omitted from assistant-visible evidence for this Fed/FOMC announcement query. Verify against an official Federal Reserve or FOMC source before naming announcements or personnel changes."
-      : `${untrustedContentHeader("web search results")}\n\n${items.join("\n\n")}`;
-
-    const text = `${softDegradedPrefix}${sourceGapPrefix}${stalePrefix}${header}\n\n${body}`;
-
-    return {
-      content: [{ type: "text", text }],
-      details: data,
-    };
-  },
-};
+export const webSearchTool = createWebSearchTool();

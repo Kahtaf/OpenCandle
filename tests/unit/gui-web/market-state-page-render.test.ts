@@ -519,6 +519,17 @@ describe("MarketStatePage rendering", () => {
     ).toEqual({ shares: "100", avg_cost: "154.2", currency: "CAD" });
   });
 
+  it("does not invent USD when quote currency resolution fails", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "SHOP.TO",
+        currentValues: { shares: "", avg_cost: "", currency: "" },
+        previousAutofill: { shares: "", avg_cost: "", currency: "" },
+        selectedQuote: { status: "unavailable" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "", currency: "" });
+  });
+
   it("does not overwrite holding fields the user has already edited", () => {
     expect(
       getHoldingAutofillValues({

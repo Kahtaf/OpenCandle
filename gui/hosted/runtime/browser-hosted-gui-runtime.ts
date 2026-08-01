@@ -22,6 +22,7 @@ import {
 } from "../../../gui/shared/ask-user-bridge.js";
 import {
   buildDispatchedPromptFromState,
+  chatRunAttachmentLabel,
   type ParsedChatRunBody,
 } from "../../../gui/shared/chat-run-input.js";
 import {
@@ -385,6 +386,17 @@ export class BrowserHostedGuiRuntime {
           for (const event of events) await emit(event as Record<string, unknown>);
         },
       });
+      const attachmentLabels = [
+        ...input.images.map((image, index) => ({
+          kind: "image",
+          label: `${image.mimeType || "image"} #${index + 1}`,
+        })),
+        ...input.attachments.map((attachment) => ({
+          kind: attachment.kind,
+          label: chatRunAttachmentLabel(attachment),
+        })),
+      ];
+      session.markOriginalInput?.(input.prompt, attachmentLabels);
       await session.prompt(dispatchedPrompt, signal, images);
       await emit({ type: "run.completed" });
       const completedResult = {
@@ -477,8 +489,10 @@ export class BrowserHostedGuiRuntime {
       if (existing.operation) return existing.operation;
       if (existing.result && existing.persistencePending) {
         const persistenceRetry = Promise.resolve()
-          .then(() => {
+          .then(async () => {
             this.flushState();
+            const bootstrap = await this.buildBootstrap(await this.resolveManager(sessionId));
+            existing.result = { ...bootstrap, result: existing.result?.result };
             existing.persistencePending = false;
             existing.settled = true;
             this.pruneSettledActionResults();
@@ -507,8 +521,10 @@ export class BrowserHostedGuiRuntime {
       cached.result = response;
       cached.persistencePending = true;
       this.flushState();
+      const bootstrap = await this.buildBootstrap(await this.resolveManager(sessionId));
+      cached.result = { ...bootstrap, result };
       cached.persistencePending = false;
-      return response;
+      return cached.result;
     });
     cached.operation = operation;
     this.actionResults.set(key, cached);

@@ -132,12 +132,12 @@ function mergePortfolioSummary(
 function retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFailedAt) {
   if (!current || current.status === "unavailable") return refreshed;
   const rows = portfolioQuotes.filter((quote) => quote?.portfolioId === refreshed.portfolioId);
+  const includedRows = rows.filter((quote) => quote?.includedInTotals !== false);
   const canRecompute =
-    rows.length > 0 &&
-    rows.every(
+    includedRows.length > 0 &&
+    includedRows.every(
       (quote) =>
         quote?.status === "ok" &&
-        quote.includedInTotals !== false &&
         Number.isFinite(quote.marketValue) &&
         Number.isFinite(quote.totalCost) &&
         Number.isFinite(quote.pnl),
@@ -151,9 +151,9 @@ function retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFail
       refreshFailedAt,
     };
   }
-  const totalValue = rows.reduce((sum, quote) => sum + quote.marketValue, 0);
-  const totalCost = rows.reduce((sum, quote) => sum + quote.totalCost, 0);
-  const totalPnl = rows.reduce((sum, quote) => sum + quote.pnl, 0);
+  const totalValue = includedRows.reduce((sum, quote) => sum + quote.marketValue, 0);
+  const totalCost = includedRows.reduce((sum, quote) => sum + quote.totalCost, 0);
+  const totalPnl = includedRows.reduce((sum, quote) => sum + quote.pnl, 0);
   return {
     ...current,
     status: "ok",

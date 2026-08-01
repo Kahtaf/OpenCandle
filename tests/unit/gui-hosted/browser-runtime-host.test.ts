@@ -655,6 +655,74 @@ describe("browser runtime host", () => {
     });
   });
 
+  it("rejects an acknowledged GUI mutation when its durable checkpoint is missing", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { persistCheckpoint: vi.fn(async () => false) },
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const response = host.request("gui", {
+      action: "tool_invoke",
+      sessionId: "session-1",
+      actionId: "action-1",
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "AAPL" },
+    });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    const request = JSON.parse(write.mock.calls[0][0]);
+    host.handleRuntimeMessage({
+      type: "response",
+      runtimeEpoch: host.runtimeEpoch,
+      requestId: request.requestId,
+      ok: true,
+      result: { result: { saved: true } },
+    });
+
+    await expect(response).rejects.toThrow("durable checkpoint");
+  });
+
+  it("allows credential validation responses without a state checkpoint", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { persistCheckpoint: vi.fn(async () => false) },
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const response = host.request("gui", {
+      action: "validate_model_key",
+      provider: "openai",
+      apiKey: "test-key",
+    });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    const request = JSON.parse(write.mock.calls[0][0]);
+    host.handleRuntimeMessage({
+      type: "response",
+      runtimeEpoch: host.runtimeEpoch,
+      requestId: request.requestId,
+      ok: true,
+      result: { status: "valid" },
+    });
+
+    await expect(response).resolves.toEqual({ status: "valid" });
+  });
+
   it("configures the WebContainer client before the first boot only", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());

@@ -104,6 +104,13 @@ export function createHostedRuntimeTransport({ host }) {
           });
         });
       });
+      const closeChannel = () => {
+        if (channelClosed) return;
+        channelClosed = true;
+        subscribers.delete(onMessage);
+        unsubscribeHost?.();
+        onClose?.();
+      };
       void transport
         .bootstrap()
         .then((bootstrap) => {
@@ -135,6 +142,7 @@ export function createHostedRuntimeTransport({ host }) {
             type: "error",
             message: error instanceof Error ? error.message : String(error),
           });
+          closeChannel();
         });
 
       return {
@@ -190,11 +198,7 @@ export function createHostedRuntimeTransport({ host }) {
             });
         },
         close() {
-          if (channelClosed) return;
-          channelClosed = true;
-          subscribers.delete(onMessage);
-          unsubscribeHost?.();
-          onClose?.();
+          closeChannel();
         },
       };
     },

@@ -84,7 +84,9 @@ const audit = auditRuntimeComposition({
     process.env.GEMINI_API_KEY,
     process.env.ANTHROPIC_API_KEY,
   ],
-  maxBytes: 5_000_000,
+  // Canonical Pi AgentSession includes compaction, command dispatch, model
+  // switching, and retry lifecycle code that the former hosted shim omitted.
+  maxBytes: 10_000_000,
 });
 
 await rm(outputDirectory, { recursive: true, force: true });

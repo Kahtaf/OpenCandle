@@ -15,6 +15,8 @@ export interface WebSearchOpts {
   limit: number;
   /** Override provider: skip cascade, use this provider only. */
   provider?: "exa" | "brave" | "ddg";
+  /** Restrict automatic and explicit selection to runtime-negotiated providers. */
+  allowedProviders?: readonly ("exa" | "brave" | "ddg")[];
 }
 
 const BARE_TICKER = /^[A-Z]{1,5}$/;
@@ -262,9 +264,13 @@ export async function searchWeb(
   const config = getConfig();
 
   const entries: Array<{ provider: string; fn: () => Promise<WebSearchEnvelope> }> = [];
+  const allowedProviders = resolved.allowedProviders ?? ["exa", "brave", "ddg"];
 
   // Provider override: skip cascade, use only the specified provider
   if (resolved.provider) {
+    if (!allowedProviders.includes(resolved.provider)) {
+      return { status: "unavailable", reason: "provider not allowed", provider: resolved.provider };
+    }
     switch (resolved.provider) {
       case "exa":
         entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
@@ -292,16 +298,20 @@ export async function searchWeb(
     return withFallback<WebSearchEnvelope>(entries);
   }
 
-  // Default cascade: Exa → Brave → DDG
-  entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
+  // Default cascade: Exa → Brave → DDG, bounded by the negotiated runtime policy.
+  if (allowedProviders.includes("exa")) {
+    entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
+  }
   const braveApiKey = config.braveApiKey;
-  if (braveApiKey) {
+  if (allowedProviders.includes("brave") && braveApiKey) {
     entries.push({
       provider: "brave_search",
       fn: () => braveSearch(normalized, resolved, braveApiKey),
     });
   }
-  entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+  if (allowedProviders.includes("ddg")) {
+    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+  }
 
   return withFallback<WebSearchEnvelope>(entries);
 }

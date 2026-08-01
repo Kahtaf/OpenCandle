@@ -56,6 +56,13 @@ describe("BrowserPiSession model history", () => {
       credentials: { anthropic: "anthropic-key" },
       toolDefinitions: [],
     });
+    expect((anthropic as any).session).toEqual(
+      expect.objectContaining({
+        compact: expect.any(Function),
+        setModel: expect.any(Function),
+        setThinkingLevel: expect.any(Function),
+      }),
+    );
     anthropic.dispose();
     database.close();
 
@@ -104,14 +111,8 @@ describe("BrowserPiSession terminal outcomes", () => {
     const stateFile = join(root, "state.sqlite3");
     const stateBytes = Uint8Array.from([1, 2, 3, 4]);
     const session = {
-      host: {
-        processInput: async () => ({ action: "continue", text: "question" }),
-        prepareSystemPrompt: async () => "system",
-        waitForWorkflowIdle: async () => undefined,
-      },
-      agent: {
+      session: {
         state: {
-          systemPrompt: "",
           messages: [
             {
               role: "assistant",
@@ -122,8 +123,9 @@ describe("BrowserPiSession terminal outcomes", () => {
         },
         prompt: async () => undefined,
         waitForIdle: async () => undefined,
-        abort: () => undefined,
+        abort: async () => undefined,
       },
+      coordinator: { waitForActiveWorkflow: async () => undefined },
       stateDatabase: { exportBytes: () => stateBytes },
       stateFile,
     };

@@ -20,7 +20,7 @@ The in-browser Node process is provided by [WebContainer](https://webcontainers.
 
 ## What works
 
-- The real Pi agent loop and canonical Pi JSONL sessions.
+- Pi's canonical `AgentSession`, including command dispatch, extension lifecycle, retries, context accounting, auto-compaction, thinking controls, and canonical Pi JSONL sessions.
 - Pi's installed OpenAI, Anthropic, and Google model catalog through the same `ModelRuntime` used by the local GUI and TUI.
 - The same React transcript, tool, source, session, watchlist, portfolio, alert, report, and diagnostics surfaces as the local GUI.
 - Shared workflow metadata, interactive `ask_user` prompts, images, and saved portfolio, watchlist, and report attachments.
@@ -43,6 +43,8 @@ OpenCandle exports, Pi sessions, and SQLite state.
 
 A session-only key remains scoped to the tab where it was entered and is never sent over the cross-tab coordination channel. If that writer closes, an independently opened follower can take over the saved session and market state but must be given the model key before research can continue. Choose device storage when seamless writer failover is more important than tab-scoped key isolation.
 
+Follower tabs forward ordinary research and market-state actions to the writer, but never forward model or provider credentials. Enter or change a key only in the active writer tab. A saved-state mutation is acknowledged only after its matching SQLite or Pi-session bytes have been checkpointed to OPFS.
+
 Browser storage is not a secure vault. Same-origin script compromise, a malicious browser extension, physical access to the browser profile, or a compromised dependency could expose a saved key. Use session-only model storage on shared devices and clear secrets when needed.
 
 The relay has no KV, D1, R2, Durable Object, queue, analytics, cache, application log, or invocation-log sink. Requests and responses use `Cache-Control: no-store`; errors do not reflect URLs, bodies, upstream errors, or credentials. Cloudflare still terminates and processes relay traffic and may retain platform-level security or operational metadata under its own policies. The precise boundary and deployment instructions are in [Provider relay operations](./provider-relay.md).
@@ -59,6 +61,8 @@ Open the hosted status menu in the lower-right corner:
 Imports and installed updates preserve a recovery backup before replacing or migrating durable state. An older OpenCandle build refuses to open a database written by a newer schema instead of resetting it. An installed update waits while any runtime request is active, checkpoints the current session, writes a recovery backup, and only then activates the waiting service worker.
 
 If the writer tab closes while a follower action is in flight, the follower fails that action promptly rather than replaying an operation whose completion is unknown. Check the current state, then retry it in the newly promoted writer tab.
+
+The negotiated direct/relay capability manifest is also the execution boundary for hosted search and sentiment evidence. OpenCandle does not silently fall through to an unadvertised search provider. Portfolio holdings require an explicit currency when the quote provider cannot determine one, and totals omit unknown-currency rows rather than assuming USD.
 
 ## Offline behavior
 

@@ -39,6 +39,24 @@ describe("hosted market-state actions", () => {
     expect(checked.result.content[0]?.text).toContain(`AAPL [item ${item.id}]`);
   });
 
+  it("does not create a missing collection for read or failed mutation actions", async () => {
+    await expect(
+      invokeHostedMarketStateTool(service, "manage_watchlist", {
+        action: "check",
+        watchlist_name: "Typo",
+      }),
+    ).rejects.toThrow("Watchlist Typo was not found");
+    await expect(
+      invokeHostedMarketStateTool(service, "track_portfolio", {
+        action: "remove",
+        portfolio_name: "Missing",
+      }),
+    ).rejects.toThrow("Portfolio Missing was not found");
+
+    expect(service.listWatchlists().map((item) => item.name)).not.toContain("Typo");
+    expect(service.listPortfolios().map((item) => item.name)).not.toContain("Missing");
+  });
+
   it("resolves watchlist metadata instead of guessing USD", async () => {
     const added = await invokeHostedMarketStateTool(
       service,
@@ -232,10 +250,14 @@ describe("hosted market-state actions", () => {
       currency: "USD",
     });
     const lot = added.result.details as { id: number };
+    await invokeHostedMarketStateTool(service, "track_portfolio", {
+      action: "create",
+      portfolio_name: "Other",
+    });
 
     const removed = await invokeHostedMarketStateTool(service, "track_portfolio", {
       action: "remove",
-      portfolio_name: "Default",
+      portfolio_name: "Other",
       lot_id: lot.id,
     });
 

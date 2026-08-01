@@ -1,20 +1,25 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import initSqlJs from "sql.js";
-import { Agent } from "../../../node_modules/@earendil-works/pi-agent-core/dist/agent.js";
 import type { ImageContent, Model } from "@earendil-works/pi-ai";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { convertToLlm } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/messages.js";
-import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
+import {
+  type AgentSession,
+  type AgentSessionEvent,
+  type SessionEntry,
+  SessionManager,
+  SettingsManager,
+  type ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 import type { ChatEvent } from "../../../gui/shared/chat-events.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { getAllDefaults } from "../../../src/memory/tool-defaults.js";
+import { createOpenCandleSessionCore } from "../../../src/pi/session-core.js";
+import type { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 import {
   createSqlJsStateDatabaseWithModule,
   type SqlJsStateDatabase,
 } from "../../../src/runtime/sqljs-state-database.js";
-import { BrowserOpenCandleExtensionHost } from "./browser-extension-host.js";
 import {
   createBrowserModelRuntime,
   type BrowserModelCredentials,
@@ -81,10 +86,9 @@ export interface BrowserPiSessionOptions {
 
 export class BrowserPiSession {
   private constructor(
-    private readonly model: Model<string>,
+    private readonly session: AgentSession,
     private readonly sessionManager: SessionManager,
-    private readonly host: BrowserOpenCandleExtensionHost,
-    private readonly agent: Agent,
+    private readonly coordinator: SessionCoordinator,
     private readonly stateDatabase: SqlJsStateDatabase,
     private readonly stateFile: string,
     private readonly ownsStateDatabase: boolean,
@@ -133,36 +137,44 @@ export class BrowserPiSession {
         existsSync(stateFile) ? readFileSync(stateFile) : undefined,
       );
 
-    const host = new BrowserOpenCandleExtensionHost(
-      sessionManager,
-      model,
-      createPiAiRouterClient(model, modelRuntime.completeSimple.bind(modelRuntime)),
-      stateDatabase,
-      options.toolDefinitions,
-      options.askUserHandler,
-    );
-    const agent = new Agent({
-      initialState: {
-        systemPrompt: "",
-        model,
-        thinkingLevel: existing.thinkingLevel ?? "off",
-        tools: host.getAgentTools(),
-        messages: existing.messages,
-      },
-      convertToLlm,
-      streamFn: (nextModel, context, streamOptions) =>
-        modelRuntime.streamSimple(nextModel, context, streamOptions),
-      sessionId: sessionManager.getSessionId(),
+    const settingsManager = SettingsManager.inMemory({
+      defaultProvider: model.provider,
+      defaultModel: model.id,
+      defaultThinkingLevel: existing.thinkingLevel ?? "off",
+      compaction: { enabled: true },
     });
-    host.bindAgent(agent);
+    let coordinator: SessionCoordinator | undefined;
+    const { session } = await createOpenCandleSessionCore({
+      cwd,
+      agentDir: join(cwd, ".pi-agent"),
+      modelRuntime,
+      model,
+      thinkingLevel: existing.thinkingLevel ?? "off",
+      settingsManager,
+      sessionManager,
+      askUserHandler: options.askUserHandler,
+      stateDatabaseFactory: () => stateDatabase,
+      toolDefinitions: options.toolDefinitions,
+      routerLlmClient: createPiAiRouterClient(
+        model,
+        modelRuntime.completeSimple.bind(modelRuntime),
+      ),
+      toolDefaultsFactory: (database) => getAllDefaults(database),
+      onCoordinatorCreated: (value) => {
+        coordinator = value;
+      },
+    });
+    if (!coordinator) throw new Error("OpenCandle session did not initialize its coordinator");
     let projectedEventCount = sessionEntriesToChatEvents(sessionManager.getEntries(), {
       sessionId: sessionManager.getSessionId(),
     }).length;
-    const unsubscribe = agent.subscribe(async (event) => {
-      await host.handleAgentEvent(event);
+    const unsubscribe = session.subscribe(async (event: AgentSessionEvent) => {
       if (
         !options.onDurableEvents ||
-        (event.type !== "message_end" && event.type !== "turn_end" && event.type !== "agent_end")
+        (event.type !== "message_end" &&
+          event.type !== "turn_end" &&
+          event.type !== "agent_end" &&
+          event.type !== "compaction_end")
       ) {
         return;
       }
@@ -173,13 +185,11 @@ export class BrowserPiSession {
       projectedEventCount = projected.length;
       if (next.length > 0) await options.onDurableEvents(next);
     });
-    await host.start();
 
     return new BrowserPiSession(
-      model,
+      session,
       sessionManager,
-      host,
-      agent,
+      coordinator,
       stateDatabase,
       stateFile,
       ownsStateDatabase,
@@ -193,19 +203,16 @@ export class BrowserPiSession {
     signal?: AbortSignal,
     images: ImageContent[] = [],
   ): Promise<BrowserPiSessionResult> {
-    const abort = () => this.agent.abort();
+    const abort = () => {
+      void this.session.abort();
+    };
     if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
     signal?.addEventListener("abort", abort, { once: true });
     try {
-      const input = await this.host.processInput(question);
-      if (input.action === "handled") {
-        throw new Error("Hosted Pi input was handled without producing a model turn");
-      }
-      this.agent.state.systemPrompt = await this.host.prepareSystemPrompt("");
-      await this.agent.prompt(input.text, images);
-      await this.host.waitForWorkflowIdle();
-      await this.agent.waitForIdle();
-      assertTerminalAssistantSucceeded(this.agent.state.messages);
+      await this.session.prompt(question, { images });
+      await this.coordinator.waitForActiveWorkflow();
+      await this.session.waitForIdle();
+      assertTerminalAssistantSucceeded(this.session.state.messages);
       const sessionFile = this.sessionManager.getSessionFile();
       if (!sessionFile || !existsSync(sessionFile)) {
         throw new Error("Pi session did not produce a durable JSONL file");
@@ -223,8 +230,10 @@ export class BrowserPiSession {
       return {
         runtime: "pi-agent-session",
         sessionId: this.sessionManager.getSessionId(),
-        model: `${this.model.provider}/${this.model.id}`,
-        toolNames: this.host.getAgentTools().map((tool) => tool.name),
+        model: this.session.model
+          ? `${this.session.model.provider}/${this.session.model.id}`
+          : "unconfigured",
+        toolNames: this.session.getActiveToolNames(),
         entries: entries.slice(-MAX_RETURNED_ENTRIES),
         events: sessionEntriesToChatEvents(entries, {
           sessionId: this.sessionManager.getSessionId(),
@@ -250,12 +259,24 @@ export class BrowserPiSession {
     }
   }
 
+  markOriginalInput(
+    original: string,
+    attachments: readonly { kind: string; label: string }[],
+  ): void {
+    if (attachments.length === 0) return;
+    this.sessionManager.appendCustomEntry("opencandle-user-input", {
+      original,
+      attachments: [...attachments],
+    });
+  }
+
   abort(): void {
-    this.agent.abort();
+    void this.session.abort();
   }
 
   dispose(): void {
     this.unsubscribe();
+    this.session.dispose();
     if (this.ownsStateDatabase) this.stateDatabase.close();
   }
 }

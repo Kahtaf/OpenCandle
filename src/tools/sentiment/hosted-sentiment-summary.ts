@@ -26,140 +26,160 @@ const params = Type.Object({
  * It intentionally omits the native X and Reddit adapters. The model, rather
  * than this tool, interprets the collected evidence as bullish or bearish.
  */
-export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
-  name: "get_sentiment_summary",
-  label: "Sentiment Evidence",
-  description:
-    "Collect web/news evidence, optional Finnhub company news, and current price context for a ticker or market topic. Hosted mode excludes X and Reddit.",
-  parameters: params,
-  async execute(_toolCallId, args) {
-    const hours = args.hours ?? 24;
-    const providerWindow = hours <= 24 ? "day" : "week";
-    const config = getConfig();
-    const tickers = extractTickersFromQuery(args.query).slice(0, 3);
-    const warnings: string[] = [];
-    const { from, to } = finnhubDateRange(providerWindow);
+export function createHostedSentimentSummaryTool(
+  allowedProviders?: readonly ("exa" | "brave")[],
+  allowedEvidenceProviders?: readonly ("yahoo" | "finnhub")[],
+): AgentTool<typeof params> & {
+  __hostedAllowedProviders?: readonly string[];
+  __hostedEvidenceProviders?: readonly string[];
+} {
+  return {
+    name: "get_sentiment_summary",
+    label: "Sentiment Evidence",
+    description:
+      "Collect web/news evidence, optional Finnhub company news, and current price context for a ticker or market topic. Hosted mode excludes X and Reddit.",
+    parameters: params,
+    ...(allowedProviders ? { __hostedAllowedProviders: [...allowedProviders] } : {}),
+    ...(allowedEvidenceProviders
+      ? { __hostedEvidenceProviders: [...allowedEvidenceProviders] }
+      : {}),
+    async execute(_toolCallId, args) {
+      const hours = args.hours ?? 24;
+      const providerWindow = hours <= 24 ? "day" : "week";
+      const config = getConfig();
+      const tickers = extractTickersFromQuery(args.query).slice(0, 3);
+      const warnings: string[] = [];
+      const { from, to } = finnhubDateRange(providerWindow);
 
-    const [web, finnhub, quote] = await Promise.allSettled([
-      searchWeb(args.query, {
-        freshness: providerWindow,
-        limit: 10,
-        category: "news",
-      }),
-      config.finnhubApiKey && tickers.length > 0
-        ? collectFinnhubCompanyNews(tickers, from, to, config.finnhubApiKey)
-        : Promise.resolve({ articles: [], failedSymbols: [] }),
-      tickers[0] ? wrapProvider("yahoo", () => getQuote(tickers[0])) : Promise.resolve(undefined),
-    ]);
+      const [web, finnhub, quote] = await Promise.allSettled([
+        searchWeb(args.query, {
+          freshness: providerWindow,
+          limit: 10,
+          category: "news",
+          allowedProviders,
+        }),
+        (allowedEvidenceProviders == null || allowedEvidenceProviders.includes("finnhub")) &&
+        config.finnhubApiKey &&
+        tickers.length > 0
+          ? collectFinnhubCompanyNews(tickers, from, to, config.finnhubApiKey)
+          : Promise.resolve({ articles: [], failedSymbols: [] }),
+        tickers[0] &&
+        (allowedEvidenceProviders == null || allowedEvidenceProviders.includes("yahoo"))
+          ? wrapProvider("yahoo", () => getQuote(tickers[0]))
+          : Promise.resolve(undefined),
+      ]);
 
-    const webEvidence =
-      web.status === "fulfilled" && web.value.status === "ok"
-        ? {
-            provider: web.value.provider ?? web.value.data.provider,
-            timestamp: web.value.timestamp,
-            stale: web.value.stale === true,
-            fetchedAt: web.value.data.fetchedAt,
-            results: web.value.data.results,
-          }
-        : null;
-    const finnhubArticles = finnhub.status === "fulfilled" ? finnhub.value.articles : [];
-    const finnhubEvidence =
-      finnhubArticles.length > 0
-        ? {
-            freshness: "unknown" as const,
-            results: finnhubArticles.map((item) => ({
-              id: item.id,
-              headline: item.headline,
-              url: item.url,
-              publishedAt: finnhubPublishedAt(item.datetime),
-            })),
-          }
-        : null;
-    const evidenceHeading = webEvidence?.stale
-      ? "Cached evidence"
-      : webEvidence && !finnhubEvidence
-        ? "Recent evidence"
-        : "Evidence";
+      const webEvidence =
+        web.status === "fulfilled" && web.value.status === "ok"
+          ? {
+              provider: web.value.provider ?? web.value.data.provider,
+              timestamp: web.value.timestamp,
+              stale: web.value.stale === true,
+              fetchedAt: web.value.data.fetchedAt,
+              results: web.value.data.results,
+            }
+          : null;
+      const finnhubArticles = finnhub.status === "fulfilled" ? finnhub.value.articles : [];
+      const finnhubEvidence =
+        finnhubArticles.length > 0
+          ? {
+              freshness: "unknown" as const,
+              results: finnhubArticles.map((item) => ({
+                id: item.id,
+                headline: item.headline,
+                url: item.url,
+                publishedAt: finnhubPublishedAt(item.datetime),
+              })),
+            }
+          : null;
+      const evidenceHeading = webEvidence?.stale
+        ? "Cached evidence"
+        : webEvidence && !finnhubEvidence
+          ? "Recent evidence"
+          : "Evidence";
 
-    const lines = [
-      `**${evidenceHeading} for "${renderUntrustedText(args.query, 160)}"** (provider window: past ${providerWindow})`,
-      "",
-      untrustedContentHeader("Hosted web and company-news results"),
-    ];
+      const lines = [
+        `**${evidenceHeading} for "${renderUntrustedText(args.query, 160)}"** (provider window: past ${providerWindow})`,
+        "",
+        untrustedContentHeader("Hosted web and company-news results"),
+      ];
 
-    if (web.status === "fulfilled" && web.value.status === "ok") {
-      for (const item of web.value.data.results.slice(0, 10)) {
-        lines.push(renderNewsItem(item.title, item.url, item.snippet, item.published));
+      if (web.status === "fulfilled" && web.value.status === "ok") {
+        for (const item of web.value.data.results.slice(0, 10)) {
+          lines.push(renderNewsItem(item.title, item.url, item.snippet, item.published));
+        }
+        if (web.value.stale) {
+          warnings.push(`Web/news evidence came from stale cache as of ${web.value.timestamp}.`);
+        }
+      } else {
+        warnings.push("Web/news search was unavailable.");
       }
-      if (web.value.stale) {
-        warnings.push(`Web/news evidence came from stale cache as of ${web.value.timestamp}.`);
-      }
-    } else {
-      warnings.push("Web/news search was unavailable.");
-    }
 
-    if (finnhub.status === "fulfilled") {
-      for (const item of finnhubArticles) {
+      if (finnhub.status === "fulfilled") {
+        for (const item of finnhubArticles) {
+          lines.push(
+            `${renderNewsItem(item.headline, item.url, item.summary, finnhubPublishedAt(item.datetime))} (Finnhub)`,
+          );
+        }
+        for (const symbol of finnhub.value.failedSymbols) {
+          warnings.push(`Finnhub company news was unavailable for ${symbol}.`);
+        }
+        if (finnhubEvidence) {
+          warnings.push(
+            "Finnhub freshness is unknown; use the publication timestamps shown for each article.",
+          );
+        }
+      } else {
+        warnings.push("Finnhub company news was unavailable.");
+      }
+
+      const validPriceResult =
+        quote.status === "fulfilled" &&
+        quote.value?.status === "ok" &&
+        Number.isFinite(quote.value.data.price) &&
+        Number.isFinite(quote.value.data.changePercent) &&
+        !isZeroFilledQuote(quote.value.data)
+          ? quote.value
+          : undefined;
+      if (validPriceResult) {
+        const value = validPriceResult.data;
+        const label = validPriceResult.stale ? "Cached price context" : "Price context";
+        const symbol = renderUntrustedText(value.symbol, 40);
+        const currency = renderUntrustedText(value.currency ?? "", 16);
         lines.push(
-          `${renderNewsItem(item.headline, item.url, item.summary, finnhubPublishedAt(item.datetime))} (Finnhub)`,
+          "",
+          `${label} (Yahoo Finance, as of ${validPriceResult.timestamp}): ${symbol} ${value.price.toFixed(2)} ${currency}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
         );
+      } else if (tickers[0]) {
+        warnings.push(`Price context was unavailable for ${tickers[0]}.`);
       }
-      for (const symbol of finnhub.value.failedSymbols) {
-        warnings.push(`Finnhub company news was unavailable for ${symbol}.`);
-      }
-      if (finnhubEvidence) {
-        warnings.push(
-          "Finnhub freshness is unknown; use the publication timestamps shown for each article.",
-        );
-      }
-    } else {
-      warnings.push("Finnhub company news was unavailable.");
-    }
 
-    const validPriceResult =
-      quote.status === "fulfilled" &&
-      quote.value?.status === "ok" &&
-      Number.isFinite(quote.value.data.price) &&
-      Number.isFinite(quote.value.data.changePercent) &&
-      !isZeroFilledQuote(quote.value.data)
-        ? quote.value
-        : undefined;
-    if (validPriceResult) {
-      const value = validPriceResult.data;
-      const label = validPriceResult.stale ? "Cached price context" : "Price context";
-      const symbol = renderUntrustedText(value.symbol, 40);
-      const currency = renderUntrustedText(value.currency ?? "", 16);
       lines.push(
         "",
-        `${label} (Yahoo Finance, as of ${validPriceResult.timestamp}): ${symbol} ${value.price.toFixed(2)} ${currency}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
+        "Coverage note: hosted mode uses web/news and optional Finnhub. X and Reddit require the local OpenCandle app.",
       );
-    } else if (tickers[0]) {
-      warnings.push(`Price context was unavailable for ${tickers[0]}.`);
-    }
-
-    lines.push(
-      "",
-      "Coverage note: hosted mode uses web/news and optional Finnhub. X and Reddit require the local OpenCandle app.",
-    );
-    if (warnings.length > 0) lines.push(...warnings.map((warning) => `Warning: ${warning}`));
-    return {
-      content: [{ type: "text", text: lines.join("\n") }],
-      details: {
-        query: args.query,
-        hours,
-        tickers,
-        warnings,
-        webEvidence,
-        finnhubEvidence,
-        sources: {
-          web: web.status === "fulfilled" && web.value.status === "ok",
-          finnhub: finnhub.status === "fulfilled" && finnhubArticles.length > 0,
-          price: Boolean(validPriceResult),
+      if (warnings.length > 0) lines.push(...warnings.map((warning) => `Warning: ${warning}`));
+      return {
+        content: [{ type: "text", text: lines.join("\n") }],
+        details: {
+          query: args.query,
+          hours,
+          tickers,
+          warnings,
+          webEvidence,
+          finnhubEvidence,
+          sources: {
+            web: web.status === "fulfilled" && web.value.status === "ok",
+            finnhub: finnhub.status === "fulfilled" && finnhubArticles.length > 0,
+            price: Boolean(validPriceResult),
+          },
         },
-      },
-    };
-  },
-};
+      };
+    },
+  };
+}
+
+export const hostedSentimentSummaryTool = createHostedSentimentSummaryTool();
 
 async function collectFinnhubCompanyNews(
   tickers: string[],

@@ -542,6 +542,36 @@ describe("searchWeb cascade", () => {
     }
   });
 
+  it("restricts the cascade to explicitly allowed hosted providers", async () => {
+    mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
+    mockedHttpGet.mockResolvedValue(braveNewsFixture);
+
+    const result = await searchWeb("AAPL", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+      allowedProviders: ["brave"],
+    });
+
+    expect(result.status).toBe("ok");
+    expect(mockedExaSearch).not.toHaveBeenCalled();
+    expect(mockedSearchNews).not.toHaveBeenCalled();
+  });
+
+  it("rejects a provider override outside the allowed hosted set", async () => {
+    const result = await searchWeb("AAPL", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+      provider: "ddg",
+      allowedProviders: ["exa"],
+    });
+
+    expect(result).toMatchObject({ status: "unavailable", reason: "provider not allowed" });
+    expect(mockedExaSearch).not.toHaveBeenCalled();
+    expect(mockedSearchNews).not.toHaveBeenCalled();
+  });
+
   it("returns unavailable when all providers fail", async () => {
     mockedGetConfig.mockReturnValue({} as any);
     mockedExaSearch.mockRejectedValue(new Error("Exa down"));

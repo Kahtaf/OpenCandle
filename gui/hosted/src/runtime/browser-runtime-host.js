@@ -331,7 +331,12 @@ class BrowserRuntimeHost {
         reject(error);
       });
     });
-    if (operation === "gui") await this.persistCheckpoint(result);
+    if (operation === "gui") {
+      const persisted = await this.persistCheckpoint(result);
+      if (requestBlocksUpdate(operation, payload) && persisted === false) {
+        throw new Error("Hosted GUI mutation did not include a durable checkpoint.");
+      }
+    }
     if (operation === "gui" && payload?.action === "diagnostics") {
       return {
         ...result,
@@ -762,7 +767,7 @@ class BrowserRuntimeHost {
   }
 
   async persistCheckpoint(value) {
-    await this.dataStore.persistCheckpoint(value);
+    const persisted = await this.dataStore.persistCheckpoint(value);
     if (this.preserveRecoveryBackupUntilBoot) {
       await this.dataStore.createBackup();
       this.preserveRecoveryBackupUntilBoot = false;
@@ -770,6 +775,7 @@ class BrowserRuntimeHost {
     if (typeof value.sessionId === "string") {
       this.storage.setItem(CURRENT_SESSION_KEY, value.sessionId);
     }
+    return persisted;
   }
 
   clearModelCredentials() {
@@ -1075,6 +1081,8 @@ const UPDATE_SAFE_GUI_ACTIONS = new Set([
   "instrument_quote",
   "instrument_endpoint",
   "diagnostics",
+  "validate_model_key",
+  "validate_provider_key",
 ]);
 
 function requestBlocksUpdate(operation, payload) {

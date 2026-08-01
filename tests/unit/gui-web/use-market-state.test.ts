@@ -292,4 +292,71 @@ describe("mergeQuoteRefreshSnapshot", () => {
     expect(merged.portfolioSummary.totalPnlPercent).toBeCloseTo(30.77, 2);
     expect(merged.portfolioSummaries[0]).toMatchObject(merged.portfolioSummary);
   });
+
+  it("recomputes base-currency totals while preserving excluded-currency rows", () => {
+    const current = {
+      generatedAt: "2026-08-01T12:00:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        {
+          lotId: 1,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: 600,
+          totalCost: 500,
+          pnl: 100,
+          includedInTotals: true,
+        },
+        {
+          lotId: 2,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: null,
+          totalCost: 200,
+          pnl: null,
+          includedInTotals: false,
+          currency: "CAD",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "ok",
+        totalValue: 600,
+        totalCost: 500,
+        totalPnl: 100,
+        totalPnlPercent: 20,
+        baseCurrency: "USD",
+        excludedFromTotals: [{ symbol: "SHOP.TO", currency: "CAD" }],
+      },
+      portfolioSummaries: [],
+    };
+    current.portfolioSummaries = [current.portfolioSummary];
+    const refreshed = {
+      generatedAt: "2026-08-01T12:05:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        { lotId: 1, portfolioId: 3, status: "unavailable", reason: "relay timeout" },
+        current.portfolioQuotes[1],
+      ],
+      portfolioSummary: {
+        ...current.portfolioSummary,
+        status: "unavailable",
+        totalValue: null,
+        totalPnl: null,
+      },
+      portfolioSummaries: [],
+    };
+    refreshed.portfolioSummaries = [refreshed.portfolioSummary];
+
+    const merged = mergeQuoteRefreshSnapshot(current, refreshed);
+
+    expect(merged.portfolioSummary).toMatchObject({
+      status: "ok",
+      totalValue: 600,
+      totalCost: 500,
+      totalPnl: 100,
+      excludedFromTotals: [{ symbol: "SHOP.TO", currency: "CAD" }],
+      stale: true,
+    });
+  });
 });

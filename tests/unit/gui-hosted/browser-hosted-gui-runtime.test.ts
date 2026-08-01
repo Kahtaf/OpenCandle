@@ -208,6 +208,11 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     expect(retry).toBe(first);
     expect(runtime.marketState().watchlist).toHaveLength(1);
     expect(runtime.marketState().watchlist[0]).toMatchObject({ symbol: "AAPL" });
+    expect(first).toMatchObject({
+      sessionId: "session-1",
+      checkpoint: expect.any(Object),
+      result: expect.any(Object),
+    });
     database.close();
   });
 
@@ -340,6 +345,46 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     );
 
     expect(prompt).toHaveBeenCalledWith("Review this", undefined, [{ type: "image", ...image }]);
+  });
+
+  it("preserves the original prompt and attachment labels in canonical Pi history", async () => {
+    const markOriginalInput = vi.fn();
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime(
+      {
+        createPiSession: vi.fn(async () => ({
+          prompt: vi.fn(async () => ({ sessionId: "session-1" })),
+          markOriginalInput,
+          dispose: vi.fn(),
+        })),
+      },
+      database,
+    );
+    const image = { data: Buffer.from("png").toString("base64"), mimeType: "image/png" };
+    await runtime.invokeTool("session-1", "holding-1", "track_portfolio", {
+      action: "add",
+      symbol: "MSFT",
+      shares: 2,
+      avg_cost: 300,
+      currency: "USD",
+      unverified_exact_symbol: true,
+    });
+
+    await runtime.chatRun(
+      "session-1",
+      {
+        prompt: "Review my context",
+        images: [image],
+        attachments: [{ kind: "portfolio", id: "default" }],
+      },
+      "run-attachments",
+    );
+
+    expect(markOriginalInput).toHaveBeenCalledWith("Review my context", [
+      { kind: "image", label: "image/png #1" },
+      { kind: "portfolio", label: "Portfolio" },
+    ]);
+    database.close();
   });
 
   it("round-trips ask_user through the same GUI prompt contract", async () => {

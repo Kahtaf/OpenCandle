@@ -1,3 +1,5 @@
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   type CreateAgentSessionResult,
   createAgentSession,
@@ -19,6 +21,8 @@ export interface CreateOpenCandleSessionOptions {
   cwd?: string;
   agentDir?: string;
   modelRuntime?: ModelRuntime;
+  model?: Model<Api>;
+  thinkingLevel?: ThinkingLevel;
   settingsManager?: SettingsManager;
   sessionManager?: SessionManager;
   useInlineExtension?: boolean;
@@ -30,6 +34,8 @@ export interface CreateOpenCandleSessionOptions {
   toolDefinitions?: OpenCandleExtensionOptions["toolDefinitions"];
   routerLlmClient?: OpenCandleExtensionOptions["routerLlmClient"];
   setupRunner?: OpenCandleExtensionOptions["setupRunner"];
+  onCoordinatorCreated?: OpenCandleExtensionOptions["onCoordinatorCreated"];
+  titleCompletion?: OpenCandleExtensionOptions["titleCompletion"];
 }
 
 export async function createOpenCandleSessionCore(
@@ -57,6 +63,8 @@ export async function createOpenCandleSessionCore(
               setupRunner: options.setupRunner,
               addonToolDescriptionsFactory: options.addonToolDescriptionsFactory,
               toolDefaultsFactory: options.toolDefaultsFactory,
+              onCoordinatorCreated: options.onCoordinatorCreated,
+              titleCompletion: options.titleCompletion,
             }),
         ],
       })
@@ -70,6 +78,8 @@ export async function createOpenCandleSessionCore(
     cwd,
     agentDir,
     modelRuntime: options.modelRuntime,
+    model: options.model,
+    thinkingLevel: options.thinkingLevel,
     sessionManager: options.sessionManager,
     settingsManager: options.settingsManager,
     resourceLoader,

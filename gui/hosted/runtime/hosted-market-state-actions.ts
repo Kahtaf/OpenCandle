@@ -89,8 +89,8 @@ async function manageWatchlist(
     const value = service.deleteWatchlist(current.name);
     return result(`Deleted ${current.name}.`, value);
   }
-  const watchlist = resolveWatchlist(service, optionalString(args, "watchlist_name"), true);
   if (action === "add") {
+    const watchlist = resolveWatchlist(service, optionalString(args, "watchlist_name"), true);
     const symbol = normalizedSymbol(args.symbol);
     const explicitCurrency = optionalString(args, "currency");
     const unverifiedExactSymbol = args.unverified_exact_symbol === true;
@@ -111,6 +111,7 @@ async function manageWatchlist(
     });
     return result(`Added ${resolved.instrument.symbol} to ${watchlist.name}.`, value);
   }
+  const watchlist = resolveWatchlist(service, optionalString(args, "watchlist_name"));
   if (action === "remove") {
     if (args.item_id != null) {
       const id = positiveInteger(args.item_id, "item_id");
@@ -159,8 +160,8 @@ async function trackPortfolio(
     const value = service.renamePortfolio(current.name, requiredString(args, "new_portfolio_name"));
     return result(`Renamed ${current.name} to ${value.name}.`, value);
   }
-  const portfolio = resolvePortfolio(service, optionalString(args, "portfolio_name"), true);
   if (action === "add") {
+    const portfolio = resolvePortfolio(service, optionalString(args, "portfolio_name"), true);
     const symbol = normalizedSymbol(args.symbol);
     const quantity = positiveNumber(args.shares, "shares");
     const avgCost = positiveNumber(args.avg_cost, "avg_cost");
@@ -192,6 +193,7 @@ async function trackPortfolio(
     });
     return result(`Added ${quantity} ${symbol} at ${avgCost} ${currency}.`, value);
   }
+  const portfolio = resolvePortfolio(service, optionalString(args, "portfolio_name"));
   if (action === "update") {
     const id = positiveInteger(args.lot_id, "lot_id");
     const selected = service.listPortfolioLots(portfolio.id).find((lot) => lot.id === id);

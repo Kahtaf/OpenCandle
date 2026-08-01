@@ -57,10 +57,13 @@ adapters.
 
 ### Requirement: Hosted turns use the real Pi agent loop
 
-The hosted runtime SHALL run the real Pi model/agent loop and OpenCandle
+The hosted runtime SHALL create Pi's canonical `AgentSession` through the same
+OpenCandle session core as the local GUI and TUI, including command dispatch,
+extension lifecycle, model and thinking controls, retries, context accounting,
+and compaction. It SHALL run the real Pi model/agent loop and OpenCandle
 routing, tools, workflow, and evidence code for enabled capabilities. It MUST
-NOT replace the agent loop with direct UI fetches or a hosted-only answer
-generator.
+NOT replace the agent session with a partial hosted shim, direct UI fetches, or
+a hosted-only answer generator.
 
 #### Scenario: Hosted chat turn runs through Pi
 
@@ -69,6 +72,13 @@ generator.
 - **THEN** the runtime creates a Pi user entry, executes the Pi agent loop,
   records tool and assistant entries, and streams canonical chat events
 - **AND** the resulting session can be replayed after reload
+
+#### Scenario: Long hosted chat reaches the compaction threshold
+
+- **WHEN** a hosted session reaches Pi's automatic context-compaction threshold
+- **THEN** the same Pi `AgentSession` compaction lifecycle used locally runs in
+  the browser-hosted Node process
+- **AND** canonical compaction entries survive checkpoint and reload
 
 ### Requirement: Model discovery and execution use canonical Pi internals
 
