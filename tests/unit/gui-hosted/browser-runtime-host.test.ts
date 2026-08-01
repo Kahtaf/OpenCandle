@@ -331,7 +331,7 @@ describe("browser runtime host", () => {
     expect(host.pendingRequests.size).toBe(0);
   });
 
-  it("tears down and reboots the runtime after clearing a live model key", async () => {
+  it("tears down and reboots the runtime after clearing all browser secrets", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     vi.stubGlobal("navigator", { onLine: true });
@@ -375,9 +375,7 @@ describe("browser runtime host", () => {
     expect(storage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
     expect(sessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
     expect(storage.getItem("opencandle.hosted.model-selection.v1")).toBeNull();
-    expect(storage.getItem("opencandle.hosted.provider-credentials.v1")).toContain(
-      "fred-provider-key",
-    );
+    expect(storage.getItem("opencandle.hosted.provider-credentials.v1")).toBeNull();
     expect(host.stopRuntime).toHaveBeenCalledTimes(1);
     expect(host.ensureBooted).toHaveBeenCalledTimes(1);
     expect(host.request).not.toHaveBeenCalledWith(

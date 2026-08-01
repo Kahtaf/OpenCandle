@@ -95,6 +95,7 @@ describe("hosted tool adapter", () => {
   });
 
   it("registers HTTP-backed tools only when their relay providers are negotiated", () => {
+    hasCredential.mockImplementation((provider) => provider === "brave");
     const names = getHostedOpenCandleToolDefinitions({
       relayProviders: ["brave", "exa", "fear_greed", "fred", "tradingview", "yahoo"],
     }).map((tool) => tool.name);
@@ -127,6 +128,30 @@ describe("hosted tool adapter", () => {
     expect(names).not.toContain("get_reddit_sentiment");
     expect(names).not.toContain("get_twitter_sentiment");
     expect(names).not.toContain("manage_alerts");
+  });
+
+  it("narrows hosted web-search overrides to usable browser providers", () => {
+    const withoutBraveKey = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["brave", "exa"],
+    }).find((tool) => tool.name === "search_web");
+    expect(withoutBraveKey).toBeDefined();
+    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "exa" })).toBe(
+      true,
+    );
+    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "brave" })).toBe(
+      false,
+    );
+    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "ddg" })).toBe(
+      false,
+    );
+
+    hasCredential.mockImplementation((provider) => provider === "brave");
+    const withBraveKey = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["brave", "exa"],
+    }).find((tool) => tool.name === "search_web");
+    expect(Value.Check(withBraveKey?.parameters, { query: "markets", provider: "brave" })).toBe(
+      true,
+    );
   });
 
   it("does not change the native local tool composition", () => {

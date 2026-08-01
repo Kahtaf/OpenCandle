@@ -41,7 +41,7 @@ saved through the provider catalog stay in browser storage. Restored keys are
 never filled back into password fields and all keys are excluded from
 OpenCandle exports, Pi sessions, and SQLite state.
 
-An open writer tab shares a session-only key transiently with its same-origin follower tabs so one of them can take over if the writer closes. The key is not written to durable OpenCandle state, and closing the final tab removes it.
+A session-only key remains scoped to the tab where it was entered and is never sent over the cross-tab coordination channel. If that writer closes, an independently opened follower can take over the saved session and market state but must be given the model key before research can continue. Choose device storage when seamless writer failover is more important than tab-scoped key isolation.
 
 Browser storage is not a secure vault. Same-origin script compromise, a malicious browser extension, physical access to the browser profile, or a compromised dependency could expose a saved key. Use session-only model storage on shared devices and clear secrets when needed.
 
@@ -53,7 +53,7 @@ Open the hosted status menu in the lower-right corner:
 
 - **Export data** downloads one versioned JSON archive containing Pi sessions and SQLite state, but no model key.
 - **Import data** validates archive version, filenames, session identities, parent relationships, sizes, SQLite integrity, and supported schema version before stopping the runtime or replacing device data.
-- **Clear model key** removes model and provider credentials, tears down the in-browser runtime so the old process cannot retain them, and restarts without deleting research.
+- **Clear secrets** removes model and provider credentials, tears down the in-browser runtime so the old process cannot retain them, and restarts without deleting research.
 - **Clear all** removes credentials, sessions, market state, runtime snapshots, and cached application data for this origin.
 
 Imports and installed updates preserve a recovery backup before replacing or migrating durable state. An older OpenCandle build refuses to open a database written by a newer schema instead of resetting it. An installed update waits while any runtime request is active, checkpoints the current session, writes a recovery backup, and only then activates the waiting service worker.

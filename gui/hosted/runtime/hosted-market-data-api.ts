@@ -470,7 +470,12 @@ export function buildHostedUnavailableMarketQuoteSnapshot(
 async function fetchHostedQuoteSnapshot(symbol: string) {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
   if (result.status === "unavailable") return { status: "unavailable" as const, reason: result.reason };
-  if (result.stale || isZeroFilledQuote(result.data)) {
+  if (
+    result.stale ||
+    !Number.isFinite(result.data.price) ||
+    result.data.price <= 0 ||
+    isZeroFilledQuote(result.data)
+  ) {
     return { status: "unavailable" as const, reason: "provider returned stale or invalid market data" };
   }
   const freshness = buildFreshnessStamp({

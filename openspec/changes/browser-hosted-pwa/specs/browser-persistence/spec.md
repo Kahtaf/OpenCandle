@@ -73,12 +73,12 @@ MUST NOT erase credentials for other configured providers.
 - **THEN** reopening the PWA requires the key again
 - **AND** saved sessions and market state remain available
 
-#### Scenario: Session-only key survives writer failover
+#### Scenario: Session-only key remains tab scoped during writer failover
 
 - **WHEN** a writer and follower tab are open with a session-only model key and
   the writer closes
-- **THEN** the key is transferred only through the same-origin live
-  coordination channel and the promoted follower can continue
+- **THEN** the key is not transferred through the same-origin live
+  coordination channel and the promoted follower requests model setup before continuing
 - **AND** no durable browser archive or persistent credential store receives
   the key
 

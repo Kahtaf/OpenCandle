@@ -54,12 +54,14 @@ export function mergeQuoteRefreshSnapshot(current, refreshed) {
   const portfolioSummaries = mergePortfolioSummaries(
     current.portfolioSummaries,
     refreshed.portfolioSummaries,
+    portfolioQuotes,
     stalePortfolioIds,
     refreshFailedAt,
   );
   const portfolioSummary = mergePortfolioSummary(
     current.portfolioSummary,
     refreshed.portfolioSummary,
+    portfolioQuotes,
     stalePortfolioIds,
     refreshFailedAt,
   );
@@ -99,26 +101,66 @@ function mergeQuoteRows(currentRows = [], refreshedRows = [], identityKey, refre
 function mergePortfolioSummaries(
   currentSummaries = [],
   refreshedSummaries = [],
+  portfolioQuotes,
   stalePortfolioIds,
   refreshFailedAt,
 ) {
   const currentById = new Map(currentSummaries.map((summary) => [summary.portfolioId, summary]));
   return refreshedSummaries.map((summary) =>
     stalePortfolioIds.has(summary.portfolioId)
-      ? retainPortfolioSummary(currentById.get(summary.portfolioId), summary, refreshFailedAt)
+      ? retainPortfolioSummary(
+          currentById.get(summary.portfolioId),
+          summary,
+          portfolioQuotes,
+          refreshFailedAt,
+        )
       : summary,
   );
 }
 
-function mergePortfolioSummary(current, refreshed, stalePortfolioIds, refreshFailedAt) {
+function mergePortfolioSummary(
+  current,
+  refreshed,
+  portfolioQuotes,
+  stalePortfolioIds,
+  refreshFailedAt,
+) {
   if (!refreshed || !stalePortfolioIds.has(refreshed.portfolioId)) return refreshed;
-  return retainPortfolioSummary(current, refreshed, refreshFailedAt);
+  return retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFailedAt);
 }
 
-function retainPortfolioSummary(current, refreshed, refreshFailedAt) {
+function retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFailedAt) {
   if (!current || current.status === "unavailable") return refreshed;
+  const rows = portfolioQuotes.filter((quote) => quote?.portfolioId === refreshed.portfolioId);
+  const canRecompute =
+    rows.length > 0 &&
+    rows.every(
+      (quote) =>
+        quote?.status === "ok" &&
+        quote.includedInTotals !== false &&
+        Number.isFinite(quote.marketValue) &&
+        Number.isFinite(quote.totalCost) &&
+        Number.isFinite(quote.pnl),
+    );
+  if (!canRecompute) {
+    return {
+      ...refreshed,
+      stale: true,
+      refreshStatus: "unavailable",
+      refreshReason: refreshed?.reason || "Quote refresh unavailable",
+      refreshFailedAt,
+    };
+  }
+  const totalValue = rows.reduce((sum, quote) => sum + quote.marketValue, 0);
+  const totalCost = rows.reduce((sum, quote) => sum + quote.totalCost, 0);
+  const totalPnl = rows.reduce((sum, quote) => sum + quote.pnl, 0);
   return {
     ...current,
+    status: "ok",
+    totalValue,
+    totalCost,
+    totalPnl,
+    totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
     stale: true,
     refreshStatus: "unavailable",
     refreshReason: refreshed?.reason || "Quote refresh unavailable",

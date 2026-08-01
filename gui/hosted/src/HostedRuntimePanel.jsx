@@ -83,7 +83,7 @@ export function HostedRuntimePanel({ host }) {
   };
 
   const clearSecrets = () =>
-    run("Clearing model key…", () => host.handleCommand({ type: "hosted.data.clear_secrets" }));
+    run("Clearing secrets…", () => host.handleCommand({ type: "hosted.data.clear_secrets" }));
 
   const clearAll = async () => {
     if (!confirm("Clear all OpenCandle sessions, market state, model keys, and cached app data on this device?")) return;
@@ -117,7 +117,7 @@ export function HostedRuntimePanel({ host }) {
             {waitingWorker ? <button type="button" onClick={installUpdate} disabled={status.busy}>Install update</button> : null}
             <button type="button" onClick={exportData} disabled={status.busy}>Export data</button>
             <button type="button" onClick={() => importRef.current?.click()} disabled={status.busy}>Import data</button>
-            <button type="button" onClick={clearSecrets} disabled={status.busy}>Clear model key</button>
+            <button type="button" onClick={clearSecrets} disabled={status.busy}>Clear secrets</button>
             <button type="button" className="is-destructive" onClick={clearAll} disabled={status.busy}>Clear all</button>
           </div>
           <input

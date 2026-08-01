@@ -76,7 +76,7 @@
 
 - [x] 12.1 Add failing contract tests for a shared Pi-backed model catalog and setup state used by hosted web, local web, and local TUI, with no hosted-only model literals.
 - [x] 12.2 Replace the hosted OpenAI-only compatibility path with Pi provider implementations for every browser-proven first-class OpenCandle model provider, and use the selected Pi model for both routing and agent streaming.
-- [x] 12.3 Persist credentials per model provider, preserve the selected provider/model across reload and writer failover, and keep all credentials out of exports, events, URLs, bundles, and logs.
+- [x] 12.3 Persist credentials per model provider, preserve the selected provider/model across reload and writer failover when device storage is selected, keep session-only credentials tab scoped, and keep all credentials out of exports, events, URLs, bundles, and logs.
 - [x] 12.4 Reuse shared GUI/TUI setup, validation, session, and runtime contracts where platform boundaries permit; document and test every intentional hosted-only boundary.
 - [x] 12.5 Run live browser turns for every configured browser-safe model provider, local GUI and TUI regression journeys, strict OpenSpec validation, graph refresh, root gates, and autoreview.
 

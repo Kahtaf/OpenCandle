@@ -431,7 +431,7 @@ try {
 
   stage = "clear model key";
   await openHostedPanel(page);
-  await page.getByRole("button", { name: "Clear model key" }).click();
+  await page.getByRole("button", { name: "Clear secrets" }).click();
   assert(await credentialsAreAbsent(page), "clear model key removes persistent and session keys");
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForText(page, "AAPL", 120_000);

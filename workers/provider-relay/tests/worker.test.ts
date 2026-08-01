@@ -260,6 +260,52 @@ describe("hosted provider relay", () => {
     await expect(response.json()).resolves.toEqual({ error: "upstream_response_too_large" });
   });
 
+  it("rejects an oversized request before forwarding upstream", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ maxRequestBytes: 32, fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "yahoo",
+        url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+        method: "GET",
+        padding: "x".repeat(64),
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toEqual({ error: "request_too_large" });
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("aborts a stalled upstream request and returns a bounded timeout", async () => {
+    let forwardedSignal: AbortSignal | undefined;
+    const upstreamFetch = vi.fn(
+      async (request: Request) =>
+        new Promise<Response>((_resolve, reject) => {
+          forwardedSignal = request.signal;
+          request.signal.addEventListener(
+            "abort",
+            () => reject(request.signal.reason ?? new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const relay = createProviderRelay({ timeoutMs: 1, fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "yahoo",
+        url: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+        method: "GET",
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ error: "upstream_timeout" });
+    expect(forwardedSignal?.aborted).toBe(true);
+  });
+
   it("does not reflect credentials from an upstream failure", async () => {
     const credential = "credential-canary-do-not-reflect";
     const relay = createProviderRelay({

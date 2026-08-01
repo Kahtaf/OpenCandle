@@ -213,7 +213,7 @@ class BrowserRuntimeHost {
         return { imported: true };
       }
       case "hosted.data.clear_secrets":
-        this.clearModelCredentials();
+        this.clearSecrets();
         await this.stopRuntime();
         if (navigator.onLine) await this.ensureBooted();
         return { modelSetup: this.getModelSetup() };

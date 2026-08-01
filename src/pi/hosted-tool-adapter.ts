@@ -91,6 +91,31 @@ const HOSTED_SCREEN_STOCKS = withParameters(
   ]),
 );
 
+function hostedWebSearchTool(available: ReadonlySet<string>) {
+  const providers = [
+    ...(available.has("exa") ? [Type.Literal("exa")] : []),
+    ...(available.has("brave") && hasCredential("brave") ? [Type.Literal("brave")] : []),
+  ];
+  if (providers.length === 0) return null;
+  const providerSchema =
+    providers.length === 1
+      ? providers[0]
+      : Type.Union(providers as [(typeof providers)[number], (typeof providers)[number]]);
+  return withParameters(
+    agentToolToPiTool(webSearchTool),
+    Type.Composite([
+      Type.Omit(webSearchTool.parameters, ["provider"]),
+      Type.Object({
+        provider: Type.Optional(
+          Type.Intersect([providerSchema], {
+            description: "Override the hosted search provider. Default: automatic cascade.",
+          }),
+        ),
+      }),
+    ]),
+  );
+}
+
 /**
  * Read-only tools whose dependencies are browser-safe once their HTTP
  * providers are direct or negotiated through the audited relay.
@@ -121,7 +146,6 @@ const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(correlationTool, ["yahoo"]),
   hosted(holdingsOverlapTool, ["yahoo"]),
   hosted(optionChainTool, ["yahoo"]),
-  hosted(webSearchTool, ["exa", "brave"]),
   hosted(hostedSentimentSummaryTool, ["exa", "brave"]),
 ];
 
@@ -141,10 +165,11 @@ export function getHostedOpenCandleToolDefinitions(
   );
   const hasIntradayHistory = available.has("yahoo") || available.has("lse");
   const hasAlphaVantageCredential = hasCredential("alpha_vantage");
-  return HOSTED_TOOLS.filter(({ tool, anyProviders }) =>
+  const tools = HOSTED_TOOLS.filter(({ tool, anyProviders }) =>
     anyProviders.some(
       (provider) =>
         available.has(provider) &&
+        (provider !== "brave" || hasCredential("brave")) &&
         (provider !== "alpha_vantage" ||
           !ALPHA_VANTAGE_MARKET_TOOLS.has(tool.name) ||
           hasAlphaVantageCredential),
@@ -155,4 +180,11 @@ export function getHostedOpenCandleToolDefinitions(
     if (tool.name === "get_price_comparison") return DAILY_ONLY_PRICE_COMPARISON;
     return tool;
   });
+  const search = hostedWebSearchTool(available);
+  if (search) {
+    const sentimentIndex = tools.findIndex((tool) => tool.name === "get_sentiment_summary");
+    if (sentimentIndex >= 0) tools.splice(sentimentIndex, 0, search);
+    else tools.push(search);
+  }
+  return tools;
 }

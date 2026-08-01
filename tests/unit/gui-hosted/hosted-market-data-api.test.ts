@@ -68,6 +68,33 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("rejects a zero current price even when Yahoo returns other populated fields", async () => {
+    vi.mocked(getQuote).mockResolvedValueOnce({
+      symbol: "AAPL",
+      name: "Apple Inc.",
+      price: 0,
+      change: -200,
+      changePercent: -100,
+      open: 198,
+      high: 204,
+      low: 197,
+      previousClose: 200,
+      volume: 2_000,
+      marketCap: 3_000_000,
+      pe: null,
+      week52High: 220,
+      week52Low: 160,
+      timestamp: "2026-07-31T20:00:00.000Z",
+      asOf: "2026-07-31T20:00:00.000Z",
+      currency: "USD",
+    });
+
+    await expect(getHostedInstrumentQuoteSnapshot("AAPL")).resolves.toMatchObject({
+      status: "unavailable",
+      reason: "provider returned stale or invalid market data",
+    });
+  });
+
   it("builds watchlist and portfolio quote rows from browser-owned state", async () => {
     const snapshot = await buildHostedMarketQuoteSnapshot({
       watchlists: [{ id: 1, name: "Default", isDefault: true }],

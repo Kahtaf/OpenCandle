@@ -210,4 +210,86 @@ describe("mergeQuoteRefreshSnapshot", () => {
     expect(merged.generatedAt).toBe("2026-08-01T12:05:00.000Z");
     expect(merged.lastSuccessfulGeneratedAt).toBe("2026-08-01T12:00:00.000Z");
   });
+
+  it("recomputes portfolio totals from fresh and retained quote rows", () => {
+    const current = {
+      generatedAt: "2026-08-01T12:00:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        {
+          lotId: 1,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: 600,
+          totalCost: 500,
+          pnl: 100,
+          includedInTotals: true,
+        },
+        {
+          lotId: 2,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: 200,
+          totalCost: 150,
+          pnl: 50,
+          includedInTotals: true,
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "ok",
+        totalValue: 800,
+        totalCost: 650,
+        totalPnl: 150,
+        totalPnlPercent: 23.08,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [],
+    };
+    current.portfolioSummaries = [current.portfolioSummary];
+    const refreshed = {
+      generatedAt: "2026-08-01T12:05:00.000Z",
+      watchlistQuotes: [],
+      portfolioQuotes: [
+        {
+          lotId: 1,
+          portfolioId: 3,
+          status: "ok",
+          marketValue: 650,
+          totalCost: 500,
+          pnl: 150,
+          includedInTotals: true,
+        },
+        {
+          lotId: 2,
+          portfolioId: 3,
+          status: "unavailable",
+          reason: "relay timeout",
+        },
+      ],
+      portfolioSummary: {
+        portfolioId: 3,
+        status: "unavailable",
+        totalValue: null,
+        totalCost: 650,
+        totalPnl: null,
+        totalPnlPercent: null,
+        baseCurrency: "USD",
+      },
+      portfolioSummaries: [],
+    };
+    refreshed.portfolioSummaries = [refreshed.portfolioSummary];
+
+    const merged = mergeQuoteRefreshSnapshot(current, refreshed);
+
+    expect(merged.portfolioSummary).toMatchObject({
+      totalValue: 850,
+      totalCost: 650,
+      totalPnl: 200,
+      stale: true,
+      refreshStatus: "unavailable",
+    });
+    expect(merged.portfolioSummary.totalPnlPercent).toBeCloseTo(30.77, 2);
+    expect(merged.portfolioSummaries[0]).toMatchObject(merged.portfolioSummary);
+  });
 });
