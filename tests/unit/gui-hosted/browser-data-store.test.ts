@@ -185,6 +185,25 @@ describe("hosted browser archive", () => {
     );
   });
 
+  it("accepts a supported v6 SQLite import before the v7 alert migration", async () => {
+    const database = await createSqlJsStateDatabase();
+    database.exec(
+      "UPDATE schema_version SET version = 6; ALTER TABLE alert_rules DROP COLUMN status",
+    );
+    const legacy = database.exportBytes();
+    database.close();
+    const archive = createHostedArchive({
+      sessions: [session],
+      stateBytes: legacy,
+      currentSessionId: "session-1",
+    });
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(new Map()),
+    });
+
+    await expect(store.validateImportForRestore(JSON.stringify(archive))).resolves.toBeTruthy();
+  });
+
   it("restores the pre-update backup when the current checkpoint is corrupt", async () => {
     const archive = createHostedArchive({
       sessions: [session],

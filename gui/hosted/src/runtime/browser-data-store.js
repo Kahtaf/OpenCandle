@@ -26,9 +26,12 @@ const REQUIRED_STATE_COLUMNS = {
     "created_at",
     "updated_at",
   ],
-  alert_rules: ["id", "condition_type", "condition_json", "enabled", "status"],
+  alert_rules: ["id", "condition_type", "condition_json", "enabled"],
   report_templates: ["id", "name", "report_type", "config_json", "enabled"],
 };
+const VERSIONED_STATE_COLUMNS = [
+  { since: 7, table: "alert_rules", columns: ["status"] },
+];
 
 export function createBrowserDataStore(options = {}) {
   return new BrowserDataStore(options);
@@ -240,10 +243,11 @@ async function validateStateDatabaseBytes(bytes) {
       );
     }
     for (const [table, expectedColumns] of Object.entries(REQUIRED_STATE_COLUMNS)) {
-      const result = database.exec(`PRAGMA table_info(${table})`);
-      const columns = new Set(result[0]?.values.map((row) => row[1]));
-      if (expectedColumns.some((column) => !columns.has(column))) {
-        throw new Error(`State snapshot schema is missing required ${table} columns`);
+      validateTableColumns(database, table, expectedColumns);
+    }
+    for (const requirement of VERSIONED_STATE_COLUMNS) {
+      if (version >= requirement.since) {
+        validateTableColumns(database, requirement.table, requirement.columns);
       }
     }
   } catch (error) {
@@ -251,6 +255,14 @@ async function validateStateDatabaseBytes(bytes) {
     throw new Error("State snapshot is not a valid OpenCandle SQLite database");
   } finally {
     database?.close();
+  }
+}
+
+function validateTableColumns(database, table, expectedColumns) {
+  const result = database.exec(`PRAGMA table_info(${table})`);
+  const columns = new Set(result[0]?.values.map((row) => row[1]));
+  if (expectedColumns.some((column) => !columns.has(column))) {
+    throw new Error(`State snapshot schema is missing required ${table} columns`);
   }
 }
 

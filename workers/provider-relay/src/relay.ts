@@ -397,12 +397,11 @@ async function relayModelRequest(options: {
     }
     if (!upstream.ok) {
       await upstream.body?.cancel();
+      const headers = modelResponseHeaders(upstream.headers, options.corsOrigin);
+      headers.set("content-type", "application/json; charset=utf-8");
       return new Response(JSON.stringify({ error: "model_provider_request_failed" }), {
         status: upstream.status,
-        headers: modelResponseHeaders(
-          new Headers({ "content-type": "application/json; charset=utf-8" }),
-          options.corsOrigin,
-        ),
+        headers,
       });
     }
     clearTimeout(timeout);

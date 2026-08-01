@@ -184,7 +184,10 @@ describe("hosted provider relay", () => {
               cancelled = true;
             },
           }),
-          { status: 401 },
+          {
+            status: 401,
+            headers: { "retry-after": "30", "request-id": "request-safe" },
+          },
         ),
       ),
     });
@@ -200,6 +203,8 @@ describe("hosted provider relay", () => {
 
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('{"error":"model_provider_request_failed"}');
+    expect(response.headers.get("retry-after")).toBe("30");
+    expect(response.headers.get("request-id")).toBe("request-safe");
     expect(cancelled).toBe(true);
   });
 
