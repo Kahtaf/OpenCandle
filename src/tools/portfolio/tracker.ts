@@ -223,6 +223,15 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         if (updateParams.avgCost != null && updateParams.avgCost <= 0) {
           throw new Error("avg_cost must be greater than 0.");
         }
+        const selected = service
+          .listPortfolioLots(portfolio.id)
+          .find((lot) => lot.id === args.lot_id);
+        if (!selected) {
+          return {
+            content: [{ type: "text", text: `lot ${args.lot_id} not found in portfolio` }],
+            details: null,
+          };
+        }
         const updated = service.updatePortfolioLot(args.lot_id, updateParams);
         if (updated == null) {
           const target = args.lot_id ? `lot ${args.lot_id}` : args.symbol?.toUpperCase();

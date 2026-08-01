@@ -549,6 +549,35 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("does not update a lot belonging to a different selected portfolio", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Retirement",
+    });
+    const added = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Retirement",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const lotId = (added.details as { id: number }).id;
+
+    const update = await portfolioTrackerTool.execute("test", {
+      action: "update",
+      portfolio_name: "Default",
+      lot_id: lotId,
+      shares: 99,
+    });
+
+    expect(update.content[0].text).toContain(`lot ${lotId} not found in portfolio`);
+    const retirement = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Retirement",
+    });
+    expect(retirement.details?.positions[0]).toMatchObject({ shares: 2, avgCost: 250 });
+  });
+
   it("requires lot_id for portfolio updates and leaves same-symbol lots unchanged", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",

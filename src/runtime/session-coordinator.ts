@@ -170,6 +170,7 @@ export class SessionCoordinator {
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
   private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
+  private activeWorkflowPromise: Promise<void> | null = null;
   private activeWorkflowType: string | undefined;
   private activeStepCapture: ActiveStepCapture | null = null;
   private workflowEventCaptureInstalled = false;
@@ -461,6 +462,15 @@ export class SessionCoordinator {
     return this.activeWorkflowRunRef?.active ? this.activeWorkflowType : undefined;
   }
 
+  /** Wait until the current workflow, including every queued Pi prompt, is terminal. */
+  async waitForActiveWorkflow(): Promise<void> {
+    while (this.activeWorkflowPromise) {
+      const pending = this.activeWorkflowPromise;
+      await pending;
+      if (this.activeWorkflowPromise === pending) return;
+    }
+  }
+
   transformWorkflowInput(
     pi: ExtensionAPI,
     definition: WorkflowDefinition,
@@ -506,7 +516,7 @@ export class SessionCoordinator {
 
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
-    void runner
+    const workflowPromise = runner
       .start(
         definition.workflowType,
         stepDefs,
@@ -598,6 +608,7 @@ export class SessionCoordinator {
           return structuredOutput;
         },
       )
+      .then(() => undefined)
       .finally(() => {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeStepCapture = null;
@@ -606,7 +617,11 @@ export class SessionCoordinator {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeWorkflowRunRef = null;
         }
+        if (this.activeWorkflowPromise === workflowPromise) {
+          this.activeWorkflowPromise = null;
+        }
       });
+    this.activeWorkflowPromise = workflowPromise;
   }
 
   /** Cancel any active workflow. */

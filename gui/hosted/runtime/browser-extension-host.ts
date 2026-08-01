@@ -18,6 +18,7 @@ import openCandleExtensionCore from "../../../src/pi/opencandle-extension-core.j
 import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import type { RouterLlmClient } from "../../../src/routing/router-types.js";
 import type { StateDatabase } from "../../../src/runtime/state-database.js";
+import type { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 import type { AskUserHandler } from "../../../src/types/index.js";
 
 type ExtensionHandler = (
@@ -78,6 +79,7 @@ export class BrowserOpenCandleExtensionHost {
   private readonly commands = new Map<string, unknown>();
   private activeToolNames: string[] = [];
   private agent: Agent | null = null;
+  private readonly coordinator: SessionCoordinator;
 
   readonly api: ExtensionAPI;
 
@@ -178,13 +180,23 @@ export class BrowserOpenCandleExtensionHost {
     };
     this.api = api as unknown as ExtensionAPI;
 
+    let coordinator: SessionCoordinator | null = null;
     openCandleExtensionCore(this.api, {
       routerLlmClient,
       stateDatabaseFactory: () => stateDatabase,
       toolDefinitions,
       askUserHandler,
+      onCoordinatorCreated: (value) => {
+        coordinator = value;
+      },
       titleCompletion: async () => "OpenCandle research",
     });
+    if (!coordinator) throw new Error("OpenCandle extension did not initialize its coordinator");
+    this.coordinator = coordinator;
+  }
+
+  waitForWorkflowIdle(): Promise<void> {
+    return this.coordinator.waitForActiveWorkflow();
   }
 
   bindAgent(agent: Agent): void {

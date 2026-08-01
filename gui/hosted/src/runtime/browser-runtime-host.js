@@ -213,7 +213,7 @@ class BrowserRuntimeHost {
         return { imported: true };
       }
       case "hosted.data.clear_secrets":
-        this.clearSecrets();
+        this.clearModelCredentials();
         await this.stopRuntime();
         if (navigator.onLine) await this.ensureBooted();
         return { modelSetup: this.getModelSetup() };
@@ -772,10 +772,15 @@ class BrowserRuntimeHost {
     }
   }
 
-  clearSecrets() {
+  clearModelCredentials() {
     this.volatileCredential = null;
     this.storage.removeItem(CREDENTIAL_KEY);
     this.sessionStorage.removeItem(CREDENTIAL_KEY);
+    this.storage.removeItem(MODEL_SELECTION_KEY);
+  }
+
+  clearSecrets() {
+    this.clearModelCredentials();
     this.storage.removeItem(PROVIDER_CREDENTIAL_KEY);
   }
 
@@ -795,7 +800,6 @@ class BrowserRuntimeHost {
     await this.dataStore.clearAll();
     this.clearSecrets();
     this.storage.removeItem(CURRENT_SESSION_KEY);
-    this.storage.removeItem(MODEL_SELECTION_KEY);
     this.storage.removeItem(RELAY_CLIENT_KEY);
     if (globalThis.caches) {
       await Promise.all((await caches.keys()).map((name) => caches.delete(name)));

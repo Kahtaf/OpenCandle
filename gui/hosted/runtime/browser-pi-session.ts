@@ -203,6 +203,7 @@ export class BrowserPiSession {
       }
       this.agent.state.systemPrompt = await this.host.prepareSystemPrompt("");
       await this.agent.prompt(input.text, images);
+      await this.host.waitForWorkflowIdle();
       await this.agent.waitForIdle();
       assertTerminalAssistantSucceeded(this.agent.state.messages);
       const sessionFile = this.sessionManager.getSessionFile();

@@ -752,17 +752,20 @@ export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
 export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState("");
-  const [unverifiedExact, setUnverifiedExact] = useState(false);
+  const unverifiedExactRef = useRef(false);
   const resolvedSymbol = selected;
 
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    const saved = await onSubmit({ symbol: resolvedSymbol, unverifiedExact });
+    const saved = await onSubmit({
+      symbol: resolvedSymbol,
+      unverifiedExact: unverifiedExactRef.current,
+    });
     if (saved === false) return;
     setQuery("");
     setSelected("");
-    setUnverifiedExact(false);
+    unverifiedExactRef.current = false;
   };
 
   return (
@@ -778,7 +781,9 @@ export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
         disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
-        onSelectionVerificationChange={(verified) => setUnverifiedExact(verified === false)}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>

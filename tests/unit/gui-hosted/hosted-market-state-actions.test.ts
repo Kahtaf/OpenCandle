@@ -219,4 +219,51 @@ describe("hosted market-state actions", () => {
       expect.objectContaining({ id: lot.id }),
     ]);
   });
+
+  it("does not persist an instrument when alert validation fails", async () => {
+    await expect(
+      invokeHostedMarketStateTool(
+        service,
+        "manage_alerts",
+        { action: "create_price_above", symbol: "AAPL", threshold: 0 },
+        "hosted-invalid-alert",
+        {
+          resolveInstrument: async () => ({
+            status: "resolved",
+            instrument: { symbol: "AAPL", assetType: "equity", currency: "USD", provider: "yahoo" },
+          }),
+        },
+      ),
+    ).rejects.toThrow("threshold must be greater than 0");
+
+    const row = database
+      .prepare<[], { count: number }>("SELECT COUNT(*) AS count FROM instruments")
+      .get();
+    expect(row?.count).toBe(0);
+  });
+
+  it("validates an alert update target before resolving or persisting an instrument", async () => {
+    const resolveInstrument = vi.fn(async () => ({
+      status: "resolved" as const,
+      instrument: { symbol: "AAPL", assetType: "equity", currency: "USD", provider: "yahoo" },
+    }));
+
+    await expect(
+      invokeHostedMarketStateTool(
+        service,
+        "manage_alerts",
+        {
+          action: "update",
+          id: 999,
+          condition_action: "create_price_above",
+          symbol: "AAPL",
+          threshold: 200,
+        },
+        "hosted-missing-alert",
+        { resolveInstrument },
+      ),
+    ).rejects.toThrow("Alert 999 was not found");
+
+    expect(resolveInstrument).not.toHaveBeenCalled();
+  });
 });

@@ -261,6 +261,11 @@ async function manageAlerts(
   if (action === "check") providerUnavailable("manual alert checks");
 
   const conditionAction = action === "update" ? requiredString(args, "condition_action") : action;
+  const condition = alertCondition(conditionAction, args);
+  const updateId = action === "update" ? positiveInteger(args.id, "id") : null;
+  if (updateId != null && !service.listAlertRules().some((alert) => alert.id === updateId)) {
+    throw new Error(`Alert ${updateId} was not found.`);
+  }
   const symbol = normalizedSymbol(args.symbol);
   const resolved = await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
   if (resolved.status === "needs_selection") {
@@ -270,10 +275,8 @@ async function manageAlerts(
     );
   }
   const instrument = service.upsertInstrumentRecord(resolved.instrument);
-  const condition = alertCondition(conditionAction, args);
   if (action === "update") {
-    const id = positiveInteger(args.id, "id");
-    const value = service.updateAlertRule(id, {
+    const value = service.updateAlertRule(updateId as number, {
       instrumentId: instrument.id,
       conditionType: condition.type,
       conditionVersion: ALERT_CONDITION_VERSION,
@@ -281,8 +284,8 @@ async function manageAlerts(
       timeframe: condition.timeframe,
       cooldownSeconds: optionalPositiveInteger(args.cooldown_seconds),
     });
-    if (!value) throw new Error(`Alert ${id} was not found.`);
-    return result(`Updated alert ${id} for ${symbol}.`, value);
+    if (!value) throw new Error(`Alert ${updateId} was not found.`);
+    return result(`Updated alert ${updateId} for ${symbol}.`, value);
   }
   const value = service.createAlertRule({
     scopeType: "instrument",

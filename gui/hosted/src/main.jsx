@@ -13,8 +13,8 @@ import "./styles.css";
 
 const host = createBrowserRuntimeCoordinator({ createHost: createBrowserRuntimeHost });
 const transport = createHostedRuntimeTransport({ host });
-addEventListener("pagehide", () => {
-  void host.dispose();
+addEventListener("pagehide", (event) => {
+  if (!event.persisted) void host.dispose();
 });
 
 createRoot(document.getElementById("root")).render(

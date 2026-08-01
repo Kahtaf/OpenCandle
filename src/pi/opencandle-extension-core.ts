@@ -72,6 +72,7 @@ export interface OpenCandleExtensionOptions {
   addonToolDescriptionsFactory?: SessionCoordinatorOptions["addonToolDescriptionsFactory"];
   toolDefaultsFactory?: SessionCoordinatorOptions["toolDefaultsFactory"];
   toolDefinitions?: readonly ToolDefinition[];
+  onCoordinatorCreated?: (coordinator: SessionCoordinator) => void;
 }
 
 interface OriginalInputMarkerContext {
@@ -88,6 +89,7 @@ export default function openCandleExtension(
     addonToolDescriptionsFactory: options?.addonToolDescriptionsFactory,
     toolDefaultsFactory: options?.toolDefaultsFactory,
   });
+  options?.onCoordinatorCreated?.(coordinator);
 
   // Workflow transforms replace the user's turn with the expanded prompt; this
   // marker lets the GUI render the user's original words instead.
@@ -570,7 +572,10 @@ export default function openCandleExtension(
 
       // action === "prompt": pause and ask the user via promptUser.
       const descriptor = getProvider(parsed.provider);
-      const connectLabel = `Connect now — ${descriptor.instructionsHint}`;
+      const canConnectInline = ctx.hasUI === true;
+      const connectLabel = canConnectInline
+        ? `Connect now — ${descriptor.instructionsHint}`
+        : "Show provider setup instructions";
       const continueLabel = descriptor.fallbackDescription
         ? `Continue with ${descriptor.fallbackDescription} for this run`
         : `Continue without ${descriptor.displayName} for this run`;
@@ -613,6 +618,23 @@ export default function openCandleExtension(
       }
 
       const answer = promptResult.answer ?? "";
+
+      if (!canConnectInline && answer.startsWith("Show provider")) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `${buildSkippedTag({
+                  provider: parsed.provider,
+                  reason: "credential_not_provided",
+                  remediation: "open Providers settings and add the provider key",
+                })}\n\n` +
+                `Open Providers settings, add the ${descriptor.displayName} key, then re-run the request.`,
+            },
+          ],
+        };
+      }
 
       if (answer.startsWith("Connect")) {
         const connectResult = await runProviderConnect(ctx, parsed.provider);

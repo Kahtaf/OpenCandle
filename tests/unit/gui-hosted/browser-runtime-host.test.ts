@@ -338,6 +338,14 @@ describe("browser runtime host", () => {
     const storage = memoryStorage();
     const sessionStorage = memoryStorage();
     storage.setItem(
+      "opencandle.hosted.provider-credentials.v1",
+      JSON.stringify({ version: 1, credentials: { fred: "fred-provider-key" } }),
+    );
+    storage.setItem(
+      "opencandle.hosted.model-selection.v1",
+      JSON.stringify({ version: 1, provider: "openai", modelId: "gpt-4.1-mini" }),
+    );
+    storage.setItem(
       "opencandle.hosted.credentials.v1",
       JSON.stringify({
         version: 1,
@@ -366,6 +374,10 @@ describe("browser runtime host", () => {
 
     expect(storage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
     expect(sessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+    expect(storage.getItem("opencandle.hosted.model-selection.v1")).toBeNull();
+    expect(storage.getItem("opencandle.hosted.provider-credentials.v1")).toContain(
+      "fred-provider-key",
+    );
     expect(host.stopRuntime).toHaveBeenCalledTimes(1);
     expect(host.ensureBooted).toHaveBeenCalledTimes(1);
     expect(host.request).not.toHaveBeenCalledWith(

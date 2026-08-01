@@ -1265,6 +1265,59 @@ describe("opencandle extension", () => {
       rmSync(home, { recursive: true, force: true });
     });
 
+    it("gives hosted users provider-settings instructions instead of a dead connect flow", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-hosted-provider-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Show provider setup instructions" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      const input = vi.fn();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage reason=missing unlocks="fundamentals" fallback=none]',
+        ),
+        { hasUI: false, ui: { input, notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.arrayContaining(["Show provider setup instructions"]),
+        }),
+      );
+      expect(input).not.toHaveBeenCalled();
+      expect(result?.content[0]?.text).toContain("Providers settings");
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("keeps inline provider connection available in an interactive Pi UI", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-interactive-provider-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Continue without Alpha Vantage for this run" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+
+      await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage reason=missing unlocks="fundamentals" fallback=none]',
+        ),
+        { hasUI: true, ui: { input: vi.fn(), notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.arrayContaining([expect.stringMatching(/^Connect now/)]),
+        }),
+      );
+      rmSync(home, { recursive: true, force: true });
+    });
+
     it("uses the requested external-tool provider in continue responses", async () => {
       const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
       vi.stubEnv("OPENCANDLE_HOME", home);

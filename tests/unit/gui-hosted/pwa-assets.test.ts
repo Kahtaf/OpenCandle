@@ -95,6 +95,7 @@ describe("hosted PWA assets", () => {
   it("tears down the in-browser runtime when the document is replaced", () => {
     const entry = readFileSync(resolve(root, "gui/hosted/src/main.jsx"), "utf8");
     expect(entry).toContain('addEventListener("pagehide"');
+    expect(entry).toContain("if (!event.persisted)");
     expect(entry).toContain("host.dispose()");
   });
 
