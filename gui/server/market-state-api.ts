@@ -5,11 +5,7 @@ import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
-import {
-  getHistory,
-  getQuote,
-  getYahooCompanyOverview,
-} from "../../src/providers/yahoo-finance.js";
+import { getQuote, getYahooCompanyOverview } from "../../src/providers/yahoo-finance.js";
 import {
   fetchHistoryWithFallback,
   HISTORY_INTERVALS,
@@ -17,9 +13,7 @@ import {
 } from "../../src/tools/market/stock-history.js";
 import {
   buildMarketQuoteSnapshot as buildSharedMarketQuoteSnapshot,
-  type MarketSparklineSnapshot,
   type MarketStateQuoteSnapshot as SharedMarketStateQuoteSnapshot,
-  unavailableSparkline,
 } from "../shared/market-quote-snapshot.js";
 import { HistorySnapshotStore } from "./history-snapshot-store.js";
 
@@ -219,8 +213,6 @@ export function resetInstrumentHistoryMemoForTests(): void {
   instrumentHistorySnapshotStore.clear();
 }
 
-export type { MarketSparklineSnapshot } from "../shared/market-quote-snapshot.js";
-
 export interface MarketStateSnapshot {
   instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
   watchlists: ReturnType<MarketStateService["listWatchlists"]>;
@@ -332,36 +324,10 @@ export async function buildMarketStateQuoteSnapshot(
   try {
     return buildSharedMarketQuoteSnapshot(buildMarketStateSnapshot(ownedDb), {
       fetchQuote: fetchQuoteSnapshot,
-      fetchSparkline: fetchSparklineSnapshot,
     });
   } finally {
     if (!db) ownedDb.close();
   }
-}
-
-export async function fetchSparklineSnapshot(symbol: string): Promise<MarketSparklineSnapshot> {
-  const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
-  if (result.status === "unavailable") return unavailableSparkline(result.reason);
-
-  const bars = result.data.filter((bar) => Number.isFinite(bar.close) && bar.close > 0);
-  const dataAsOf = bars.at(-1)?.date;
-  if (result.stale) {
-    return unavailableSparkline("Historical data is stale", dataAsOf, true);
-  }
-  if (bars.length < 2) {
-    return unavailableSparkline("Not enough intraday history", dataAsOf);
-  }
-  if (bars.length !== result.data.length) {
-    return unavailableSparkline("Historical data contains invalid bars", dataAsOf);
-  }
-  return {
-    status: "ok",
-    source: "Yahoo Finance",
-    points: bars.map((bar) => bar.close),
-    fetchedAt: result.timestamp,
-    dataAsOf,
-    stale: false,
-  };
 }
 
 export async function searchInstrumentCandidates(query: string): Promise<{

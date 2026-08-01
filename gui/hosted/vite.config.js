@@ -24,7 +24,7 @@ const isolationHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Content-Security-Policy":
-    `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${relayConnectSource} https://api.coingecko.com https://www.alphavantage.co https://gamma-api.polymarket.com https://*.webcontainer-api.io wss://*.webcontainer-api.io; frame-src https://stackblitz.com https://*.webcontainer-api.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${relayConnectSource} https://ticker-line.com https://api.coingecko.com https://www.alphavantage.co https://gamma-api.polymarket.com https://*.webcontainer-api.io wss://*.webcontainer-api.io; frame-src https://stackblitz.com https://*.webcontainer-api.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
 };
 const runtimeVersion = createHash("sha256")
   .update(readFileSync(resolve(import.meta.dirname, "public/runtime/runtime-files.json")))

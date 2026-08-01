@@ -59,6 +59,7 @@ describe("hosted PWA assets", () => {
 
   it("ships the cross-origin isolation and cache headers required by WebContainer", () => {
     const headers = readFileSync(resolve(root, "gui/hosted/public/_headers"), "utf8");
+    const viteConfig = readFileSync(resolve(root, "gui/hosted/vite.config.js"), "utf8");
     expect(headers).toContain("Cross-Origin-Embedder-Policy: require-corp");
     expect(headers).toContain("Cross-Origin-Opener-Policy: same-origin");
     expect(headers).toContain("Content-Security-Policy:");
@@ -69,6 +70,8 @@ describe("hosted PWA assets", () => {
     expect(headers).toContain("https://api.coingecko.com");
     expect(headers).toContain("https://www.alphavantage.co");
     expect(headers).toContain("https://gamma-api.polymarket.com");
+    expect(headers).toMatch(/connect-src[^;]*https:\/\/ticker-line\.com/);
+    expect(viteConfig).toMatch(/connect-src[^;]*https:\/\/ticker-line\.com/);
     expect(headers).toContain("https://*.webcontainer-api.io");
     expect(headers).toContain("object-src 'none'");
     expect(headers).toContain("frame-ancestors 'none'");

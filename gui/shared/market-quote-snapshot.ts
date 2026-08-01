@@ -23,23 +23,6 @@ export type MarketQuoteResult =
     }
   | { status: "unavailable"; reason: string };
 
-export type MarketSparklineSnapshot =
-  | {
-      status: "ok";
-      source: "Yahoo Finance";
-      points: number[];
-      fetchedAt: string;
-      dataAsOf?: string;
-      stale: false;
-    }
-  | {
-      status: "unavailable";
-      source: "Yahoo Finance";
-      reason: string;
-      dataAsOf?: string;
-      stale?: boolean;
-    };
-
 export interface MarketQuoteState {
   watchlists?: Array<{ id: number; isDefault?: boolean; name?: string }>;
   portfolios?: Array<{
@@ -48,12 +31,13 @@ export interface MarketQuoteState {
     name?: string;
     baseCurrency?: string | null;
   }>;
-  watchlist?: Array<{ id: number; instrumentId: number; symbol: string }>;
+  watchlist?: Array<{ id: number; instrumentId: number; symbol: string; assetType: string }>;
   portfolio?: Array<{
     id: number;
     portfolioId: number;
     instrumentId: number;
     symbol: string;
+    assetType: string;
     quantity: number;
     avgCost: number;
     currency: string;
@@ -63,24 +47,32 @@ export interface MarketQuoteState {
 
 export interface MarketQuoteSnapshotDependencies {
   fetchQuote(symbol: string): Promise<MarketQuoteResult>;
-  fetchSparkline(symbol: string): Promise<MarketSparklineSnapshot>;
   now?: () => Date;
 }
 
-export const MARKET_INDEX_SYMBOLS = ["^GSPC", "^IXIC", "^DJI", "BTC-USD"] as const;
+export const MARKET_INDEX_SYMBOLS = ["^GSPC", "^NDX", "^DJI", "BTC-USD"] as const;
+
+const MARKET_INDEX_ASSET_TYPES = {
+  "^GSPC": "index",
+  "^NDX": "index",
+  "^DJI": "index",
+  "BTC-USD": "crypto",
+} as const;
 
 export async function buildMarketIndicesSnapshot(
-  dependencies: Pick<MarketQuoteSnapshotDependencies, "fetchQuote" | "fetchSparkline">,
+  dependencies: Pick<MarketQuoteSnapshotDependencies, "fetchQuote">,
 ) {
   const indices = [];
   for (const symbol of MARKET_INDEX_SYMBOLS) {
     const quote = await dependencies.fetchQuote(symbol);
+    const assetType = MARKET_INDEX_ASSET_TYPES[symbol];
     if (quote.status === "unavailable") {
-      indices.push({ symbol, status: "unavailable" as const, reason: quote.reason });
+      indices.push({ symbol, assetType, status: "unavailable" as const, reason: quote.reason });
       continue;
     }
     indices.push({
       symbol,
+      assetType,
       name: quote.name,
       status: "ok" as const,
       price: quote.price,
@@ -90,7 +82,6 @@ export async function buildMarketIndicesSnapshot(
       marketState: quote.marketState,
       dataAsOf: quote.dataAsOf,
       stale: quote.stale,
-      sparkline: await dependencies.fetchSparkline(symbol),
     });
   }
   return { generatedAt: new Date().toISOString(), indices };
@@ -109,35 +100,28 @@ export async function buildMarketQuoteSnapshot(
     ...new Set([...watchlist.map((item) => item.symbol), ...lots.map((lot) => lot.symbol)]),
   ];
   const quoteMap = new Map<string, MarketQuoteResult>();
-  const sparklineMap = new Map<string, MarketSparklineSnapshot>();
   for (const symbol of symbols) {
     const quote = await dependencies.fetchQuote(symbol);
     quoteMap.set(symbol, quote);
-    sparklineMap.set(
-      symbol,
-      quote.status === "ok"
-        ? await dependencies.fetchSparkline(symbol)
-        : unavailableSparkline(quote.reason),
-    );
   }
 
   const watchlistQuotes = watchlist.map((item) => {
     const quote = quoteMap.get(item.symbol);
-    const sparkline = sparklineMap.get(item.symbol) ?? unavailableSparkline("History unavailable");
     if (!quote || quote.status === "unavailable") {
       return {
         itemId: item.id,
         instrumentId: item.instrumentId,
         symbol: item.symbol,
+        assetType: item.assetType,
         status: "unavailable" as const,
         reason: quote?.reason ?? "quote unavailable",
-        sparkline,
       };
     }
     return {
       itemId: item.id,
       instrumentId: item.instrumentId,
       symbol: item.symbol,
+      assetType: item.assetType,
       name: quote.name,
       status: "ok" as const,
       price: quote.price,
@@ -157,7 +141,6 @@ export async function buildMarketQuoteSnapshot(
       extendedChangePercent: quote.extendedChangePercent,
       extendedAsOf: quote.extendedAsOf,
       stale: quote.stale,
-      sparkline,
     };
   });
 
@@ -167,7 +150,6 @@ export async function buildMarketQuoteSnapshot(
     const quotes = portfolioLots.map((lot) => {
       const quote = quoteMap.get(lot.symbol);
       const totalCost = lot.avgCost * lot.quantity;
-      const sparkline = sparklineMap.get(lot.symbol) ?? unavailableSparkline("History unavailable");
       const quoteCurrency =
         quote?.status === "ok" ? (quote.currency ?? lot.instrumentCurrency) : null;
       const common = {
@@ -175,9 +157,9 @@ export async function buildMarketQuoteSnapshot(
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        assetType: lot.assetType,
         totalCost,
         currency: lot.currency,
-        sparkline,
       };
       if (!quote || quote.status === "unavailable") {
         return {
@@ -318,9 +300,9 @@ function buildMarketQuoteSnapshotFromUnavailableState(
     itemId: item.id,
     instrumentId: item.instrumentId,
     symbol: item.symbol,
+    assetType: item.assetType,
     status: "unavailable" as const,
     reason,
-    sparkline: unavailableSparkline(reason),
   }));
   const portfolioResults = portfolios.map((portfolio) => {
     const baseCurrency = portfolio.baseCurrency ?? "USD";
@@ -331,12 +313,12 @@ function buildMarketQuoteSnapshotFromUnavailableState(
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        assetType: lot.assetType,
         status: "unavailable" as const,
         totalCost: lot.avgCost * lot.quantity,
         currency: lot.currency,
         includedInTotals: false,
         reason,
-        sparkline: unavailableSparkline(reason),
       }));
     return {
       quotes,
@@ -368,20 +350,6 @@ function buildMarketQuoteSnapshotFromUnavailableState(
     portfolioQuotes: portfolioResults.flatMap((result) => result.quotes),
     portfolioSummary: defaultResult?.summary ?? createEmptySummary(defaultPortfolio),
     portfolioSummaries: portfolioResults.map((result) => result.summary),
-  };
-}
-
-export function unavailableSparkline(
-  reason: string,
-  dataAsOf?: string,
-  stale?: boolean,
-): MarketSparklineSnapshot {
-  return {
-    status: "unavailable",
-    source: "Yahoo Finance",
-    reason,
-    dataAsOf,
-    stale,
   };
 }
 

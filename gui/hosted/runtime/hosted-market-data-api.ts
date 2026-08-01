@@ -1,11 +1,7 @@
 import { buildFreshnessStamp } from "../../../src/infra/freshness.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
-import {
-  getHistory,
-  getQuote,
-  getYahooCompanyOverview,
-} from "../../../src/providers/yahoo-finance.js";
+import { getQuote, getYahooCompanyOverview } from "../../../src/providers/yahoo-finance.js";
 import {
   fetchHistoryWithFallback,
   HISTORY_INTERVALS,
@@ -16,7 +12,6 @@ import {
   buildMarketIndicesSnapshot,
   buildUnavailableMarketQuoteSnapshot,
   type MarketQuoteState,
-  unavailableSparkline,
 } from "../../shared/market-quote-snapshot.js";
 
 type HistoryRange = (typeof HISTORY_RANGES)[number];
@@ -124,14 +119,12 @@ export async function getHostedInstrumentHistorySnapshot(symbol: string, rangeLa
 export async function buildHostedMarketIndicesSnapshot() {
   return buildMarketIndicesSnapshot({
     fetchQuote: fetchHostedQuoteSnapshot,
-    fetchSparkline: fetchHostedSparklineSnapshot,
   });
 }
 
 export function buildHostedMarketQuoteSnapshot(state: MarketQuoteState) {
   return buildMarketQuoteSnapshot(state, {
     fetchQuote: fetchHostedQuoteSnapshot,
-    fetchSparkline: fetchHostedSparklineSnapshot,
   });
 }
 
@@ -183,31 +176,6 @@ async function fetchHostedQuoteSnapshot(symbol: string) {
     extendedAsOf: result.data.extendedAsOf,
     stale: false as const,
     currency: result.data.currency ?? null,
-  };
-}
-
-async function fetchHostedSparklineSnapshot(symbol: string) {
-  const result = await wrapProvider("yahoo", () => getHistory(symbol, "1d", "5m"));
-  if (result.status === "unavailable") return unavailableSparkline(result.reason);
-  const bars = result.data.filter((bar) => Number.isFinite(bar.close) && bar.close > 0);
-  if (result.stale || bars.length !== result.data.length || bars.length < 2) {
-    return unavailableSparkline(
-      result.stale
-        ? "Historical data is stale"
-        : bars.length < 2
-          ? "Not enough intraday history"
-          : "Historical data contains invalid bars",
-      bars.at(-1)?.date,
-      result.stale === true,
-    );
-  }
-  return {
-    status: "ok" as const,
-    source: "Yahoo Finance" as const,
-    points: bars.map((bar) => bar.close),
-    fetchedAt: result.timestamp,
-    dataAsOf: bars.at(-1)?.date,
-    stale: false as const,
   };
 }
 

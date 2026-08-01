@@ -5,6 +5,7 @@ import {
   getHostedInstrumentHistorySnapshot,
   getHostedInstrumentQuoteSnapshot,
 } from "../../../gui/hosted/runtime/hosted-market-data-api.js";
+import { cache } from "../../../src/infra/cache.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
@@ -15,6 +16,7 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 
 describe("hosted market data API", () => {
   beforeEach(() => {
+    cache.clear();
     vi.clearAllMocks();
     vi.mocked(getHistory).mockResolvedValue([
       {
@@ -99,13 +101,14 @@ describe("hosted market data API", () => {
     const snapshot = await buildHostedMarketQuoteSnapshot({
       watchlists: [{ id: 1, name: "Default", isDefault: true }],
       portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],
-      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
+      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL", assetType: "equity" }],
       portfolio: [
         {
           id: 5,
           portfolioId: 2,
           instrumentId: 4,
           symbol: "AAPL",
+          assetType: "equity",
           quantity: 2,
           avgCost: 180,
           currency: "USD",
@@ -117,11 +120,11 @@ describe("hosted market data API", () => {
     expect(snapshot.watchlistQuotes[0]).toMatchObject({
       itemId: 3,
       symbol: "AAPL",
+      assetType: "equity",
       status: "ok",
       price: 203,
       dayHigh: 204,
       dayLow: 197,
-      sparkline: { status: "ok", points: [200, 203] },
     });
     expect(snapshot.portfolioQuotes[0]).toMatchObject({
       lotId: 5,
@@ -138,81 +141,7 @@ describe("hosted market data API", () => {
       totalCost: 360,
       totalPnl: 46,
     });
-  });
-
-  it("rejects zero-filled Yahoo history instead of rendering a valid sparkline", async () => {
-    vi.mocked(getHistory).mockResolvedValueOnce([
-      {
-        date: "2026-07-31",
-        timestamp: 1_754_000_000,
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        volume: 0,
-      },
-      {
-        date: "2026-07-31",
-        timestamp: 1_754_000_300,
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        volume: 0,
-      },
-    ]);
-
-    const snapshot = await buildHostedMarketQuoteSnapshot({
-      watchlists: [{ id: 1, name: "Default", isDefault: true }],
-      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
-    });
-
-    expect(snapshot.watchlistQuotes[0]?.sparkline).toMatchObject({
-      status: "unavailable",
-      reason: "Not enough intraday history",
-    });
-  });
-
-  it("rejects a sparse sparkline response instead of silently dropping provider bars", async () => {
-    vi.mocked(getHistory).mockResolvedValueOnce([
-      {
-        date: "2026-07-31",
-        timestamp: 1_754_000_000,
-        open: 198,
-        high: 202,
-        low: 197,
-        close: 200,
-        volume: 1_000,
-      },
-      {
-        date: "2026-07-31",
-        timestamp: 1_754_000_300,
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        volume: 0,
-      },
-      {
-        date: "2026-07-31",
-        timestamp: 1_754_000_600,
-        open: 200,
-        high: 204,
-        low: 199,
-        close: 203,
-        volume: 1_200,
-      },
-    ]);
-
-    const snapshot = await buildHostedMarketQuoteSnapshot({
-      watchlists: [{ id: 1, name: "Default", isDefault: true }],
-      watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
-    });
-
-    expect(snapshot.watchlistQuotes[0]?.sparkline).toMatchObject({
-      status: "unavailable",
-      reason: "Historical data contains invalid bars",
-    });
+    expect(getHistory).not.toHaveBeenCalled();
   });
 
   it("rejects zero-filled and malformed history instead of returning an OK chart", async () => {
@@ -321,6 +250,7 @@ describe("hosted market data API", () => {
           portfolioId: 2,
           instrumentId: 4,
           symbol: "SHOP.TO",
+          assetType: "equity",
           quantity: 2,
           avgCost: 100,
           currency: "USD",
@@ -379,6 +309,7 @@ describe("hosted market data API", () => {
           portfolioId: 2,
           instrumentId: 4,
           symbol: "AAPL",
+          assetType: "equity",
           quantity: 2,
           avgCost: 180,
           currency: "USD",
@@ -436,6 +367,7 @@ describe("hosted market data API", () => {
           portfolioId: 2,
           instrumentId: 4,
           symbol: "AAPL",
+          assetType: "equity",
           quantity: 1,
           avgCost: 100,
           currency: "USD",
@@ -446,6 +378,7 @@ describe("hosted market data API", () => {
           portfolioId: 2,
           instrumentId: 7,
           symbol: "MSFT",
+          assetType: "equity",
           quantity: 3,
           avgCost: 300,
           currency: "USD",
@@ -484,13 +417,14 @@ describe("hosted market data API", () => {
     const snapshot = buildHostedUnavailableMarketQuoteSnapshot(
       {
         portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "CAD" }],
-        watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL" }],
+        watchlist: [{ id: 3, instrumentId: 4, symbol: "AAPL", assetType: "equity" }],
         portfolio: [
           {
             id: 5,
             portfolioId: 2,
             instrumentId: 4,
             symbol: "AAPL",
+            assetType: "equity",
             quantity: 2,
             avgCost: 180,
             currency: "CAD",

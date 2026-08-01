@@ -2,7 +2,7 @@ import {
   buildMarketIndicesSnapshot as buildSharedMarketIndicesSnapshot,
   type MarketIndicesSnapshot,
 } from "../shared/market-quote-snapshot.js";
-import { fetchQuoteSnapshot, fetchSparklineSnapshot } from "./market-state-api.js";
+import { fetchQuoteSnapshot } from "./market-state-api.js";
 
 export {
   MARKET_INDEX_SYMBOLS,
@@ -13,6 +13,5 @@ export type MarketIndexSnapshotEntry = MarketIndicesSnapshot["indices"][number];
 export async function buildMarketIndicesSnapshot(): Promise<MarketIndicesSnapshot> {
   return buildSharedMarketIndicesSnapshot({
     fetchQuote: fetchQuoteSnapshot,
-    fetchSparkline: fetchSparklineSnapshot,
   });
 }
