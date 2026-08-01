@@ -2,13 +2,15 @@
 // Kept separate from check-public-doc-links.mjs (which owns fs walking and process exit)
 // so the transient-vs-broken decision can be unit-tested without hitting the network.
 
-export const ACCEPTED_STATUSES = new Set([401, 403, 429]);
+// Auth, method, and rate-limit responses prove that the documented endpoint exists even
+// when a generic link checker cannot make the request the endpoint expects.
+export const ACCEPTED_STATUSES = new Set([401, 403, 405, 429]);
 
 export function isAcceptedStatus(status) {
   return (status >= 200 && status < 400) || ACCEPTED_STATUSES.has(status);
 }
 
-// A completed HTTP response is definitive: 2xx/3xx (or an accepted auth/rate-limit status)
+// A completed HTTP response is definitive: 2xx/3xx (or an accepted auth/method/rate-limit status)
 // means the link resolves; any other status means it is genuinely broken. A thrown error
 // (DNS, TCP, TLS, timeout/abort) means the host was unreachable from here — unverifiable,
 // not proof the link is broken.

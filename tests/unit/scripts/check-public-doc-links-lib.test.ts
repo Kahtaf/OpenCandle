@@ -25,9 +25,10 @@ describe("classifyLinkOutcome", () => {
 });
 
 describe("isAcceptedStatus", () => {
-  it("accepts the auth/rate-limit statuses that gate bot-detected hosts", () => {
+  it("accepts statuses that prove a protected or method-specific endpoint exists", () => {
     expect(isAcceptedStatus(401)).toBe(true);
     expect(isAcceptedStatus(403)).toBe(true);
+    expect(isAcceptedStatus(405)).toBe(true);
     expect(isAcceptedStatus(429)).toBe(true);
     expect(isAcceptedStatus(404)).toBe(false);
   });
@@ -50,6 +51,13 @@ describe("checkUrlWithRetry", () => {
     const result = await checkUrlWithRetry({ url: "https://x.test", fetchImpl });
     expect(result.outcome).toBe("ok");
     expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://x.test", "GET");
+  });
+
+  it("accepts a POST-only endpoint when both HEAD and GET return 405", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ status: 405 });
+    const result = await checkUrlWithRetry({ url: "https://x.test/post-only", fetchImpl });
+    expect(result).toEqual({ outcome: "ok", detail: "HTTP 405", status: 405 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("returns broken on a definitive 404 without retrying", async () => {
