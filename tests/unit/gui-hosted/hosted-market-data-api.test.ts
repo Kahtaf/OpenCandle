@@ -159,6 +159,31 @@ describe("hosted market data API", () => {
       includedInTotals: false,
       reason: "No FX conversion from CAD to USD",
     });
+    expect(snapshot.portfolioSummary).toMatchObject({
+      portfolioId: 2,
+      baseCurrency: "USD",
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 200,
+      totalPnl: null,
+      totalPnlPercent: null,
+    });
+  });
+
+  it("keeps truly empty portfolio totals at zero", async () => {
+    const snapshot = await buildHostedMarketQuoteSnapshot({
+      portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],
+      portfolio: [],
+    });
+
+    expect(snapshot.portfolioSummary).toMatchObject({
+      portfolioId: 2,
+      status: "empty",
+      totalValue: 0,
+      totalCost: 0,
+      totalPnl: 0,
+      totalPnlPercent: 0,
+    });
   });
 
   it("preserves saved watchlist and portfolio rows when the relay is unavailable", () => {

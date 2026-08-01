@@ -1,6 +1,7 @@
 const CHANNEL_NAME = "opencandle-hosted-coordination-v1";
 const LOCK_NAME = "opencandle-hosted-writer-v1";
 const EPOCH_KEY = "opencandle.hosted.runtime-epoch.v1";
+const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 const MAX_FORWARDED_CHUNK_BYTES = 64 * 1024;
 
@@ -17,6 +18,7 @@ class BrowserRuntimeCoordinator {
     this.lockManager = options.lockManager ?? navigator.locks;
     this.channel = (options.channelFactory ?? ((name) => new BroadcastChannel(name)))(CHANNEL_NAME);
     this.storage = options.storage ?? localStorage;
+    this.sessionStorage = options.sessionStorage ?? globalThis.sessionStorage;
     this.eventTarget = options.eventTarget ?? globalThis;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.tabId = randomId();
@@ -41,14 +43,15 @@ class BrowserRuntimeCoordinator {
       this.notify({ type: "invalidate", reason: "network", epoch: this.epoch });
     this.eventTarget.addEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.addEventListener?.("offline", this.handleNetworkChange);
-    void this.lockManager.request(LOCK_NAME, async () => {
+    this.writerLockPromise = this.lockManager.request(LOCK_NAME, async () => {
       if (this.disposed) return;
       await this.becomeWriter();
       await new Promise((resolve) => {
         this.releaseWriter = resolve;
       });
       await this.stopWriter();
-    }).catch((error) => this.rejectReady(error));
+    });
+    void this.writerLockPromise.catch((error) => this.rejectReady(error));
     this.post({ type: "hello" });
   }
 
@@ -127,8 +130,10 @@ class BrowserRuntimeCoordinator {
     this.pending.clear();
     this.eventTarget.removeEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.removeEventListener?.("offline", this.handleNetworkChange);
+    const heldWriterLock = typeof this.releaseWriter === "function";
     this.releaseWriter?.();
-    await this.stopWriter();
+    if (heldWriterLock) await this.writerLockPromise;
+    else await this.stopWriter();
     this.channel.close();
   }
 
@@ -250,6 +255,7 @@ class BrowserRuntimeCoordinator {
     if (message.type === "session-credential") {
       if (message.target && message.target !== this.tabId) return;
       this.sessionCredential = normalizeSessionCredential(message.credential);
+      if (!this.sessionCredential) this.sessionStorage?.removeItem(CREDENTIAL_KEY);
       return;
     }
     if (message.type === "cancel") {
@@ -280,7 +286,11 @@ class BrowserRuntimeCoordinator {
       const pending = this.pending.get(message.requestId);
       if (!pending?.streamController) return;
       if (message.type === "stream-chunk") {
-        if (isByteArray(message.value)) pending.streamController.enqueue(Uint8Array.from(message.value));
+        if (isByteArray(message.value)) {
+          clearTimeout(pending.timer);
+          pending.timer = null;
+          pending.streamController.enqueue(Uint8Array.from(message.value));
+        }
         return;
       }
       clearTimeout(pending.timer);

@@ -7,6 +7,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import type { SessionInfo } from "@earendil-works/pi-coding-agent";
 // The hosted bundle deliberately imports only the audited SessionManager leaf;
@@ -48,6 +49,21 @@ import type { BrowserModelCredentials } from "./browser-model-runtime.js";
 const MAX_SESSION_FILE_BYTES = 128 * 1_024 * 1_024;
 const SESSION_COMPLETION_RESERVE_BYTES = 8 * 1_024 * 1_024;
 const MAX_SESSION_FILES = 100;
+export const MAX_COMPLETED_CHAT_RESULTS = 256;
+
+type CompletedChatResult = BrowserHostedBootstrap & {
+  events: Array<Record<string, unknown>>;
+};
+
+interface CachedChatResult {
+  fingerprint: string;
+  sessionId: string;
+}
+
+interface InFlightChatResult {
+  fingerprint: string;
+  operation: Promise<CompletedChatResult>;
+}
 
 export interface BrowserHostedGuiRuntimeOptions {
   cwd: string;
@@ -139,10 +155,8 @@ export interface BrowserHostedBootstrap {
 export class BrowserHostedGuiRuntime {
   private currentSessionId: string | undefined;
   private readonly activeSessionRuns = new Set<string>();
-  private readonly completedChatResults = new Map<
-    string,
-    BrowserHostedBootstrap & { events: Array<Record<string, unknown>> }
-  >();
+  private readonly completedChatResults = new Map<string, CachedChatResult>();
+  private readonly inFlightChatResults = new Map<string, InFlightChatResult>();
   private readonly actionResults = new Map<string, Promise<Record<string, unknown>>>();
   private readonly activeEventEmitters = new Map<
     string,
@@ -229,20 +243,56 @@ export class BrowserHostedGuiRuntime {
     actionId: string,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
-  ): Promise<
-    BrowserHostedBootstrap & {
-      events: Array<Record<string, unknown>>;
-    }
-  > {
+  ): Promise<CompletedChatResult> {
     const guardedSessionId = requireSessionId(sessionId);
     const guardedActionId = requireActionId(actionId);
     const actionKey = `${guardedSessionId}:${guardedActionId}`;
+    const fingerprint = fingerprintChatInput(input);
     const completed = this.completedChatResults.get(actionKey);
-    if (completed) return completed;
+    if (completed) {
+      requireMatchingChatInput(completed.fingerprint, fingerprint);
+      return {
+        ...(await this.buildBootstrap(await this.resolveManager(completed.sessionId))),
+        events: [],
+      };
+    }
+    const inFlight = this.inFlightChatResults.get(actionKey);
+    if (inFlight) {
+      requireMatchingChatInput(inFlight.fingerprint, fingerprint);
+      return inFlight.operation;
+    }
     if (this.activeSessionRuns.has(guardedSessionId)) {
       throw new Error("A research run is already active for this session.");
     }
     this.activeSessionRuns.add(guardedSessionId);
+    const operation = this.executeChatRun(
+      guardedSessionId,
+      input,
+      guardedActionId,
+      actionKey,
+      fingerprint,
+      onEvent,
+      signal,
+    );
+    this.inFlightChatResults.set(actionKey, { fingerprint, operation });
+    try {
+      return await operation;
+    } finally {
+      const current = this.inFlightChatResults.get(actionKey);
+      if (current?.operation === operation) this.inFlightChatResults.delete(actionKey);
+      this.activeSessionRuns.delete(guardedSessionId);
+    }
+  }
+
+  private async executeChatRun(
+    guardedSessionId: string,
+    input: ParsedChatRunBody,
+    guardedActionId: string,
+    actionKey: string,
+    fingerprint: string,
+    onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<CompletedChatResult> {
     let session: Awaited<ReturnType<typeof BrowserPiSession.create>> | undefined;
     const runId = guardedActionId;
     let seq = 1;
@@ -304,8 +354,15 @@ export class BrowserHostedGuiRuntime {
         ...(await this.buildBootstrap(await this.resolveManager(guardedSessionId))),
         events: streamedEvents,
       };
-      this.completedChatResults.set(actionKey, completedResult);
-      if (this.completedChatResults.size > 256) {
+      // Keep only the idempotency identity. A bootstrap can include many complete
+      // session files and image blocks, so retaining it for every completed run
+      // would multiply the browser runtime's memory use. Retries rebuild the
+      // canonical current snapshot without paying for another model invocation.
+      this.completedChatResults.set(actionKey, {
+        fingerprint,
+        sessionId: completedResult.sessionId,
+      });
+      if (this.completedChatResults.size > MAX_COMPLETED_CHAT_RESULTS) {
         this.completedChatResults.delete(this.completedChatResults.keys().next().value as string);
       }
       return completedResult;
@@ -321,7 +378,6 @@ export class BrowserHostedGuiRuntime {
     } finally {
       session?.dispose();
       this.activeEventEmitters.delete(guardedSessionId);
-      this.activeSessionRuns.delete(guardedSessionId);
     }
   }
 
@@ -588,6 +644,16 @@ function requireActionId(value: string): string {
   const actionId = value.trim();
   if (!/^[A-Za-z0-9_-]{1,200}$/.test(actionId)) throw new Error("Invalid actionId");
   return actionId;
+}
+
+function fingerprintChatInput(input: ParsedChatRunBody): string {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+function requireMatchingChatInput(expected: string, candidate: string): void {
+  if (expected !== candidate) {
+    throw new Error("The actionId was already used with different input.");
+  }
 }
 
 function toDisplaySession(session: SessionInfo): BrowserHostedBootstrap["sessions"][number] {

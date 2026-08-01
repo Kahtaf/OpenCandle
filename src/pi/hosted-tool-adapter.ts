@@ -1,3 +1,5 @@
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { type TSchema, Type } from "@sinclair/typebox";
 import { type ProviderId, resolveHostedBrowserCapabilityReport } from "../onboarding/providers.js";
 import { companyOverviewTool } from "../tools/fundamentals/company-overview.js";
 import { compsTool } from "../tools/fundamentals/comps.js";
@@ -35,6 +37,42 @@ const hosted = (
   anyProviders: readonly ProviderId[],
 ): HostedToolPolicy => ({ tool: agentToolToPiTool(tool), anyProviders });
 
+function withParameters<TParams extends TSchema, TDetails, TState>(
+  tool: ToolDefinition<TParams, TDetails, TState>,
+  parameters: TSchema,
+): ReturnType<typeof agentToolToPiTool> {
+  // The hosted schemas only narrow parameters accepted by the canonical tool.
+  return { ...tool, parameters } as unknown as ReturnType<typeof agentToolToPiTool>;
+}
+
+const DAILY_ONLY_STOCK_HISTORY = withParameters(
+  agentToolToPiTool(stockHistoryTool),
+  Type.Composite([
+    Type.Omit(stockHistoryTool.parameters, ["interval"]),
+    Type.Object({
+      interval: Type.Optional(
+        Type.Union([Type.Literal("1d"), Type.Literal("1wk"), Type.Literal("1mo")], {
+          description: "Data interval: 1d, 1wk, or 1mo. Default: 1d",
+        }),
+      ),
+    }),
+  ]),
+);
+
+const HOSTED_SCREEN_STOCKS = withParameters(
+  agentToolToPiTool(screenStocksTool),
+  Type.Composite([
+    Type.Omit(screenStocksTool.parameters, ["market"]),
+    Type.Object({
+      market: Type.Optional(
+        Type.Union([Type.Literal("america"), Type.Literal("global")], {
+          description: "TradingView market: america or global. Default: america",
+        }),
+      ),
+    }),
+  ]),
+);
+
 /**
  * Read-only tools whose dependencies are browser-safe once their HTTP
  * providers are direct or negotiated through the audited relay.
@@ -47,13 +85,13 @@ const HOSTED_TOOLS: readonly HostedToolPolicy[] = [
   hosted(stockQuoteTool, ["alpha_vantage", "yahoo"]),
   hosted(stockHistoryTool, ["alpha_vantage", "lse", "yahoo"]),
   hosted(priceComparisonTool, ["alpha_vantage", "lse", "yahoo"]),
-  hosted(screenStocksTool, ["tradingview"]),
+  { tool: HOSTED_SCREEN_STOCKS, anyProviders: ["tradingview"] },
   hosted(cryptoPriceTool, ["coingecko"]),
   hosted(cryptoHistoryTool, ["coingecko"]),
   hosted(companyOverviewTool, ["alpha_vantage"]),
   hosted(financialsTool, ["alpha_vantage", "lse"]),
   hosted(earningsTool, ["alpha_vantage"]),
-  hosted(dcfTool, ["alpha_vantage", "lse", "yahoo"]),
+  hosted(dcfTool, ["yahoo"]),
   hosted(compsTool, ["alpha_vantage"]),
   hosted(secFilingsTool, ["sec_edgar"]),
   hosted(eventProbabilitiesTool, ["polymarket"]),
@@ -77,7 +115,10 @@ export function getHostedOpenCandleToolDefinitions(
       (provider) => provider.id,
     ),
   );
+  const hasIntradayHistory = available.has("yahoo") || available.has("lse");
   return HOSTED_TOOLS.filter(({ anyProviders }) =>
     anyProviders.some((provider) => available.has(provider)),
-  ).map(({ tool }) => tool);
+  ).map(({ tool }) =>
+    tool.name === "get_stock_history" && !hasIntradayHistory ? DAILY_ONLY_STOCK_HISTORY : tool,
+  );
 }

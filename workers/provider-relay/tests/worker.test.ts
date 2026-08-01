@@ -81,6 +81,45 @@ describe("hosted provider relay", () => {
     expect(upstreamFetch).toHaveBeenCalledOnce();
   });
 
+  it.each(["america", "global"])(
+    "accepts the complete hosted TradingView market contract for %s",
+    async (market) => {
+      const upstreamFetch = vi.fn(async () => new Response("{}"));
+      const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+      const response = await relay.fetch(
+        relayRequest({
+          provider: "tradingview",
+          method: "POST",
+          url: `https://scanner.tradingview.com/${market}/scan2?label-product=screener-stock`,
+          headers: { "content-type": "application/json" },
+          bodyBase64: Buffer.from("{}").toString("base64"),
+        }),
+        environment(),
+      );
+
+      expect(response.status).toBe(200);
+      expect(upstreamFetch).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("rejects TradingView market paths outside the hosted screener contract", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "tradingview",
+        method: "POST",
+        url: "https://scanner.tradingview.com/germany/scan2?label-product=screener-stock",
+        headers: { "content-type": "application/json" },
+        bodyBase64: Buffer.from("{}").toString("base64"),
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["alpha_vantage", "https://www.alphavantage.co/query?function=GLOBAL_QUOTE"],
     ["coingecko", "https://api.coingecko.com/api/v3/coins/bitcoin"],

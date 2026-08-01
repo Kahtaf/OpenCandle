@@ -6,6 +6,12 @@ const EMPTY_MODEL_SETUP = {
   providers: [],
   availableModels: [],
 };
+const HTTP_FALLBACK_COMMAND_TYPES = {
+  "/api/model-setup/refresh": "model.setup.refresh",
+  "/api/model-setup/api-key": "model.setup.save_api_key",
+  "/api/model-setup/model": "model.setup.select_model",
+  "/api/provider-setup/api-key": "provider.save_api_key",
+};
 
 export function createHostedRuntimeTransport({ host }) {
   if (!host || typeof host.request !== "function") {
@@ -187,8 +193,9 @@ export function createHostedRuntimeTransport({ host }) {
       };
     },
 
-    async postCommand(_path, body) {
-      await host.handleCommand?.(body);
+    async postCommand(path, body) {
+      const commandType = body?.type || HTTP_FALLBACK_COMMAND_TYPES[path];
+      await host.handleCommand?.(commandType ? { ...body, type: commandType } : body);
       return refresh();
     },
 
@@ -245,6 +252,7 @@ export function createHostedRuntimeTransport({ host }) {
         });
         return sseResponse(Array.isArray(result?.events) ? result.events : []);
       } catch (error) {
+        await refreshCanonicalState(refresh);
         if (error?.name === "AbortError") throw error;
         return Response.json(
           { error: error instanceof Error ? error.message : String(error) },
@@ -304,20 +312,27 @@ function refreshAfterStream(response, refresh) {
   const reader = response.body.getReader();
   const body = new ReadableStream({
     async pull(controller) {
+      let value;
       try {
-        const value = await reader.read();
-        if (!value.done) {
-          controller.enqueue(value.value);
-          return;
-        }
-        controller.close();
-        await refresh();
+        value = await reader.read();
       } catch (error) {
+        await refreshCanonicalState(refresh);
         controller.error(error);
+        return;
       }
+      if (!value.done) {
+        controller.enqueue(value.value);
+        return;
+      }
+      controller.close();
+      await refreshCanonicalState(refresh);
     },
-    cancel(reason) {
-      return reader.cancel(reason);
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        await refreshCanonicalState(refresh);
+      }
     },
   });
   return new Response(body, {
@@ -325,6 +340,14 @@ function refreshAfterStream(response, refresh) {
     statusText: response.statusText,
     headers: response.headers,
   });
+}
+
+async function refreshCanonicalState(refresh) {
+  try {
+    await refresh();
+  } catch {
+    // Keep the original stream failure or cancellation as the caller-visible result.
+  }
 }
 
 function requireSessionId(value) {

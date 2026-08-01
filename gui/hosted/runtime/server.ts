@@ -39,6 +39,10 @@ import {
   isFirstClassModelProvider,
   type FirstClassModelProviderId,
 } from "../../../src/pi/model-provider-metadata.js";
+import {
+  isAuthorizedPrivateRuntimeRequest,
+  PRIVATE_RUNTIME_TOKEN_HEADER,
+} from "./runtime-request-auth.js";
 
 const RUNTIME_VERSION = "opencandle-hosted-web-v1";
 // Four 5 MiB image attachments expand to roughly 27 MiB as base64 JSON. Keep
@@ -351,14 +355,25 @@ async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
 
 const server = createServer(async (request, response) => {
   const requestOrigin = request.headers.origin;
-  if (requestOrigin && requestOrigin !== trustedHostOrigin) {
-    sendJson(response, 403, { error: "Origin is not authorized" });
+  const requestRuntimeToken = request.headers[PRIVATE_RUNTIME_TOKEN_HEADER];
+  if (
+    !isAuthorizedPrivateRuntimeRequest(
+      {
+        ...(requestOrigin !== undefined ? { origin: requestOrigin } : {}),
+        ...(typeof requestRuntimeToken === "string"
+          ? { runtimeToken: requestRuntimeToken }
+          : {}),
+      },
+      { trustedOrigin: trustedHostOrigin, runtimeToken: runtimeEpoch },
+    )
+  ) {
+    sendJson(response, 403, { error: "Request is not authorized" });
     return;
   }
   if (request.method === "OPTIONS") {
     response.writeHead(204, {
       ...isolationHeaders("text/plain; charset=utf-8"),
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": `Content-Type, ${PRIVATE_RUNTIME_TOKEN_HEADER}`,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Max-Age": "600",
     });

@@ -169,6 +169,15 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
 
       if (args.action === "remove") {
         if (args.lot_id != null) {
+          const selectedLot = service
+            .listPortfolioLots(portfolio.id)
+            .find((lot) => lot.id === args.lot_id);
+          if (selectedLot == null) {
+            return {
+              content: [{ type: "text", text: `lot ${args.lot_id} not found in portfolio` }],
+              details: null,
+            };
+          }
           const removed = service.removePortfolioLot(args.lot_id);
           if (removed == null) {
             return {

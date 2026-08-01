@@ -24,20 +24,14 @@ class BrowserDataStore {
 
   async readRuntimeSnapshot() {
     return this.enqueue(async () => {
-      let archive;
-      try {
-        archive = await this.readArchive();
-      } catch (error) {
-        if (!(await this.restoreBackupFile())) throw error;
-        archive = await this.readArchive();
-      }
+      const archive = await this.readArchiveWithBackupRecovery();
       if (!archive) return { sessions: [], stateBytes: undefined, currentSessionId: "" };
       return decodeHostedArchive(archive);
     });
   }
 
   async readOfflineBootstrap() {
-    return this.enqueue(async () => (await this.readArchive())?.bootstrap ?? null);
+    return this.enqueue(async () => (await this.readArchiveWithBackupRecovery())?.bootstrap ?? null);
   }
 
   async persistCheckpoint(value) {
@@ -161,6 +155,15 @@ class BrowserDataStore {
     } catch (error) {
       if (isNotFound(error)) return null;
       throw error;
+    }
+  }
+
+  async readArchiveWithBackupRecovery() {
+    try {
+      return await this.readArchive();
+    } catch (error) {
+      if (!(await this.restoreBackupFile())) throw error;
+      return this.readArchive();
     }
   }
 

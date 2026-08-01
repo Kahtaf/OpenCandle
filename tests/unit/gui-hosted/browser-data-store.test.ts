@@ -94,6 +94,30 @@ describe("hosted browser archive", () => {
     expect(files.get("checkpoint-v1.json")).toBe(JSON.stringify(archive));
   });
 
+  it("restores offline bootstrap from backup when the current checkpoint is corrupt", async () => {
+    const bootstrap = {
+      role: "writer",
+      sessionId: "session-1",
+      sessions: [{ id: "session-1", name: "Recovered research" }],
+      snapshot: { entries: [], events: [], state: {} },
+    };
+    const archive = createHostedArchive({
+      sessions: [session],
+      currentSessionId: "session-1",
+      bootstrap,
+    });
+    const files = new Map([
+      ["checkpoint-v1.json", "not json"],
+      ["checkpoint-backup-v1.json", JSON.stringify(archive)],
+    ]);
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+    });
+
+    await expect(store.readOfflineBootstrap()).resolves.toMatchObject(bootstrap);
+    expect(files.get("checkpoint-v1.json")).toBe(JSON.stringify(archive));
+  });
+
   it("serializes archive reads and writes across concurrent GUI checkpoints", async () => {
     let content = JSON.stringify(
       createHostedArchive({

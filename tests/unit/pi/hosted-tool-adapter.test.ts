@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, it } from "vitest";
 import { getHostedOpenCandleToolDefinitions } from "../../../src/pi/hosted-tool-adapter.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
@@ -13,10 +14,44 @@ describe("hosted tool adapter", () => {
       "get_company_overview",
       "get_financials",
       "get_earnings",
-      "compute_dcf",
       "compare_companies",
       "get_event_probabilities",
     ]);
+  });
+
+  it("advertises only daily stock history until an intraday-capable relay is available", () => {
+    const directHistory = getHostedOpenCandleToolDefinitions().find(
+      (tool) => tool.name === "get_stock_history",
+    );
+    const relayedHistory = getHostedOpenCandleToolDefinitions({ relayProviders: ["yahoo"] }).find(
+      (tool) => tool.name === "get_stock_history",
+    );
+
+    expect(directHistory).toBeDefined();
+    expect(Value.Check(directHistory?.parameters, { symbol: "AAPL", interval: "1d" })).toBe(true);
+    expect(Value.Check(directHistory?.parameters, { symbol: "AAPL", interval: "1m" })).toBe(false);
+    expect(Value.Check(relayedHistory?.parameters, { symbol: "AAPL", interval: "1m" })).toBe(true);
+  });
+
+  it("does not advertise DCF until its required Yahoo quote path is available", () => {
+    const directNames = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
+    const yahooNames = getHostedOpenCandleToolDefinitions({ relayProviders: ["yahoo"] }).map(
+      (tool) => tool.name,
+    );
+
+    expect(directNames).not.toContain("compute_dcf");
+    expect(yahooNames).toContain("compute_dcf");
+  });
+
+  it("restricts hosted stock screening to the TradingView markets accepted by the relay", () => {
+    const screener = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["tradingview"],
+    }).find((tool) => tool.name === "screen_stocks");
+
+    expect(screener).toBeDefined();
+    expect(Value.Check(screener?.parameters, { market: "america" })).toBe(true);
+    expect(Value.Check(screener?.parameters, { market: "global" })).toBe(true);
+    expect(Value.Check(screener?.parameters, { market: "germany" })).toBe(false);
   });
 
   it("registers HTTP-backed tools only when their relay providers are negotiated", () => {
@@ -55,11 +90,16 @@ describe("hosted tool adapter", () => {
   });
 
   it("does not change the native local tool composition", () => {
-    const localNames = getOpenCandleToolDefinitions().map((tool) => tool.name);
+    const localTools = getOpenCandleToolDefinitions();
+    const localNames = localTools.map((tool) => tool.name);
+    const localHistory = localTools.find((tool) => tool.name === "get_stock_history");
+    const localScreener = localTools.find((tool) => tool.name === "screen_stocks");
 
     expect(localNames).toContain("get_event_probabilities");
     expect(localNames).toContain("get_stock_quote");
     expect(localNames).toContain("get_reddit_sentiment");
     expect(localNames.length).toBeGreaterThan(20);
+    expect(Value.Check(localHistory?.parameters, { symbol: "AAPL", interval: "1m" })).toBe(true);
+    expect(Value.Check(localScreener?.parameters, { market: "germany" })).toBe(true);
   });
 });

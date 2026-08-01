@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   BrowserHostedGuiRuntime,
+  MAX_COMPLETED_CHAT_RESULTS,
   selectSessionCheckpoints,
 } from "../../../gui/hosted/runtime/browser-hosted-gui-runtime.js";
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
@@ -39,8 +40,79 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     const first = await runtime.chatRun("session-1", chatInput("First"), "run-1");
     const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1");
 
-    expect(retry).toBe(first);
+    expect(retry).toEqual({ ...first, events: [] });
     expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps only a lightweight idempotency marker for completed chat runs", async () => {
+    const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    await runtime.chatRun("session-1", chatInput("First"), "run-1");
+
+    expect((runtime as any).completedChatResults.get("session-1:run-1")).toEqual({
+      fingerprint: expect.any(String),
+      sessionId: "session-1",
+    });
+  });
+
+  it("joins identical retries while their logical run is still in flight", async () => {
+    let finishPrompt!: () => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<{ sessionId: string }>((resolve) => {
+          finishPrompt = () => resolve({ sessionId: "session-1" });
+        }),
+    );
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    const first = runtime.chatRun("session-1", chatInput("First"), "run-1");
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    const retry = runtime.chatRun("session-1", chatInput("First"), "run-1");
+
+    finishPrompt();
+    const [firstResult, retryResult] = await Promise.all([first, retry]);
+    expect(retryResult).toBe(firstResult);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects reuse of an in-flight action id for different input", async () => {
+    let finishPrompt!: () => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<{ sessionId: string }>((resolve) => {
+          finishPrompt = () => resolve({ sessionId: "session-1" });
+        }),
+    );
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    const first = runtime.chatRun("session-1", chatInput("First"), "run-1");
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    await expect(runtime.chatRun("session-1", chatInput("Changed"), "run-1")).rejects.toThrow(
+      "different input",
+    );
+    finishPrompt();
+    await first;
+  });
+
+  it("bounds completed chat results", async () => {
+    const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
+    const runtime = createRuntime({
+      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+    });
+
+    for (let index = 0; index <= MAX_COMPLETED_CHAT_RESULTS; index += 1) {
+      await runtime.chatRun("session-1", chatInput(`Run ${index}`), `run-${index}`);
+    }
+
+    expect((runtime as any).completedChatResults.size).toBe(MAX_COMPLETED_CHAT_RESULTS);
+    expect((runtime as any).completedChatResults.has("session-1:run-0")).toBe(false);
   });
 
   it("deduplicates a retried logical market-state action", async () => {

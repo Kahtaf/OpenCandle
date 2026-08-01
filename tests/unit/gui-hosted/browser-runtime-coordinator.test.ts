@@ -49,6 +49,7 @@ function createStorage() {
   return {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
   };
 }
 
@@ -169,6 +170,50 @@ describe("browser runtime coordinator", () => {
     await follower.dispose();
   });
 
+  it("purges a follower's stale session credential when the writer reports it cleared", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const followerSessionStorage = createStorage();
+    followerSessionStorage.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: {
+          openai: { apiKey: "stale-session-key", storageMode: "session" },
+        },
+      }),
+    );
+    const createHost = () => ({
+      request: vi.fn(),
+      handleCommand: vi.fn(),
+      getSessionCredential: () => null,
+      dispose: vi.fn(),
+    });
+    const sharedOptions = {
+      createHost,
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+    };
+    const writer = createBrowserRuntimeCoordinator({
+      ...sharedOptions,
+      sessionStorage: createStorage(),
+    });
+    await writer.ready();
+    const follower = createBrowserRuntimeCoordinator({
+      ...sharedOptions,
+      sessionStorage: followerSessionStorage,
+    });
+    await follower.ready();
+    await settle();
+
+    expect(follower.getRole()).toBe("follower");
+    expect(followerSessionStorage.getItem("opencandle.hosted.credentials.v1")).toBeNull();
+
+    await Promise.all([writer.dispose(), follower.dispose()]);
+  });
+
   it("rejects an in-flight follower action immediately when the writer epoch changes", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
@@ -229,6 +274,53 @@ describe("browser runtime coordinator", () => {
     expect(settled).toBe(false);
     finishHostDispose();
     await disposal;
+  });
+
+  it("holds the writer lock until asynchronous host teardown completes", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let finishFirstHostDispose!: () => void;
+    const firstHostDisposed = new Promise<void>((resolve) => {
+      finishFirstHostDispose = resolve;
+    });
+    const createHost = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        request: vi.fn(),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(() => firstHostDisposed),
+      }))
+      .mockImplementation(() => ({
+        request: vi.fn(),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }));
+    const options = {
+      createHost,
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    await first.ready();
+    const second = createBrowserRuntimeCoordinator(options);
+    await second.ready();
+
+    const disposal = first.dispose();
+    await settle();
+
+    expect(createHost).toHaveBeenCalledTimes(1);
+    expect(second.getRole()).toBe("follower");
+
+    finishFirstHostDispose();
+    await disposal;
+    await settle();
+
+    expect(second.getRole()).toBe("writer");
+    expect(createHost).toHaveBeenCalledTimes(2);
+    await second.dispose();
   });
 
   it("invalidates hosted subscribers when browser connectivity changes", async () => {
@@ -334,6 +426,57 @@ describe("browser runtime coordinator", () => {
       'data: {"type":"run.started"}\n\ndata: {"type":"run.completed"}\n\n',
     );
     expect(streamRequest).toHaveBeenCalledTimes(1);
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
+  it("does not apply the stream startup timeout after the first forwarded chunk", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let finishStream!: () => void;
+    const streamRequest = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("first"));
+              finishStream = () => {
+                controller.enqueue(new TextEncoder().encode("second"));
+                controller.close();
+              };
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    );
+    const options = {
+      createHost: () => ({
+        request: vi.fn(),
+        streamRequest,
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 30,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+    const response = await follower.streamRequest("gui", { action: "chat_run" });
+    const reader = response.body!.getReader();
+
+    const firstChunk = await reader.read();
+    expect(new TextDecoder().decode(firstChunk.value)).toBe("first");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    finishStream();
+
+    const secondChunk = await reader.read();
+    expect(new TextDecoder().decode(secondChunk.value)).toBe("second");
+    await expect(reader.read()).resolves.toMatchObject({ done: true });
 
     await Promise.all([first.dispose(), second.dispose()]);
   });

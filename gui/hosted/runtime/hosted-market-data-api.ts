@@ -285,6 +285,15 @@ export async function buildHostedMarketQuoteSnapshot(state: HostedMarketState) {
     const included = quotes.filter((quote) => quote.status === "ok" && quote.includedInTotals);
     const totalValue = included.reduce((sum, quote) => sum + (quote.marketValue ?? 0), 0);
     const totalCost = included.reduce((sum, quote) => sum + quote.totalCost, 0);
+    const knownBaseCurrencyCost = quotes
+      .filter((quote) => quote.currency === baseCurrency)
+      .reduce((sum, quote) => sum + quote.totalCost, 0);
+    const summaryStatus =
+      portfolioLots.length === 0
+        ? ("empty" as const)
+        : included.length === 0
+          ? ("unavailable" as const)
+          : ("ok" as const);
     const allocatedQuotes = quotes.map((quote) =>
       quote.status === "ok" && quote.includedInTotals && totalValue > 0
         ? { ...quote, allocationPercent: ((quote.marketValue ?? 0) / totalValue) * 100 }
@@ -295,10 +304,16 @@ export async function buildHostedMarketQuoteSnapshot(state: HostedMarketState) {
       summary: {
         portfolioId: portfolio.id,
         baseCurrency,
-        totalValue,
-        totalCost,
-        totalPnl: totalValue - totalCost,
-        totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+        status: summaryStatus,
+        totalValue: summaryStatus === "unavailable" ? null : totalValue,
+        totalCost: summaryStatus === "unavailable" ? knownBaseCurrencyCost : totalCost,
+        totalPnl: summaryStatus === "unavailable" ? null : totalValue - totalCost,
+        totalPnlPercent:
+          summaryStatus === "unavailable"
+            ? null
+            : totalCost > 0
+              ? ((totalValue - totalCost) / totalCost) * 100
+              : 0,
         excludedFromTotals: allocatedQuotes
           .filter((quote) => quote.status !== "ok" || !quote.includedInTotals)
           .map((quote) => ({
@@ -317,6 +332,7 @@ export async function buildHostedMarketQuoteSnapshot(state: HostedMarketState) {
   const emptySummary = {
     portfolioId: defaultPortfolio?.id ?? 0,
     baseCurrency: defaultPortfolio?.baseCurrency ?? "USD",
+    status: "empty" as const,
     totalValue: 0,
     totalCost: 0,
     totalPnl: 0,

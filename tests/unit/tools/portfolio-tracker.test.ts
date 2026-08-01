@@ -643,6 +643,33 @@ describe("portfolioTrackerTool", () => {
     expect((view.details as { positions: unknown[] }).positions).toHaveLength(1);
     expect(secondLotId).not.toBe(firstLotId);
   });
+
+  it("does not remove a lot from a different named portfolio", async () => {
+    const retirementLot = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Retirement",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const retirementLotId = (retirementLot.details as { id: number }).id;
+
+    const removeFromDefault = await portfolioTrackerTool.execute("test", {
+      action: "remove",
+      lot_id: retirementLotId,
+    });
+
+    expect(removeFromDefault.content[0].text).toBe(`lot ${retirementLotId} not found in portfolio`);
+    expect(removeFromDefault.details).toBeNull();
+
+    const retirement = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Retirement",
+    });
+    expect(retirement.details?.positions).toEqual([
+      expect.objectContaining({ lotId: retirementLotId, symbol: "VTI" }),
+    ]);
+  });
 });
 
 function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {

@@ -125,6 +125,79 @@ describe("hosted runtime transport", () => {
     expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
   });
 
+  it("refreshes canonical state when a hosted stream fails while being consumed", async () => {
+    const host = createHost();
+    host.streamRequest = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error("stream failed"));
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    );
+    const transport = createHostedRuntimeTransport({ host });
+
+    const response = await transport.startChatRun(
+      "session-1",
+      { prompt: "What changed?", actionId: "chat-stream-failed" },
+      new AbortController().signal,
+    );
+
+    await expect(response.text()).rejects.toThrow("stream failed");
+    expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
+  });
+
+  it("refreshes canonical state when a hosted stream fails before returning a response", async () => {
+    const host = createHost();
+    host.streamRequest = vi.fn(async () => {
+      throw new Error("stream did not start");
+    });
+    const transport = createHostedRuntimeTransport({ host });
+
+    const response = await transport.startChatRun(
+      "session-1",
+      { prompt: "What changed?", actionId: "chat-stream-start-failed" },
+      new AbortController().signal,
+    );
+
+    expect(response.status).toBe(500);
+    expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
+  });
+
+  it("refreshes canonical state when a hosted stream is cancelled", async () => {
+    const host = createHost();
+    const cancelStream = vi.fn();
+    host.streamRequest = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: {"type":"run.started"}\n\n'));
+            },
+            cancel: cancelStream,
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    );
+    const transport = createHostedRuntimeTransport({ host });
+
+    const response = await transport.startChatRun(
+      "session-1",
+      { prompt: "What changed?", actionId: "chat-stream-cancelled" },
+      new AbortController().signal,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    host.request.mockClear();
+
+    await response.body!.cancel("user cancelled");
+
+    expect(cancelStream).toHaveBeenCalledWith("user cancelled");
+    expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
+  });
+
   it("emulates the GUI event channel and refreshes snapshots after a run", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });
@@ -225,6 +298,24 @@ describe("hosted runtime transport", () => {
       ),
     );
     channel?.close();
+  });
+
+  it("restores the GUI command type when an HTTP fallback route carries only its body", async () => {
+    const host = createHost();
+    const transport = createHostedRuntimeTransport({ host });
+
+    await transport.postCommand("/api/model-setup/api-key", {
+      provider: "openai",
+      apiKey: "secret",
+      storageMode: "session",
+    });
+
+    expect(host.handleCommand).toHaveBeenCalledWith({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      apiKey: "secret",
+      storageMode: "session",
+    });
   });
 
   it("settles socket-shaped tool invocations through the hosted tool boundary", async () => {
