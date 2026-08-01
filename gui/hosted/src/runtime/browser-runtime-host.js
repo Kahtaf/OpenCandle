@@ -275,10 +275,19 @@ class BrowserRuntimeHost {
 
   async request(operation, payload = {}, options = {}) {
     if (!navigator.onLine) {
-      if (operation === "gui" && payload?.action === "bootstrap") {
+      if (
+        operation === "gui" &&
+        (payload?.action === "bootstrap" || payload?.action === "market_state")
+      ) {
         const bootstrap = await this.dataStore.readOfflineBootstrap();
         if (!bootstrap) {
           throw new Error("OpenCandle is offline and no saved session is available yet.");
+        }
+        if (payload.action === "market_state") {
+          if (!bootstrap.marketState || typeof bootstrap.marketState !== "object") {
+            throw new Error("OpenCandle is offline and no saved market state is available yet.");
+          }
+          return structuredClone(bootstrap.marketState);
         }
         return {
           ...bootstrap,

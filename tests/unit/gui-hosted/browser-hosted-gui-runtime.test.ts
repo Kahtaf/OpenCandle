@@ -287,6 +287,53 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     expect(persistCheckpoint).toHaveBeenCalledTimes(2);
   });
 
+  it("checkpoints market-state mutations made during a chat run", async () => {
+    const database = await createSqlJsStateDatabase();
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-market-checkpoint-"));
+    writeFileSync(
+      join(sessionDir, "session-1.jsonl"),
+      `${JSON.stringify({ type: "session", id: "session-1" })}\n`,
+    );
+    let finishPrompt!: () => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<{ sessionId: string }>((resolve) => {
+          finishPrompt = () => resolve({ sessionId: "session-1" });
+        }),
+    );
+    const persistCheckpoint = vi.fn(async () => undefined);
+    const runtime = createRuntime(
+      {
+        sessionDir,
+        createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+      },
+      database,
+    );
+
+    const run = runtime.chatRun(
+      "session-1",
+      chatInput("Add AAPL to my watchlist"),
+      "run-market-state",
+      undefined,
+      undefined,
+      persistCheckpoint,
+    );
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    await runtime.invokeTool("session-1", "tool-market-state", "manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    });
+    finishPrompt();
+    await run;
+
+    expect(persistCheckpoint.mock.calls.at(-1)?.[0]).toMatchObject({
+      marketState: {
+        watchlist: [expect.objectContaining({ symbol: "AAPL" })],
+      },
+    });
+    database.close();
+  });
+
   it("accepts a failed paid turn when Pi already persisted the user message", async () => {
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-provider-failure-"));
     const sessionFile = join(sessionDir, "session-1.jsonl");
@@ -746,6 +793,23 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     database.close();
   });
 
+  it("includes durable market state in persisted bootstraps", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+
+    await runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    });
+
+    await expect(runtime.bootstrap()).resolves.toMatchObject({
+      marketState: {
+        watchlist: [expect.objectContaining({ symbol: "AAPL" })],
+      },
+    });
+    database.close();
+  });
+
   it("validates direct tool arguments against the canonical tool schema", async () => {
     const database = await createSqlJsStateDatabase();
     const runtime = createRuntime({}, database);
@@ -1162,6 +1226,14 @@ function createRuntime(
     },
     database,
   );
+  if (typeof database.prepare !== "function") {
+    runtime.marketState = vi.fn(() => ({
+      watchlists: [],
+      watchlist: [],
+      portfolios: [],
+      portfolio: [],
+    }));
+  }
   runtime.resolveManager = vi.fn(async () => ({
     getSessionId: () => "session-1",
     getSessionFile: () => join(sessionDir, "session-1.jsonl"),
@@ -1177,6 +1249,7 @@ function createRuntime(
     catalog: { tools: [], workflows: [], providers: [] },
     askUserPrompts: [],
     snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+    marketState: runtime.marketState(),
     checkpoint: {
       sessions: [],
       state: { format: "sqlite3", filename: "current.sqlite3", contentBase64: "" },

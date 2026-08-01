@@ -102,6 +102,33 @@ describe("browser runtime host", () => {
     expect(restoreBackup).toHaveBeenCalledOnce();
   });
 
+  it("serves persisted market state while offline", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: false });
+    const marketState = {
+      watchlists: [{ id: 1, name: "Watchlist" }],
+      watchlist: [{ id: 2, symbol: "AAPL" }],
+      portfolios: [],
+      portfolio: [],
+    };
+    const readOfflineBootstrap = vi.fn(async () => ({
+      role: "writer",
+      sessionId: "session-1",
+      sessions: [],
+      snapshot: { entries: [], events: [], state: {} },
+      marketState,
+    }));
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { readOfflineBootstrap },
+    });
+
+    await expect(host.request("gui", { action: "market_state" })).resolves.toEqual(marketState);
+    expect(readOfflineBootstrap).toHaveBeenCalledOnce();
+  });
+
   it("advances the recovery backup only after the imported runtime boots successfully", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());

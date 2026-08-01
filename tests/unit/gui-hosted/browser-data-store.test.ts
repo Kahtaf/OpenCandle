@@ -97,6 +97,40 @@ describe("hosted browser archive", () => {
     await expect(store.readRuntimeSnapshot()).resolves.toMatchObject({ stateBytes: sqlite });
   });
 
+  it("refreshes the offline market snapshot on checkpoint-only writes", async () => {
+    const files = new Map<string, string>();
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+      validateStateDatabase: async () => {},
+    });
+    const checkpoint = {
+      sessions: [session],
+      state: {
+        format: "sqlite3",
+        filename: "current.sqlite3",
+        contentBase64: btoa(String.fromCharCode(...sqlite)),
+      },
+    };
+    await store.persistCheckpoint({
+      role: "writer",
+      sessionId: "session-1",
+      sessions: [{ id: "session-1" }],
+      snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+      marketState: { watchlist: [{ symbol: "AAPL" }] },
+      checkpoint,
+    });
+
+    await store.persistCheckpoint({
+      sessionId: "session-1",
+      marketState: { watchlist: [{ symbol: "MSFT" }] },
+      checkpoint: { sessions: [session] },
+    });
+
+    await expect(store.readOfflineBootstrap()).resolves.toMatchObject({
+      marketState: { watchlist: [{ symbol: "MSFT" }] },
+    });
+  });
+
   it("rejects malformed explicit state instead of acknowledging the previous SQLite snapshot", async () => {
     const files = new Map<string, string>();
     const store = createBrowserDataStore({
@@ -231,6 +265,10 @@ describe("hosted browser archive", () => {
       sessionId: "session-1",
       sessions: [{ id: "session-1", name: "Recovered research" }],
       snapshot: { entries: [], events: [], state: {} },
+      marketState: {
+        watchlists: [{ id: 1, name: "Watchlist" }],
+        watchlist: [{ id: 2, symbol: "AAPL" }],
+      },
     };
     const archive = createHostedArchive({
       sessions: [session],

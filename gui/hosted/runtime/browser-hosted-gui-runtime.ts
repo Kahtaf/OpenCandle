@@ -192,11 +192,17 @@ export interface BrowserHostedBootstrap {
     events: ReturnType<typeof sessionEntriesToChatEvents>;
     state: ReturnType<typeof projectDashboard>;
   };
+  marketState: Record<string, unknown>;
   checkpoint: {
     sessions: HostedSessionCheckpoint[];
     state: HostedStateCheckpoint;
   };
 }
+
+type BrowserHostedCheckpointPersistence = Pick<
+  BrowserHostedBootstrap,
+  "sessionId" | "checkpoint" | "marketState"
+>;
 
 export class BrowserHostedGuiRuntime {
   private currentSessionId: string | undefined;
@@ -327,9 +333,7 @@ export class BrowserHostedGuiRuntime {
     actionId: string,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
-    persistCheckpoint?: (
-      value: Pick<BrowserHostedBootstrap, "sessionId" | "checkpoint">,
-    ) => Promise<void>,
+    persistCheckpoint?: (value: BrowserHostedCheckpointPersistence) => Promise<void>,
   ): Promise<CompletedChatResult> {
     const guardedSessionId = requireSessionId(sessionId);
     const guardedActionId = requireActionId(actionId);
@@ -402,9 +406,7 @@ export class BrowserHostedGuiRuntime {
     manager: SessionManager,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
-    persistCheckpoint?: (
-      value: Pick<BrowserHostedBootstrap, "sessionId" | "checkpoint">,
-    ) => Promise<void>,
+    persistCheckpoint?: (value: BrowserHostedCheckpointPersistence) => Promise<void>,
   ): Promise<CompletedChatResult> {
     const runId = guardedActionId;
     let seq = 1;
@@ -463,6 +465,7 @@ export class BrowserHostedGuiRuntime {
       recordPendingSessionAction(manager, guardedActionId, fingerprint, { durable: true });
       await persistCheckpoint?.({
         sessionId: guardedSessionId,
+        marketState: this.marketState(),
         checkpoint: this.checkpoint(),
       });
       emit({ type: "run.started" });
@@ -516,6 +519,7 @@ export class BrowserHostedGuiRuntime {
             Promise.resolve().then(() =>
               persistCheckpoint({
                 sessionId: this.currentSessionId ?? guardedSessionId,
+                marketState: this.marketState(),
                 checkpoint: this.checkpoint(),
               }),
             ),
@@ -591,6 +595,7 @@ export class BrowserHostedGuiRuntime {
           try {
             await persistCheckpoint({
               sessionId: this.currentSessionId ?? guardedSessionId,
+              marketState: this.marketState(),
               checkpoint: this.checkpoint(),
             });
           } catch (checkpointError) {
@@ -966,6 +971,7 @@ export class BrowserHostedGuiRuntime {
         events: sessionEntriesToChatEvents(entries, { sessionId }),
         state: projectDashboard(entries, sessionId, symbols),
       },
+      marketState: this.marketState(),
       checkpoint: this.checkpoint(),
     };
     assertHostedBootstrapPersistable(

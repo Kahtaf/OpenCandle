@@ -83,7 +83,9 @@ class BrowserDataStore {
         stateBytes,
         currentSessionId:
           typeof value.sessionId === "string" ? value.sessionId : previous?.currentSessionId,
-        bootstrap: isBootstrapResponse(value) ? value : previous?.bootstrap,
+        bootstrap: isBootstrapResponse(value)
+          ? value
+          : mergeCheckpointMarketState(previous?.bootstrap, value.marketState),
         now: this.now(),
       });
       await this.writeArchive(archive);
@@ -461,6 +463,7 @@ function sanitizeBootstrap(value) {
       events: safeArray(snapshot.events),
       state: isRecord(snapshot.state) ? structuredClone(snapshot.state) : {},
     },
+    marketState: isRecord(value.marketState) ? structuredClone(value.marketState) : undefined,
     coordination: isRecord(value.coordination) ? value.coordination : {},
     catalog: {
       tools: safeArray(catalog.tools),
@@ -495,6 +498,7 @@ function validateBootstrap(value, currentSessionId, archiveSessionIds) {
     !Array.isArray(value.snapshot.entries) ||
     !Array.isArray(value.snapshot.events) ||
     !isRecord(value.snapshot.state) ||
+    (value.marketState !== undefined && !isRecord(value.marketState)) ||
     !isRecord(value.coordination) ||
     (value.coordination.writable !== undefined &&
       typeof value.coordination.writable !== "boolean") ||
@@ -529,6 +533,11 @@ function containsCredentialField(value) {
 
 function isBootstrapResponse(value) {
   return isRecord(value) && Array.isArray(value.sessions) && isRecord(value.snapshot);
+}
+
+function mergeCheckpointMarketState(bootstrap, marketState) {
+  if (!bootstrap || !isRecord(marketState)) return bootstrap;
+  return { ...bootstrap, marketState: structuredClone(marketState) };
 }
 
 function safeArray(value) {
