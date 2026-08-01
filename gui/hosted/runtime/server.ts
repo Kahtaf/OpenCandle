@@ -276,12 +276,12 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
 
 async function refreshHostedRelayProviders(runtime: BrowserHostedGuiRuntime): Promise<void> {
   const manifest = await loadHostedRelayManifest();
-  if (manifest) runtime.configureRelayProviders(manifest.providers);
+  runtime.configureRelayProviders(manifest?.providers ?? []);
 }
 
 async function hasRelayProvider(provider: string): Promise<boolean> {
   const manifest = await loadHostedRelayManifest();
-  if (manifest) (await hostedGuiRuntimePromise).configureRelayProviders(manifest.providers);
+  (await hostedGuiRuntimePromise).configureRelayProviders(manifest?.providers ?? []);
   return manifest?.providers.includes(provider) === true;
 }
 
@@ -294,7 +294,7 @@ async function requireRelayProvider(provider: string, capability: string): Promi
 
 async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
   const relayManifest = await loadHostedRelayManifest();
-  if (relayManifest) (await hostedGuiRuntimePromise).configureRelayProviders(relayManifest.providers);
+  (await hostedGuiRuntimePromise).configureRelayProviders(relayManifest?.providers ?? []);
   const providers = resolveHostedBrowserCapabilityReport(relayManifest?.providers);
   const relayReady = Boolean(relayManifest);
   return {

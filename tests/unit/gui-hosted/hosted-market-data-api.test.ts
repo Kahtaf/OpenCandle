@@ -308,6 +308,66 @@ describe("hosted market data API", () => {
     });
   });
 
+  it("does not present partial base-currency portfolio totals as complete", async () => {
+    vi.mocked(getQuote).mockImplementation(async (symbol) => {
+      if (symbol === "MSFT") throw new Error("quote unavailable");
+      return {
+        symbol: "AAPL",
+        name: "Apple Inc.",
+        price: 203,
+        change: 3,
+        changePercent: 1.5,
+        open: 198,
+        high: 204,
+        low: 197,
+        previousClose: 200,
+        volume: 2_000,
+        marketCap: 3_000_000,
+        pe: null,
+        week52High: 220,
+        week52Low: 160,
+        timestamp: "2026-07-31T20:00:00.000Z",
+        asOf: "2026-07-31T20:00:00.000Z",
+        currency: "USD",
+      };
+    });
+
+    const snapshot = await buildHostedMarketQuoteSnapshot({
+      portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],
+      portfolio: [
+        {
+          id: 5,
+          portfolioId: 2,
+          instrumentId: 4,
+          symbol: "AAPL",
+          quantity: 1,
+          avgCost: 100,
+          currency: "USD",
+          instrumentCurrency: "USD",
+        },
+        {
+          id: 6,
+          portfolioId: 2,
+          instrumentId: 7,
+          symbol: "MSFT",
+          quantity: 3,
+          avgCost: 300,
+          currency: "USD",
+          instrumentCurrency: "USD",
+        },
+      ],
+    });
+
+    expect(snapshot.portfolioSummary).toMatchObject({
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 1_000,
+      totalPnl: null,
+      totalPnlPercent: null,
+    });
+    expect(snapshot.portfolioQuotes[0]).not.toHaveProperty("allocationPercent");
+  });
+
   it("keeps truly empty portfolio totals at zero", async () => {
     const snapshot = await buildHostedMarketQuoteSnapshot({
       portfolios: [{ id: 2, name: "Default", isDefault: true, baseCurrency: "USD" }],

@@ -211,6 +211,36 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     database.close();
   });
 
+  it("retries only persistence after a mutation flush fails", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+    const flushState = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("storage full");
+      })
+      .mockImplementation(() => undefined);
+    (runtime as any).flushState = flushState;
+
+    await expect(
+      runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+        action: "add",
+        symbol: "AAPL",
+      }),
+    ).rejects.toThrow("storage full");
+    expect(runtime.marketState().watchlist).toHaveLength(1);
+
+    await expect(
+      runtime.invokeTool("session-1", "action-1", "manage_watchlist", {
+        action: "add",
+        symbol: "AAPL",
+      }),
+    ).resolves.toBeTruthy();
+    expect(runtime.marketState().watchlist).toHaveLength(1);
+    expect(flushState).toHaveBeenCalledTimes(2);
+    database.close();
+  });
+
   it("rejects in-flight action id reuse with changed tool arguments", async () => {
     const database = await createSqlJsStateDatabase();
     const runtime = createRuntime({}, database);

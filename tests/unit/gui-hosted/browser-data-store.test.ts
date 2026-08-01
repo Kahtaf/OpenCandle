@@ -3,6 +3,7 @@ import {
   createBrowserDataStore,
   createHostedArchive,
   decodeHostedArchive,
+  decodeStateBase64,
   validateHostedArchive,
 } from "../../../gui/hosted/src/runtime/browser-data-store.js";
 
@@ -278,6 +279,18 @@ describe("hosted browser archive", () => {
     expect(() => validateHostedArchive({ ...archive, stateBase64: "bm90LXNxbGl0ZQ==" })).toThrow(
       "State snapshot",
     );
+  });
+
+  it("rejects oversized encoded state before calling atob", () => {
+    const originalAtob = globalThis.atob;
+    const atob = vi.fn(originalAtob);
+    globalThis.atob = atob;
+    try {
+      expect(() => decodeStateBase64("A".repeat(140), 32)).toThrow("size");
+      expect(atob).not.toHaveBeenCalled();
+    } finally {
+      globalThis.atob = originalAtob;
+    }
   });
 
   it("validates an import before touching browser-owned files", () => {

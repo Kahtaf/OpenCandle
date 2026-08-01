@@ -1,6 +1,7 @@
 const RELAY_CONTRACT_VERSION = 1;
 const MAX_RELAY_ENVELOPE_BYTES = 6 * 1024 * 1024;
 const DEFAULT_RELAY_HEALTH_TIMEOUT_MS = 5_000;
+const DEFAULT_RELAY_MANIFEST_MAX_AGE_MS = 60_000;
 const ABORTED = Symbol("aborted");
 
 type RelayProvider =
@@ -37,17 +38,27 @@ export function createHostedRelayManifestLoader(options: {
   relayUrl: string;
   fetchImpl?: typeof globalThis.fetch;
   timeoutMs?: number;
+  maxAgeMs?: number;
+  now?: () => number;
 }): () => Promise<HostedRelayManifest | undefined> {
   let cached: HostedRelayManifest | undefined;
+  let cachedAt = 0;
   let inFlight: Promise<HostedRelayManifest | undefined> | undefined;
   return async () => {
-    if (cached) return cached;
+    const now = options.now ?? Date.now;
+    const maxAgeMs = options.maxAgeMs ?? DEFAULT_RELAY_MANIFEST_MAX_AGE_MS;
+    if (cached && now() - cachedAt <= maxAgeMs) return cached;
     inFlight ??= fetchHostedRelayManifest(options)
       .then((manifest) => {
         cached = manifest;
+        cachedAt = now();
         return manifest;
       })
-      .catch(() => undefined)
+      .catch(() => {
+        cached = undefined;
+        cachedAt = 0;
+        return undefined;
+      })
       .finally(() => {
         inFlight = undefined;
       });

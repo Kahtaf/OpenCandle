@@ -87,12 +87,14 @@ export async function invokeMarketStateMutation({
       throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
     }
     const response = await invokeToolRequest(toolName, args, "", { recordTranscript: false });
-    const responseDetails = response?.details?.value ?? response?.details;
+    const acknowledged = response?.result ?? response;
+    const payload = acknowledged?.result?.content ? acknowledged.result : acknowledged;
+    const responseDetails = payload?.details?.value ?? payload?.details;
     if (
       responseDetails?.status === "needs_selection" ||
       responseDetails?.status === "needs_currency"
     ) {
-      const message = response?.content?.find?.((item) => item?.type === "text")?.text;
+      const message = payload?.content?.find?.((item) => item?.type === "text")?.text;
       setToast?.(message || "More information is required before this can be saved.", {
         destructive: true,
       });

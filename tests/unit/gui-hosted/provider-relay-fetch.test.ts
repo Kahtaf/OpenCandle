@@ -135,6 +135,29 @@ describe("hosted provider relay fetch", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("revalidates an expired manifest and fails closed when refresh fails", async () => {
+    let now = 0;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: 1, providers: ["yahoo"] })))
+      .mockRejectedValueOnce(new Error("relay withdrawn"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: 1, providers: ["fred"] })));
+    const load = createHostedRelayManifestLoader({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      fetchImpl,
+      maxAgeMs: 1_000,
+      now: () => now,
+    });
+
+    await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
+    now = 500;
+    await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
+    now = 1_001;
+    await expect(load()).resolves.toBeUndefined();
+    await expect(load()).resolves.toEqual({ version: 1, providers: ["fred"] });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
   it("bounds relay negotiation while the manifest body is still streaming", async () => {
     vi.useFakeTimers();
     let cancelled = false;

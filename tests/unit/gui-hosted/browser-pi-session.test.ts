@@ -98,6 +98,45 @@ describe("BrowserPiSession terminal outcomes", () => {
       expect(error).toMatchObject({ name: "AbortError", message: "Provider stream was cancelled" });
     }
   });
+
+  it("checkpoints market state when the terminal assistant result fails", async () => {
+    const root = mkdtempSync(join(tmpdir(), "opencandle-browser-pi-failure-"));
+    const stateFile = join(root, "state.sqlite3");
+    const stateBytes = Uint8Array.from([1, 2, 3, 4]);
+    const session = {
+      host: {
+        processInput: async () => ({ action: "continue", text: "question" }),
+        prepareSystemPrompt: async () => "system",
+        waitForWorkflowIdle: async () => undefined,
+      },
+      agent: {
+        state: {
+          systemPrompt: "",
+          messages: [
+            {
+              role: "assistant",
+              stopReason: "error",
+              errorMessage: "provider failed after mutation",
+            },
+          ],
+        },
+        prompt: async () => undefined,
+        waitForIdle: async () => undefined,
+        abort: () => undefined,
+      },
+      stateDatabase: { exportBytes: () => stateBytes },
+      stateFile,
+    };
+
+    try {
+      await expect(BrowserPiSession.prototype.prompt.call(session, "question")).rejects.toThrow(
+        "provider failed after mutation",
+      );
+      expect(readFileSync(stateFile)).toEqual(Buffer.from(stateBytes));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function findSessionFile(sessionDir: string): string {

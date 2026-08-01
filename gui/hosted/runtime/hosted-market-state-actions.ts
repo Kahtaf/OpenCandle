@@ -260,41 +260,60 @@ async function manageAlerts(
   }
   if (action === "check") providerUnavailable("manual alert checks");
 
-  const conditionAction = action === "update" ? requiredString(args, "condition_action") : action;
-  const condition = alertCondition(conditionAction, args);
   const updateId = action === "update" ? positiveInteger(args.id, "id") : null;
-  if (updateId != null && !service.listAlertRules().some((alert) => alert.id === updateId)) {
+  const existing =
+    updateId == null ? undefined : service.listAlertRules().find((alert) => alert.id === updateId);
+  if (updateId != null && !existing) {
     throw new Error(`Alert ${updateId} was not found.`);
   }
-  const symbol = normalizedSymbol(args.symbol);
-  const resolved = await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
-  if (resolved.status === "needs_selection") {
-    return result(
-      `Could not verify ${resolved.query}. Choose one of the returned candidates before creating the alert.`,
-      resolved,
+  const conditionAction =
+    action === "update"
+      ? optionalString(args, "condition_action") || alertCreateActionFromRule(existing)
+      : action;
+  if (!conditionAction) {
+    throw new Error(
+      `Alert ${updateId} uses condition ${existing?.conditionType}, which requires condition_action to update.`,
     );
   }
-  const instrument = service.upsertInstrumentRecord(resolved.instrument);
+  const condition = alertCondition(conditionAction, args, alertConditionRecord(existing));
+  let instrumentId = existing?.instrumentId ?? null;
+  let symbol = instrumentId == null ? "" : (service.getInstrument(instrumentId)?.symbol ?? "");
+  if (args.symbol != null || instrumentId == null) {
+    symbol = normalizedSymbol(args.symbol);
+    const resolved = await (dependencies.resolveInstrument ?? resolveInstrumentForMutation)(symbol);
+    if (resolved.status === "needs_selection") {
+      return result(
+        `Could not verify ${resolved.query}. Choose one of the returned candidates before creating the alert.`,
+        resolved,
+      );
+    }
+    instrumentId = service.upsertInstrumentRecord(resolved.instrument).id;
+    symbol = resolved.instrument.symbol;
+  }
+  if (instrumentId == null) throw new Error("symbol is required for non-instrument alerts.");
+  const requestedCooldown = optionalNonNegativeInteger(args.cooldown_seconds, "cooldown_seconds");
+  const cooldownSeconds = action === "update" ? requestedCooldown : (requestedCooldown ?? 3_600);
   if (action === "update") {
     const value = service.updateAlertRule(updateId as number, {
-      instrumentId: instrument.id,
+      instrumentId,
       conditionType: condition.type,
       conditionVersion: ALERT_CONDITION_VERSION,
       condition: condition.value,
       timeframe: condition.timeframe,
-      cooldownSeconds: optionalPositiveInteger(args.cooldown_seconds),
+      cooldownSeconds,
+      ...(typeof args.enabled === "boolean" ? { enabled: args.enabled } : {}),
     });
     if (!value) throw new Error(`Alert ${updateId} was not found.`);
     return result(`Updated alert ${updateId} for ${symbol}.`, value);
   }
   const value = service.createAlertRule({
     scopeType: "instrument",
-    instrumentId: instrument.id,
+    instrumentId,
     conditionType: condition.type,
     conditionVersion: ALERT_CONDITION_VERSION,
     condition: condition.value,
     timeframe: condition.timeframe,
-    cooldownSeconds: optionalPositiveInteger(args.cooldown_seconds),
+    cooldownSeconds,
   });
   return result(`Created alert ${value.id} for ${symbol}.`, value);
 }
@@ -340,9 +359,13 @@ function manageReport(service: MarketStateService, args: Record<string, unknown>
   return result(`Saved report schedule for ${localTime} ${timezone}.`, value);
 }
 
-function alertCondition(action: string, args: Record<string, unknown>) {
+function alertCondition(
+  action: string,
+  args: Record<string, unknown>,
+  existing: Record<string, unknown> = {},
+) {
   if (action === "create_price_above" || action === "create_price_below") {
-    const threshold = positiveNumber(args.threshold, "threshold");
+    const threshold = alertPositiveNumber(args.threshold, existing.threshold, "threshold");
     return {
       type: action === "create_price_above" ? "price_crosses_above" : "price_crosses_below",
       timeframe: "quote",
@@ -351,27 +374,60 @@ function alertCondition(action: string, args: Record<string, unknown>) {
   }
   if (action === "create_price_above_sma" || action === "create_price_below_sma") {
     const direction = action === "create_price_above_sma" ? "above" : "below";
-    return { type: "price_crosses_sma", timeframe: "1d", value: priceCrossesSma(optionalPositiveInteger(args.period) ?? 50, direction) };
+    return { type: "price_crosses_sma", timeframe: "1d", value: priceCrossesSma(optionalPositiveInteger(args.period) ?? optionalPositiveInteger(existing.period) ?? 50, direction) };
   }
   if (action === "create_rsi_above" || action === "create_rsi_below") {
     const direction = action === "create_rsi_above" ? "above" : "below";
-    return { type: "rsi_threshold", timeframe: "1d", value: rsiThreshold(optionalPositiveInteger(args.period) ?? 14, positiveNumber(args.threshold, "threshold"), direction) };
+    return { type: "rsi_threshold", timeframe: "1d", value: rsiThreshold(optionalPositiveInteger(args.period) ?? optionalPositiveInteger(existing.period) ?? 14, alertPositiveNumber(args.threshold, existing.threshold, "threshold"), direction) };
   }
   if (action === "create_volume_spike") {
-    return { type: "volume_spike", timeframe: "1d", value: volumeSpike(optionalPositiveInteger(args.period) ?? 20, positiveNumber(args.threshold ?? 2, "threshold")) };
+    return { type: "volume_spike", timeframe: "1d", value: volumeSpike(optionalPositiveInteger(args.period) ?? optionalPositiveInteger(existing.lookback_period) ?? 20, alertPositiveNumber(args.threshold, existing.multiplier ?? 2, "threshold")) };
   }
   if (action === "create_percent_move_up" || action === "create_percent_move_down") {
     const direction = action === "create_percent_move_up" ? "up" : "down";
-    return { type: "percent_move", timeframe: "1d", value: percentMove(direction, positiveNumber(args.threshold, "threshold")) };
+    return { type: "percent_move", timeframe: "1d", value: percentMove(direction, alertPositiveNumber(args.threshold, existing.percent, "threshold")) };
   }
   if (action === "create_sma_cross_above" || action === "create_sma_cross_below") {
     const direction = action === "create_sma_cross_above" ? "above" : "below";
-    const fast = optionalPositiveInteger(args.fast_period) ?? 50;
-    const slow = optionalPositiveInteger(args.slow_period) ?? 200;
+    const fast = optionalPositiveInteger(args.fast_period) ?? optionalPositiveInteger(existing.fast_period) ?? 50;
+    const slow = optionalPositiveInteger(args.slow_period) ?? optionalPositiveInteger(existing.slow_period) ?? 200;
     if (fast >= slow) throw new Error("fast_period must be less than slow_period.");
     return { type: "sma_cross", timeframe: "1d", value: smaCross(fast, slow, direction) };
   }
   throw new Error("Unsupported alert condition.");
+}
+
+function alertConditionRecord(rule: { conditionJson?: unknown } | undefined): Record<string, unknown> {
+  return rule?.conditionJson && typeof rule.conditionJson === "object"
+    ? (rule.conditionJson as Record<string, unknown>)
+    : {};
+}
+
+function alertCreateActionFromRule(
+  rule: { conditionType: string; conditionJson?: unknown } | undefined,
+): string | undefined {
+  if (!rule) return undefined;
+  const direction = alertConditionRecord(rule).direction;
+  if (rule.conditionType === "price_crosses_above") return "create_price_above";
+  if (rule.conditionType === "price_crosses_below") return "create_price_below";
+  if (rule.conditionType === "price_crosses_sma") {
+    return direction === "below" ? "create_price_below_sma" : "create_price_above_sma";
+  }
+  if (rule.conditionType === "rsi_threshold") {
+    return direction === "below" ? "create_rsi_below" : "create_rsi_above";
+  }
+  if (rule.conditionType === "volume_spike") return "create_volume_spike";
+  if (rule.conditionType === "percent_move") {
+    return direction === "down" ? "create_percent_move_down" : "create_percent_move_up";
+  }
+  if (rule.conditionType === "sma_cross") {
+    return direction === "below" ? "create_sma_cross_below" : "create_sma_cross_above";
+  }
+  return undefined;
+}
+
+function alertPositiveNumber(value: unknown, existing: unknown, label: string): number {
+  return positiveNumber(value ?? existing, label);
 }
 
 function hostedInstrument(symbol: string, currency?: string | null) {
@@ -443,4 +499,12 @@ function positiveInteger(value: unknown, label: string): number {
 function optionalPositiveInteger(value: unknown): number | undefined {
   if (value == null) return undefined;
   return positiveInteger(value, "value");
+}
+
+function optionalNonNegativeInteger(value: unknown, label: string): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  return value;
 }

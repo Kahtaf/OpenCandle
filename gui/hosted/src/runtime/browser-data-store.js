@@ -263,7 +263,7 @@ export function validateHostedArchive(value) {
     sessionIds.add(sessionId);
   }
   if (typeof value.stateBase64 !== "string") throw new Error("State snapshot is invalid");
-  if (value.stateBase64) validateStateBytes(decodeBase64(value.stateBase64));
+  if (value.stateBase64) validateStateBytes(decodeStateBase64(value.stateBase64));
   if (typeof value.currentSessionId !== "string" || value.currentSessionId.length > 220) {
     throw new Error("Current session identity is invalid");
   }
@@ -281,7 +281,7 @@ export function decodeHostedArchive(value) {
   const archive = validateHostedArchive(value);
   return {
     sessions: archive.sessions.map((session) => ({ ...session })),
-    stateBytes: archive.stateBase64 ? decodeBase64(archive.stateBase64) : undefined,
+    stateBytes: archive.stateBase64 ? decodeStateBase64(archive.stateBase64) : undefined,
     currentSessionId: archive.currentSessionId,
     bootstrap: archive.bootstrap ? structuredClone(archive.bootstrap) : null,
   };
@@ -430,7 +430,16 @@ function encodeBase64(bytes) {
   return btoa(binary);
 }
 
-function decodeBase64(value) {
+export function decodeStateBase64(value, maxBytes = MAX_STATE_BYTES) {
+  const maxEncodedLength = Math.ceil(maxBytes / 3) * 4;
+  if (
+    typeof value !== "string" ||
+    value.length > maxEncodedLength ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  ) {
+    throw new Error("State snapshot size or base64 encoding is invalid");
+  }
   try {
     const binary = atob(value);
     return Uint8Array.from(binary, (character) => character.charCodeAt(0));
@@ -438,6 +447,8 @@ function decodeBase64(value) {
     throw new Error("State snapshot is not valid base64");
   }
 }
+
+const decodeBase64 = decodeStateBase64;
 
 function isNotFound(error) {
   return error instanceof DOMException && error.name === "NotFoundError";

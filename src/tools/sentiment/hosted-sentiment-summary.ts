@@ -116,18 +116,20 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
       warnings.push("Finnhub company news was unavailable.");
     }
 
-    if (
+    const validPriceResult =
       quote.status === "fulfilled" &&
       quote.value?.status === "ok" &&
       Number.isFinite(quote.value.data.price) &&
       Number.isFinite(quote.value.data.changePercent) &&
       !isZeroFilledQuote(quote.value.data)
-    ) {
-      const value = quote.value.data;
-      const label = quote.value.stale ? "Cached price context" : "Price context";
+        ? quote.value
+        : undefined;
+    if (validPriceResult) {
+      const value = validPriceResult.data;
+      const label = validPriceResult.stale ? "Cached price context" : "Price context";
       lines.push(
         "",
-        `${label} (Yahoo Finance, as of ${quote.value.timestamp}): ${value.symbol} ${value.price.toFixed(2)} ${value.currency ?? ""}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
+        `${label} (Yahoo Finance, as of ${validPriceResult.timestamp}): ${value.symbol} ${value.price.toFixed(2)} ${value.currency ?? ""}; day change ${value.changePercent >= 0 ? "+" : ""}${value.changePercent.toFixed(2)}%.`,
       );
     } else if (tickers[0]) {
       warnings.push(`Price context was unavailable for ${tickers[0]}.`);
@@ -150,7 +152,7 @@ export const hostedSentimentSummaryTool: AgentTool<typeof params> = {
         sources: {
           web: web.status === "fulfilled" && web.value.status === "ok",
           finnhub: finnhub.status === "fulfilled" && finnhubArticles.length > 0,
-          price: quote.status === "fulfilled" && quote.value?.status === "ok",
+          price: Boolean(validPriceResult),
         },
       },
     };

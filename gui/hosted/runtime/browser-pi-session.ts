@@ -220,7 +220,6 @@ export class BrowserPiSession {
       const watchlistCount = marketState.listWatchlists().length;
       const stateBytes = this.stateDatabase.exportBytes();
       const entries = this.sessionManager.getEntries();
-      writeFileSync(this.stateFile, stateBytes);
       return {
         runtime: "pi-agent-session",
         sessionId: this.sessionManager.getSessionId(),
@@ -246,6 +245,7 @@ export class BrowserPiSession {
         },
       };
     } finally {
+      writeFileSync(this.stateFile, this.stateDatabase.exportBytes());
       signal?.removeEventListener("abort", abort);
     }
   }

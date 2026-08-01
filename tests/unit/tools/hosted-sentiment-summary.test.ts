@@ -184,6 +184,7 @@ describe("hosted sentiment summary", () => {
 
     expect(result.content[0].text).not.toContain("AAPL 0.00");
     expect(result.content[0].text).toContain("Price context was unavailable for AAPL");
+    expect(result.details).toMatchObject({ sources: { price: false } });
   });
 
   it("renders Finnhub publication timestamps without claiming unknown-freshness evidence is recent", async () => {

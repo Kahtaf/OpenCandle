@@ -83,8 +83,10 @@ interface InFlightChatResult {
 
 interface CachedToolActionResult {
   fingerprint: string;
-  operation: Promise<Record<string, unknown>>;
+  operation?: Promise<Record<string, unknown>>;
   settled: boolean;
+  result?: Record<string, unknown>;
+  persistencePending?: boolean;
 }
 
 export interface BrowserHostedGuiRuntimeOptions {
@@ -472,8 +474,26 @@ export class BrowserHostedGuiRuntime {
     const existing = this.actionResults.get(key);
     if (existing) {
       requireMatchingActionInput(existing.fingerprint, fingerprint);
-      return existing.operation;
+      if (existing.operation) return existing.operation;
+      if (existing.result && existing.persistencePending) {
+        const persistenceRetry = Promise.resolve()
+          .then(() => {
+            this.flushState();
+            existing.persistencePending = false;
+            existing.settled = true;
+            this.pruneSettledActionResults();
+            return existing.result as Record<string, unknown>;
+          })
+          .catch((error) => {
+            existing.operation = undefined;
+            throw error;
+          });
+        existing.operation = persistenceRetry;
+        return persistenceRetry;
+      }
+      if (existing.result) return existing.result;
     }
+    const cached: CachedToolActionResult = { fingerprint, settled: false };
     const operation = Promise.resolve().then(async () => {
       const service = new MarketStateService(this.stateDatabase);
       const result = await invokeHostedMarketStateTool(
@@ -483,18 +503,33 @@ export class BrowserHostedGuiRuntime {
         undefined,
         this.options.marketStateDependencies,
       );
+      const response = { result };
+      cached.result = response;
+      cached.persistencePending = true;
       this.flushState();
-      return { result };
+      cached.persistencePending = false;
+      return response;
     });
-    this.actionResults.set(key, { fingerprint, operation, settled: false });
+    cached.operation = operation;
+    this.actionResults.set(key, cached);
     void operation.then(
       () => {
         const cached = this.actionResults.get(key);
-        if (cached?.operation === operation) cached.settled = true;
+        if (cached?.operation === operation) {
+          cached.settled = true;
+          cached.persistencePending = false;
+        }
         this.pruneSettledActionResults();
       },
       () => {
-        if (this.actionResults.get(key)?.operation === operation) this.actionResults.delete(key);
+        const failed = this.actionResults.get(key);
+        if (failed?.operation !== operation) return;
+        if (failed.result) {
+          failed.operation = undefined;
+          failed.persistencePending = true;
+        } else {
+          this.actionResults.delete(key);
+        }
       },
     );
     return operation;

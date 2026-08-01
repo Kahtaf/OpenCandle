@@ -328,14 +328,18 @@ export async function buildHostedMarketQuoteSnapshot(state: HostedMarketState) {
     const knownBaseCurrencyCost = quotes
       .filter((quote) => quote.currency === baseCurrency)
       .reduce((sum, quote) => sum + quote.totalCost, 0);
+    const hasUnavailableBaseCurrencyPosition = quotes.some(
+      (quote) =>
+        quote.currency === baseCurrency && !(quote.status === "ok" && quote.includedInTotals),
+    );
     const summaryStatus =
       portfolioLots.length === 0
         ? ("empty" as const)
-        : included.length === 0
+        : included.length === 0 || hasUnavailableBaseCurrencyPosition
           ? ("unavailable" as const)
           : ("ok" as const);
     const allocatedQuotes = quotes.map((quote) =>
-      quote.status === "ok" && quote.includedInTotals && totalValue > 0
+      summaryStatus === "ok" && quote.status === "ok" && quote.includedInTotals && totalValue > 0
         ? { ...quote, allocationPercent: ((quote.marketValue ?? 0) / totalValue) * 100 }
         : quote,
     );

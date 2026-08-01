@@ -266,4 +266,42 @@ describe("hosted market-state actions", () => {
 
     expect(resolveInstrument).not.toHaveBeenCalled();
   });
+
+  it("preserves omitted alert fields and accepts zero cooldown on update", async () => {
+    const created = await invokeHostedMarketStateTool(
+      service,
+      "manage_alerts",
+      {
+        action: "create_price_above",
+        symbol: "AAPL",
+        threshold: 200,
+        cooldown_seconds: 3_600,
+      },
+      "hosted-create-alert",
+      {
+        resolveInstrument: async () => ({
+          status: "resolved",
+          instrument: { symbol: "AAPL", assetType: "equity", currency: "USD", provider: "yahoo" },
+        }),
+      },
+    );
+    const alert = created.result.details as { id: number; instrumentId: number };
+
+    const updated = await invokeHostedMarketStateTool(service, "manage_alerts", {
+      action: "update",
+      id: alert.id,
+      threshold: 250,
+      enabled: false,
+      cooldown_seconds: 0,
+    });
+
+    expect(updated.result.details).toMatchObject({
+      id: alert.id,
+      instrumentId: alert.instrumentId,
+      conditionType: "price_crosses_above",
+      conditionJson: { threshold: 250, field: "last_price" },
+      enabled: false,
+      cooldownSeconds: 0,
+    });
+  });
 });

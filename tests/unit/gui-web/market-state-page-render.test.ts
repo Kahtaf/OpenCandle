@@ -1076,6 +1076,32 @@ describe("MarketStatePage rendering", () => {
     expect(setToast).toHaveBeenCalledWith("Choose a listing.", { destructive: true });
   });
 
+  it("unwraps an acknowledged tool result before handling semantic validation", async () => {
+    const refresh = vi.fn();
+    const setToast = vi.fn();
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "SHOP" },
+      invokeToolRequest: vi.fn(async () => ({
+        type: "tool.invoke.result",
+        ok: true,
+        result: {
+          toolCallId: "call-1",
+          content: [{ type: "text", text: "Choose a listing." }],
+          details: { status: "needs_selection", query: "SHOP", candidates: [] },
+          isError: false,
+        },
+      })),
+      setToast,
+      refresh,
+    });
+
+    expect(saved).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(setToast).toHaveBeenCalledWith("Choose a listing.", { destructive: true });
+  });
+
   it("names market-state form controls for assistive technology", () => {
     const alertHtml = renderToStaticMarkup(
       React.createElement(AlertCreateForm, {
