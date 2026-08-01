@@ -10,6 +10,7 @@ import {
 import { createHash } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import type { SessionInfo } from "@earendil-works/pi-coding-agent";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 // The hosted bundle deliberately imports only the audited SessionManager leaf;
 // the package root also pulls native/TUI surfaces that cannot run in WebContainer.
 // The runtime composition build is the compatibility gate for this pinned path.
@@ -20,6 +21,9 @@ import {
   createAskUserBridge,
   type GuiAskUserPrompt,
 } from "../../../gui/shared/ask-user-bridge.js";
+import { createLiveChatEventAdapter } from "../../../gui/shared/live-chat-event-adapter.js";
+import { assertValidToolArguments } from "../../../gui/shared/tool-argument-validation.js";
+import { toolOutcomeNeedsInput } from "../../../gui/shared/tool-output.js";
 import {
   buildDispatchedPromptFromState,
   chatRunAttachmentLabel,
@@ -28,8 +32,19 @@ import {
 import {
   inferToolDomain,
   OPENCANDLE_WORKFLOWS,
+  providerCatalogBase,
+  serializeApiKeyProviderCatalog,
 } from "../../../gui/shared/catalog-metadata.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import {
+  clearPendingSessionAction,
+  deleteSessionActionStore,
+  hasAcceptedSessionAction,
+  hasPendingSessionAction,
+  readSessionActionStoreSnapshot,
+  recordAcceptedSessionAction,
+  recordPendingSessionAction,
+} from "../../../src/pi/session-action-dedupe.js";
 import {
   isApiKeyProvider,
   resolveHostedBrowserCapabilityReport,
@@ -39,11 +54,11 @@ import {
   createSqlJsStateDatabase,
   type SqlJsStateDatabase,
 } from "../../../src/runtime/sqljs-state-database-node.js";
-import { BrowserPiSession } from "./browser-pi-session.js";
 import {
-  invokeHostedMarketStateTool,
-  type HostedMarketStateDependencies,
-} from "./hosted-market-state-actions.js";
+  BrowserPiSession,
+  type BrowserPiThinkingState,
+} from "./browser-pi-session.js";
+import type { StatefulToolOptions } from "../../../src/tools/portfolio/stateful-tool-options.js";
 import { getBrowserHostedToolDefinitions } from "./hosted-tool-composition.js";
 import type { FirstClassModelProviderId } from "../../../src/pi/model-provider-metadata.js";
 import type { BrowserModelCredentials } from "./browser-model-runtime.js";
@@ -56,6 +71,7 @@ const MAX_SESSION_FILES = 100;
 const MAX_HOSTED_ARCHIVE_BYTES = 240 * 1_024 * 1_024;
 const ARCHIVE_SESSION_GROWTH_MULTIPLIER = 4;
 export const MAX_COMPLETED_CHAT_RESULTS = 256;
+export const MAX_PI_SESSION_CACHE_SIZE = 2;
 
 export function assertHostedBootstrapPersistable(
   bootstrap: unknown,
@@ -88,6 +104,7 @@ interface CachedToolActionResult {
   settled: boolean;
   result?: Record<string, unknown>;
   persistencePending?: boolean;
+  acceptOnPersistence?: boolean;
 }
 
 export interface BrowserHostedGuiRuntimeOptions {
@@ -101,13 +118,14 @@ export interface BrowserHostedGuiRuntimeOptions {
   relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
   maxArchiveBytes?: number;
-  marketStateDependencies?: HostedMarketStateDependencies;
+  marketStateDependencies?: Pick<StatefulToolOptions, "resolveInstrument" | "getCurrentPrice">;
 }
 
 interface HostedSessionCheckpoint {
   sessionId: string;
   filename: string;
   content: string;
+  actionStore?: string;
 }
 
 interface HostedStateCheckpoint {
@@ -147,11 +165,11 @@ export interface BrowserHostedBootstrap {
     workflows: typeof OPENCANDLE_WORKFLOWS;
     providers: Array<{
       id: string;
-      name: string;
       displayName: string;
       kind: ProviderDescriptor["kind"];
       category: ProviderDescriptor["category"];
       tier: ProviderDescriptor["tier"];
+      aliases: readonly string[];
       unlocks: readonly string[];
       fallbackDescription: string | null;
       instructionsHint: string;
@@ -167,6 +185,7 @@ export interface BrowserHostedBootstrap {
     }>;
   };
   askUserPrompts: GuiAskUserPrompt[];
+  thinking: BrowserPiThinkingState | null;
   snapshot: {
     sessionId: string;
     entries: ReturnType<SessionManager["getEntries"]>;
@@ -185,6 +204,10 @@ export class BrowserHostedGuiRuntime {
   private readonly completedChatResults = new Map<string, CachedChatResult>();
   private readonly inFlightChatResults = new Map<string, InFlightChatResult>();
   private readonly actionResults = new Map<string, CachedToolActionResult>();
+  private readonly piSessions = new Map<string, BrowserPiSession>();
+  private readonly piSessionCreations = new Map<string, Promise<BrowserPiSession>>();
+  private readonly piSessionVersions = new Map<string, number>();
+  private piSessionEpoch = 0;
   private readonly activeEventEmitters = new Map<
     string,
     (event: Record<string, unknown>) => void | Promise<void>
@@ -222,16 +245,36 @@ export class BrowserHostedGuiRuntime {
 
   configureModel(provider: FirstClassModelProviderId, modelId: string, apiKey: string): void {
     const normalizedKey = apiKey.trim();
+    const configurationChanged =
+      this.options.modelProvider !== (normalizedKey ? provider : undefined) ||
+      this.options.modelId !== (normalizedKey ? modelId : undefined) ||
+      this.options.modelCredentials?.[provider] !== normalizedKey;
+    if (configurationChanged) this.requireNoActiveRuns();
     this.options.modelProvider = normalizedKey ? provider : undefined;
     this.options.modelId = normalizedKey ? modelId : undefined;
     this.options.modelCredentials = {
       ...this.options.modelCredentials,
       ...(normalizedKey ? { [provider]: normalizedKey } : {}),
     };
+    if (configurationChanged) this.disposePiSessions();
   }
 
   configureRelayProviders(providers: readonly string[]): void {
-    this.options.relayProviders = [...new Set(providers)];
+    const normalized = [...new Set(providers)].sort();
+    const current = [...new Set(this.options.relayProviders ?? [])].sort();
+    if (normalized.join("\0") !== current.join("\0")) {
+      this.requireNoActiveRuns();
+      this.options.relayProviders = normalized;
+      this.disposePiSessions();
+    }
+  }
+
+  async configureThinking(level: ThinkingLevel): Promise<BrowserHostedBootstrap> {
+    const manager = await this.resolveCurrentManager();
+    const session = await this.resolveConfiguredPiSession(manager);
+    this.requireNoActiveRuns();
+    session.setThinkingLevel(level);
+    return this.buildBootstrap(manager);
   }
 
   async newSession(): Promise<BrowserHostedBootstrap> {
@@ -255,7 +298,11 @@ export class BrowserHostedGuiRuntime {
   async renameSession(sessionId: string, name: string): Promise<BrowserHostedBootstrap> {
     const nextName = name.trim();
     if (!nextName) throw new Error("Session name must not be blank");
+    const guardedSessionId = requireSessionId(sessionId);
+    this.requireInactiveSession(guardedSessionId);
+    this.disposePiSession(guardedSessionId);
     const manager = await this.resolveManager(sessionId);
+    this.requireInactiveSession(guardedSessionId);
     manager.appendSessionInfo(nextName.slice(0, 160));
     return this.buildBootstrap(manager);
   }
@@ -263,10 +310,12 @@ export class BrowserHostedGuiRuntime {
   async deleteSession(sessionId: string): Promise<BrowserHostedBootstrap> {
     const guardedSessionId = requireSessionId(sessionId);
     this.requireInactiveSession(guardedSessionId);
+    this.disposePiSession(guardedSessionId);
     const manager = await this.resolveManager(guardedSessionId);
     this.requireInactiveSession(guardedSessionId);
     const sessionFile = manager.getSessionFile();
     if (!sessionFile) throw new Error("Saved session file is unavailable");
+    deleteSessionActionStore(manager);
     unlinkSync(sessionFile);
     if (this.currentSessionId === guardedSessionId) this.currentSessionId = undefined;
     return this.bootstrap();
@@ -278,6 +327,9 @@ export class BrowserHostedGuiRuntime {
     actionId: string,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
+    persistCheckpoint?: (
+      value: Pick<BrowserHostedBootstrap, "sessionId" | "checkpoint">,
+    ) => Promise<void>,
   ): Promise<CompletedChatResult> {
     const guardedSessionId = requireSessionId(sessionId);
     const guardedActionId = requireActionId(actionId);
@@ -296,6 +348,25 @@ export class BrowserHostedGuiRuntime {
       requireMatchingChatInput(inFlight.fingerprint, fingerprint);
       return inFlight.operation;
     }
+    const manager = await this.resolveManager(guardedSessionId);
+    const completedAfterLookup = this.completedChatResults.get(actionKey);
+    if (completedAfterLookup) {
+      requireMatchingChatInput(completedAfterLookup.fingerprint, fingerprint);
+      return { ...(await this.buildBootstrap(manager, false)), events: [] };
+    }
+    const inFlightAfterLookup = this.inFlightChatResults.get(actionKey);
+    if (inFlightAfterLookup) {
+      requireMatchingChatInput(inFlightAfterLookup.fingerprint, fingerprint);
+      return inFlightAfterLookup.operation;
+    }
+    if (hasAcceptedSessionAction(manager, guardedActionId, fingerprint)) {
+      return { ...(await this.buildBootstrap(manager, false)), events: [] };
+    }
+    if (hasPendingSessionAction(manager, guardedActionId, fingerprint)) {
+      throw new Error(
+        "A previous run with this action id may have started before the browser runtime stopped. OpenCandle will not replay paid work automatically; submit a new message only if you want to retry intentionally.",
+      );
+    }
     if (this.activeSessionRuns.has(guardedSessionId)) {
       throw new Error("A research run is already active for this session.");
     }
@@ -306,8 +377,10 @@ export class BrowserHostedGuiRuntime {
       guardedActionId,
       actionKey,
       fingerprint,
+      manager,
       onEvent,
       signal,
+      persistCheckpoint,
     );
     this.inFlightChatResults.set(actionKey, { fingerprint, operation });
     try {
@@ -316,6 +389,7 @@ export class BrowserHostedGuiRuntime {
       const current = this.inFlightChatResults.get(actionKey);
       if (current?.operation === operation) this.inFlightChatResults.delete(actionKey);
       this.activeSessionRuns.delete(guardedSessionId);
+      this.prunePiSessionCache(this.currentSessionId ?? guardedSessionId);
     }
   }
 
@@ -325,21 +399,41 @@ export class BrowserHostedGuiRuntime {
     guardedActionId: string,
     actionKey: string,
     fingerprint: string,
+    manager: SessionManager,
     onEvent?: (event: Record<string, unknown>) => void | Promise<void>,
     signal?: AbortSignal,
+    persistCheckpoint?: (
+      value: Pick<BrowserHostedBootstrap, "sessionId" | "checkpoint">,
+    ) => Promise<void>,
   ): Promise<CompletedChatResult> {
-    let session: Awaited<ReturnType<typeof BrowserPiSession.create>> | undefined;
     const runId = guardedActionId;
     let seq = 1;
     const streamedEvents: Array<Record<string, unknown>> = [];
-    const emit = async (event: Record<string, unknown>) => {
+    const pendingEventWrites: Promise<void>[] = [];
+    const pendingCheckpointWrites: Promise<void>[] = [];
+    const runAbortController = new AbortController();
+    const abortFromCaller = () => runAbortController.abort(signal?.reason);
+    if (signal?.aborted) abortFromCaller();
+    else signal?.addEventListener("abort", abortFromCaller, { once: true });
+    const trackPersistenceWrite = (writes: Promise<void>[], write: Promise<void>) => {
+      writes.push(write);
+      void write.catch((error) => runAbortController.abort(error));
+    };
+    let actionAccepted = false;
+    let actionStartAmbiguous = false;
+    let nextLiveSeq: (() => number) | undefined;
+    const emit = (event: Record<string, unknown>) => {
       const sequenced = { ...event, runId, sessionId: guardedSessionId, seq: seq++ };
       streamedEvents.push(sequenced);
-      await onEvent?.(sequenced);
+      trackPersistenceWrite(
+        pendingEventWrites,
+        Promise.resolve()
+          .then(() => onEvent?.(sequenced))
+          .then(() => undefined),
+      );
     };
     this.activeEventEmitters.set(guardedSessionId, emit);
     try {
-      const manager = await this.resolveManager(guardedSessionId);
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new Error("Saved session file is unavailable");
       const modelProvider = this.options.modelProvider;
@@ -366,26 +460,12 @@ export class BrowserHostedGuiRuntime {
         await this.buildBootstrap(manager),
         nextInputBytes + SESSION_COMPLETION_RESERVE_BYTES,
       );
-      await emit({ type: "run.started" });
-      const createPiSession = this.options.createPiSession ?? BrowserPiSession.create;
-      session = await createPiSession({
-        cwd: this.options.cwd,
-        sessionDir: this.options.sessionDir,
-        restoredSessionFile: sessionFile,
-        stateFile: this.options.stateFile,
-        stateDatabase: this.stateDatabase,
-        providerId: modelProvider,
-        modelId: this.options.modelId,
-        credentials: this.options.modelCredentials,
-        toolDefinitions: getBrowserHostedToolDefinitions({
-          stateDatabase: this.stateDatabase,
-          relayProviders: this.options.relayProviders,
-        }),
-        askUserHandler: this.askUserBridge.askForSession(guardedSessionId),
-        onDurableEvents: async (events) => {
-          for (const event of events) await emit(event as Record<string, unknown>);
-        },
+      recordPendingSessionAction(manager, guardedActionId, fingerprint, { durable: true });
+      await persistCheckpoint?.({
+        sessionId: guardedSessionId,
+        checkpoint: this.checkpoint(),
       });
+      emit({ type: "run.started" });
       const attachmentLabels = [
         ...input.images.map((image, index) => ({
           kind: "image",
@@ -396,9 +476,94 @@ export class BrowserHostedGuiRuntime {
           label: chatRunAttachmentLabel(attachment),
         })),
       ];
-      session.markOriginalInput?.(input.prompt, attachmentLabels);
-      await session.prompt(dispatchedPrompt, signal, images);
-      await emit({ type: "run.completed" });
+      const session = await this.getOrCreatePiSession(
+        guardedSessionId,
+        sessionFile,
+        modelProvider,
+        this.options.modelId,
+        this.options.modelCredentials,
+      );
+      const liveStartSeq = seq;
+      const liveAdapter = createLiveChatEventAdapter({
+        runId,
+        sessionId: guardedSessionId,
+        startSeq: seq,
+        sequence: {
+          next: () => seq++,
+          peek: () => seq,
+        },
+        emit: (event) => {
+          streamedEvents.push(event as Record<string, unknown>);
+          trackPersistenceWrite(
+            pendingEventWrites,
+            Promise.resolve()
+              .then(() => onEvent?.(event))
+              .then(() => undefined),
+          );
+        },
+        originalPrompt: input.prompt,
+        dispatchedPrompt,
+        originalAttachments: attachmentLabels,
+      });
+      nextLiveSeq = liveAdapter.nextSeq;
+      const acceptAction = () => {
+        if (actionAccepted) return;
+        recordAcceptedSessionAction(manager, guardedActionId, fingerprint);
+        actionAccepted = true;
+        if (persistCheckpoint) {
+          trackPersistenceWrite(
+            pendingCheckpointWrites,
+            Promise.resolve().then(() =>
+              persistCheckpoint({
+                sessionId: this.currentSessionId ?? guardedSessionId,
+                checkpoint: this.checkpoint(),
+              }),
+            ),
+          );
+        }
+      };
+      const unsubscribeLive = session.subscribe?.((event) => {
+        liveAdapter.handle(event);
+      });
+      let result: Awaited<ReturnType<BrowserPiSession["prompt"]>>;
+      const entryCountBeforePrompt = manager.getEntries().length;
+      try {
+        session.markOriginalInput?.(input.prompt, attachmentLabels);
+        result = await session.prompt(dispatchedPrompt, runAbortController.signal, images);
+        acceptAction();
+      } catch (error) {
+        let persistedUserMessage = false;
+        try {
+          const refreshedManager = await this.resolveManager(guardedSessionId);
+          persistedUserMessage = refreshedManager
+            .getEntries()
+            .slice(entryCountBeforePrompt)
+            .some(
+              (entry) =>
+                entry.type === "message" &&
+                (entry as { message?: { role?: unknown } }).message?.role === "user",
+            );
+        } catch {
+          // The durable pending marker must survive when the canonical session
+          // cannot be inspected. Replaying paid work would be less safe than
+          // reporting an ambiguous action after restart.
+          actionStartAmbiguous = true;
+        }
+        if (persistedUserMessage) {
+          acceptAction();
+          await Promise.all(pendingCheckpointWrites);
+        }
+        throw error;
+      } finally {
+        unsubscribeLive?.();
+      }
+      seq = Math.max(seq, liveAdapter.nextSeq());
+      if (seq === liveStartSeq && result.turnEvents) {
+        for (const event of result.turnEvents) emit(event as Record<string, unknown>);
+      }
+      await Promise.all(pendingCheckpointWrites);
+      emit({ type: "run.completed" });
+      await Promise.all(pendingEventWrites);
       const completedResult = {
         ...(await this.buildBootstrap(
           await this.resolveManager(guardedSessionId),
@@ -419,16 +584,33 @@ export class BrowserHostedGuiRuntime {
       }
       return completedResult;
     } catch (error) {
+      let reportedError = error;
+      if (!actionAccepted && !actionStartAmbiguous) {
+        clearPendingSessionAction(manager, guardedActionId);
+        if (persistCheckpoint) {
+          try {
+            await persistCheckpoint({
+              sessionId: this.currentSessionId ?? guardedSessionId,
+              checkpoint: this.checkpoint(),
+            });
+          } catch (checkpointError) {
+            reportedError = checkpointError;
+          }
+        }
+      }
+      seq = Math.max(seq, nextLiveSeq?.() ?? seq);
       const message =
-        signal?.aborted || (error instanceof DOMException && error.name === "AbortError")
+        signal?.aborted ||
+        (reportedError instanceof DOMException && reportedError.name === "AbortError")
           ? "Run cancelled. The last durable session state was preserved."
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      await emit({ type: "run.failed", error: { message: message.slice(0, 500) } });
-      throw error;
+          : reportedError instanceof Error
+            ? reportedError.message
+            : String(reportedError);
+      emit({ type: "run.failed", error: { message: message.slice(0, 500) } });
+      await Promise.all(pendingEventWrites);
+      throw reportedError;
     } finally {
-      session?.dispose();
+      signal?.removeEventListener("abort", abortFromCaller);
       this.activeEventEmitters.delete(guardedSessionId);
     }
   }
@@ -481,7 +663,9 @@ export class BrowserHostedGuiRuntime {
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const key = `${requireSessionId(sessionId)}:${requireActionId(actionId)}`;
+    const guardedSessionId = requireSessionId(sessionId);
+    const guardedActionId = requireActionId(actionId);
+    const key = `${guardedSessionId}:${guardedActionId}`;
     const fingerprint = fingerprintToolInvocation(toolName, args);
     const existing = this.actionResults.get(key);
     if (existing) {
@@ -491,7 +675,13 @@ export class BrowserHostedGuiRuntime {
         const persistenceRetry = Promise.resolve()
           .then(async () => {
             this.flushState();
-            const bootstrap = await this.buildBootstrap(await this.resolveManager(sessionId));
+            const manager = await this.resolveManager(guardedSessionId);
+            if (existing.acceptOnPersistence === false) {
+              clearPendingSessionAction(manager, guardedActionId);
+            } else {
+              recordAcceptedSessionAction(manager, guardedActionId, fingerprint);
+            }
+            const bootstrap = await this.buildBootstrap(manager);
             existing.result = { ...bootstrap, result: existing.result?.result };
             existing.persistencePending = false;
             existing.settled = true;
@@ -509,22 +699,51 @@ export class BrowserHostedGuiRuntime {
     }
     const cached: CachedToolActionResult = { fingerprint, settled: false };
     const operation = Promise.resolve().then(async () => {
-      const service = new MarketStateService(this.stateDatabase);
-      const result = await invokeHostedMarketStateTool(
-        service,
-        toolName,
-        args,
-        undefined,
-        this.options.marketStateDependencies,
-      );
-      const response = { result };
-      cached.result = response;
-      cached.persistencePending = true;
-      this.flushState();
-      const bootstrap = await this.buildBootstrap(await this.resolveManager(sessionId));
-      cached.result = { ...bootstrap, result };
-      cached.persistencePending = false;
-      return cached.result;
+      const manager = await this.resolveManager(guardedSessionId);
+      if (hasAcceptedSessionAction(manager, guardedActionId, fingerprint)) {
+        return {
+          ...(await this.buildBootstrap(manager, false)),
+          result: { status: "already_accepted" },
+        };
+      }
+      if (hasPendingSessionAction(manager, guardedActionId, fingerprint)) {
+        throw new Error("This action is still being recovered. Retry shortly.");
+      }
+      recordPendingSessionAction(manager, guardedActionId, fingerprint);
+      try {
+        const tool = getBrowserHostedToolDefinitions({
+          stateDatabase: this.stateDatabase,
+          relayProviders: this.options.relayProviders,
+          marketStateDependencies: this.options.marketStateDependencies,
+        }).find((candidate) => candidate.name === toolName);
+        if (!tool) {
+          throw new Error(
+            `${toolName || "This action"} is unavailable in hosted OpenCandle.`,
+          );
+        }
+        assertValidToolArguments(tool.parameters, args);
+        const output = await tool.execute(guardedActionId, args, undefined, () => undefined);
+        const result = { toolCallId: guardedActionId, result: output, isError: false as const };
+        const response = { result };
+        cached.result = response;
+        cached.persistencePending = true;
+        cached.acceptOnPersistence = !toolOutcomeNeedsInput(output);
+        this.flushState();
+        if (cached.acceptOnPersistence) {
+          recordAcceptedSessionAction(manager, guardedActionId, fingerprint);
+        } else {
+          clearPendingSessionAction(manager, guardedActionId);
+        }
+        const bootstrap = await this.buildBootstrap(manager);
+        cached.result = { ...bootstrap, result };
+        cached.persistencePending = false;
+        return cached.result;
+      } catch (error) {
+        if (!hasAcceptedSessionAction(manager, guardedActionId, fingerprint)) {
+          clearPendingSessionAction(manager, guardedActionId);
+        }
+        throw error;
+      }
     });
     cached.operation = operation;
     this.actionResults.set(key, cached);
@@ -560,8 +779,107 @@ export class BrowserHostedGuiRuntime {
   }
 
   dispose(): void {
+    this.disposePiSessions();
     this.flushState();
     this.stateDatabase.close();
+  }
+
+  private async getOrCreatePiSession(
+    sessionId: string,
+    sessionFile: string,
+    modelProvider: FirstClassModelProviderId,
+    modelId: string,
+    modelCredentials: BrowserModelCredentials,
+  ): Promise<BrowserPiSession> {
+    const existing = this.piSessions.get(sessionId);
+    if (existing) {
+      this.piSessions.delete(sessionId);
+      this.piSessions.set(sessionId, existing);
+      return existing;
+    }
+    const pending = this.piSessionCreations.get(sessionId);
+    if (pending) return pending;
+    const epoch = this.piSessionEpoch;
+    const version = this.piSessionVersions.get(sessionId) ?? 0;
+    const createPiSession = this.options.createPiSession ?? BrowserPiSession.create;
+    const creation = createPiSession({
+      cwd: this.options.cwd,
+      sessionDir: this.options.sessionDir,
+      restoredSessionFile: sessionFile,
+      stateFile: this.options.stateFile,
+      stateDatabase: this.stateDatabase,
+      providerId: modelProvider,
+      modelId,
+      credentials: modelCredentials,
+      toolDefinitions: getBrowserHostedToolDefinitions({
+        stateDatabase: this.stateDatabase,
+        relayProviders: this.options.relayProviders,
+        marketStateDependencies: this.options.marketStateDependencies,
+      }),
+      askUserHandler: this.askUserBridge.askForSession(sessionId),
+    }).then((session) => {
+      if (
+        this.piSessionEpoch !== epoch ||
+        (this.piSessionVersions.get(sessionId) ?? 0) !== version
+      ) {
+        session.dispose();
+        throw new Error("The hosted model configuration changed while the session was loading.");
+      }
+      this.piSessions.set(sessionId, session);
+      this.prunePiSessionCache(sessionId);
+      return session;
+    });
+    this.piSessionCreations.set(sessionId, creation);
+    try {
+      return await creation;
+    } finally {
+      if (this.piSessionCreations.get(sessionId) === creation) {
+        this.piSessionCreations.delete(sessionId);
+      }
+    }
+  }
+
+  private async resolveConfiguredPiSession(manager: SessionManager): Promise<BrowserPiSession> {
+    const sessionFile = manager.getSessionFile();
+    const provider = this.options.modelProvider;
+    const modelId = this.options.modelId;
+    const credentials = this.options.modelCredentials;
+    if (!sessionFile || !provider || !modelId || !credentials?.[provider]) {
+      throw new Error("Connect an AI model before changing its thinking level.");
+    }
+    return this.getOrCreatePiSession(
+      manager.getSessionId(),
+      sessionFile,
+      provider,
+      modelId,
+      credentials,
+    );
+  }
+
+  private disposePiSession(sessionId: string): void {
+    this.piSessionVersions.set(sessionId, (this.piSessionVersions.get(sessionId) ?? 0) + 1);
+    this.piSessionCreations.delete(sessionId);
+    this.piSessions.get(sessionId)?.dispose();
+    this.piSessions.delete(sessionId);
+  }
+
+  private disposePiSessions(): void {
+    this.piSessionEpoch += 1;
+    this.piSessionCreations.clear();
+    for (const session of this.piSessions.values()) session.dispose();
+    this.piSessions.clear();
+  }
+
+  private prunePiSessionCache(preserveSessionId: string): void {
+    while (this.piSessions.size > MAX_PI_SESSION_CACHE_SIZE) {
+      const candidate = [...this.piSessions.keys()].find(
+        (sessionId) =>
+          sessionId !== preserveSessionId && !this.activeSessionRuns.has(sessionId),
+      );
+      if (!candidate) return;
+      this.piSessions.get(candidate)?.dispose();
+      this.piSessions.delete(candidate);
+    }
   }
 
   private async resolveCurrentManager(): Promise<SessionManager> {
@@ -609,8 +927,13 @@ export class BrowserHostedGuiRuntime {
     const tools = getBrowserHostedToolDefinitions({
       stateDatabase: this.stateDatabase,
       relayProviders: this.options.relayProviders,
+      marketStateDependencies: this.options.marketStateDependencies,
     });
     const providerReport = resolveHostedBrowserCapabilityReport(this.options.relayProviders);
+    const thinking =
+      this.options.modelProvider && this.options.modelId
+        ? (await this.resolveConfiguredPiSession(manager)).getThinkingState()
+        : null;
     this.flushState();
     const bootstrap: BrowserHostedBootstrap = {
       role: "writer",
@@ -636,6 +959,7 @@ export class BrowserHostedGuiRuntime {
         providers: providerReport.available.map(serializeHostedProvider),
       },
       askUserPrompts: this.askUserBridge.getPrompts(),
+      thinking,
       snapshot: {
         sessionId,
         entries,
@@ -665,10 +989,15 @@ export class BrowserHostedGuiRuntime {
         if (header.type !== "session" || typeof header.id !== "string") {
           throw new Error(`Session snapshot is invalid: ${filename}`);
         }
+        const actionStore = readSessionActionStoreSnapshot({
+          getSessionFile: () => path,
+          getSessionDir: () => this.options.sessionDir,
+        });
         return {
           sessionId: header.id,
           filename: basename(filename),
           content,
+          ...(actionStore ? { actionStore: actionStore.content } : {}),
         };
       });
     const sessions = selectSessionCheckpoints(sessionFiles, this.currentSessionId);
@@ -722,7 +1051,13 @@ export class BrowserHostedGuiRuntime {
 
   private requireInactiveSession(sessionId: string): void {
     if (this.activeSessionRuns.has(sessionId)) {
-      throw new Error("Cannot delete a session while its research run is active.");
+      throw new Error("Cannot modify a session while its research run is active.");
+    }
+  }
+
+  private requireNoActiveRuns(): void {
+    if (this.activeSessionRuns.size > 0) {
+      throw new Error("Cannot change hosted runtime configuration while a research run is active.");
     }
   }
 }
@@ -731,29 +1066,17 @@ function serializeHostedProvider(
   provider: ProviderDescriptor,
 ): BrowserHostedBootstrap["catalog"]["providers"][number] {
   const credential = isApiKeyProvider(provider) ? process.env[provider.envVar]?.trim() : undefined;
+  const shared = isApiKeyProvider(provider)
+    ? serializeApiKeyProviderCatalog(provider, {
+        source: credential ? "file" : "absent",
+        credential,
+      })
+    : providerCatalogBase(provider);
   return {
-    id: provider.id,
-    name: provider.displayName,
-    displayName: provider.displayName,
-    kind: provider.kind,
-    category: provider.category,
-    tier: provider.tier,
-    unlocks: provider.unlocks,
-    fallbackDescription: provider.fallbackDescription,
-    instructionsHint: provider.instructionsHint,
+    ...shared,
     status: isApiKeyProvider(provider) ? (credential ? "file" : "absent") : "reachable",
     browserTransport: provider.browserTransport.mode === "direct" ? "direct" : "relayed",
     hosted: true,
-    ...(isApiKeyProvider(provider)
-      ? {
-          configured: Boolean(credential),
-          source: credential ? ("file" as const) : ("absent" as const),
-          signupUrl: provider.signupUrl,
-          freeTier: provider.freeTier,
-          envVar: provider.envVar,
-          ...(credential ? { maskedKeyHint: `…${credential.slice(-4)}` } : {}),
-        }
-      : {}),
   };
 }
 

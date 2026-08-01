@@ -1,5 +1,6 @@
 import { BellPlus, Loader2, Plus, RefreshCw, Search, Settings, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { toolOutcomeNeedsInput } from "../../../../shared/tool-output.js";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,11 +90,7 @@ export async function invokeMarketStateMutation({
     const response = await invokeToolRequest(toolName, args, "", { recordTranscript: false });
     const acknowledged = response?.result ?? response;
     const payload = acknowledged?.result?.content ? acknowledged.result : acknowledged;
-    const responseDetails = payload?.details?.value ?? payload?.details;
-    if (
-      responseDetails?.status === "needs_selection" ||
-      responseDetails?.status === "needs_currency"
-    ) {
+    if (toolOutcomeNeedsInput(payload)) {
       const message = payload?.content?.find?.((item) => item?.type === "text")?.text;
       setToast?.(message || "More information is required before this can be saved.", {
         destructive: true,
@@ -101,7 +98,14 @@ export async function invokeMarketStateMutation({
       return false;
     }
     await refresh();
-    await refreshQuotes?.();
+    if (refreshQuotes) {
+      void Promise.resolve(refreshQuotes()).catch((quoteError) => {
+        const message = quoteError instanceof Error ? quoteError.message : String(quoteError);
+        setToast?.(`Saved, but current quotes could not be refreshed: ${message}`, {
+          destructive: true,
+        });
+      });
+    }
     return true;
   } catch (mutationError) {
     const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
@@ -446,6 +450,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
             shares: Number(values.shares),
             avg_cost: Number(values.avg_cost),
             currency: values.currency || undefined,
+            ...(values.unverified_exact_symbol ? { unverified_exact_symbol: true } : {}),
             portfolio_name: portfolio?.name,
           });
           if (saved) closePanel();
@@ -805,6 +810,7 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     avg_cost: "",
     currency: lot?.currency ?? "",
   });
+  const unverifiedExactRef = useRef(false);
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -852,7 +858,10 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     if (!resolvedSymbol || !values.shares || !values.avg_cost || !values.currency) return;
     setPending(true);
     try {
-      await onSubmit({ ...values, symbol: resolvedSymbol });
+      await onSubmit({
+        ...values,
+        ...holdingInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
+      });
     } finally {
       setPending(false);
     }
@@ -871,6 +880,9 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
         disabled={disabled || pending || Boolean(lot)}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
       <label htmlFor={quantityId} className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -1416,6 +1428,13 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
 }
 
 export function alertInstrumentArgs(symbol, unverifiedExactSymbol) {
+  return {
+    symbol,
+    ...(unverifiedExactSymbol ? { unverified_exact_symbol: true } : {}),
+  };
+}
+
+export function holdingInstrumentArgs(symbol, unverifiedExactSymbol) {
   return {
     symbol,
     ...(unverifiedExactSymbol ? { unverified_exact_symbol: true } : {}),

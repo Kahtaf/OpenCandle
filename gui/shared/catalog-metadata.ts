@@ -1,3 +1,40 @@
+import type {
+  ApiKeyProviderDescriptor,
+  ProviderDescriptor,
+} from "../../src/onboarding/providers.js";
+
+export function providerCatalogBase(provider: ProviderDescriptor) {
+  return {
+    id: provider.id,
+    kind: provider.kind,
+    displayName: provider.displayName,
+    category: provider.category,
+    tier: provider.tier,
+    aliases: provider.aliases,
+    unlocks: provider.unlocks,
+    fallbackDescription: provider.fallbackDescription,
+    instructionsHint: provider.instructionsHint,
+  };
+}
+
+export function serializeApiKeyProviderCatalog(
+  provider: ApiKeyProviderDescriptor,
+  credential: {
+    source: "env" | "file" | "absent";
+    credential?: string;
+  },
+) {
+  return {
+    ...providerCatalogBase(provider),
+    source: credential.source,
+    configured: credential.source !== "absent",
+    ...(credential.credential ? { maskedKeyHint: `…${credential.credential.slice(-4)}` } : {}),
+    signupUrl: provider.signupUrl,
+    freeTier: provider.freeTier,
+    envVar: provider.envVar,
+  };
+}
+
 export const OPENCANDLE_WORKFLOWS = [
   {
     id: "comprehensive_analysis",

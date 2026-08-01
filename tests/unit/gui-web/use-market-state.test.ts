@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createLatestRequestGate,
   MARKET_STATE_POLL_MS,
   mergeMarketStateSnapshot,
   mergeQuoteRefreshSnapshot,
@@ -10,6 +11,17 @@ describe("market-state refresh intervals", () => {
   it("refreshes quotes immediately on render and every five minutes after that", () => {
     expect(MARKET_STATE_POLL_MS).toBe(4000);
     expect(QUOTE_REFRESH_INTERVAL_MS).toBe(5 * 60 * 1000);
+  });
+});
+
+describe("createLatestRequestGate", () => {
+  it("invalidates an older quote refresh as soon as a newer one starts", () => {
+    const gate = createLatestRequestGate();
+    const first = gate.start();
+    const second = gate.start();
+
+    expect(first.isLatest()).toBe(false);
+    expect(second.isLatest()).toBe(true);
   });
 });
 
@@ -94,6 +106,9 @@ describe("mergeMarketStateSnapshot", () => {
         watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 190 }],
         portfolioQuotes: [{ lotId: 2, symbol: "VTI", marketValue: 600, pnl: 100 }],
         portfolioSummary: { totalValue: 600, totalPnl: 100, baseCurrency: "USD" },
+        portfolioSummaries: [
+          { portfolioId: 1, totalValue: 600, totalPnl: 100, baseCurrency: "USD" },
+        ],
       },
     };
 
@@ -106,6 +121,7 @@ describe("mergeMarketStateSnapshot", () => {
     expect(next.quoteSnapshot.watchlistQuotes).toBe(current.quoteSnapshot.watchlistQuotes);
     expect(next.quoteSnapshot.portfolioQuotes).toEqual([]);
     expect(next.quoteSnapshot.portfolioSummary).toBeNull();
+    expect(next.quoteSnapshot.portfolioSummaries).toEqual([]);
   });
 });
 

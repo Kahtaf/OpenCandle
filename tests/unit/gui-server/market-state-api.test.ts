@@ -623,8 +623,9 @@ describe("market-state API helpers", () => {
       }),
     ]);
     expect(snapshot.portfolioSummary).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 300,
       excludedFromTotals: [
         expect.objectContaining({ symbol: "AAPL", reason: "provider returned stale market data" }),
       ],
@@ -682,8 +683,9 @@ describe("market-state API helpers", () => {
       }),
     ]);
     expect(snapshot.portfolioSummary).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 300,
     });
     db.close();
   });
@@ -777,8 +779,9 @@ describe("market-state API helpers", () => {
       }),
     ]);
     expect(snapshot.portfolioSummary).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      status: "unavailable",
+      totalValue: null,
+      totalCost: 300,
     });
     db.close();
   });

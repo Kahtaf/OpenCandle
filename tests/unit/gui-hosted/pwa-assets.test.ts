@@ -136,10 +136,17 @@ describe("hosted PWA assets", () => {
     expect(smoke).toContain('waitForText(restored, "Price history"');
   });
 
-  it("marks diagnostic provider evidence as untrusted before model synthesis", () => {
+  it("ships only the production stdio GUI protocol in the browser runtime", () => {
     const server = readFileSync(resolve(root, "gui/hosted/runtime/server.ts"), "utf8");
-    expect(server).toContain('untrustedContentHeader("Polymarket diagnostic evidence")');
-    expect(server).toContain("renderUntrustedText(item.title");
-    expect(server).toContain("renderUntrustedText(item.outcome");
+    expect(server).not.toContain("createServer");
+    expect(server).not.toContain('operation === "health"');
+    expect(server).not.toContain('operation === "probe"');
+    expect(server).not.toContain('operation === "session"');
+    expect(server).toContain('operation === "gui"');
+    expect(server).toContain('operation === "gui-stream"');
+    expect(server).toContain("Chat runs require the streaming hosted GUI operation");
+    expect(server).toMatch(
+      /operation === "gui-stream"[\s\S]+refreshHostedRelayProviders\(runtime\)[\s\S]+runtime\.chatRun/,
+    );
   });
 });

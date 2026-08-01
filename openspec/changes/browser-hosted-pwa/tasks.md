@@ -83,10 +83,10 @@
 ## 13. Close remaining hosted/local feature-parity gaps
 
 - [x] 13.1 Replace hosted catalog and manual-tool metadata with the filtered canonical GUI/TUI catalog, including parameters, domains, defaults, workflows, and executable invocation.
-- [ ] 13.2 Reuse canonical market-state tool commands so hosted chat and manual actions can manage watchlists, portfolios, alerts, and reports while excluding only unavailable background delivery.
+- [x] 13.2 Reuse canonical market-state tool commands so hosted chat and manual actions can manage watchlists, portfolios, alerts, and reports while excluding only unavailable background delivery.
 - [x] 13.3 Add the shared ask-user command lifecycle and attachment parsing to the browser-safe session composition.
-- [ ] 13.8 Reuse the remaining JIT credential and thinking-level controls where they are available in the local GUI/TUI.
-- [ ] 13.4 Replace volatile hosted action deduplication with canonical persisted Pi action markers and prove exactly-once behavior across runtime epochs.
-- [ ] 13.5 Extract a shared headless Pi/OpenCandle session factory beneath local GUI, TUI, and hosted compositions; remove the partial hosted ExtensionAPI lifecycle.
-- [ ] 13.6 Reuse the canonical live chat-event adapter and assert equivalent ordered progress, tool, source, cancellation, and completion traces on hosted and local web.
-- [ ] 13.7 Consolidate hosted/local market snapshot builders, provider requirements, tool capability metadata, and typed transport requests so platform adapters only handle transport and persistence.
+- [x] 13.8 Reuse the remaining JIT credential and thinking-level controls where they are available in the local GUI/TUI.
+- [x] 13.4 Replace volatile hosted action deduplication with canonical persisted Pi action markers and prove exactly-once behavior across runtime epochs.
+- [x] 13.5 Extract a shared headless Pi/OpenCandle session factory beneath local GUI, TUI, and hosted compositions; remove the partial hosted ExtensionAPI lifecycle.
+- [x] 13.6 Reuse the canonical live chat-event adapter and assert equivalent ordered progress, tool, source, cancellation, and completion traces on hosted and local web.
+- [x] 13.7 Consolidate hosted/local market snapshot builders, provider requirements, tool capability metadata, and typed transport requests so platform adapters only handle transport and persistence.

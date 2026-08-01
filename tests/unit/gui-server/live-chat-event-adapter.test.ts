@@ -1,7 +1,7 @@
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { createLiveChatEventAdapter } from "../../../gui/server/live-chat-event-adapter.js";
 import type { ChatEvent } from "../../../gui/shared/chat-events.js";
+import { createLiveChatEventAdapter } from "../../../gui/shared/live-chat-event-adapter.js";
 
 describe("live chat event adapter", () => {
   it("streams text deltas and preserves completed tool outputs for GUI renderers", () => {
@@ -79,7 +79,7 @@ describe("live chat event adapter", () => {
         toolName: "get_stock_quote",
         result: {
           content: [{ type: "text", text: "NVDA quote" }],
-          details: { symbol: "NVDA", price: 185.25 },
+          details: { symbol: "NVDA", price: 185.25, source: "Yahoo Finance" },
         },
         isError: false,
       }),
@@ -101,8 +101,9 @@ describe("live chat event adapter", () => {
       toolCallId: "call-1",
       output: {
         content: [{ type: "text", text: "NVDA quote" }],
-        details: { symbol: "NVDA", price: 185.25 },
+        details: { symbol: "NVDA", price: 185.25, source: "Yahoo Finance" },
         isError: false,
+        source: "Yahoo Finance",
       },
     });
   });

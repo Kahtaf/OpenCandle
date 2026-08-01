@@ -1,10 +1,10 @@
-import type { CreateAgentSessionResult } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
 import { initDefaultDatabase } from "../memory/sqlite.js";
 import { getAllDefaults } from "../memory/tool-defaults.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import {
   type CreateOpenCandleSessionOptions,
+  type CreateOpenCandleSessionResult,
   createOpenCandleSessionCore,
 } from "./session-core.js";
 import { runOpenCandleSetup } from "./setup.js";
@@ -15,7 +15,7 @@ export type { CreateOpenCandleSessionOptions } from "./session-core.js";
 /** Native local TUI and web composition. */
 export async function createOpenCandleSession(
   options: CreateOpenCandleSessionOptions = {},
-): Promise<CreateAgentSessionResult> {
+): Promise<CreateOpenCandleSessionResult> {
   // Tool composition reads provider configuration, so hydrate .env before
   // constructing definitions. The core repeats this defensively for callers
   // that supply their own browser-safe composition.

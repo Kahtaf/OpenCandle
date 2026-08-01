@@ -1,8 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assertTerminalAssistantSucceeded,
   BrowserPiSession,
@@ -75,9 +75,75 @@ describe("BrowserPiSession model history", () => {
       expect.objectContaining({ provider: "anthropic", modelId: "claude-haiku-4-5" }),
     ]);
   });
+
+  it("preserves thinking selected before the first message across session restarts", async () => {
+    const root = mkdtempSync(join(tmpdir(), "opencandle-browser-pi-thinking-"));
+    roots.push(root);
+    const sessionDir = join(root, "sessions");
+    const stateFile = join(root, "state.sqlite3");
+    const database = await createSqlJsStateDatabase();
+    const manager = SessionManager.create(root, sessionDir);
+    const sessionFile = manager.getSessionFile();
+    const header = manager.getHeader();
+    if (!sessionFile || !header) throw new Error("Expected a Pi session header");
+    writeFileSync(sessionFile, `${JSON.stringify(header)}\n`, { flag: "wx" });
+    manager.appendModelChange("openai", "gpt-5-mini");
+    manager.appendThinkingLevelChange("minimal");
+    const restoredFile = sessionFile;
+
+    for (let restart = 0; restart < 2; restart += 1) {
+      const session = await BrowserPiSession.create({
+        cwd: root,
+        sessionDir,
+        restoredSessionFile: restoredFile,
+        stateFile,
+        stateDatabase: database,
+        providerId: "openai",
+        modelId: "gpt-5-mini",
+        credentials: { openai: "openai-key" },
+        toolDefinitions: [],
+      });
+      expect(session.getThinkingState().current).toBe("minimal");
+      session.dispose();
+    }
+
+    const entries = readFileSync(restoredFile, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const thinkingEntries = entries.filter((entry) => entry.type === "thinking_level_change");
+    expect(thinkingEntries.length).toBeGreaterThan(0);
+    expect(thinkingEntries).not.toContainEqual(expect.objectContaining({ thinkingLevel: "off" }));
+    expect(thinkingEntries.at(-1)).toMatchObject({ thinkingLevel: "minimal" });
+    database.close();
+  });
 });
 
 describe("BrowserPiSession terminal outcomes", () => {
+  it("delegates thinking levels to the real Pi session contract", () => {
+    const setThinkingLevel = vi.fn(function (this: { thinkingLevel: string }, level: string) {
+      this.thinkingLevel = level;
+    });
+    const browserSession = {
+      session: {
+        thinkingLevel: "low",
+        getAvailableThinkingLevels: () => ["off", "low", "high"],
+        setThinkingLevel,
+      },
+      getThinkingState: BrowserPiSession.prototype.getThinkingState,
+    };
+
+    expect(BrowserPiSession.prototype.getThinkingState.call(browserSession)).toEqual({
+      current: "low",
+      available: ["off", "low", "high"],
+    });
+    expect(BrowserPiSession.prototype.setThinkingLevel.call(browserSession, "high")).toEqual({
+      current: "high",
+      available: ["off", "low", "high"],
+    });
+    expect(setThinkingLevel).toHaveBeenCalledWith("high");
+  });
+
   it("surfaces the provider message when Pi ends the turn with an error", () => {
     expect(() =>
       assertTerminalAssistantSucceeded([
@@ -125,7 +191,8 @@ describe("BrowserPiSession terminal outcomes", () => {
         waitForIdle: async () => undefined,
         abort: async () => undefined,
       },
-      coordinator: { waitForActiveWorkflow: async () => undefined },
+      sessionManager: { getEntries: () => [] },
+      waitForSettled: async () => undefined,
       stateDatabase: { exportBytes: () => stateBytes },
       stateFile,
     };

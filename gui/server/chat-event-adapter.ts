@@ -1,6 +1,7 @@
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
+import { normalizeToolOutput } from "../shared/tool-output.js";
 
 export interface SessionEventOptions {
   sessionId: string;
@@ -421,17 +422,11 @@ function imageAlt(part: unknown): string | undefined {
 }
 
 function toolOutput(message: ToolResultMessage): ToolOutput {
-  const details = message.details;
-  const source =
-    typeof details === "object" && details !== null && "source" in details
-      ? String((details as { source?: unknown }).source ?? "")
-      : undefined;
-  return {
+  return normalizeToolOutput({
     content: message.content,
-    details,
+    details: message.details,
     isError: message.isError,
-    source,
-  };
+  });
 }
 
 function inputFromDetails(details: unknown): unknown {

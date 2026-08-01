@@ -250,6 +250,44 @@ describe("browser runtime host", () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
+  it("persists runtime checkpoints before acknowledging streamed work", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const persistCheckpoint = vi.fn(async () => true);
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { persistCheckpoint },
+    });
+    host.runtimeEpoch = "runtime-epoch";
+    host.pendingRequests.set("stream-1", {
+      runtimeEpoch: "runtime-epoch",
+      streamController: {},
+      sseGate: { push: vi.fn() },
+    });
+    host.writeProcessMessage = vi.fn(async () => {});
+
+    host.handleRuntimeMessage({
+      type: "checkpoint",
+      requestId: "stream-1",
+      checkpointId: "checkpoint-1",
+      runtimeEpoch: "runtime-epoch",
+      value: { sessionId: "session-1", checkpoint: { sessions: [], state: {} } },
+    });
+
+    await vi.waitFor(() =>
+      expect(host.writeProcessMessage).toHaveBeenCalledWith({
+        type: "checkpoint-ack",
+        runtimeEpoch: "runtime-epoch",
+        requestId: "stream-1",
+        checkpointId: "checkpoint-1",
+        ok: true,
+      }),
+    );
+    expect(persistCheckpoint).toHaveBeenCalledOnce();
+  });
+
   it("times out and cancels a stream that emits once and then stalls", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("addEventListener", vi.fn());
@@ -367,6 +405,7 @@ describe("browser runtime host", () => {
     });
     host.ensureBooted = vi.fn(async () => {});
     host.request = vi.fn();
+    host.runtimeThinking = { current: "high", available: ["off", "high"] };
 
     await expect(host.handleCommand({ type: "hosted.data.clear_secrets" })).resolves.toMatchObject({
       modelSetup: { requirement: "api_key" },
@@ -382,6 +421,7 @@ describe("browser runtime host", () => {
       "gui",
       expect.objectContaining({ action: "configure_model" }),
     );
+    expect(host.getModelSetup()).not.toHaveProperty("currentThinkingLevel");
   });
 
   it("repopulates the active service worker shell after clearing browser caches", async () => {
@@ -480,6 +520,45 @@ describe("browser runtime host", () => {
     });
   });
 
+  it("reflects Pi thinking state without storing a second preference", () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const storage = memoryStorage();
+    storage.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: { openai: { apiKey: "openai-key", storageMode: "persistent" } },
+      }),
+    );
+    storage.setItem(
+      "opencandle.hosted.model-selection.v1",
+      JSON.stringify({ version: 1, provider: "openai", modelId: "gpt-5-mini" }),
+    );
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage,
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+
+    host.captureRuntimeState({ thinking: { current: "medium", available: ["off", "medium"] } });
+
+    expect(host.getModelSetup()).toMatchObject({
+      currentThinkingLevel: "medium",
+      availableThinkingLevels: ["off", "medium"],
+    });
+
+    host.captureRuntimeState({ sessionId: "session-1" });
+    expect(host.getModelSetup()).toMatchObject({
+      currentThinkingLevel: "medium",
+      availableThinkingLevels: ["off", "medium"],
+    });
+
+    host.captureRuntimeState({ thinking: null });
+    expect(host.getModelSetup()).not.toHaveProperty("currentThinkingLevel");
+  });
+
   it("preserves provider credentials independently while switching Pi models", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -527,6 +606,47 @@ describe("browser runtime host", () => {
       provider: "openai",
       modelId: "gpt-5-mini",
       apiKey: "openai-key",
+    });
+  });
+
+  it("does not persist a model selection that the active runtime rejects", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const storage = memoryStorage();
+    storage.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: { openai: { apiKey: "openai-key", storageMode: "persistent" } },
+      }),
+    );
+    storage.setItem(
+      "opencandle.hosted.model-selection.v1",
+      JSON.stringify({ version: 1, provider: "openai", modelId: "gpt-5-mini" }),
+    );
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage,
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.request = vi.fn(async (_operation, body) => {
+      if (body.action === "configure_model") throw new Error("research run is active");
+      return {};
+    });
+
+    await expect(
+      host.handleCommand({
+        type: "model.setup.select_model",
+        provider: "openai",
+        modelId: "gpt-5.4",
+      }),
+    ).rejects.toThrow("active");
+
+    expect(host.getModelSetup()).toMatchObject({ currentModel: "openai/gpt-5-mini" });
+    expect(JSON.parse(storage.getItem("opencandle.hosted.model-selection.v1"))).toMatchObject({
+      provider: "openai",
+      modelId: "gpt-5-mini",
     });
   });
 
@@ -767,6 +887,59 @@ describe("browser runtime host", () => {
     await host.boot();
 
     expect(calls).toEqual(["configure", "boot", "boot"]);
+  });
+
+  it("mounts canonical action markers beside restored Pi sessions", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const mount = vi.fn(async () => {});
+    const actionStore = JSON.stringify({
+      acceptedActionIds: ["run-1"],
+      pendingActionIds: [],
+      actionFingerprints: { "run-1": "fingerprint" },
+    });
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        readRuntimeSnapshot: vi.fn(async () => ({
+          sessions: [
+            {
+              filename: "session.jsonl",
+              content: '{"type":"session","version":3,"id":"session-1"}\n',
+              actionStore,
+            },
+          ],
+          stateBytes: null,
+          currentSessionId: "session-1",
+        })),
+      },
+      WebContainerImpl: { boot: vi.fn(async () => ({ mount })) },
+    });
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {});
+
+    await host.boot();
+
+    expect(mount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessions: {
+          directory: expect.objectContaining({
+            "session.jsonl.accepted-actions.json": { file: { contents: actionStore } },
+          }),
+        },
+      }),
+    );
   });
 
   it("passes a stable non-secret relay identity only to the hosted process", async () => {

@@ -155,6 +155,10 @@ export function createWsHub({
           );
           broadcastModelSetup();
           break;
+        case "model.setup.set_thinking":
+          await modelSetupController.handleSetThinkingLevel?.(String(data.level ?? ""));
+          broadcastModelSetup();
+          break;
         case "provider.save_api_key":
           await modelSetupController.handleSaveProviderApiKey(
             String(data.providerId ?? ""),

@@ -16,6 +16,8 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
   const [setupOpen, setSetupOpen] = useState(false);
   const availableModels = modelSetup?.availableModels || [];
   const currentModel = modelSetup?.currentModel || "";
+  const availableThinkingLevels = modelSetup?.availableThinkingLevels || [];
+  const currentThinkingLevel = modelSetup?.currentThinkingLevel || "off";
   const triggerLabel = formatModelLabel(currentModel) || "No model connected";
 
   const onSelect = (model) => {
@@ -87,6 +89,29 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
             )}
           </div>
           <div className="border-t border-border p-1">
+            {availableThinkingLevels.length > 1 ? (
+              <div className="border-b border-border px-1 pb-2 pt-1">
+                <div className="px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Reasoning
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {availableThinkingLevels.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      aria-pressed={level === currentThinkingLevel}
+                      onClick={() => send?.("model.setup.set_thinking", { level })}
+                      className={cn(
+                        "min-h-8 rounded-md px-2 text-xs capitalize text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        level === currentThinkingLevel && "bg-secondary text-foreground",
+                      )}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <button
               type="button"
               role="menuitem"

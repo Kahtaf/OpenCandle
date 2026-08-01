@@ -1,3 +1,5 @@
+import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
+
 const CHANNEL_NAME = "opencandle-hosted-coordination-v1";
 const LOCK_NAME = "opencandle-hosted-writer-v1";
 const EPOCH_KEY = "opencandle.hosted.runtime-epoch.v1";
@@ -475,24 +477,9 @@ function isCredentialBearingCommand(command) {
   return command?.type === "model.setup.save_api_key" || command?.type === "provider.save_api_key";
 }
 
-const READ_ONLY_GUI_ACTIONS = new Set([
-  "bootstrap",
-  "get",
-  "market_state",
-  "market_quotes",
-  "market_indices",
-  "instrument_history",
-  "instrument_search",
-  "instrument_quote",
-  "instrument_endpoint",
-  "diagnostics",
-  "validate_model_key",
-  "validate_provider_key",
-]);
-
 function isMutatingRequest(operation, payload) {
   if (operation !== "gui") return false;
-  return !READ_ONLY_GUI_ACTIONS.has(payload?.action);
+  return hostedGuiActionBlocksUpdate(payload?.action);
 }
 
 function forwardedRequestMutates(message) {

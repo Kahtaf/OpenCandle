@@ -4,6 +4,9 @@ import {
   modelSetupProviders,
 } from "../../../../src/pi/model-provider-metadata.js";
 import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generated.js";
+import { resolveFirstClassModelEntry } from "../../../../src/pi/model-catalog-lookup.js";
+import { listApiKeyProviders } from "../../../../src/onboarding/providers.js";
+import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
 
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
@@ -12,14 +15,6 @@ const PROVIDER_CREDENTIAL_KEY = "opencandle.hosted.provider-credentials.v1";
 const CURRENT_SESSION_KEY = "opencandle.hosted.current-session.v1";
 const RELAY_CLIENT_KEY = "opencandle.hosted.relay-client.v1";
 const REQUEST_TIMEOUT_MS = 180_000;
-const PROVIDER_ENV_BY_ID = Object.freeze({
-  alpha_vantage: "ALPHA_VANTAGE_API_KEY",
-  fred: "FRED_API_KEY",
-  finnhub: "FINNHUB_API_KEY",
-  brave: "BRAVE_API_KEY",
-  exa: "EXA_API_KEY",
-  lse: "LSE_API_KEY",
-});
 
 export function createBrowserRuntimeHost(options = {}) {
   return new BrowserRuntimeHost(options);
@@ -68,6 +63,7 @@ class BrowserRuntimeHost {
     this.lastBootError = "";
     this.pendingRequests = new Map();
     this.subscribers = new Set();
+    this.runtimeThinking = null;
   }
 
   subscribe(callback) {
@@ -94,6 +90,12 @@ class BrowserRuntimeHost {
       storageMode: selection ? credentials[selection.provider]?.storageMode ?? "persistent" : "persistent",
       supportsAttachments: true,
       hosted: true,
+      ...(configured && this.runtimeThinking
+        ? {
+            currentThinkingLevel: this.runtimeThinking.current,
+            availableThinkingLevels: this.runtimeThinking.available,
+          }
+        : {}),
       ...(this.lastBootError ? { error: this.lastBootError } : {}),
     };
   }
@@ -107,7 +109,7 @@ class BrowserRuntimeHost {
         if (!apiKey || apiKey.length > 512) throw new Error("Enter a valid model API key.");
         const setup = modelSetupProviders.find((candidate) => candidate.id === provider);
         const requestedModel = String(command.modelId ?? setup?.defaultModel ?? "");
-        const model = resolveCatalogModel(provider, requestedModel);
+        const model = resolveFirstClassModelEntry(provider, requestedModel);
         if (!model) throw new Error("Unsupported provider or model.");
         const storageMode = command.storageMode === "session" ? "session" : "persistent";
         const validation = await this.request("gui", {
@@ -118,37 +120,45 @@ class BrowserRuntimeHost {
         if (validation?.status === "invalid") {
           throw new Error(`The ${setup?.label ?? provider} key was rejected. Your existing key was not changed.`);
         }
-        this.writeCredential({ provider, modelId: model.id, apiKey, storageMode });
         await this.request("gui", {
           action: "configure_model",
           provider,
           modelId: model.id,
           apiKey,
         });
+        this.writeCredential({ provider, modelId: model.id, apiKey, storageMode });
         return { modelSetup: this.getModelSetup() };
       }
       case "model.setup.select_model": {
         const provider = isFirstClassModelProvider(command.provider) ? command.provider : undefined;
         const modelId = String(command.modelId ?? "");
-        if (!provider || !resolveCatalogModel(provider, modelId)) {
+        if (!provider || !resolveFirstClassModelEntry(provider, modelId)) {
           throw new Error("Unsupported provider or model.");
         }
         const credential = this.readModelCredentials()[provider];
         if (!credential?.apiKey) throw new Error(`Connect ${provider} before selecting this model.`);
-        this.writeModelSelection({ provider, modelId });
         await this.request("gui", {
           action: "configure_model",
           provider,
           modelId,
           apiKey: credential.apiKey,
         });
+        this.writeModelSelection({ provider, modelId });
         return { modelSetup: this.getModelSetup() };
       }
       case "model.setup.refresh":
         return { modelSetup: this.getModelSetup() };
+      case "model.setup.set_thinking": {
+        const result = await this.request("gui", {
+          action: "configure_thinking",
+          level: String(command.level ?? ""),
+        });
+        this.captureRuntimeState(result);
+        return { modelSetup: this.getModelSetup() };
+      }
       case "provider.save_api_key": {
         const providerId = String(command.providerId ?? "").trim();
-        if (!Object.hasOwn(PROVIDER_ENV_BY_ID, providerId)) {
+        if (!apiKeyProvider(providerId)) {
           throw new Error("This provider does not accept an API key in hosted OpenCandle.");
         }
         const apiKey = String(command.apiKey ?? "").trim();
@@ -489,9 +499,16 @@ class BrowserRuntimeHost {
     if (sessionFiles.length > 0) {
       runtimeFiles.sessions = {
         directory: Object.fromEntries(
-          sessionFiles.map((session) => [
-            session.filename,
-            { file: { contents: session.content } },
+          sessionFiles.flatMap((session) => [
+            [session.filename, { file: { contents: session.content } }],
+            ...(session.actionStore
+              ? [
+                  [
+                    `${session.filename}.accepted-actions.json`,
+                    { file: { contents: session.actionStore } },
+                  ],
+                ]
+              : []),
           ]),
         ),
       };
@@ -518,8 +535,6 @@ class BrowserRuntimeHost {
     const selection = this.readModelSelection(modelCredentials);
     const providerCredentials = this.readProviderCredentials();
     const environment = {
-      OPENCANDLE_RUNTIME_TRANSPORT: "stdio",
-      OPENCANDLE_SPIKE_HOST_ORIGIN: globalThis.location.origin,
       OPENCANDLE_RUNTIME_EPOCH: this.runtimeEpoch,
       ...(this.relayUrl
         ? {
@@ -540,10 +555,11 @@ class BrowserRuntimeHost {
           }
         : {}),
       ...Object.fromEntries(
-        Object.entries(providerCredentials).map(([providerId, apiKey]) => [
-          PROVIDER_ENV_BY_ID[providerId],
-          apiKey,
-        ]),
+        Object.entries(providerCredentials).map(([providerId, apiKey]) => {
+          const provider = apiKeyProvider(providerId);
+          if (!provider) throw new Error(`Unsupported hosted provider: ${providerId}`);
+          return [provider.envVar, apiKey];
+        }),
       ),
       ...(currentSessionId
         ? {
@@ -653,6 +669,15 @@ class BrowserRuntimeHost {
       this.runtimeReady = null;
       return;
     }
+    if (
+      message.type === "checkpoint" &&
+      typeof message.requestId === "string" &&
+      typeof message.checkpointId === "string" &&
+      this.pendingRequests.has(message.requestId)
+    ) {
+      void this.acknowledgeRuntimeCheckpoint(message);
+      return;
+    }
     if (message.type === "stream-event" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
       if (
@@ -689,6 +714,7 @@ class BrowserRuntimeHost {
     pending.signal?.removeEventListener("abort", pending.abort);
     this.pendingRequests.delete(message.requestId);
     if (message.ok) {
+      this.captureRuntimeState(message.result);
       pending.resolve(message.result);
       return;
     }
@@ -700,6 +726,29 @@ class BrowserRuntimeHost {
         ),
       ),
     );
+  }
+
+  async acknowledgeRuntimeCheckpoint(message) {
+    try {
+      const persisted = await this.persistCheckpoint(message.value);
+      if (persisted === false) throw new Error("Hosted runtime checkpoint is invalid");
+      await this.writeProcessMessage({
+        type: "checkpoint-ack",
+        runtimeEpoch: this.runtimeEpoch,
+        requestId: message.requestId,
+        checkpointId: message.checkpointId,
+        ok: true,
+      });
+    } catch (error) {
+      await this.writeProcessMessage({
+        type: "checkpoint-ack",
+        runtimeEpoch: this.runtimeEpoch,
+        requestId: message.requestId,
+        checkpointId: message.checkpointId,
+        ok: false,
+        error: String(error instanceof Error ? error.message : error).slice(0, 500),
+      });
+    }
   }
 
   async finishStreamRequest(requestId, message) {
@@ -733,6 +782,27 @@ class BrowserRuntimeHost {
     return { ...persistent, ...session, ...volatile };
   }
 
+  captureRuntimeState(value) {
+    if (!value || typeof value !== "object") return;
+    if (!Object.prototype.hasOwnProperty.call(value, "thinking")) return;
+    const thinking = value.thinking;
+    if (thinking == null) {
+      this.runtimeThinking = null;
+      return;
+    }
+    if (
+      thinking &&
+      typeof thinking === "object" &&
+      typeof thinking.current === "string" &&
+      Array.isArray(thinking.available)
+    ) {
+      this.runtimeThinking = {
+        current: thinking.current,
+        available: thinking.available.filter((level) => typeof level === "string"),
+      };
+    }
+  }
+
   writeCredential(credential) {
     const persistent = parseCredentialStore(this.storage.getItem(CREDENTIAL_KEY), "persistent");
     const session = parseCredentialStore(this.sessionStorage.getItem(CREDENTIAL_KEY), "session");
@@ -753,7 +823,7 @@ class BrowserRuntimeHost {
 
   readModelSelection(credentials = this.readModelCredentials()) {
     const stored = parseModelSelection(this.storage.getItem(MODEL_SELECTION_KEY));
-    if (stored && credentials[stored.provider] && resolveCatalogModel(stored.provider, stored.modelId)) {
+    if (stored && credentials[stored.provider] && resolveFirstClassModelEntry(stored.provider, stored.modelId)) {
       return stored;
     }
     for (const provider of modelSetupProviders) {
@@ -780,6 +850,7 @@ class BrowserRuntimeHost {
 
   clearModelCredentials() {
     this.volatileCredential = null;
+    this.runtimeThinking = null;
     this.storage.removeItem(CREDENTIAL_KEY);
     this.sessionStorage.removeItem(CREDENTIAL_KEY);
     this.storage.removeItem(MODEL_SELECTION_KEY);
@@ -1005,18 +1076,12 @@ function parseModelSelection(serialized) {
   if (!serialized) return null;
   try {
     const value = JSON.parse(serialized);
-    return value?.version === 1 && resolveCatalogModel(value.provider, value.modelId)
+    return value?.version === 1 && resolveFirstClassModelEntry(value.provider, value.modelId)
       ? { provider: value.provider, modelId: value.modelId }
       : null;
   } catch {
     return null;
   }
-}
-
-function resolveCatalogModel(provider, modelId) {
-  return firstClassModelCatalog.find(
-    (model) => model.provider === provider && model.id === modelId,
-  );
 }
 
 function parseProviderCredentials(serialized) {
@@ -1029,7 +1094,7 @@ function parseProviderCredentials(serialized) {
     return Object.fromEntries(
       Object.entries(value.credentials).filter(
         ([providerId, apiKey]) =>
-          Object.hasOwn(PROVIDER_ENV_BY_ID, providerId) &&
+          Boolean(apiKeyProvider(providerId)) &&
           typeof apiKey === "string" &&
           apiKey.trim().length > 0 &&
           apiKey.length <= 8_192,
@@ -1038,6 +1103,10 @@ function parseProviderCredentials(serialized) {
   } catch {
     return {};
   }
+}
+
+function apiKeyProvider(providerId) {
+  return listApiKeyProviders().find((provider) => provider.id === providerId);
 }
 
 function normalizeCredential(value) {
@@ -1070,23 +1139,8 @@ function isByteArray(value) {
   );
 }
 
-const UPDATE_SAFE_GUI_ACTIONS = new Set([
-  "bootstrap",
-  "get",
-  "market_state",
-  "market_quotes",
-  "market_indices",
-  "instrument_history",
-  "instrument_search",
-  "instrument_quote",
-  "instrument_endpoint",
-  "diagnostics",
-  "validate_model_key",
-  "validate_provider_key",
-]);
-
 function requestBlocksUpdate(operation, payload) {
-  return operation !== "gui" || !UPDATE_SAFE_GUI_ACTIONS.has(payload?.action);
+  return operation !== "gui" || hostedGuiActionBlocksUpdate(payload?.action);
 }
 
 async function withTimeout(promise, timeoutMs, message) {

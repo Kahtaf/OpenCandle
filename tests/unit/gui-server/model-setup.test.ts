@@ -76,6 +76,42 @@ describe("GUI model setup", () => {
     expect(state.requirement).toBe("ready");
   });
 
+  it("projects Pi thinking controls into the shared model setup state", () => {
+    const active = model("openai", "gpt-5-mini");
+
+    const state = buildModelSetupState(registry([active], new Set(["openai/gpt-5-mini"])), active, {
+      current: "medium",
+      available: ["off", "low", "medium", "high"],
+    });
+
+    expect(state).toMatchObject({
+      currentThinkingLevel: "medium",
+      availableThinkingLevels: ["off", "low", "medium", "high"],
+    });
+  });
+
+  it("sets thinking through Pi and flushes its canonical settings", async () => {
+    const setThinkingLevel = vi.fn();
+    const flush = vi.fn(async () => undefined);
+    const controller = createModelSetupController({
+      role: "writer",
+      getSession: () =>
+        ({
+          modelRuntime: {},
+          getAvailableThinkingLevels: () => ["off", "high"],
+          setThinkingLevel,
+          settingsManager: { flush },
+        }) as never,
+      getSessionManager: () => ({ appendCustomMessageEntry: vi.fn() }),
+      broadcastState: vi.fn(),
+    });
+
+    await controller.handleSetThinkingLevel?.("high");
+
+    expect(setThinkingLevel).toHaveBeenCalledWith("high");
+    expect(flush).toHaveBeenCalledOnce();
+  });
+
   it("prefers the provider default model after saving an API key", () => {
     const google = modelSetupProviders.find((provider) => provider.id === "google");
     if (!google) throw new Error("Missing google provider setup");

@@ -2,7 +2,6 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message, ToolCall, Usage } from "@earendil-works/pi-ai";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
 import {
   clearPendingSessionAction,
@@ -14,6 +13,7 @@ import {
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
+import { assertValidToolArguments } from "../shared/tool-argument-validation.js";
 import type { LocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import {
@@ -357,12 +357,7 @@ export async function invokeToolFromUi(
     onTranscriptStarted?: () => void;
   } = {},
 ): Promise<InvokeToolResult> {
-  if (!Value.Check(tool.parameters, args)) {
-    const errors = [...Value.Errors(tool.parameters, args)]
-      .map((error) => `${error.path || "/"} ${error.message}`)
-      .join("; ");
-    throw new Error(errors || "Invalid tool arguments");
-  }
+  assertValidToolArguments(tool.parameters, args);
 
   const toolCallId = `${source}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const call: ToolCall = {

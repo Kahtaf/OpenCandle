@@ -7,8 +7,10 @@ import {
   clearPendingSessionAction,
   hasAcceptedSessionAction,
   hasPendingSessionAction,
+  readSessionActionStoreSnapshot,
   recordAcceptedSessionAction,
   recordPendingSessionAction,
+  restoreSessionActionStoreSnapshot,
 } from "../../../src/pi/session-action-dedupe.js";
 import { acquireWriterLock, migrateWriterLockScope } from "../../../src/pi/session-writer-lock.js";
 
@@ -39,7 +41,128 @@ describe("session action dedupe store", () => {
     }
   });
 
+  it("rejects reuse of an action id with a different input fingerprint", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-fingerprint-"));
+    try {
+      const sessionManager = {
+        getSessionFile: () => join(dir, "session.jsonl"),
+        getSessionDir: () => dir,
+      };
+      recordAcceptedSessionAction(sessionManager, "action-1", "input-a");
+
+      expect(hasAcceptedSessionAction(sessionManager, "action-1", "input-a")).toBe(true);
+      expect(() => hasAcceptedSessionAction(sessionManager, "action-1", "input-b")).toThrow(
+        "different input",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("treats object prototype names as unused action ids", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-prototype-id-"));
+    try {
+      const sessionManager = {
+        getSessionFile: () => join(dir, "session.jsonl"),
+        getSessionDir: () => dir,
+      };
+
+      expect(() =>
+        recordPendingSessionAction(sessionManager, "constructor", "input-a"),
+      ).not.toThrow();
+      expect(hasPendingSessionAction(sessionManager, "constructor", "input-a")).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("prunes fingerprints with evicted accepted and expired pending actions", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-fingerprint-prune-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sessionManager = {
+        getSessionFile: () => sessionFile,
+        getSessionDir: () => dir,
+      };
+
+      for (let index = 0; index < 501; index += 1) {
+        recordAcceptedSessionAction(sessionManager, `accepted-${index}`, `input-${index}`);
+      }
+      recordPendingSessionAction(sessionManager, "pending-expired", "old-input");
+
+      vi.setSystemTime(new Date("2026-07-01T00:03:00.000Z"));
+      recordPendingSessionAction(sessionManager, "pending-current", "current-input");
+
+      const snapshot = readSessionActionStoreSnapshot(sessionManager);
+      const parsed = JSON.parse(snapshot?.content ?? "") as {
+        acceptedActionIds: string[];
+        pendingActionIds: Array<{ id: string }>;
+        actionFingerprints: Record<string, string>;
+      };
+      expect(parsed.acceptedActionIds).toHaveLength(500);
+      expect(parsed.acceptedActionIds).not.toContain("accepted-0");
+      expect(Object.keys(parsed.actionFingerprints)).toHaveLength(501);
+      expect(parsed.actionFingerprints).not.toHaveProperty("accepted-0");
+      expect(parsed.actionFingerprints).not.toHaveProperty("pending-expired");
+      expect(parsed.actionFingerprints).toMatchObject({
+        "accepted-500": "input-500",
+        "pending-current": "current-input",
+      });
+
+      expect(() =>
+        recordPendingSessionAction(sessionManager, "pending-expired", "new-input"),
+      ).not.toThrow();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("round-trips the canonical action sidecar through an opaque snapshot", async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), "opencandle-action-snapshot-source-"));
+    const targetDir = mkdtempSync(join(tmpdir(), "opencandle-action-snapshot-target-"));
+    try {
+      const source = {
+        getSessionFile: () => join(sourceDir, "session.jsonl"),
+        getSessionDir: () => sourceDir,
+      };
+      const target = {
+        getSessionFile: () => join(targetDir, "session.jsonl"),
+        getSessionDir: () => targetDir,
+      };
+      recordAcceptedSessionAction(source, "action-1", "input-a");
+      const snapshot = readSessionActionStoreSnapshot(source);
+
+      expect(snapshot).toEqual(expect.objectContaining({ content: expect.any(String) }));
+      restoreSessionActionStoreSnapshot(target, snapshot?.content ?? "");
+      expect(hasAcceptedSessionAction(target, "action-1", "input-a")).toBe(true);
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+      await rm(targetDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when the action sidecar is corrupt", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-corrupt-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sessionManager = {
+        getSessionFile: () => sessionFile,
+        getSessionDir: () => dir,
+      };
+      writeFileSync(`${sessionFile}.accepted-actions.json`, "{truncated", "utf8");
+
+      expect(() => readSessionActionStoreSnapshot(sessionManager)).toThrow();
+      expect(() => hasAcceptedSessionAction(sessionManager, "action-1")).toThrow();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("migrates accepted action ids when the writer lock moves to the session file", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
     const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-migrate-"));
     try {
       const sessionFile = join(dir, "session.jsonl");
@@ -52,13 +175,22 @@ describe("session action dedupe store", () => {
         getSessionDir: () => dir,
       };
       await acquireWriterLock(dir, "gui");
-      recordPendingSessionAction(fallbackManager, "pending-action");
-      recordAcceptedSessionAction(fallbackManager, "action-1");
+      recordPendingSessionAction(fallbackManager, "pending-action", "pending-input", {
+        durable: true,
+      });
+      recordAcceptedSessionAction(fallbackManager, "action-1", "accepted-input");
 
       expect(migrateWriterLockScope(dir, sessionFile)).toBe(true);
 
-      expect(hasAcceptedSessionAction(fileManager, "action-1")).toBe(true);
-      expect(hasPendingSessionAction(fileManager, "pending-action")).toBe(true);
+      vi.setSystemTime(new Date("2026-07-01T00:03:00.000Z"));
+      expect(hasAcceptedSessionAction(fileManager, "action-1", "accepted-input")).toBe(true);
+      expect(() => hasAcceptedSessionAction(fileManager, "action-1", "changed")).toThrow(
+        "different input",
+      );
+      expect(hasPendingSessionAction(fileManager, "pending-action", "pending-input")).toBe(true);
+      expect(() => hasPendingSessionAction(fileManager, "pending-action", "changed")).toThrow(
+        "different input",
+      );
       expect(hasAcceptedSessionAction(fallbackManager, "action-1")).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -108,6 +240,29 @@ describe("session action dedupe store", () => {
       recordPendingSessionAction(sessionManager, "action-1");
       expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(true);
       expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("retains explicitly durable pending action ids for ambiguous paid-work recovery", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-durable-pending-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sessionManager = {
+        getSessionFile: () => sessionFile,
+        getSessionDir: () => dir,
+      };
+
+      recordPendingSessionAction(sessionManager, "paid-action", "input-a", {
+        durable: true,
+      });
+      vi.setSystemTime(new Date("2026-07-02T00:00:00.000Z"));
+
+      expect(hasPendingSessionAction(sessionManager, "paid-action", "input-a")).toBe(true);
+      expect(hasAcceptedSessionAction(sessionManager, "paid-action", "input-a")).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

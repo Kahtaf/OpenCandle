@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import initSqlJs from "sql.js";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model } from "@earendil-works/pi-ai";
 import {
   type AgentSession,
@@ -15,7 +16,6 @@ import type { ChatEvent } from "../../../gui/shared/chat-events.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { getAllDefaults } from "../../../src/memory/tool-defaults.js";
 import { createOpenCandleSessionCore } from "../../../src/pi/session-core.js";
-import type { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 import {
   createSqlJsStateDatabaseWithModule,
   type SqlJsStateDatabase,
@@ -53,6 +53,7 @@ export interface BrowserPiSessionResult {
   toolNames: string[];
   entries: SessionEntry[];
   events: ChatEvent[];
+  turnEvents: ChatEvent[];
   snapshot: {
     format: "pi-jsonl";
     filename: string;
@@ -79,21 +80,24 @@ export interface BrowserPiSessionOptions {
   providerId: FirstClassModelProviderId;
   modelId: string;
   credentials: BrowserModelCredentials;
-  onDurableEvents?: (events: ChatEvent[]) => void | Promise<void>;
   toolDefinitions?: ToolDefinition[];
   askUserHandler?: AskUserHandler;
+}
+
+export interface BrowserPiThinkingState {
+  current: ThinkingLevel;
+  available: ThinkingLevel[];
 }
 
 export class BrowserPiSession {
   private constructor(
     private readonly session: AgentSession,
     private readonly sessionManager: SessionManager,
-    private readonly coordinator: SessionCoordinator,
+    private readonly waitForSettled: () => Promise<void>,
     private readonly stateDatabase: SqlJsStateDatabase,
     private readonly stateFile: string,
     private readonly ownsStateDatabase: boolean,
     private readonly writeCurrentAlias: boolean,
-    private readonly unsubscribe: () => void,
   ) {}
 
   static async create(options: BrowserPiSessionOptions): Promise<BrowserPiSession> {
@@ -121,7 +125,7 @@ export class BrowserPiSession {
     ) {
       sessionManager.appendModelChange(model.provider, model.id);
     }
-    if (existing.messages.length === 0) {
+    if (existing.thinkingLevel == null) {
       sessionManager.appendThinkingLevelChange("off");
     }
 
@@ -143,8 +147,7 @@ export class BrowserPiSession {
       defaultThinkingLevel: existing.thinkingLevel ?? "off",
       compaction: { enabled: true },
     });
-    let coordinator: SessionCoordinator | undefined;
-    const { session } = await createOpenCandleSessionCore({
+    const sessionHandle = await createOpenCandleSessionCore({
       cwd,
       agentDir: join(cwd, ".pi-agent"),
       modelRuntime,
@@ -160,41 +163,17 @@ export class BrowserPiSession {
         modelRuntime.completeSimple.bind(modelRuntime),
       ),
       toolDefaultsFactory: (database) => getAllDefaults(database),
-      onCoordinatorCreated: (value) => {
-        coordinator = value;
-      },
     });
+    const { session, coordinator } = sessionHandle;
     if (!coordinator) throw new Error("OpenCandle session did not initialize its coordinator");
-    let projectedEventCount = sessionEntriesToChatEvents(sessionManager.getEntries(), {
-      sessionId: sessionManager.getSessionId(),
-    }).length;
-    const unsubscribe = session.subscribe(async (event: AgentSessionEvent) => {
-      if (
-        !options.onDurableEvents ||
-        (event.type !== "message_end" &&
-          event.type !== "turn_end" &&
-          event.type !== "agent_end" &&
-          event.type !== "compaction_end")
-      ) {
-        return;
-      }
-      const projected = sessionEntriesToChatEvents(sessionManager.getEntries(), {
-        sessionId: sessionManager.getSessionId(),
-      });
-      const next = projected.slice(projectedEventCount);
-      projectedEventCount = projected.length;
-      if (next.length > 0) await options.onDurableEvents(next);
-    });
-
     return new BrowserPiSession(
       session,
       sessionManager,
-      coordinator,
+      sessionHandle.waitForSettled,
       stateDatabase,
       stateFile,
       ownsStateDatabase,
       options.writeCurrentAlias === true,
-      unsubscribe,
     );
   }
 
@@ -203,6 +182,7 @@ export class BrowserPiSession {
     signal?: AbortSignal,
     images: ImageContent[] = [],
   ): Promise<BrowserPiSessionResult> {
+    const beforeEntryCount = this.sessionManager.getEntries().length;
     const abort = () => {
       void this.session.abort();
     };
@@ -210,8 +190,7 @@ export class BrowserPiSession {
     signal?.addEventListener("abort", abort, { once: true });
     try {
       await this.session.prompt(question, { images });
-      await this.coordinator.waitForActiveWorkflow();
-      await this.session.waitForIdle();
+      await this.waitForSettled();
       assertTerminalAssistantSucceeded(this.session.state.messages);
       const sessionFile = this.sessionManager.getSessionFile();
       if (!sessionFile || !existsSync(sessionFile)) {
@@ -236,6 +215,9 @@ export class BrowserPiSession {
         toolNames: this.session.getActiveToolNames(),
         entries: entries.slice(-MAX_RETURNED_ENTRIES),
         events: sessionEntriesToChatEvents(entries, {
+          sessionId: this.sessionManager.getSessionId(),
+        }),
+        turnEvents: sessionEntriesToChatEvents(entries.slice(beforeEntryCount), {
           sessionId: this.sessionManager.getSessionId(),
         }),
         snapshot: {
@@ -274,33 +256,27 @@ export class BrowserPiSession {
     void this.session.abort();
   }
 
+  subscribe(handler: (event: AgentSessionEvent) => void): () => void {
+    return this.session.subscribe(handler);
+  }
+
+  getThinkingState(): BrowserPiThinkingState {
+    return {
+      current: this.session.thinkingLevel,
+      available: this.session.getAvailableThinkingLevels(),
+    };
+  }
+
+  setThinkingLevel(level: ThinkingLevel): BrowserPiThinkingState {
+    if (!this.session.getAvailableThinkingLevels().includes(level)) {
+      throw new Error(`Unsupported thinking level: ${level}`);
+    }
+    this.session.setThinkingLevel(level);
+    return this.getThinkingState();
+  }
+
   dispose(): void {
-    this.unsubscribe();
     this.session.dispose();
     if (this.ownsStateDatabase) this.stateDatabase.close();
-  }
-}
-
-export async function runBrowserPiSession(
-  question: string,
-  providerId: FirstClassModelProviderId,
-  modelId: string,
-  apiKey: string,
-): Promise<BrowserPiSessionResult> {
-  const cwd = process.cwd();
-  const session = await BrowserPiSession.create({
-    cwd,
-    sessionDir: join(cwd, "sessions"),
-    restoredSessionFile: join(cwd, "sessions", "current.jsonl"),
-    stateFile: join(cwd, "state", "current.sqlite3"),
-    writeCurrentAlias: true,
-    providerId,
-    modelId,
-    credentials: { [providerId]: apiKey },
-  });
-  try {
-    return await session.prompt(question);
-  } finally {
-    session.dispose();
   }
 }

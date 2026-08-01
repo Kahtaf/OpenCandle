@@ -6,6 +6,7 @@ const BACKUP_FILENAME = "checkpoint-backup-v1.json";
 const MAX_SESSION_FILES = 100;
 const MAX_SESSION_BYTES = 128 * 1_024 * 1_024;
 const MAX_SESSION_ENTRY_BYTES = 32 * 1_024 * 1_024;
+const MAX_ACTION_STORE_BYTES = 1_024 * 1_024;
 const MAX_STATE_BYTES = 32 * 1_024 * 1_024;
 const MAX_ARCHIVE_BYTES = 256 * 1_024 * 1_024;
 const SQLITE_SIGNATURE = "SQLite format 3\0";
@@ -232,6 +233,7 @@ export function createHostedArchive({
     sessions: sessions.map((session) => ({
       filename: session.filename,
       content: session.content,
+      ...(session.actionStore ? { actionStore: session.actionStore } : {}),
     })),
     stateBase64: stateBytes ? encodeBase64(stateBytes) : "",
     currentSessionId: typeof currentSessionId === "string" ? currentSessionId : "",
@@ -256,6 +258,7 @@ export function validateHostedArchive(value) {
     if (!isRecord(session)) throw new Error("Session snapshot is invalid");
     validateSessionFilename(session.filename);
     const sessionId = validateSessionContent(session.content);
+    if (session.actionStore !== undefined) validateActionStore(session.actionStore);
     if (filenames.has(session.filename) || sessionIds.has(sessionId)) {
       throw new Error("Duplicate session identity in hosted archive");
     }
@@ -275,6 +278,40 @@ export function validateHostedArchive(value) {
     throw new Error("Hosted archive is too large");
   }
   return value;
+}
+
+function validateActionStore(content) {
+  if (typeof content !== "string" || byteLength(content) > MAX_ACTION_STORE_BYTES) {
+    throw new Error("Session action snapshot size is invalid");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("Session action snapshot is not valid JSON");
+  }
+  if (
+    !isRecord(parsed) ||
+    !Array.isArray(parsed.acceptedActionIds) ||
+    !Array.isArray(parsed.pendingActionIds) ||
+    parsed.acceptedActionIds.length > 500 ||
+    parsed.pendingActionIds.length > 500 ||
+    parsed.acceptedActionIds.some((id) => typeof id !== "string") ||
+    parsed.pendingActionIds.some(
+      (entry) =>
+        !isRecord(entry) ||
+        typeof entry.id !== "string" ||
+        typeof entry.pendingAtMs !== "number",
+    ) ||
+    (parsed.actionFingerprints !== undefined &&
+      (!isRecord(parsed.actionFingerprints) ||
+        Object.keys(parsed.actionFingerprints).length > 1_000 ||
+        Object.values(parsed.actionFingerprints).some(
+          (fingerprint) => typeof fingerprint !== "string" || fingerprint.length > 256,
+        )))
+  ) {
+    throw new Error("Session action snapshot shape is invalid");
+  }
 }
 
 export function decodeHostedArchive(value) {

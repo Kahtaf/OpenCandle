@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 export const MARKET_STATE_POLL_MS = 4000;
 export const QUOTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+export function createLatestRequestGate() {
+  let generation = 0;
+  return {
+    start() {
+      const requestGeneration = ++generation;
+      return { isLatest: () => requestGeneration === generation };
+    },
+  };
+}
 
 const EMPTY_MARKET_STATE = {
   instruments: [],
@@ -179,6 +189,7 @@ function mergePreservedQuoteSnapshot(current, data) {
     ...quoteSnapshot,
     portfolioQuotes: [],
     portfolioSummary: null,
+    portfolioSummaries: [],
   };
 }
 
@@ -199,6 +210,8 @@ export function useMarketState({
   const [state, setState] = useState(EMPTY_MARKET_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const quoteRefreshGate = useRef(null);
+  quoteRefreshGate.current ??= createLatestRequestGate();
 
   const refresh = useCallback(async () => {
     try {
@@ -213,14 +226,17 @@ export function useMarketState({
   }, [transport]);
 
   const refreshQuotes = useCallback(async () => {
+    const request = quoteRefreshGate.current.start();
     try {
       const quoteSnapshot = await transport.getMarketQuotes();
+      if (!request.isLatest()) return;
       setState((current) => ({
         ...current,
         quoteSnapshot: mergeQuoteRefreshSnapshot(current.quoteSnapshot, quoteSnapshot),
       }));
       setError("");
     } catch (err) {
+      if (!request.isLatest()) return;
       setError(err instanceof Error ? err.message : String(err));
     }
   }, [transport]);

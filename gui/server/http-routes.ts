@@ -28,9 +28,9 @@ export {
   parseChatRunBody,
 } from "../shared/chat-run-input.js";
 
+import { createLiveChatEventAdapter } from "../shared/live-chat-event-adapter.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
-import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import type {
   LocalSessionCoordinator,
   SessionActionEnvelope,
@@ -187,6 +187,15 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
           String(body.provider ?? ""),
           String(body.modelId ?? ""),
         );
+        options.wsHub.broadcastModelSetup();
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/model-setup/thinking" && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
+      await handleTrustedGuiMutation(req, res, options, async (body) => {
+        await options.modelSetupController.handleSetThinkingLevel?.(String(body.level ?? ""));
         options.wsHub.broadcastModelSetup();
       });
       return;

@@ -9,7 +9,12 @@ import {
   type ProviderDescriptor,
 } from "../../src/onboarding/providers.js";
 import { loadOnboardingState, type OnboardingState } from "../../src/onboarding/state.js";
-import { inferToolDomain, OPENCANDLE_WORKFLOWS } from "../shared/catalog-metadata.js";
+import {
+  inferToolDomain,
+  OPENCANDLE_WORKFLOWS,
+  providerCatalogBase,
+  serializeApiKeyProviderCatalog,
+} from "../shared/catalog-metadata.js";
 
 export function buildCatalog() {
   const defaults = getAllDefaults();
@@ -32,31 +37,18 @@ export function buildCatalog() {
 }
 
 function serializeProvider(provider: ProviderDescriptor, onboardingState: OnboardingState) {
-  const common = {
-    id: provider.id,
-    kind: provider.kind,
-    displayName: provider.displayName,
-    category: provider.category,
-    tier: provider.tier,
-    aliases: provider.aliases,
-    unlocks: provider.unlocks,
-    fallbackDescription: provider.fallbackDescription,
-    instructionsHint: provider.instructionsHint,
-  };
+  const common = providerCatalogBase(provider);
 
   if (isApiKeyProvider(provider)) {
     // Never serialize the credential value: this payload reaches the browser DOM.
     const credential = getCredential(provider.id);
     const source = credential.source;
     return {
-      ...common,
-      source,
-      configured: source !== "absent",
-      maskedKeyHint: credential.value ? `…${credential.value.slice(-4)}` : undefined,
+      ...serializeApiKeyProviderCatalog(provider, {
+        source,
+        credential: credential.value,
+      }),
       status: source,
-      signupUrl: provider.signupUrl,
-      freeTier: provider.freeTier,
-      envVar: provider.envVar,
     };
   }
 

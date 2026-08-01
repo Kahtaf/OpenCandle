@@ -11,7 +11,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
 import { assertSupportedNodeVersion } from "../infra/node-version.js";
-import type { SessionCoordinatorOptions } from "../runtime/session-coordinator.js";
+import type {
+  SessionCoordinator,
+  SessionCoordinatorOptions,
+} from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
 import openCandleExtensionCore, {
   type OpenCandleExtensionOptions,
@@ -38,15 +41,21 @@ export interface CreateOpenCandleSessionOptions {
   titleCompletion?: OpenCandleExtensionOptions["titleCompletion"];
 }
 
+export interface CreateOpenCandleSessionResult extends CreateAgentSessionResult {
+  coordinator?: SessionCoordinator;
+  waitForSettled(): Promise<void>;
+}
+
 export async function createOpenCandleSessionCore(
   options: CreateOpenCandleSessionOptions = {},
-): Promise<CreateAgentSessionResult> {
+): Promise<CreateOpenCandleSessionResult> {
   assertSupportedNodeVersion();
   loadEnv();
 
   const cwd = options.cwd ?? process.cwd();
   const agentDir = options.agentDir ?? getAgentDir();
   const useInlineExtension = options.useInlineExtension ?? true;
+  let coordinator: SessionCoordinator | undefined;
   const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
         cwd,
@@ -63,7 +72,10 @@ export async function createOpenCandleSessionCore(
               setupRunner: options.setupRunner,
               addonToolDescriptionsFactory: options.addonToolDescriptionsFactory,
               toolDefaultsFactory: options.toolDefaultsFactory,
-              onCoordinatorCreated: options.onCoordinatorCreated,
+              onCoordinatorCreated: (value) => {
+                coordinator = value;
+                options.onCoordinatorCreated?.(value);
+              },
               titleCompletion: options.titleCompletion,
             }),
         ],
@@ -92,7 +104,14 @@ export async function createOpenCandleSessionCore(
     await result.session.bindExtensions({});
   }
 
-  return result;
+  return {
+    ...result,
+    coordinator,
+    async waitForSettled() {
+      await coordinator?.waitForActiveWorkflow();
+      await result.session.waitForIdle();
+    },
+  };
 }
 
 async function applySavedDefaultModel(result: CreateAgentSessionResult): Promise<void> {

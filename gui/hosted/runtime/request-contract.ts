@@ -1,149 +1,27 @@
-import { firstClassModelCatalog } from "../../../src/pi/model-catalog.generated.js";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
   isFirstClassModelProvider,
-  type FirstClassModelProviderId,
 } from "../../../src/pi/model-provider-metadata.js";
+import { resolveFirstClassModelEntry } from "../../../src/pi/model-catalog-lookup.js";
 import {
-  parseChatRunBody,
-  type ChatRunAttachmentInput,
-  type ChatRunImageInput,
-} from "../../shared/chat-run-input.js";
+  type ApiKeyProviderId,
+  listApiKeyProviders,
+} from "../../../src/onboarding/providers.js";
+import { parseChatRunBody } from "../../shared/chat-run-input.js";
+import type { GuiRequest } from "../../shared/hosted-gui-protocol.js";
 
-export interface ProbeRequest {
-  question: string;
-  provider: "google" | "openai" | "anthropic";
-  modelId: string;
-  runModel: boolean;
-}
+export type { GuiRequest } from "../../shared/hosted-gui-protocol.js";
 
-export type ParsedProbeRequest = ProbeRequest;
-
-export interface SessionRequest {
-  question: string;
-  provider: FirstClassModelProviderId;
-  modelId: string;
-}
-
-export type GuiRequest =
-  | {
-      action:
-        | "bootstrap"
-        | "new_session"
-        | "market_state"
-        | "market_quotes"
-        | "market_indices"
-        | "diagnostics";
-    }
-  | { action: "instrument_search"; query: string }
-  | { action: "instrument_quote"; symbol: string }
-  | { action: "instrument_history"; symbol: string; range: string }
-  | { action: "instrument_endpoint"; endpoint: string; symbol: string }
-  | {
-      action: "configure_model";
-      provider: FirstClassModelProviderId;
-      modelId: string;
-      apiKey: string;
-    }
-  | {
-      action: "validate_provider_key";
-      providerId: "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa" | "lse";
-      apiKey: string;
-    }
-  | {
-      action: "validate_model_key";
-      provider: FirstClassModelProviderId;
-      apiKey: string;
-    }
-  | { action: "load_session" | "delete_session"; sessionId: string }
-  | { action: "rename_session"; sessionId: string; name: string }
-  | { action: "ask_user.answer"; sessionId: string; id: string; answer: string }
-  | { action: "ask_user.cancel"; sessionId: string; id: string }
-  | {
-      action: "tool_invoke";
-      toolName: string;
-      sessionId: string;
-      actionId: string;
-      args: Record<string, unknown>;
-    }
-  | {
-      action: "chat_run";
-      sessionId: string;
-      actionId: string;
-      prompt: string;
-      images: ChatRunImageInput[];
-      attachments: ChatRunAttachmentInput[];
-    };
-
-export const MODEL_ENVIRONMENT = {
-  google: { modelId: "gemini-2.5-flash", envVar: "GEMINI_API_KEY" },
-  openai: { modelId: "gpt-5-mini", envVar: "OPENAI_API_KEY" },
-  anthropic: { modelId: "claude-haiku-4-5", envVar: "ANTHROPIC_API_KEY" },
-} as const;
-
-export function parseTrustedHostOrigin(value: string | undefined): string {
-  const error = new Error("OPENCANDLE_SPIKE_HOST_ORIGIN must be an exact HTTP(S) origin");
-  if (!value) throw error;
-  try {
-    const url = new URL(value);
-    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.origin !== value) {
-      throw error;
-    }
-    return url.origin;
-  } catch {
-    throw error;
-  }
-}
-
-export function parseProbeRequest(
-  value: unknown,
-  environment: Record<string, string | undefined>,
-): ParsedProbeRequest {
-  if (!value || typeof value !== "object") {
-    throw new Error("Request must be a JSON object");
-  }
-  const request = value as Record<string, unknown>;
-  const question = typeof request.question === "string" ? request.question.trim() : "";
-  if (!question) throw new Error("Question must not be blank");
-  if (question.length > 500) throw new Error("Question must be 500 characters or fewer");
-  const provider = request.provider;
-  const modelId = request.modelId;
-  if (!isFirstClassModelProvider(provider) || !resolveFirstClassModel(provider, modelId)) {
-    throw new Error("Unsupported provider or model");
-  }
-  const runModel = request.runModel === true;
-  if (runModel && !environment[MODEL_ENVIRONMENT[provider].envVar]?.trim()) {
-    throw new Error("Model probe requires a configured model key");
-  }
-
-  return {
-    question,
-    provider,
-    modelId,
-    runModel,
-  };
-}
-
-export function parseSessionRequest(
-  value: unknown,
-  environment: Record<string, string | undefined>,
-): SessionRequest {
-  if (!value || typeof value !== "object") {
-    throw new Error("Request must be a JSON object");
-  }
-  const request = value as Record<string, unknown>;
-  const question = parseQuestion(request.question);
-  if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModel(request.provider, request.modelId)) {
-    throw new Error("Unsupported provider or model");
-  }
-  if (!environment[MODEL_ENVIRONMENT[request.provider].envVar]?.trim()) {
-    throw new Error("Pi session requires a configured model key");
-  }
-  return {
-    question,
-    provider: request.provider,
-    modelId: request.modelId,
-  };
-}
+const apiKeyProviderIds = new Set<string>(listApiKeyProviders().map((provider) => provider.id));
+const thinkingLevels = new Set<ThinkingLevel>([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
 
 export function parseGuiRequest(value: unknown): GuiRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -159,7 +37,7 @@ export function parseGuiRequest(value: unknown): GuiRequest {
     case "diagnostics":
       return { action: request.action };
     case "configure_model": {
-      if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModel(request.provider, request.modelId)) {
+      if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModelEntry(request.provider, request.modelId)) {
         throw new Error("Unsupported provider or model");
       }
       if (typeof request.apiKey !== "string" || request.apiKey.length > 512) {
@@ -172,22 +50,25 @@ export function parseGuiRequest(value: unknown): GuiRequest {
         apiKey: request.apiKey,
       };
     }
+    case "configure_thinking": {
+      if (!thinkingLevels.has(request.level as ThinkingLevel)) {
+        throw new Error("Unsupported thinking level");
+      }
+      return { action: request.action, level: request.level as ThinkingLevel };
+    }
     case "validate_provider_key": {
       const providerId = request.providerId;
-      if (
-        providerId !== "alpha_vantage" &&
-        providerId !== "fred" &&
-        providerId !== "finnhub" &&
-        providerId !== "brave" &&
-        providerId !== "exa" &&
-        providerId !== "lse"
-      ) {
+      if (typeof providerId !== "string" || !apiKeyProviderIds.has(providerId)) {
         throw new Error("Unsupported hosted provider");
       }
       if (typeof request.apiKey !== "string" || !request.apiKey.trim() || request.apiKey.length > 8_192) {
         throw new Error("Hosted provider key is invalid");
       }
-      return { action: request.action, providerId, apiKey: request.apiKey.trim() };
+      return {
+        action: request.action,
+        providerId: providerId as ApiKeyProviderId,
+        apiKey: request.apiKey.trim(),
+      };
     }
     case "validate_model_key": {
       if (!isFirstClassModelProvider(request.provider)) {
@@ -315,22 +196,10 @@ export function serializeProbeError(
   return { error: message.slice(0, 240) };
 }
 
-function parseQuestion(value: unknown): string {
-  const question = typeof value === "string" ? value.trim() : "";
-  if (!question) throw new Error("Question must not be blank");
-  if (question.length > 500) throw new Error("Question must be 500 characters or fewer");
-  return question;
-}
-
 function parseSessionId(value: unknown): string {
   const sessionId = typeof value === "string" ? value.trim() : "";
   if (!sessionId || !/^[A-Za-z0-9_-]{1,160}$/.test(sessionId)) {
     throw new Error("Invalid sessionId");
   }
   return sessionId;
-}
-function resolveFirstClassModel(provider: unknown, modelId: unknown) {
-  return firstClassModelCatalog.find(
-    (model) => model.provider === provider && model.id === modelId,
-  );
 }

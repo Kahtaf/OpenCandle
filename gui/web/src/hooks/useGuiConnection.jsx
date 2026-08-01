@@ -16,6 +16,7 @@ const GLOBAL_GUI_COMMANDS = new Set([
   "model.setup.refresh",
   "model.setup.save_api_key",
   "model.setup.select_model",
+  "model.setup.set_thinking",
   "provider.save_api_key",
 ]);
 
@@ -48,6 +49,11 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
       return {
         path: "/api/model-setup/model",
         body: { provider: payload.provider, modelId: payload.modelId },
+      };
+    case "model.setup.set_thinking":
+      return {
+        path: "/api/model-setup/thinking",
+        body: { level: payload.level },
       };
     case "provider.save_api_key":
       return {

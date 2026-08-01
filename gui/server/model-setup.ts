@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
@@ -28,6 +29,8 @@ export interface ModelSetupState {
   currentModel?: string;
   providers: ModelSetupProvider[];
   availableModels: Array<{ provider: string; id: string; label: string }>;
+  currentThinkingLevel?: ThinkingLevel;
+  availableThinkingLevels?: ThinkingLevel[];
 }
 
 export interface ModelSetupRegistry {
@@ -40,6 +43,9 @@ interface ModelSetupSession {
   modelRuntime: ModelRuntime;
   model?: Model<Api>;
   setModel(model: Model<Api>): Promise<void>;
+  thinkingLevel?: ThinkingLevel;
+  getAvailableThinkingLevels?(): ThinkingLevel[];
+  setThinkingLevel?(level: ThinkingLevel): void;
   settingsManager: {
     flush(): Promise<void>;
   };
@@ -59,6 +65,7 @@ export interface ModelSetupController {
   handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void>;
   handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void>;
   handleSelectModel(provider: string, modelId: string): Promise<void>;
+  handleSetThinkingLevel?(level: string): Promise<void>;
 }
 
 export interface ModelSetupControllerOptions {
@@ -71,6 +78,7 @@ export interface ModelSetupControllerOptions {
 export function buildModelSetupState(
   registry: ModelSetupRegistry,
   currentModel: Model<Api> | undefined,
+  thinking?: { current: ThinkingLevel; available: ThinkingLevel[] },
 ): ModelSetupState {
   registry.refresh();
   const availableModels = sortModels(registry.getAvailable()).map((model) => ({
@@ -95,6 +103,12 @@ export function buildModelSetupState(
         : undefined,
     providers: modelSetupProviders,
     availableModels,
+    ...(thinking
+      ? {
+          currentThinkingLevel: thinking.current,
+          availableThinkingLevels: thinking.available,
+        }
+      : {}),
   };
 }
 
@@ -117,7 +131,16 @@ export function createModelSetupController({
 
   function buildCurrentModelSetupState(): ModelSetupState {
     const session = getSession();
-    return buildModelSetupState(new ModelRegistry(session.modelRuntime), session.model);
+    return buildModelSetupState(
+      new ModelRegistry(session.modelRuntime),
+      session.model,
+      session.thinkingLevel && session.getAvailableThinkingLevels
+        ? {
+            current: session.thinkingLevel,
+            available: session.getAvailableThinkingLevels(),
+          }
+        : undefined,
+    );
   }
 
   async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -216,10 +239,23 @@ export function createModelSetupController({
     await session.settingsManager.flush();
   }
 
+  async function handleSetThinkingLevel(level: string): Promise<void> {
+    ensureWriter();
+    const session = getSession();
+    const available = session.getAvailableThinkingLevels?.() ?? [];
+    if (!available.includes(level as ThinkingLevel) || !session.setThinkingLevel) {
+      throw new Error(`Unsupported thinking level: ${level}`);
+    }
+    session.setThinkingLevel(level as ThinkingLevel);
+    await session.settingsManager.flush();
+    broadcastState();
+  }
+
   return {
     buildCurrentModelSetupState,
     handleSaveModelApiKey,
     handleSaveProviderApiKey,
     handleSelectModel,
+    handleSetThinkingLevel,
   };
 }

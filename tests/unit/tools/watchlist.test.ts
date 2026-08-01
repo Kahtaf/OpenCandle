@@ -163,14 +163,32 @@ describe("watchlistTool", () => {
     expect(check.content[0].text).toContain("NVDA");
     await expect(
       watchlistTool.execute("test", { action: "check", watchlist_name: "Growth" }),
-    ).resolves.toMatchObject({
-      content: [
-        expect.objectContaining({ text: "Growth is empty. Use add action to add symbols." }),
-      ],
-    });
+    ).rejects.toThrow("watchlist Growth not found");
   });
 
-  it("does not create a missing watchlist while renaming", async () => {
+  it("resolves an explicitly named Default watchlist after the original default is renamed", async () => {
+    await watchlistTool.execute("test", {
+      action: "rename",
+      new_watchlist_name: "Growth",
+    });
+    await watchlistTool.execute("test", { action: "create", watchlist_name: "Default" });
+    await watchlistTool.execute("test", {
+      action: "add",
+      watchlist_name: "Default",
+      symbol: "AAPL",
+    });
+
+    const active = await watchlistTool.execute("test", { action: "check" });
+    const namedDefault = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "Default",
+    });
+    expect(active.content[0].text).toContain("Growth is empty");
+    expect(namedDefault.content[0].text).toContain("**Default**");
+    expect(namedDefault.content[0].text).toContain("AAPL");
+  });
+
+  it("does not create a missing watchlist while reading or renaming", async () => {
     await expect(
       watchlistTool.execute("test", {
         action: "rename",
@@ -179,11 +197,12 @@ describe("watchlistTool", () => {
       }),
     ).rejects.toThrow("watchlist Missing not found");
 
-    const missing = await watchlistTool.execute("test", {
-      action: "check",
-      watchlist_name: "Missing",
-    });
-    expect(missing.content[0].text).toContain("Missing is empty");
+    await expect(
+      watchlistTool.execute("test", {
+        action: "check",
+        watchlist_name: "Missing",
+      }),
+    ).rejects.toThrow("watchlist Missing not found");
   });
 
   it("deletes a named watchlist through the tool and selects another list", async () => {

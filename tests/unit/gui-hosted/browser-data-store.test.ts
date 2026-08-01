@@ -33,6 +33,22 @@ const sqlite = Uint8Array.from([
 ]);
 
 describe("hosted browser archive", () => {
+  it("keeps canonical session action sidecars with their Pi session", () => {
+    const actionStore = JSON.stringify({
+      acceptedActionIds: ["run-1"],
+      pendingActionIds: [],
+      actionFingerprints: { "run-1": "fingerprint" },
+    });
+    const archive = createHostedArchive({ sessions: [{ ...session, actionStore }] });
+
+    expect(decodeHostedArchive(archive).sessions).toEqual([{ ...session, actionStore }]);
+    expect(() =>
+      validateHostedArchive({
+        ...archive,
+        sessions: [{ ...session, actionStore: "not json" }],
+      }),
+    ).toThrow("action snapshot");
+  });
   it("accepts attachment-sized Pi session entries above the old 1 MiB ceiling", () => {
     const largeSession = {
       ...session,

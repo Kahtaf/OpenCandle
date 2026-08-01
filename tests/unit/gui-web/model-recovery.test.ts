@@ -88,4 +88,11 @@ describe("model recovery controls", () => {
       body: { provider: "openai", apiKey: "sentinel", storageMode: "session" },
     });
   });
+
+  it("maps thinking changes through the same GUI fallback contract", () => {
+    expect(buildHttpFallbackMessageRequest("model.setup.set_thinking", { level: "high" })).toEqual({
+      path: "/api/model-setup/thinking",
+      body: { level: "high" },
+    });
+  });
 });

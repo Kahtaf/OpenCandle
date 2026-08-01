@@ -286,6 +286,58 @@ An unavailable browser capability is omitted with a reason. A capability that
 is available in the browser must reuse the local GUI/TUI implementation and
 its contract tests rather than a similar hosted implementation.
 
+The production implementation applies that rule at the following concrete
+seams:
+
+- `createOpenCandleSessionCore` returns the canonical Pi session and workflow
+  coordinator handle used by local and hosted compositions. Hosted mode keeps
+  one long-lived Pi session per session ID instead of rebuilding a partial
+  extension lifecycle for every turn.
+- One live chat-event adapter projects Pi events on both web surfaces. Durable
+  JSONL projection remains the recovery fallback, and cancellation or provider
+  failure continues sequence numbering after already-streamed events.
+- Canonical watchlist, portfolio, alert, report, and notification tool
+  factories accept an injected `StateDatabase`. Native local mode and WASM
+  hosted mode differ only in the database adapter and browser-safe provider
+  capability filter. Exact symbols entered through hosted saved-state forms
+  use one explicit factory policy instead of a parallel hosted command
+  interpreter; local tools retain provider-backed symbol verification.
+- Quote, portfolio valuation, sparkline, and market-index snapshots share one
+  browser-safe assembler. Platform code supplies state and provider fetchers;
+  it does not recalculate totals independently.
+- Accepted and pending action markers use Pi session sidecars with input
+  fingerprints. OPFS checkpoints include the sidecars, so writer failover and
+  runtime restart preserve exactly-once behavior. A request-scoped stdio
+  checkpoint handshake durably admits each streamed action before Pi starts
+  paid work. Chat actions become accepted after Pi completes the prompt, or
+  after a terminal prompt failure when the canonical session proves that Pi
+  already persisted the user message. Accepted transitions are checkpointed
+  before the result is returned. A restored admission whose start state is
+  ambiguous remains durable and reports that ambiguity instead of silently
+  succeeding or replaying paid work.
+- Thinking levels are read and changed through Pi's `AgentSession` methods and
+  the shared model selector. Provider credentials continue to use the shared
+  provider setup UI. Hosted JIT prompts may direct users there, but secret text
+  is never collected through `ask_user`, because ask-user answers are durable
+  session content.
+- Hosted Pi session construction is single-flight per canonical session and the
+  reusable session cache is bounded. Only active runs may temporarily exceed
+  the cache limit; settled sessions are evicted and disposed least-recently.
+- Persistence-only mutation retries record the canonical accepted-action marker
+  before acknowledging their checkpoint. Empty sessions retain a previously
+  selected Pi thinking level, and clearing model credentials clears the
+  browser's projected thinking controls.
+- The hosted runtime transport requires Pi's streaming request boundary. It
+  does not synthesize live events from a completed response, and HTTP fallback
+  command restoration uses the shared GUI protocol metadata.
+- Quote refreshes use a shared latest-request gate in the React data hook, so
+  overlapping background refreshes cannot overwrite newer saved market state.
+
+The removed spike HTTP server, hosted market-state command interpreter,
+hosted action allowlist, and hosted live-event adapter are intentionally not
+retained as fallbacks. Stdio transport, OPFS persistence, and browser secret
+storage are the only hosted-specific runtime responsibilities.
+
 ## Risks / Trade-offs
 
 - **WebContainer availability or licensing changes** -> disclose the dependency,

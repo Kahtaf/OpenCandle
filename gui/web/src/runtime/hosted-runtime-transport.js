@@ -1,3 +1,4 @@
+import { GUI_HTTP_COMMAND_TYPES } from "../../../shared/hosted-gui-protocol.js";
 import { runtimeTransportContractVersion } from "./runtime-transport.js";
 
 const EMPTY_CATALOG = { tools: [], workflows: [], providers: [] };
@@ -6,16 +7,12 @@ const EMPTY_MODEL_SETUP = {
   providers: [],
   availableModels: [],
 };
-const HTTP_FALLBACK_COMMAND_TYPES = {
-  "/api/model-setup/refresh": "model.setup.refresh",
-  "/api/model-setup/api-key": "model.setup.save_api_key",
-  "/api/model-setup/model": "model.setup.select_model",
-  "/api/provider-setup/api-key": "provider.save_api_key",
-};
-
 export function createHostedRuntimeTransport({ host }) {
   if (!host || typeof host.request !== "function") {
     throw new Error("Hosted runtime transport requires a browser runtime host");
+  }
+  if (typeof host.streamRequest !== "function") {
+    throw new Error("Hosted runtime transport requires streaming request support");
   }
 
   const subscribers = new Set();
@@ -204,7 +201,7 @@ export function createHostedRuntimeTransport({ host }) {
     },
 
     async postCommand(path, body) {
-      const commandType = body?.type || HTTP_FALLBACK_COMMAND_TYPES[path];
+      const commandType = body?.type || GUI_HTTP_COMMAND_TYPES[path];
       await host.handleCommand?.(commandType ? { ...body, type: commandType } : body);
       return refresh();
     },
@@ -237,19 +234,8 @@ export function createHostedRuntimeTransport({ host }) {
       const targetSessionId = requireSessionId(sessionId);
       selectedSessionId = targetSessionId;
       try {
-        if (typeof host.streamRequest === "function") {
-          const response = await host.streamRequest(
-            "gui",
-            {
-              action: "chat_run",
-              ...body,
-              sessionId: targetSessionId,
-            },
-            { signal },
-          );
-          return refreshAfterStream(response, refresh);
-        }
-        const result = await requestGui(
+        const response = await host.streamRequest(
+          "gui",
           {
             action: "chat_run",
             ...body,
@@ -257,10 +243,7 @@ export function createHostedRuntimeTransport({ host }) {
           },
           { signal },
         );
-        queueMicrotask(() => {
-          void refresh();
-        });
-        return sseResponse(Array.isArray(result?.events) ? result.events : []);
+        return refreshAfterStream(response, refresh);
       } catch (error) {
         await refreshCanonicalState(refresh);
         if (error?.name === "AbortError") throw error;
@@ -269,10 +252,6 @@ export function createHostedRuntimeTransport({ host }) {
           { status: 500 },
         );
       }
-    },
-
-    getJson(path, signal) {
-      return requestGui({ action: "get", path }, { signal });
     },
 
     getMarketState(signal) {
@@ -364,15 +343,4 @@ function requireSessionId(value) {
   const sessionId = String(value ?? "").trim();
   if (!sessionId) throw new Error("sessionId is required");
   return sessionId;
-}
-
-function sseResponse(events) {
-  const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
 }

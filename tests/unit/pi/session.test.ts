@@ -39,6 +39,8 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).toHaveLength(
       getOpenCandleToolDefinitions().length + 1,
     );
+    expect(result.coordinator).toBeDefined();
+    await expect(result.waitForSettled()).resolves.toBeUndefined();
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");
     }

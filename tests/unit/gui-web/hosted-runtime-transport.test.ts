@@ -51,6 +51,29 @@ function createHost() {
           return { ok: true };
       }
     }),
+    streamRequest: vi.fn(async (_operation: string, payload: Record<string, unknown>) => {
+      const events = [
+        {
+          v: 1,
+          seq: 0,
+          type: "run.started",
+          sessionId: payload.sessionId,
+          runId: "run-1",
+          timestamp: "2026-07-30T00:00:00.000Z",
+        },
+        {
+          v: 1,
+          seq: 1,
+          type: "run.completed",
+          sessionId: payload.sessionId,
+          runId: "run-1",
+          timestamp: "2026-07-30T00:00:01.000Z",
+        },
+      ];
+      return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""), {
+        headers: { "content-type": "text/event-stream" },
+      });
+    }),
     getModelSetup: vi.fn(() => ({
       requirement: "ready",
       currentModel: "openai/gpt-4.1-mini",
@@ -62,6 +85,15 @@ function createHost() {
 }
 
 describe("hosted runtime transport", () => {
+  it("requires the canonical streaming runtime boundary", () => {
+    const host = createHost();
+    delete (host as Partial<typeof host>).streamRequest;
+
+    expect(() => createHostedRuntimeTransport({ host })).toThrow(
+      "Hosted runtime transport requires streaming request support",
+    );
+  });
+
   it("merges browser-owned model setup into the canonical bootstrap", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });
@@ -97,7 +129,7 @@ describe("hosted runtime transport", () => {
     });
   });
 
-  it("presents hosted chat results as the same SSE response consumed by the local GUI", async () => {
+  it("presents hosted Pi events as the same SSE response consumed by the local GUI", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });
 
@@ -112,7 +144,7 @@ describe("hosted runtime transport", () => {
     const body = await response.text();
     expect(body).toContain('"type":"run.started"');
     expect(body).toContain('"type":"run.completed"');
-    expect(host.request).toHaveBeenCalledWith(
+    expect(host.streamRequest).toHaveBeenCalledWith(
       "gui",
       expect.objectContaining({
         action: "chat_run",
@@ -351,6 +383,12 @@ describe("hosted runtime transport", () => {
       provider: "openai",
       apiKey: "secret",
       storageMode: "session",
+    });
+
+    await transport.postCommand("/api/model-setup/thinking", { level: "high" });
+    expect(host.handleCommand).toHaveBeenCalledWith({
+      type: "model.setup.set_thinking",
+      level: "high",
     });
   });
 

@@ -177,6 +177,36 @@ describe("portfolioTrackerTool", () => {
     expect(portfolios.filter((portfolio) => portfolio.name === "Retirement")).toHaveLength(1);
   });
 
+  it("resolves an explicitly named Default portfolio after the original default is renamed", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "rename",
+      new_portfolio_name: "Long term",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Default",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Default",
+      symbol: "AAPL",
+      shares: 2,
+      avg_cost: 100,
+      currency: "USD",
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.getDefaultPortfolio().name).toBe("Long term");
+    expect(service.listPortfolioLots(service.getDefaultPortfolio().id)).toEqual([]);
+    const namedDefault = service.getPortfolioByName("Default");
+    expect(namedDefault).not.toBeNull();
+    expect(service.listPortfolioLots(namedDefault!.id).map(({ symbol }) => symbol)).toEqual([
+      "AAPL",
+    ]);
+    db.close();
+  });
+
   it("rejects renaming a portfolio to an existing name", async () => {
     await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Retirement" });
     await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Trading" });
@@ -190,7 +220,7 @@ describe("portfolioTrackerTool", () => {
     ).rejects.toThrow("portfolio Retirement already exists");
   });
 
-  it("does not create a missing portfolio while renaming", async () => {
+  it("does not create a missing portfolio while viewing or renaming", async () => {
     await expect(
       portfolioTrackerTool.execute("test", {
         action: "rename",
@@ -199,11 +229,12 @@ describe("portfolioTrackerTool", () => {
       }),
     ).rejects.toThrow("portfolio Missing not found");
 
-    const missing = await portfolioTrackerTool.execute("test", {
-      action: "view",
-      portfolio_name: "Missing",
-    });
-    expect(missing.content[0].text).toContain("Missing is empty");
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "view",
+        portfolio_name: "Missing",
+      }),
+    ).rejects.toThrow("portfolio Missing not found");
   });
 
   it("does not emit NaN for a legacy zero-cost portfolio lot", async () => {

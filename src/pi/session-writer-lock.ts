@@ -202,20 +202,30 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
   const toPath = acceptedActionStorePath(toScopePath);
   let fromActions: AcceptedActionStore;
   try {
-    const parsed = JSON.parse(readFileSync(fromPath, "utf8")) as { acceptedActionIds?: unknown };
+    const parsed = JSON.parse(readFileSync(fromPath, "utf8")) as {
+      acceptedActionIds?: unknown;
+      pendingActionIds?: unknown;
+      actionFingerprints?: unknown;
+    };
     fromActions = parseAcceptedActionStore(parsed);
-  } catch {
-    return;
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
   }
   let toActions: AcceptedActionStore = {
     acceptedActionIds: [],
     pendingActions: [],
+    actionFingerprints: {},
   };
   try {
-    const parsed = JSON.parse(readFileSync(toPath, "utf8")) as { acceptedActionIds?: unknown };
+    const parsed = JSON.parse(readFileSync(toPath, "utf8")) as {
+      acceptedActionIds?: unknown;
+      pendingActionIds?: unknown;
+      actionFingerprints?: unknown;
+    };
     toActions = parseAcceptedActionStore(parsed);
-  } catch {
-    // Destination store does not exist yet.
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
   }
   const acceptedActionIds = [
     ...new Set([...toActions.acceptedActionIds, ...fromActions.acceptedActionIds]),
@@ -225,6 +235,20 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
     if (!acceptedActionIds.includes(action.id)) pendingActionsById.set(action.id, action);
   }
   const pendingActions = [...pendingActionsById.values()].slice(-500);
+  const actionFingerprints: Record<string, string> = {};
+  for (const store of [fromActions, toActions]) {
+    for (const [id, fingerprint] of Object.entries(store.actionFingerprints)) {
+      const existing = actionFingerprints[id];
+      if (existing && existing !== fingerprint) {
+        throw new Error(`Conflicting action fingerprint while migrating ${id}`);
+      }
+      actionFingerprints[id] = fingerprint;
+    }
+  }
+  const retainedIds = new Set([...acceptedActionIds, ...pendingActions.map(({ id }) => id)]);
+  const retainedFingerprints = Object.fromEntries(
+    Object.entries(actionFingerprints).filter(([id]) => retainedIds.has(id)),
+  );
   mkdirSync(dirname(toPath), { recursive: true });
   writeFileSync(
     toPath,
@@ -234,7 +258,9 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
         pendingActionIds: pendingActions.map((action) => ({
           id: action.id,
           pendingAtMs: action.pendingAtMs,
+          ...(action.durable ? { durable: true } : {}),
         })),
+        actionFingerprints: retainedFingerprints,
       },
       null,
       2,
@@ -253,24 +279,38 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
 interface PendingActionRecord {
   id: string;
   pendingAtMs: number;
+  durable?: boolean;
 }
 
 interface AcceptedActionStore {
   acceptedActionIds: string[];
   pendingActions: PendingActionRecord[];
+  actionFingerprints: Record<string, string>;
 }
 
 function parseAcceptedActionStore(parsed: {
   acceptedActionIds?: unknown;
   pendingActionIds?: unknown;
+  actionFingerprints?: unknown;
 }): AcceptedActionStore {
   const acceptedActionIds = Array.isArray(parsed.acceptedActionIds)
     ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
     : [];
   const pending = parsePendingActionRecords(parsed.pendingActionIds);
+  const actionFingerprints =
+    parsed.actionFingerprints &&
+    typeof parsed.actionFingerprints === "object" &&
+    !Array.isArray(parsed.actionFingerprints)
+      ? Object.fromEntries(
+          Object.entries(parsed.actionFingerprints).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : {};
   return {
     acceptedActionIds,
     pendingActions: pending.activeRecords,
+    actionFingerprints,
   };
 }
 
@@ -283,14 +323,29 @@ function parsePendingActionRecords(value: unknown): {
   for (const entry of value) {
     const record = (() => {
       if (!entry || typeof entry !== "object") return null;
-      const pending = entry as { id?: unknown; pendingAtMs?: unknown };
+      const pending = entry as { id?: unknown; pendingAtMs?: unknown; durable?: unknown };
       if (typeof pending.id !== "string" || typeof pending.pendingAtMs !== "number") return null;
-      return { id: pending.id, pendingAtMs: pending.pendingAtMs };
+      return {
+        id: pending.id,
+        pendingAtMs: pending.pendingAtMs,
+        ...(pending.durable === true ? { durable: true } : {}),
+      };
     })();
     if (!record) continue;
-    if (now - record.pendingAtMs <= PENDING_SESSION_ACTION_TTL_MS) activeRecords.push(record);
+    if (record.durable || now - record.pendingAtMs <= PENDING_SESSION_ACTION_TTL_MS) {
+      activeRecords.push(record);
+    }
   }
   return { activeRecords };
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }
 
 function tryCreate(

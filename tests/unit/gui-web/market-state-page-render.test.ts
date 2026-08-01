@@ -11,6 +11,7 @@ import {
   clampComboboxActiveIndex,
   getHoldingAutofillValues,
   HoldingForm,
+  holdingInstrumentArgs,
   invokeMarketStateMutation,
   isAlertDraftValid,
   MarketStatePage,
@@ -1065,6 +1066,29 @@ describe("MarketStatePage rendering", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
+  it("does not hold the saved-state acknowledgement open while quotes refresh", async () => {
+    let resolveQuotes: (() => void) | undefined;
+    const refreshQuotes = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveQuotes = resolve;
+        }),
+    );
+
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "AAPL" },
+      invokeToolRequest: vi.fn(async () => undefined),
+      refresh: vi.fn(async () => undefined),
+      refreshQuotes,
+    });
+
+    expect(saved).toBe(true);
+    expect(refreshQuotes).toHaveBeenCalledOnce();
+    resolveQuotes?.();
+  });
+
   it("keeps a market-state form open when a tool requires more input", async () => {
     const refresh = vi.fn();
     const refreshQuotes = vi.fn();
@@ -1094,6 +1118,11 @@ describe("MarketStatePage rendering", () => {
       unverified_exact_symbol: true,
     });
     expect(alertInstrumentArgs("AAPL", false)).toEqual({ symbol: "AAPL" });
+    expect(holdingInstrumentArgs("AAPL", true)).toEqual({
+      symbol: "AAPL",
+      unverified_exact_symbol: true,
+    });
+    expect(holdingInstrumentArgs("AAPL", false)).toEqual({ symbol: "AAPL" });
   });
 
   it("unwraps an acknowledged tool result before handling semantic validation", async () => {

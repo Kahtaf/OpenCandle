@@ -189,6 +189,33 @@ try {
       );
     }
 
+    stage = "Pi model and reasoning controls";
+    const modelTrigger = page.getByRole("button", {
+      name: new RegExp(openAiModel.replaceAll(".", "\\.")),
+    });
+    await modelTrigger.click();
+    assert(
+      (await page.getByRole("menuitemradio").count()) > 1,
+      "Pi exposes more than the default hosted model",
+    );
+    await waitForText(page, "Reasoning", 30_000);
+    const lowReasoning = page.getByRole("button", { name: "low", exact: true });
+    await lowReasoning.click();
+    await waitFor(
+      async () => (await lowReasoning.getAttribute("aria-pressed")) === "true",
+      30_000,
+      "Pi reasoning level selection",
+    );
+    const offReasoning = page.getByRole("button", { name: "off", exact: true });
+    await offReasoning.click();
+    await waitFor(
+      async () => (await offReasoning.getAttribute("aria-pressed")) === "true",
+      30_000,
+      "Pi reasoning level reset",
+    );
+    await modelTrigger.click();
+
+    stage = "live Pi turn";
     const initialRows = await page.locator("[data-chat-row-id]").count();
     await page.getByRole("textbox", { name: "Message OpenCandle" }).fill(prompt);
     await page.getByRole("button", { name: "Send message" }).click();
