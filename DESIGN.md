@@ -109,7 +109,7 @@ components:
 
 # Design System: OpenCandle
 
-## 1. Overview
+## Overview
 
 **Creative North Star: "The Research Desk."**
 
@@ -125,7 +125,7 @@ The system rejects glossy fintech theater, navy-and-gold finance cliches, purple
 - Hairline borders, 8–12px radii; pill shapes reserved for composer actions and page-level primary CTAs.
 - Tabular numerals on all financial figures; signed values accompany every direction color.
 
-## 2. Colors
+## Colors
 
 A zinc-neutral system: white paper, cool grays with a barely-there blue cast (hue 240), one near-black action color, and four semantic signals.
 
@@ -157,7 +157,7 @@ Semantic tints follow the shadcn badge recipe: `color/10` background, `color/30`
 
 **The Signed Color Rule.** Direction colors never appear without a sign, label, or icon. `+2.41%` in green; never a green number alone.
 
-## 3. Typography
+## Typography
 
 **Display Font:** Inter (system-ui fallback)
 **Body Font:** Inter (system-ui fallback)
@@ -180,7 +180,13 @@ Semantic tints follow the shadcn badge recipe: `color/10` background, `color/30`
 
 **The Tabular Rule.** Every financial figure — price, P&L, percentage, quantity — renders with `font-variant-numeric: tabular-nums`.
 
-## 4. Elevation
+## Layout
+
+The shared browser surfaces use a responsive application shell with a maximum page width of 1320px and a maximum prose width of 720px. Desktop layouts keep navigation, primary content, and inspectors legible without compressing financial tables; narrow layouts collapse navigation and replace wide tables or inspectors with cards, sheets, and focused detail views.
+
+Use the established 8px-based spacing vocabulary: 8px for tight relationships, 12px for compact component padding, 16px for default panel content, 24px between major groups, and 36px between page sections. Keep chat and financial context in balance rather than allowing either surface to dominate the viewport.
+
+## Elevation & Depth
 
 Tonal layering first, shadows second. Surfaces sit flat with a 1px Hairline border; depth comes from Paper → Zinc Mist → Zinc Sunk. Shadows are neutral-gray, near-invisible, and reserved for genuine lift.
 
@@ -194,7 +200,11 @@ Tonal layering first, shadows second. Surfaces sit flat with a 1px Hairline bord
 
 **The Neutral Shadow Rule.** Shadow color is neutral near-black at single-digit opacity. Tinted, colored, or glowing shadows are prohibited.
 
-## 5. Components
+## Shapes
+
+Use 6px radii for compact controls, 8px for standard controls and badges, and 12px for panels and cards. Full pill shapes are reserved for composer actions, page-level primary CTAs, and small count indicators. Hairline borders define structure; avoid decorative outlines, side stripes, and nested rounded containers.
+
+## Components
 
 Components are shadcn/ui constructions (cva variants, Radix primitives where interaction demands it). Shared runtime-agnostic primitives — logo, button, badge, card, input, textarea, kbd, tooltip — live in `packages/ui/src/` and are consumed by the GUI and the public site. GUI-only interactive components (dialog, popover, sheet, toast, status dots) live in `gui/web/src/components/ui/` and compose the same tokens. New components should be composed from these before anything is hand-rolled; efferd.com shadcn blocks are an approved structural reference.
 
@@ -238,7 +248,7 @@ Components are shadcn/ui constructions (cva variants, Radix primitives where int
 - **Numbers:** right-aligned, tabular. Direction values use Signed Color Rule.
 - **Drill-down:** chevron-expand to Zinc Mist detail rows (lot ledgers), not modals.
 
-## 6. Do's and Don'ts
+## Do's and Don'ts
 
 ### Do:
 
