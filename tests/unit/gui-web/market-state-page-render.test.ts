@@ -169,12 +169,12 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("24 hr sparkline");
     expect(html).toContain('data-slot="market-sparkline"');
-    expect(html).toContain('alt="AAPL 24-hour price sparkline from Ticker Line"');
+    expect(html).not.toContain("<img");
     expect(html).toContain('data-source="Ticker Line"');
-    expect(html).toContain("Ticker Line · 1D");
+    expect(html).toContain("Ticker Line · loading");
     expect(html).toContain('data-slot="mobile-watchlist-row"');
     expect(html).toContain('data-slot="watchlist-inspector-sheet"');
-    expect(html).toContain("/api/market-state/sparkline");
+    expect(html).not.toContain("ticker-line.com");
     expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain("Price");
     expect(html).toContain("Change");
@@ -381,8 +381,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('aria-label="Remove AAPL lot"');
     expect(html).toContain("min-h-10 min-w-10");
     expect(html).not.toContain("font-mono");
-    expect(html).toContain('alt="AAPL 24-hour price sparkline from Ticker Line"');
-    expect(html).toContain("/api/market-state/sparkline");
+    expect(html).not.toContain("<img");
+    expect(html).toContain("Ticker Line · loading");
     expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain('data-slot="avg-cost-basis"');
     expect(html).toContain('data-slot="mobile-portfolio-holding"');

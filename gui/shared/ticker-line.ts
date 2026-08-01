@@ -49,8 +49,9 @@ export function resolveTickerLineInstrument(
     return ticker ? { ticker, market: "forex" } : null;
   }
 
-  if (normalizedSymbol.endsWith("-USD")) {
-    return { ticker: `${normalizedSymbol.slice(0, -4)}/USD`, market: "crypto" };
+  const symbolCryptoPair = normalizedSymbol.match(/^([A-Z0-9]{2,10})-([A-Z0-9]{3,10})$/);
+  if (symbolCryptoPair) {
+    return { ticker: `${symbolCryptoPair[1]}/${symbolCryptoPair[2]}`, market: "crypto" };
   }
 
   if (normalizedAssetType === "crypto") {

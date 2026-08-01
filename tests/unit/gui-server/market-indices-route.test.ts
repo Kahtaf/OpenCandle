@@ -123,6 +123,26 @@ describe("market indices HTTP route", () => {
     expect(fetchTickerLineSparklineMock).toHaveBeenCalledWith("AAPL", "equity");
   });
 
+  it("serves Ticker Line as-of metadata for the sparkline caption", async () => {
+    fetchTickerLineSparklineMock.mockResolvedValue({
+      status: "ok",
+      svg: "<svg></svg>",
+      dataAsOf: "2026-08-01T00:00:00.000Z",
+    });
+
+    const response = await fetch(
+      `${endpoint}/api/market-state/sparkline?symbol=AAPL&assetType=equity&metadata=1`,
+      { headers: { cookie: privateApiCookieHeader(privateApiSessionToken) } },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({
+      source: "Ticker Line",
+      dataAsOf: "2026-08-01T00:00:00.000Z",
+    });
+  });
+
   it("rejects untrusted sparkline requests before contacting Ticker Line", async () => {
     const response = await fetch(
       `${endpoint}/api/market-state/sparkline?symbol=AAPL&assetType=equity`,

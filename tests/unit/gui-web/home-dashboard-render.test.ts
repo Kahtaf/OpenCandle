@@ -37,7 +37,7 @@ describe("home dashboard widgets", () => {
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("tabular-nums");
     expect(html).toContain("+1.25%");
-    expect(html).toContain("^GSPC 24-hour price sparkline from Ticker Line");
+    expect(html).toContain("Ticker Line · loading");
     expect(html).not.toContain("null");
 
     expect(renderToStaticMarkup(React.createElement(IndicesStrip, { unavailable: true }))).toBe("");
@@ -562,7 +562,7 @@ describe("home dashboard widgets", () => {
         },
       }),
     );
-    expect(moversHtml).toContain("DROP 24-hour price sparkline from Ticker Line");
+    expect(moversHtml).toContain("Ticker Line · loading");
     expect(moversHtml).toContain("↓");
   });
 });

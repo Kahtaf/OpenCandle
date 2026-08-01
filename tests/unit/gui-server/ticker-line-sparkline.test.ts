@@ -38,6 +38,26 @@ describe("Ticker Line sparkline proxy", () => {
     );
   });
 
+  it("coalesces concurrent cold-cache requests for the same instrument", async () => {
+    const providerFetch = vi.fn().mockResolvedValue(
+      new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+        headers: { "x-data-as-of": "2026-08-01T00:00:00.000Z" },
+      }),
+    );
+    vi.stubGlobal("fetch", providerFetch);
+
+    const results = await Promise.all([
+      fetchTickerLineSparkline("AAPL", "equity"),
+      fetchTickerLineSparkline("AAPL", "equity"),
+    ]);
+
+    expect(results).toEqual([
+      expect.objectContaining({ status: "ok" }),
+      expect.objectContaining({ status: "ok" }),
+    ]);
+    expect(providerFetch).toHaveBeenCalledOnce();
+  });
+
   it("rejects unsupported symbols without contacting the provider", async () => {
     const providerFetch = vi.fn();
     vi.stubGlobal("fetch", providerFetch);

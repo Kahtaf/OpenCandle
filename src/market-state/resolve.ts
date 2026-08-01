@@ -96,7 +96,7 @@ export function isZeroFilledQuote(quote: StockQuote): boolean {
 }
 
 function inferAssetType(symbol: string): string {
-  if (symbol.endsWith("-USD")) return "crypto";
+  if (/^[A-Z0-9]{2,10}-[A-Z0-9]{3,10}$/.test(symbol)) return "crypto";
   if (symbol.startsWith("^")) return "index";
   return "equity";
 }

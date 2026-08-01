@@ -42,7 +42,7 @@ If the page returns `502`, the tunnel is up but the local GUI is not listening. 
 
 ## Market Dashboard, Symbol Pages, and Charts
 
-The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq Composite, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt starts a fresh chat session.
+The home screen is a market dashboard. Below the composer you get an indices strip (S&P 500, Nasdaq-100, Dow Jones, Bitcoin) with sparklines, top movers from your watchlists, a portfolio summary with the day's move, and an alerts status card. Sending a prompt starts a fresh chat session.
 
 Every ticker links to a symbol page at `/symbol/<TICKER>`, reachable from watchlist and portfolio rows, ticker popovers in chat, and instrument search. A symbol page shows the live quote with pre-market/after-hours context, an interactive range chart (day through max, with volume, crosshair tooltip, and previous-close line), key stats and fundamentals, plus your saved positions, alerts, and watchlist membership for that symbol.
 

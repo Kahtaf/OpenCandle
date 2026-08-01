@@ -245,6 +245,14 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         writeJson(res, { error: result.reason }, result.status === "invalid_request" ? 400 : 502);
         return;
       }
+      if (url.searchParams.get("metadata") === "1") {
+        if (!result.dataAsOf) {
+          writeJson(res, { error: "Ticker Line did not provide an as-of timestamp" }, 502);
+          return;
+        }
+        writeJson(res, { source: "Ticker Line", dataAsOf: result.dataAsOf });
+        return;
+      }
       res.writeHead(200, {
         "cache-control": "private, max-age=300",
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
