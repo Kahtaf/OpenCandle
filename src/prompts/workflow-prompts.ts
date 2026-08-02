@@ -191,7 +191,13 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
 3. Use get_company_overview only for individual-stock candidates; do not require company fundamentals for ETF candidates.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 5. Use analyze_correlation across all candidates to check diversification.`
-      : `1. ${candidateInstruction}
+      : isStocksAndCrypto
+        ? `1. ${candidateInstruction}
+   Label every candidate as stock or cryptocurrency. For cryptocurrency candidates, include the canonical CoinGecko id used by the crypto tools.
+2. For each stock candidate, use get_stock_quote for current price, get_company_overview for fundamentals, and analyze_risk for volatility, Sharpe, and max drawdown.
+3. For each cryptocurrency candidate, use get_crypto_price with its canonical CoinGecko id for current price and get_crypto_history with that same id for dated price history. Do not send cryptocurrencies to stock-only quote, company, or risk tools.
+4. Use analyze_correlation only across the stock candidates. Assess stock/crypto diversification from the dated evidence available and explicitly disclose that a cross-asset correlation matrix is unavailable instead of substituting stock symbols for crypto ids.`
+        : `1. ${candidateInstruction}
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use get_company_overview for fundamentals on each candidate.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.

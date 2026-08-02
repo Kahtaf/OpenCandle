@@ -167,6 +167,18 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("get_company_overview");
   });
 
+  it("uses crypto-capable tools for a stocks-and-crypto portfolio", () => {
+    const prompt = buildPortfolioPrompt(
+      makePortfolioResolution({ assetScope: "stocks_and_crypto" }, { assetScope: "user" }),
+    );
+
+    expect(prompt).toContain("get_crypto_price");
+    expect(prompt).toContain("get_crypto_history");
+    expect(prompt).toContain("canonical CoinGecko id");
+    expect(prompt).toContain("Do not send cryptocurrencies to stock-only");
+    expect(prompt).toContain("Use analyze_correlation only across the stock candidates");
+  });
+
   it("does not include get_company_overview for diversified fund building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
     expect(prompt).not.toContain("get_company_overview");

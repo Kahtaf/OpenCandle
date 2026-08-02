@@ -36,6 +36,22 @@ describe("validatePortfolioOutput", () => {
     ]);
   });
 
+  it("rejects duplicate and composite holdings that bypass diversification constraints", () => {
+    expect(
+      validatePortfolioOutput(
+        `| Symbol | Allocation % |
+| --- | ---: |
+| AAPL | 35% |
+| AAPL | 35% |
+| MSFT / NVDA | 30% |`,
+        constraints,
+      ),
+    ).toEqual([
+      "allocation rows must contain one holding each; composite symbols: MSFT / NVDA",
+      "duplicate allocation symbols: AAPL",
+    ]);
+  });
+
   it("builds a bounded repair prompt from deterministic failures", () => {
     const prompt = buildPortfolioRepairPrompt(
       ["allocation percentages sum to 90%; expected 100%"],

@@ -21,6 +21,27 @@ export function validatePortfolioOutput(
     );
   }
 
+  const compositeSymbols = rows.filter((row) => row.symbol.includes("/"));
+  if (compositeSymbols.length > 0) {
+    errors.push(
+      `allocation rows must contain one holding each; composite symbols: ${compositeSymbols
+        .map((row) => row.symbol)
+        .join(", ")}`,
+    );
+  }
+
+  const symbolCounts = new Map<string, number>();
+  for (const row of rows) {
+    const symbol = row.symbol.toUpperCase();
+    symbolCounts.set(symbol, (symbolCounts.get(symbol) ?? 0) + 1);
+  }
+  const duplicateSymbols = [...symbolCounts]
+    .filter(([, count]) => count > 1)
+    .map(([symbol]) => symbol);
+  if (duplicateSymbols.length > 0) {
+    errors.push(`duplicate allocation symbols: ${duplicateSymbols.join(", ")}`);
+  }
+
   const overCap = rows.filter((row) => row.percent > constraints.maxSinglePositionPct + 0.001);
   if (overCap.length > 0) {
     errors.push(

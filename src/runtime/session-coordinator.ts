@@ -121,20 +121,20 @@ function readSessionEntries(ctx: QueueContext): SessionEntry[] {
   return manager?.getEntries?.() ?? [];
 }
 
-function hasTerminalAssistantEntrySince(ctx: QueueContext, entryCount: number): boolean {
-  return readSessionEntries(ctx)
-    .slice(entryCount)
-    .some((entry) => {
-      if (entry.type !== "message") return false;
-      const message = entry.message as { role?: unknown; stopReason?: unknown };
-      return (
-        message.role === "assistant" &&
-        (message.stopReason === "stop" ||
-          message.stopReason === "length" ||
-          message.stopReason === "error" ||
-          message.stopReason === "aborted")
-      );
-    });
+function terminalAssistantOutcomeSince(
+  ctx: QueueContext,
+  entryCount: number,
+): "success" | "failure" | undefined {
+  const entries = readSessionEntries(ctx);
+  for (let index = entries.length - 1; index >= entryCount; index -= 1) {
+    const entry = entries[index];
+    if (entry?.type !== "message") continue;
+    const message = entry.message as { role?: unknown; stopReason?: unknown };
+    if (message.role !== "assistant") continue;
+    if (message.stopReason === "stop" || message.stopReason === "length") return "success";
+    if (message.stopReason === "error" || message.stopReason === "aborted") return "failure";
+  }
+  return undefined;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -151,15 +151,18 @@ async function waitForPromptSettlement(
 
   while (isCurrentRun()) {
     const ready = isReadyForNextPrompt(ctx);
-    const terminalResponseRecorded =
+    const terminalOutcome =
       options.entriesBeforePrompt !== undefined &&
       !hasPendingMessages(ctx) &&
-      hasTerminalAssistantEntrySince(ctx, options.entriesBeforePrompt);
+      terminalAssistantOutcomeSince(ctx, options.entriesBeforePrompt);
+    if (terminalOutcome === "failure") {
+      throw new Error("workflow_prompt_failed");
+    }
     if (!ready) {
       sawBusyOrPending = true;
     }
 
-    if ((sawBusyOrPending && ready) || terminalResponseRecorded) {
+    if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
       return true;
     }
 

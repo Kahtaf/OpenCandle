@@ -460,6 +460,31 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     await completion;
   });
 
+  it("fails a workflow instead of advancing after an aborted assistant response", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn(() => {
+        entries.push(userTextEntry("workflow prompt"));
+        setTimeout(() => entries.push(assistantEmptyEntry()), 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    await coord.waitForActiveWorkflow();
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+  });
+
   it("waits for every coordinator-managed workflow prompt to settle", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();

@@ -122,6 +122,17 @@ describe("buildPortfolioWorkflowDefinition", () => {
     expect(def.steps[2]?.outputValidation).toBeUndefined();
   });
 
+  it("keeps crypto positions out of stock-only risk and correlation tools", () => {
+    const def = buildPortfolioWorkflowDefinition(
+      makeResolution({ assetScope: "stocks_and_crypto" }),
+    );
+    const riskReview = def.steps.find((step) => step.stepType === "risk_review");
+
+    expect(riskReview?.prompt).toContain("get_crypto_history");
+    expect(riskReview?.prompt).toContain("Use analyze_correlation only across the stock positions");
+    expect(riskReview?.prompt).toContain("Do not send cryptocurrencies to stock-only");
+  });
+
   it("synthesis step does not emit disclaimer directive", () => {
     const def = buildPortfolioWorkflowDefinition(makeResolution());
     const synthesize = def.steps.find((s) => s.stepType === "synthesize");
