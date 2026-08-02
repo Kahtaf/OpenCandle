@@ -20,12 +20,14 @@ export function sessionEntriesToChatEvents(
   const seenToolCalls = new Set<string>();
   const resolvedToolCalls = new Set<string>();
   const pendingToolCalls = new Map<string, { name: string }>();
+  const assistantErrorsWithExplicitFailure = pairedAssistantFailureIds(entries);
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
   let pendingOriginalAttachments: Array<{ kind: string; label: string }> = [];
   let lastEntryWasUserMessage = false;
   let lastUserCompletedEventIndex: number | null = null;
+  let lastRetryPrompt: string | null = null;
   const workflowSteps = workflowStepMetadata(entries);
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
@@ -76,6 +78,7 @@ export function sessionEntriesToChatEvents(
     if (message.role === "user") {
       const workflowStep = workflowSteps.get(messageId);
       if (!workflowStep || workflowStep.preserveUserTurn) {
+        const content = userMessageContent(message.content, pendingOriginalInput);
         events.push({
           type: "message.created",
           sessionId: options.sessionId,
@@ -87,13 +90,14 @@ export function sessionEntriesToChatEvents(
           type: "message.completed",
           sessionId: options.sessionId,
           messageId,
-          content: userMessageContent(message.content, pendingOriginalInput),
+          content,
           ...(pendingOriginalAttachments.length > 0
             ? { attachments: pendingOriginalAttachments }
             : {}),
           seq: seq++,
         };
         events.push(completedEvent);
+        lastRetryPrompt = messageText(content).trim() || null;
         lastUserCompletedEventIndex = events.length - 1;
         lastEntryWasUserMessage = true;
       } else {
@@ -117,6 +121,27 @@ export function sessionEntriesToChatEvents(
 
     if (message.role === "assistant") {
       lastEntryWasUserMessage = false;
+      const failure = assistantFailure(message);
+      if (failure) {
+        if (!assistantErrorsWithExplicitFailure.has(messageId)) {
+          events.push({
+            type: "custom.message",
+            sessionId: options.sessionId,
+            messageId: `model-error-${messageId}`,
+            customType: "opencandle-model-run-failed",
+            content: [{ type: "text", text: failure.message }],
+            details: {
+              source: "persisted-assistant",
+              reason: "model_error",
+              provider: failure.provider,
+              model: failure.model,
+              ...(lastRetryPrompt ? { prompt: lastRetryPrompt } : {}),
+            },
+            seq: seq++,
+          });
+        }
+        continue;
+      }
       events.push({
         type: "message.created",
         sessionId: options.sessionId,
@@ -207,6 +232,43 @@ export function sessionEntriesToChatEvents(
   return events;
 }
 
+function pairedAssistantFailureIds(entries: SessionEntry[]): Set<string> {
+  const paired = new Set<string>();
+  entries.forEach((entry, index) => {
+    if (entry.type !== "message" || !assistantFailure(entry.message as Message)) return;
+    const next = entries[index + 1];
+    if (
+      next?.type === "custom_message" &&
+      (next as { customType?: unknown }).customType === "opencandle-model-run-failed"
+    ) {
+      paired.add(entry.id);
+    }
+  });
+  return paired;
+}
+
+function assistantFailure(message: Message): {
+  message: string;
+  provider?: string;
+  model?: string;
+} | null {
+  if (message.role !== "assistant" || message.stopReason !== "error") return null;
+  const failure = message as Message & {
+    errorMessage?: unknown;
+    provider?: unknown;
+    model?: unknown;
+  };
+  const errorMessage =
+    typeof failure.errorMessage === "string" && failure.errorMessage.trim()
+      ? failure.errorMessage.trim()
+      : "The model run failed before it returned a response.";
+  return {
+    message: errorMessage,
+    ...(typeof failure.provider === "string" ? { provider: failure.provider } : {}),
+    ...(typeof failure.model === "string" ? { model: failure.model } : {}),
+  };
+}
+
 interface WorkflowStepDetails {
   label: string;
   stage: string;
@@ -228,11 +290,10 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
   let pendingOriginalInput = false;
   let awaitingValidationPrompt = false;
 
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (isCustomEntry(entry, "opencandle-workflow")) {
       activeGroup = [];
       groups.push(activeGroup);
-      pendingOriginalInput = false;
       awaitingValidationPrompt = false;
       continue;
     }
@@ -241,7 +302,10 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
         activeGroup = null;
         awaitingValidationPrompt = false;
       }
-      if (activeGroup) pendingOriginalInput = true;
+      const previousEntry = entries[index - 1];
+      const followsUserMessage =
+        previousEntry?.type === "message" && (previousEntry.message as Message).role === "user";
+      pendingOriginalInput = !followsUserMessage;
       continue;
     }
     if (entry.type === "message" && (entry.message as Message).role === "user") {

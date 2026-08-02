@@ -6,6 +6,7 @@ import {
   type ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { validateModelKey } from "../onboarding/validate-model-key.js";
+import { previouslyValidatedModelKeyInteraction } from "./model-key-login-guard.js";
 import {
   type FirstClassModelProviderId,
   modelSetupProviders,
@@ -215,10 +216,14 @@ export async function runApiKeySetup(
     );
     return false;
   }
-  await modelRuntime.login(provider, "api_key", {
-    prompt: async () => trimmed,
-    notify: () => {},
-  });
+  await modelRuntime.login(
+    provider,
+    "api_key",
+    previouslyValidatedModelKeyInteraction({
+      prompt: async () => trimmed,
+      notify: () => {},
+    }),
+  );
   await ctx.modelRegistry.refresh();
   ctx.ui.notify(
     validation.status === "transient"

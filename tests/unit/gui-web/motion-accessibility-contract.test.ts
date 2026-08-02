@@ -34,7 +34,11 @@ describe("GUI motion and accessibility contract", () => {
     expect(dialog).toContain("slide-out-to-top-1");
     expect(sheet).toContain("slide-in-from-right");
     expect(sheet).toContain("slide-out-to-right");
-    expect(popover).toContain('data-state={open ? "open" : hasOpened ? "closed" : "dormant"}');
+    expect(popover).toContain(
+      'const state = open ? "open" : closeAnimationComplete ? "dormant" : "closed"',
+    );
+    expect(popover).toContain("data-state={state}");
+    expect(popover).toContain("data-[state=dormant]:hidden");
   });
 
   it("avoids catch-all and first-paint transitions while honoring reduced motion", () => {

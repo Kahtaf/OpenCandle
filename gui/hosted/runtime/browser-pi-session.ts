@@ -13,6 +13,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 import type { ChatEvent } from "../../../gui/shared/chat-events.js";
+import { shouldPersistOriginalInputMarker } from "../../../gui/shared/chat-run-input.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { getAllDefaults } from "../../../src/memory/tool-defaults.js";
 import { createOpenCandleSessionCore } from "../../../src/pi/session-core.js";
@@ -245,7 +246,7 @@ export class BrowserPiSession {
     original: string,
     attachments: readonly { kind: string; label: string }[],
   ): void {
-    if (attachments.length === 0) return;
+    if (!shouldPersistOriginalInputMarker(original, attachments)) return;
     this.sessionManager.appendCustomEntry("opencandle-user-input", {
       original,
       attachments: [...attachments],

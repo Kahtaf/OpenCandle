@@ -4,6 +4,7 @@ vi.mock("../../../src/infra/open-url.js", async () => ({
   openInBrowser: vi.fn(async () => {}),
 }));
 
+import { guardModelRuntimeApiKeyLogins } from "../../../src/pi/model-key-login-guard.js";
 import {
   getLlmSetupRequirement,
   runApiKeySetup,
@@ -65,6 +66,7 @@ describe("OpenCandle setup", () => {
       async () => new Response("Forbidden", { status: 403 }),
     ) as unknown as typeof fetch;
     const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
+    guardModelRuntimeApiKeyLogins(modelRuntime);
     const ui = createUi({ input: vi.fn().mockResolvedValue("bad-key") });
     const ctx = { ui, modelRegistry };
 
@@ -82,6 +84,7 @@ describe("OpenCandle setup", () => {
     // called exactly once without the model picker opening. The UI should receive only two
     // `select` calls total (choose entry method, choose provider).
     const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
+    guardModelRuntimeApiKeyLogins(modelRuntime);
     const ui = createUi();
     ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key");
@@ -110,6 +113,13 @@ describe("OpenCandle setup", () => {
     expect(activated?.id).toBe("gemini-2.5-flash");
     // Only the entry-method and provider pickers — no model picker.
     expect(ui.select).toHaveBeenCalledTimes(2);
+    expect(
+      vi
+        .mocked(globalThis.fetch)
+        .mock.calls.filter(([url]) =>
+          String(url).startsWith("https://generativelanguage.googleapis.com/v1beta/models"),
+        ),
+    ).toHaveLength(1);
   });
 
   it("falls back to the model picker when no default model is available for the provider", async () => {

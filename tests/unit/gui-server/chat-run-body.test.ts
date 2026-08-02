@@ -3,10 +3,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildDispatchedPrompt, parseChatRunBody } from "../../../gui/server/http-routes.js";
+import { shouldPersistOriginalInputMarker } from "../../../gui/shared/chat-run-input.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 
 describe("GUI chat-run body parsing", () => {
+  it("only pre-persists original input for commands that expand into workflow turns", () => {
+    expect(shouldPersistOriginalInputMarker("/analyze $NVDA", [])).toBe(true);
+    expect(shouldPersistOriginalInputMarker("/analyze", [])).toBe(false);
+    expect(shouldPersistOriginalInputMarker("/setup", [])).toBe(false);
+    expect(shouldPersistOriginalInputMarker("/connect openai", [])).toBe(false);
+    expect(
+      shouldPersistOriginalInputMarker("Review this", [{ kind: "portfolio", label: "P" }]),
+    ).toBe(true);
+  });
+
   it("bounds and deduplicates saved-state attachments", () => {
     expect(
       parseChatRunBody({

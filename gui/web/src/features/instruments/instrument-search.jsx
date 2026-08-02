@@ -145,7 +145,7 @@ export function InstrumentSuggestionList({
 
   if (!portalAnchor || !position || typeof document === "undefined") return list;
   return createPortal(
-    <div className="fixed z-50" style={position}>
+    <div className="pointer-events-auto fixed z-50" style={position}>
       {list}
     </div>,
     document.body,

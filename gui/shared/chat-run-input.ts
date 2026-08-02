@@ -30,6 +30,17 @@ const MAX_IMAGE_COUNT = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_SAVED_STATE_ATTACHMENTS = 8;
 const MAX_DISPATCHED_PROMPT_LENGTH = 64 * 1024;
+const WORKFLOW_SYMBOL_PATTERN = /^[A-Z]{1,5}(?:[./-][A-Z]{1,2})?$/;
+
+export function shouldPersistOriginalInputMarker(
+  original: string,
+  attachments: readonly { kind: string; label: string }[],
+): boolean {
+  if (!original.trim().startsWith("/")) return attachments.length > 0;
+  const command = original.trim().match(/^\/analyze(?:\s+(.+))?$/i);
+  const symbol = command?.[1]?.trim().replaceAll("$", "").toUpperCase();
+  return symbol !== undefined && WORKFLOW_SYMBOL_PATTERN.test(symbol);
+}
 
 /** Shared local-GUI and hosted-web chat input contract. */
 export function parseChatRunBody(body: unknown): ChatRunParseResult {

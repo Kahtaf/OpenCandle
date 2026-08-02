@@ -120,6 +120,29 @@ describe("BrowserPiSession model history", () => {
 });
 
 describe("BrowserPiSession terminal outcomes", () => {
+  it("persists slash-command input for hosted workflow reloads without attachments", () => {
+    const appendCustomEntry = vi.fn();
+    const session = { sessionManager: { appendCustomEntry } };
+
+    BrowserPiSession.prototype.markOriginalInput.call(session, "/analyze NVDA", []);
+
+    expect(appendCustomEntry).toHaveBeenCalledWith("opencandle-user-input", {
+      original: "/analyze NVDA",
+      attachments: [],
+    });
+  });
+
+  it("does not leave an original-input marker for slash commands without workflow turns", () => {
+    const appendCustomEntry = vi.fn();
+    const session = { sessionManager: { appendCustomEntry } };
+
+    BrowserPiSession.prototype.markOriginalInput.call(session, "/setup", []);
+    BrowserPiSession.prototype.markOriginalInput.call(session, "/connect openai", []);
+    BrowserPiSession.prototype.markOriginalInput.call(session, "/analyze", []);
+
+    expect(appendCustomEntry).not.toHaveBeenCalled();
+  });
+
   it("delegates thinking levels to the real Pi session contract", () => {
     const setThinkingLevel = vi.fn(function (this: { thinkingLevel: string }, level: string) {
       this.thinkingLevel = level;

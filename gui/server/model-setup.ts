@@ -12,6 +12,7 @@ import {
   validateModelKey,
 } from "../../src/onboarding/validate-model-key.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
+import { previouslyValidatedModelKeyInteraction } from "../../src/pi/model-key-login-guard.js";
 import {
   findPreferredModel as findPreferredModelFromCatalog,
   type ModelSetupProvider,
@@ -160,10 +161,14 @@ export function createModelSetupController({
     }
 
     const session = getSession();
-    await session.modelRuntime.login(provider.id, "api_key", {
-      prompt: async () => trimmed,
-      notify: () => {},
-    });
+    await session.modelRuntime.login(
+      provider.id,
+      "api_key",
+      previouslyValidatedModelKeyInteraction({
+        prompt: async () => trimmed,
+        notify: () => {},
+      }),
+    );
     const modelRegistry = new ModelRegistry(session.modelRuntime);
 
     const model = findPreferredModel(modelRegistry, provider);

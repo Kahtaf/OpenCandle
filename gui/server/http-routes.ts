@@ -19,6 +19,7 @@ import {
   chatRunAttachmentLabel,
   type ParsedChatRunBody,
   parseChatRunBody,
+  shouldPersistOriginalInputMarker,
 } from "../shared/chat-run-input.js";
 
 export {
@@ -763,7 +764,12 @@ async function streamAcceptedSseChatRun({
   const observation = createPromptObservation();
   let originalInputMarkerAppended = false;
   const appendOriginalInputMarker = () => {
-    if (inputAttachmentLabels.length === 0 || originalInputMarkerAppended) return;
+    if (
+      !shouldPersistOriginalInputMarker(prompt, inputAttachmentLabels) ||
+      originalInputMarkerAppended
+    ) {
+      return;
+    }
     runSessionManager.appendCustomEntry("opencandle-user-input", {
       original: prompt,
       attachments: inputAttachmentLabels,
@@ -793,6 +799,9 @@ async function streamAcceptedSseChatRun({
 
   try {
     recordPendingSessionAction(runSessionManager, actionId);
+    if (shouldPersistOriginalInputMarker(prompt, inputAttachmentLabels)) {
+      appendOriginalInputMarker();
+    }
     const modelSetup = buildModelSetupState(
       new ModelRegistry(runSession.modelRuntime),
       runSession.model,

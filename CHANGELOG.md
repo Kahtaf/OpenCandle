@@ -24,6 +24,10 @@
 
 ### Fixed
 
+- Pi's built-in terminal `/login` now runs the same provider probe as `/setup`, the local GUI, and the hosted GUI before persisting OpenAI, Anthropic, or Google API keys, closing the remaining model-key entry path that could save a provider-rejected credential.
+- Local and hosted web sessions now persist slash-command input before Pi expands workflows, and the shared transcript adapter preserves that input across the workflow marker, so `/analyze SYMBOL` remains visible after session reload instead of reopening as internal workflow steps only. Persisted Pi model failures now render an explicit repair-and-retry card instead of disappearing as empty assistant messages, including failures inside workflows.
+- Portaled ticker suggestions remain pointer-interactive inside desktop market-state dialogs, so portfolio holdings and watchlist symbols can be selected with the mouse instead of clicks falling through to the form beneath them.
+- Shared GUI popovers now recognize their own trigger independently of React ref forwarding and become dormant after their exit animation, so clicking the model selector or choosing a model closes the menu instead of briefly hiding and then reappearing in hosted or local web.
 - Hosted relay health, cashtag autocomplete, provider tools, and Pi model streaming now work end to end on `web.opencandle.app` through a Turnstile-attested, client-bound signed token and bounded browser fetch bridge. Missing, tampered, expired, or mismatched tokens fail closed, while live browser proof covers `$AAPL` suggestions, a Yahoo quote tool call, and a streamed OpenAI answer.
 - Public documentation link checks now recognize HTTP 405 responses as proof that method-specific endpoints exist, so documented POST-only relay URLs do not fail CI when probed with HEAD and GET.
 - Hosted Vite configuration now defers hashing generated runtime assets until Vite invokes the config, so the clean-checkout unit-test job can import its helpers before the hosted runtime build runs.

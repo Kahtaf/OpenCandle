@@ -16,6 +16,7 @@ import type {
   SessionCoordinatorOptions,
 } from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
+import { guardModelRuntimeApiKeyLogins } from "./model-key-login-guard.js";
 import openCandleExtensionCore, {
   type OpenCandleExtensionOptions,
 } from "./opencandle-extension-core.js";
@@ -55,6 +56,7 @@ export async function createOpenCandleSessionCore(
   const cwd = options.cwd ?? process.cwd();
   const agentDir = options.agentDir ?? getAgentDir();
   const useInlineExtension = options.useInlineExtension ?? true;
+  if (options.modelRuntime) guardModelRuntimeApiKeyLogins(options.modelRuntime);
   let coordinator: SessionCoordinator | undefined;
   const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
@@ -97,6 +99,7 @@ export async function createOpenCandleSessionCore(
     resourceLoader,
     noTools: "builtin",
   });
+  guardModelRuntimeApiKeyLogins(result.session.modelRuntime);
 
   await applySavedDefaultModel(result);
 

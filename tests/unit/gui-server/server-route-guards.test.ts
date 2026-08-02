@@ -359,6 +359,17 @@ describe("GUI server route guards", () => {
     expect(wsSource).toContain("Legacy active-session chat prompts are no longer supported");
   });
 
+  it("persists slash-command input before the local GUI dispatches a workflow", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const sseStart = source.indexOf("async function streamAcceptedSseChatRun");
+    const dispatchStart = source.indexOf("await promptAndSettle(", sseStart);
+    const beforeDispatch = source.slice(sseStart, dispatchStart);
+
+    expect(beforeDispatch).toContain(
+      "if (shouldPersistOriginalInputMarker(prompt, inputAttachmentLabels))",
+    );
+  });
+
   it("keeps proxy forwarding reachable from the browser runs route but not the proxy target", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
 
