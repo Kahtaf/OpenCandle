@@ -468,6 +468,8 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       sendUserMessage: vi.fn((prompt: string) => {
         entries.push(userTextEntry(prompt));
         setTimeout(() => entries.push(assistantEmptyEntry()), 10);
+        setTimeout(() => entries.push(userTextEntry("later unrelated question")), 15);
+        setTimeout(() => entries.push(assistantTextEntry("later unrelated answer")), 20);
       }),
       appendEntry: vi.fn(),
     };

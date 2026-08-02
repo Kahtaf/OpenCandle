@@ -25,7 +25,7 @@
 
 ### Fixed
 
-- Shared local and hosted workflows now treat a durably recorded terminal Pi assistant response as prompt completion even while an outer GUI request still owns the session's coarse busy state, preventing `/analyze` and other multi-step workflows from hanging after validation with a disabled composer.
+- Shared local and hosted workflows now bind settlement to the exact queued prompt, fail on aborted or errored assistant turns, and treat a matching durable terminal response as complete even while an outer GUI request still owns the session's coarse busy state, preventing `/analyze` and other multi-step workflows from hanging or advancing on an older turn.
 - Portfolio Builder now preserves explicit asset scope, position count, and per-position caps through deterministic routing and every workflow stage, then validates the final allocation table and requests one bounded arithmetic repair instead of presenting a noncompliant portfolio as verified.
 - Persisted chat projection now closes a workflow group at its terminal validation record so ordinary follow-ups remain user turns, and hosted startup repairs legacy local checkpoints whose sidebar list still references an already-deleted session while keeping imports and malformed archives fail-closed.
 - Hosted follower tabs now ask responsive older writer tabs to hand over the single browser runtime before validating or saving model and data-provider API keys, so hidden but active tabs no longer block credential setup while secrets remain confined to the requesting tab.

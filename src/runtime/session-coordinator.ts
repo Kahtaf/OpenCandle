@@ -147,7 +147,7 @@ function terminalAssistantOutcomeAfterPrompt(
   });
   if (promptIndex < 0) return undefined;
 
-  for (let index = entries.length - 1; index > promptIndex; index -= 1) {
+  for (let index = promptIndex + 1; index < entries.length; index += 1) {
     const entry = entries[index];
     if (entry?.type !== "message") continue;
     const message = entry.message as { role?: unknown; stopReason?: unknown };
