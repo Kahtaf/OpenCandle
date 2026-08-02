@@ -940,6 +940,13 @@ export class BrowserHostedGuiRuntime {
         ? (await this.resolveConfiguredPiSession(manager)).getThinkingState()
         : null;
     this.flushState();
+    const checkpoint = this.checkpoint();
+    const checkpointSessionIds = new Set(
+      checkpoint.sessions.map((session) => session.sessionId),
+    );
+    const displaySessions = (await this.listDisplaySessions()).filter((session) =>
+      checkpointSessionIds.has(session.id),
+    );
     const bootstrap: BrowserHostedBootstrap = {
       role: "writer",
       sessionId,
@@ -949,7 +956,7 @@ export class BrowserHostedGuiRuntime {
         ownerKind: "hosted",
         writable: true,
       },
-      sessions: (await this.listDisplaySessions()).map(toDisplaySession),
+      sessions: displaySessions.map(toDisplaySession),
       catalog: {
         tools: tools.map(({ name, label, description, parameters }) => ({
           name,
@@ -972,7 +979,7 @@ export class BrowserHostedGuiRuntime {
         state: projectDashboard(entries, sessionId, symbols),
       },
       marketState: this.marketState(),
-      checkpoint: this.checkpoint(),
+      checkpoint,
     };
     assertHostedBootstrapPersistable(
       bootstrap,
