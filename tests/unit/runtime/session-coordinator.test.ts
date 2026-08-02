@@ -424,10 +424,10 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     const entries: SessionEntry[] = [];
     let sendCount = 0;
     const pi = {
-      sendUserMessage: vi.fn(() => {
+      sendUserMessage: vi.fn((prompt: string) => {
         sendCount += 1;
         const currentSend = sendCount;
-        entries.push(userTextEntry("workflow prompt"));
+        entries.push(userTextEntry(prompt));
         setTimeout(() => {
           entries.push(
             assistantTextEntry(
@@ -465,8 +465,8 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     const coord = new SessionCoordinator();
     const entries: SessionEntry[] = [];
     const pi = {
-      sendUserMessage: vi.fn(() => {
-        entries.push(userTextEntry("workflow prompt"));
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
         setTimeout(() => entries.push(assistantEmptyEntry()), 10);
       }),
       appendEntry: vi.fn(),
@@ -485,16 +485,61 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
   });
 
+  it("does not treat an older in-flight answer as the queued workflow response", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [userTextEntry("older question")];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        sendCount += 1;
+        if (sendCount === 1) {
+          setTimeout(() => entries.push(assistantTextEntry("older answer")), 10);
+          setTimeout(() => entries.push(userTextEntry(prompt)), 30);
+          setTimeout(() => entries.push(assistantTextEntry("workflow response")), 50);
+          return;
+        }
+        entries.push(userTextEntry(prompt));
+        setTimeout(
+          () =>
+            entries.push(
+              assistantTextEntry(
+                "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+              ),
+            ),
+          10,
+        );
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+    const completion = coord.waitForActiveWorkflow();
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await completion;
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+  });
+
   it("waits for every coordinator-managed workflow prompt to settle", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
     const entries: SessionEntry[] = [];
     let sendCount = 0;
     const pi = {
-      sendUserMessage: vi.fn(() => {
+      sendUserMessage: vi.fn((prompt: string) => {
         sendCount += 1;
         const currentSend = sendCount;
-        entries.push(userTextEntry("workflow prompt"));
+        entries.push(userTextEntry(prompt));
         setTimeout(
           () =>
             entries.push(

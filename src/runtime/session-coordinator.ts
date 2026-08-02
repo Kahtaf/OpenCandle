@@ -121,15 +121,37 @@ function readSessionEntries(ctx: QueueContext): SessionEntry[] {
   return manager?.getEntries?.() ?? [];
 }
 
-function terminalAssistantOutcomeSince(
+function messageContentText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const record = part as { type?: unknown; text?: unknown };
+      return record.type === "text" && typeof record.text === "string" ? record.text : "";
+    })
+    .join("")
+    .trim();
+}
+
+function terminalAssistantOutcomeAfterPrompt(
   ctx: QueueContext,
   entryCount: number,
+  expectedPrompt: string,
 ): "success" | "failure" | undefined {
   const entries = readSessionEntries(ctx);
-  for (let index = entries.length - 1; index >= entryCount; index -= 1) {
+  const promptIndex = entries.findIndex((entry, index) => {
+    if (index < entryCount || entry.type !== "message") return false;
+    const message = entry.message as { role?: unknown; content?: unknown };
+    return message.role === "user" && messageContentText(message.content) === expectedPrompt.trim();
+  });
+  if (promptIndex < 0) return undefined;
+
+  for (let index = entries.length - 1; index > promptIndex; index -= 1) {
     const entry = entries[index];
     if (entry?.type !== "message") continue;
     const message = entry.message as { role?: unknown; stopReason?: unknown };
+    if (message.role === "user") return undefined;
     if (message.role !== "assistant") continue;
     if (message.stopReason === "stop" || message.stopReason === "length") return "success";
     if (message.stopReason === "error" || message.stopReason === "aborted") return "failure";
@@ -144,7 +166,11 @@ function sleep(ms: number): Promise<void> {
 async function waitForPromptSettlement(
   ctx: QueueContext,
   isCurrentRun: () => boolean,
-  options: { entriesBeforePrompt?: number; requireActivity?: boolean } = {},
+  options: {
+    entriesBeforePrompt?: number;
+    expectedPrompt?: string;
+    requireActivity?: boolean;
+  } = {},
 ): Promise<boolean> {
   let sawBusyOrPending = !isReadyForNextPrompt(ctx);
   const startedAt = Date.now();
@@ -153,8 +179,9 @@ async function waitForPromptSettlement(
     const ready = isReadyForNextPrompt(ctx);
     const terminalOutcome =
       options.entriesBeforePrompt !== undefined &&
+      options.expectedPrompt !== undefined &&
       !hasPendingMessages(ctx) &&
-      terminalAssistantOutcomeSince(ctx, options.entriesBeforePrompt);
+      terminalAssistantOutcomeAfterPrompt(ctx, options.entriesBeforePrompt, options.expectedPrompt);
     if (terminalOutcome === "failure") {
       throw new Error("workflow_prompt_failed");
     }
@@ -522,6 +549,7 @@ export class SessionCoordinator {
 
     const [firstStep] = definition.steps;
     let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
+    let activePrompt = firstStep.prompt;
 
     if (firstPromptMode === "send") {
       const startedBusy = !isReadyForNextPrompt(ctx);
@@ -552,6 +580,7 @@ export class SessionCoordinator {
           if (stepIndex > 0) {
             const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
               entriesBeforePrompt: entriesBeforeActivePrompt,
+              expectedPrompt: activePrompt,
             });
             if (!settled || !runRef.active) {
               throw new Error("run_cancelled");
@@ -571,11 +600,13 @@ export class SessionCoordinator {
               step.stepType,
               runner.getActiveRun(),
             );
+            activePrompt = prompt;
             pi.sendUserMessage(prompt);
           }
 
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
             entriesBeforePrompt: entriesBeforeStep,
+            expectedPrompt: activePrompt,
             requireActivity: stepIndex === 0 && firstPromptMode === "transform",
           });
           if (!settled || !runRef.active) {
@@ -595,11 +626,13 @@ export class SessionCoordinator {
           ) {
             const entriesBeforeRetry = readSessionEntries(ctx).length;
             entriesBeforeActivePrompt = entriesBeforeRetry;
-            pi.sendUserMessage(
-              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.",
-            );
+            const retryPrompt =
+              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.";
+            activePrompt = retryPrompt;
+            pi.sendUserMessage(retryPrompt);
             const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
               entriesBeforePrompt: entriesBeforeRetry,
+              expectedPrompt: retryPrompt,
             });
             if (!retrySettled || !runRef.active) {
               throw new Error("run_cancelled");
@@ -622,9 +655,12 @@ export class SessionCoordinator {
             const entriesBeforeRepair = readSessionEntries(ctx).length;
             entriesBeforeActivePrompt = entriesBeforeRepair;
             eventCapture.rawText = "";
-            pi.sendUserMessage(outputValidation.repairPrompt(validationErrors));
+            const repairPrompt = outputValidation.repairPrompt(validationErrors);
+            activePrompt = repairPrompt;
+            pi.sendUserMessage(repairPrompt);
             const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
               entriesBeforePrompt: entriesBeforeRepair,
+              expectedPrompt: repairPrompt,
             });
             if (!repairSettled || !runRef.active) {
               throw new Error("run_cancelled");
