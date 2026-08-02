@@ -287,6 +287,34 @@ describe("hosted browser archive", () => {
     expect(files.get("checkpoint-v1.json")).toBe(JSON.stringify(archive));
   });
 
+  it("repairs stale local bootstrap session references left by older builds", async () => {
+    const archive = createHostedArchive({
+      sessions: [session],
+      currentSessionId: "session-1",
+      bootstrap: {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [{ id: "session-1" }],
+        snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+        coordination: { writable: true },
+        catalog: { tools: [], workflows: [], providers: [] },
+      },
+    });
+    archive.bootstrap.sessions.push({ id: "deleted-session", name: "Deleted" });
+    const files = new Map([["checkpoint-v1.json", JSON.stringify(archive)]]);
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+    });
+
+    await expect(store.readOfflineBootstrap()).resolves.toMatchObject({
+      sessions: [{ id: "session-1" }],
+    });
+    expect(JSON.parse(files.get("checkpoint-v1.json") || "null").bootstrap.sessions).toEqual([
+      { id: "session-1" },
+    ]);
+    expect(() => validateHostedArchive(archive)).toThrow("saved session list disagrees");
+  });
+
   it("serializes archive reads and writes across concurrent GUI checkpoints", async () => {
     let content = JSON.stringify(
       createHostedArchive({

@@ -370,7 +370,7 @@ describe("sessionEntriesToChatEvents", () => {
     ).toHaveLength(3);
   });
 
-  it("keeps the final validation prompt in its workflow group", () => {
+  it("closes the workflow group after terminal validation", () => {
     const events = sessionEntriesToChatEvents(
       [
         customEntry("workflow", "opencandle-workflow", {
@@ -384,9 +384,9 @@ describe("sessionEntriesToChatEvents", () => {
         } as Message),
         messageEntry("assistant-synthesis", assistantMessage("Synthesis output")),
         customEntry("validation", "opencandle-validation", { passed: true, mismatches: [] }),
-        messageEntry("workflow-user-validation", {
+        messageEntry("genuine-follow-up", {
           role: "user",
-          content: "[Validation Check] Verify the synthesis evidence.",
+          content: "What is the biggest risk?",
           timestamp: Date.now(),
         } as Message),
       ],
@@ -395,21 +395,15 @@ describe("sessionEntriesToChatEvents", () => {
 
     expect(
       events.filter(
+        (event) => event.type === "message.completed" && event.messageId === "genuine-follow-up",
+      ),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
         (event) =>
-          event.type === "message.completed" && event.messageId === "workflow-user-validation",
+          event.type === "custom.message" && event.messageId === "workflow-step-genuine-follow-up",
       ),
     ).toHaveLength(0);
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "custom.message",
-        messageId: "workflow-step-workflow-user-validation",
-        customType: "opencandle-workflow-step",
-        details: expect.objectContaining({
-          label: "Validation and synthesis",
-          stage: "validation",
-        }),
-      }),
-    );
   });
 
   it("does not apply an analyst stage to earlier unclassified workflow prompts", () => {

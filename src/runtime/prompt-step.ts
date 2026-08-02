@@ -9,6 +9,12 @@ import type { StepOutput, WorkflowStep } from "./workflow-types.js";
  */
 export interface PromptStep extends Omit<WorkflowStep, "status"> {
   prompt: string;
+  outputValidation?: PromptOutputValidation;
+}
+
+export interface PromptOutputValidation {
+  validate(rawText: string): string[];
+  repairPrompt(errors: string[]): string;
 }
 
 /**
@@ -30,6 +36,7 @@ export function promptStep(
     skippable?: boolean;
     requiredInputs?: string[];
     expectedOutputs?: string[];
+    outputValidation?: PromptOutputValidation;
   } = {},
 ): PromptStep {
   return {
@@ -39,6 +46,7 @@ export function promptStep(
     skippable: options.skippable ?? false,
     requiredInputs: options.requiredInputs ?? [],
     expectedOutputs: options.expectedOutputs ?? [],
+    ...(options.outputValidation ? { outputValidation: options.outputValidation } : {}),
   };
 }
 
@@ -143,7 +151,7 @@ export function extractAssistantText(entries: SessionEntry[]): string {
  * (dropping the prompt field) for passing to WorkflowRunner.
  */
 export function toStepDefinitions(steps: PromptStep[]): Omit<WorkflowStep, "status">[] {
-  return steps.map(({ prompt: _prompt, ...step }) => step);
+  return steps.map(({ prompt: _prompt, outputValidation: _outputValidation, ...step }) => step);
 }
 
 function serialize(value: unknown): string {

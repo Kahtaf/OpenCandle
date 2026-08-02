@@ -25,6 +25,9 @@
 
 ### Fixed
 
+- Shared local and hosted workflows now treat a durably recorded terminal Pi assistant response as prompt completion even while an outer GUI request still owns the session's coarse busy state, preventing `/analyze` and other multi-step workflows from hanging after validation with a disabled composer.
+- Portfolio Builder now preserves explicit asset scope, position count, and per-position caps through deterministic routing and every workflow stage, then validates the final allocation table and requests one bounded arithmetic repair instead of presenting a noncompliant portfolio as verified.
+- Persisted chat projection now closes a workflow group at its terminal validation record so ordinary follow-ups remain user turns, and hosted startup repairs legacy local checkpoints whose sidebar list still references an already-deleted session while keeping imports and malformed archives fail-closed.
 - Hosted follower tabs now ask responsive older writer tabs to hand over the single browser runtime before validating or saving model and data-provider API keys, so hidden but active tabs no longer block credential setup while secrets remain confined to the requesting tab.
 - Hosted model-key setup now completes the top-level Turnstile authorization before starting the WebContainer probe, restarts a runtime that previously booted without relay configuration, allows enough time for that first browser-only exchange, and keeps safe verification failures visible in the setup card instead of hiding them in a short-lived generic toast.
 - The hosted model relay now accepts browser-produced zero-length request streams for GET model-catalog probes while continuing to reject non-empty GET bodies, so valid OpenAI, Anthropic, and Google keys can be verified before storage.

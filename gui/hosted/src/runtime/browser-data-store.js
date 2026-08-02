@@ -184,7 +184,12 @@ class BrowserDataStore {
       const handle = await root.getFileHandle(ARCHIVE_FILENAME);
       const file = await handle.getFile();
       if (file.size > MAX_ARCHIVE_BYTES) throw new Error("Hosted archive is too large");
-      return validateHostedArchive(JSON.parse(await file.text()));
+      const localArchive = reconcileLocalBootstrapSessions(JSON.parse(await file.text()));
+      const archive = validateHostedArchive(localArchive.value);
+      if (localArchive.repaired) {
+        await writeFile(root, ARCHIVE_FILENAME, JSON.stringify(archive));
+      }
+      return archive;
     } catch (error) {
       if (isNotFound(error)) return null;
       throw error;
@@ -212,7 +217,10 @@ class BrowserDataStore {
     const root = await this.getRoot();
     try {
       const handle = await root.getFileHandle(BACKUP_FILENAME);
-      const archive = validateHostedArchive(JSON.parse(await (await handle.getFile()).text()));
+      const localArchive = reconcileLocalBootstrapSessions(
+        JSON.parse(await (await handle.getFile()).text()),
+      );
+      const archive = validateHostedArchive(localArchive.value);
       await this.writeArchive(archive);
       return true;
     } catch (error) {
@@ -220,6 +228,46 @@ class BrowserDataStore {
       throw error;
     }
   }
+}
+
+function reconcileLocalBootstrapSessions(value) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.sessions) ||
+    !isRecord(value.bootstrap) ||
+    !Array.isArray(value.bootstrap.sessions)
+  ) {
+    return { value, repaired: false };
+  }
+
+  const archiveSessionIds = new Set();
+  for (const session of value.sessions) {
+    if (!isRecord(session) || typeof session.content !== "string") {
+      return { value, repaired: false };
+    }
+    archiveSessionIds.add(validateSessionContent(session.content));
+  }
+
+  const sessions = [];
+  for (const session of value.bootstrap.sessions) {
+    if (
+      !isRecord(session) ||
+      typeof session.id !== "string" ||
+      !session.id ||
+      session.id.length > 220 ||
+      (session.name !== undefined && typeof session.name !== "string")
+    ) {
+      return { value, repaired: false };
+    }
+    if (archiveSessionIds.has(session.id)) sessions.push(session);
+  }
+  if (sessions.length === value.bootstrap.sessions.length) {
+    return { value, repaired: false };
+  }
+  return {
+    value: { ...value, bootstrap: { ...value.bootstrap, sessions } },
+    repaired: true,
+  };
 }
 
 async function validateStateDatabaseBytes(bytes) {

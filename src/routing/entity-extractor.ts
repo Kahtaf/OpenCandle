@@ -230,6 +230,8 @@ export function extractEntities(input: string): ExtractedEntities {
     catalystSymbols: catalystSymbols.length > 0 ? catalystSymbols : undefined,
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
+    positionCount: extractPositionCount(input),
+    maxSinglePositionPct: extractMaxSinglePositionPct(input),
     compareMetrics: extractCompareMetrics(input),
   };
 }
@@ -534,10 +536,31 @@ function extractTimeHorizon(input: string): string | undefined {
 
 function extractAssetScope(input: string): string | undefined {
   const lower = input.toLowerCase();
+  if (/\bstocks?\s*(?:\+|and)\s*etfs?\b/.test(lower)) return "stocks_and_etfs";
+  if (/\bstocks?\s*(?:\+|and)\s*crypto(?:currencies)?\b/.test(lower)) {
+    return "stocks_and_crypto";
+  }
+  if (/\bstocks?\s+only\b/.test(lower)) return "stocks_only";
   if (/\betfs?\b/.test(lower)) return "etf_focused";
   if (/\bfunds?\b/.test(lower)) return "fund_focused";
   if (/\bindex\s+(?:funds?|products?)\b/.test(lower)) return "index_focused";
   return undefined;
+}
+
+function extractPositionCount(input: string): number | undefined {
+  const match = input.match(/\b(\d{1,2})\s+positions?\b/i);
+  if (!match) return undefined;
+  const count = Number(match[1]);
+  return count >= 1 && count <= 50 ? count : undefined;
+}
+
+function extractMaxSinglePositionPct(input: string): number | undefined {
+  const match = input.match(
+    /\bmax(?:imum)?\s+(\d{1,3}(?:\.\d+)?)\s*%\s+(?:per|for (?:any|each))\s+(?:position|holding)\b/i,
+  );
+  if (!match) return undefined;
+  const percent = Number(match[1]);
+  return percent > 0 && percent <= 100 ? percent : undefined;
 }
 
 function extractCompareMetrics(input: string): string[] | undefined {

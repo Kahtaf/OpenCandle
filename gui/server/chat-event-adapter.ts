@@ -288,20 +288,14 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
   const groups: WorkflowStepCandidate[][] = [];
   let activeGroup: WorkflowStepCandidate[] | null = null;
   let pendingOriginalInput = false;
-  let awaitingValidationPrompt = false;
 
   for (const [index, entry] of entries.entries()) {
     if (isCustomEntry(entry, "opencandle-workflow")) {
       activeGroup = [];
       groups.push(activeGroup);
-      awaitingValidationPrompt = false;
       continue;
     }
     if (isOriginalInputEntry(entry)) {
-      if (awaitingValidationPrompt) {
-        activeGroup = null;
-        awaitingValidationPrompt = false;
-      }
       const previousEntry = entries[index - 1];
       const followsUserMessage =
         previousEntry?.type === "message" && (previousEntry.message as Message).role === "user";
@@ -314,15 +308,7 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
           messageId: entry.id,
           preserveUserTurn: pendingOriginalInput,
         };
-        if (awaitingValidationPrompt) {
-          candidate.stage = "validation";
-          candidate.label = "Validation and synthesis";
-        }
         activeGroup.push(candidate);
-        if (awaitingValidationPrompt) {
-          activeGroup = null;
-          awaitingValidationPrompt = false;
-        }
       }
       pendingOriginalInput = false;
       continue;
@@ -335,7 +321,7 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
     }
     if (isCustomEntry(entry, "opencandle-validation")) {
       assignPendingWorkflowSteps(activeGroup, "validation", "Validation and synthesis");
-      awaitingValidationPrompt = activeGroup !== null;
+      activeGroup = null;
       pendingOriginalInput = false;
     }
   }

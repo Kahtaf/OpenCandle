@@ -79,6 +79,9 @@ interface RouterOutput {
     budget?: number;                 // dollar amount if user stated one
     maxPremium?: number;
     timeHorizon?: string;            // e.g. "6mo", "1y_plus", "short", "long"
+    assetScope?: string;             // e.g. "stocks_only", "stocks_and_etfs", "etf_focused"
+    positionCount?: number;          // explicit requested number of portfolio positions
+    maxSinglePositionPct?: number;   // explicit per-position allocation cap as a percentage
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;

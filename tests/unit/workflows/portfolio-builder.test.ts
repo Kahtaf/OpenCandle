@@ -99,6 +99,29 @@ describe("buildPortfolioWorkflowDefinition", () => {
     expect(synthesize.prompt).toContain("tax/account caveats");
   });
 
+  it("preserves hard portfolio constraints through every workflow step", () => {
+    const def = buildPortfolioWorkflowDefinition(
+      makeResolution({ assetScope: "stocks_only", positionCount: 8, maxSinglePositionPct: 15 }),
+    );
+
+    expect(def.steps[0]?.prompt).toContain("exactly 8 individual listed common-stock candidates");
+    expect(def.steps[0]?.prompt).toContain("allocations sum to 100%");
+    expect(def.steps[0]?.prompt).toContain("at or below 15%");
+    expect(def.steps[1]?.prompt).toContain('asset scope "stocks_only"');
+    expect(def.steps[1]?.prompt).toContain("exactly 8 positions");
+    expect(def.steps[2]?.prompt).toContain("no position above 15%");
+    expect(def.steps[2]?.prompt).toContain("allocations summing to 100%");
+  });
+
+  it("allows an incompatibility explanation when the hard allocation constraints cannot sum to 100%", () => {
+    const def = buildPortfolioWorkflowDefinition(
+      makeResolution({ positionCount: 8, maxSinglePositionPct: 10 }),
+    );
+
+    expect(def.steps[2]?.prompt).toContain("mathematically incompatible");
+    expect(def.steps[2]?.outputValidation).toBeUndefined();
+  });
+
   it("synthesis step does not emit disclaimer directive", () => {
     const def = buildPortfolioWorkflowDefinition(makeResolution());
     const synthesize = def.steps.find((s) => s.stepType === "synthesize");

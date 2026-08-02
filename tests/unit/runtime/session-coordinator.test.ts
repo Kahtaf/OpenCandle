@@ -418,6 +418,48 @@ describe("SessionCoordinator runtime composition", () => {
 });
 
 describe("SessionCoordinator workflow runtime ownership", () => {
+  it("finishes a workflow when the terminal assistant response is recorded before the queue reports idle", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn(() => {
+        sendCount += 1;
+        const currentSend = sendCount;
+        entries.push(userTextEntry("workflow prompt"));
+        setTimeout(() => {
+          entries.push(
+            assistantTextEntry(
+              currentSend === 1
+                ? "workflow response"
+                : "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+            ),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+
+    let completed = false;
+    const completion = coord.waitForActiveWorkflow().then(() => {
+      completed = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(completed).toBe(true);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    await completion;
+  });
+
   it("waits for every coordinator-managed workflow prompt to settle", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
@@ -437,7 +479,7 @@ describe("SessionCoordinator workflow runtime ownership", () => {
                   : "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
               ),
             ),
-          10,
+          currentSend === 1 ? 10 : 60,
         );
       }),
       appendEntry: vi.fn(),
@@ -453,9 +495,9 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       completed = true;
     });
 
-    await vi.advanceTimersByTimeAsync(120);
+    await vi.advanceTimersByTimeAsync(20);
     expect(completed).toBe(false);
-    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(100);
     await completion;
 
     expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);

@@ -178,6 +178,22 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
   if (typeof e.shareQuantity === "number") out.shareQuantity = e.shareQuantity;
   if (typeof e.timeHorizon === "string") out.timeHorizon = e.timeHorizon;
+  if (
+    typeof e.positionCount === "number" &&
+    Number.isInteger(e.positionCount) &&
+    e.positionCount >= 1 &&
+    e.positionCount <= 50
+  ) {
+    out.positionCount = e.positionCount;
+  }
+  if (
+    typeof e.maxSinglePositionPct === "number" &&
+    Number.isFinite(e.maxSinglePositionPct) &&
+    e.maxSinglePositionPct > 0 &&
+    e.maxSinglePositionPct <= 100
+  ) {
+    out.maxSinglePositionPct = e.maxSinglePositionPct;
+  }
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
@@ -217,6 +233,8 @@ export function postProcessRouterOutput(
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
       assetScope: output.entities.assetScope ?? extracted.assetScope,
+      positionCount: output.entities.positionCount ?? extracted.positionCount,
+      maxSinglePositionPct: output.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
       compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
@@ -498,6 +516,9 @@ export function postProcessRouterOutput(
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
         assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
+        positionCount: deterministic.entities.positionCount ?? extracted.positionCount,
+        maxSinglePositionPct:
+          deterministic.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
         compareMetrics: mergeStringArrays(
           deterministic.entities.compareMetrics,
           extracted.compareMetrics,

@@ -6,6 +6,20 @@ import {
 import type { ExtractedEntities } from "../../../src/routing/types.js";
 
 describe("resolvePortfolioSlots", () => {
+  it("uses user-provided position count and concentration cap", () => {
+    const result = resolvePortfolioSlots({
+      symbols: [],
+      budget: 100_000,
+      assetScope: "stocks_only",
+      positionCount: 8,
+      maxSinglePositionPct: 15,
+    });
+
+    expect(result.resolved.positionCount).toBe(8);
+    expect(result.resolved.maxSinglePositionPct).toBe(15);
+    expect(result.sources.positionCount).toBe("user");
+    expect(result.sources.maxSinglePositionPct).toBe("user");
+  });
   it("uses budget from entities and defaults for the rest", () => {
     const entities: ExtractedEntities = {
       symbols: [],

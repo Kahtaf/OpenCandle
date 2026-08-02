@@ -121,6 +121,22 @@ function readSessionEntries(ctx: QueueContext): SessionEntry[] {
   return manager?.getEntries?.() ?? [];
 }
 
+function hasTerminalAssistantEntrySince(ctx: QueueContext, entryCount: number): boolean {
+  return readSessionEntries(ctx)
+    .slice(entryCount)
+    .some((entry) => {
+      if (entry.type !== "message") return false;
+      const message = entry.message as { role?: unknown; stopReason?: unknown };
+      return (
+        message.role === "assistant" &&
+        (message.stopReason === "stop" ||
+          message.stopReason === "length" ||
+          message.stopReason === "error" ||
+          message.stopReason === "aborted")
+      );
+    });
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -128,18 +144,22 @@ function sleep(ms: number): Promise<void> {
 async function waitForPromptSettlement(
   ctx: QueueContext,
   isCurrentRun: () => boolean,
-  options: { requireActivity?: boolean } = {},
+  options: { entriesBeforePrompt?: number; requireActivity?: boolean } = {},
 ): Promise<boolean> {
   let sawBusyOrPending = !isReadyForNextPrompt(ctx);
   const startedAt = Date.now();
 
   while (isCurrentRun()) {
     const ready = isReadyForNextPrompt(ctx);
+    const terminalResponseRecorded =
+      options.entriesBeforePrompt !== undefined &&
+      !hasPendingMessages(ctx) &&
+      hasTerminalAssistantEntrySince(ctx, options.entriesBeforePrompt);
     if (!ready) {
       sawBusyOrPending = true;
     }
 
-    if (sawBusyOrPending && ready) {
+    if ((sawBusyOrPending && ready) || terminalResponseRecorded) {
       return true;
     }
 
@@ -498,6 +518,7 @@ export class SessionCoordinator {
     this.activeWorkflowType = definition.workflowType;
 
     const [firstStep] = definition.steps;
+    let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
 
     if (firstPromptMode === "send") {
       const startedBusy = !isReadyForNextPrompt(ctx);
@@ -521,12 +542,14 @@ export class SessionCoordinator {
         definition.workflowType,
         stepDefs,
         async (step, stepIndex, _priorEvidence, context) => {
-          let entriesBeforeStep = readSessionEntries(ctx).length;
+          let entriesBeforeStep = entriesBeforeActivePrompt;
           const eventCapture = this.startStepCapture();
 
           // First step was already sent above — later steps are sent here.
           if (stepIndex > 0) {
-            const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+            const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeActivePrompt,
+            });
             if (!settled || !runRef.active) {
               throw new Error("run_cancelled");
             }
@@ -538,6 +561,7 @@ export class SessionCoordinator {
               throw new Error("analyst_consensus");
             }
             entriesBeforeStep = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeStep;
             const prompt = this.prepareWorkflowPrompt(
               pi,
               definition.steps[stepIndex].prompt,
@@ -548,6 +572,7 @@ export class SessionCoordinator {
           }
 
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+            entriesBeforePrompt: entriesBeforeStep,
             requireActivity: stepIndex === 0 && firstPromptMode === "transform",
           });
           if (!settled || !runRef.active) {
@@ -565,10 +590,14 @@ export class SessionCoordinator {
             isStructuredAnalystStep(step.stepType) &&
             !hasStructuredContract(step.stepType, rawText)
           ) {
+            const entriesBeforeRetry = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeRetry;
             pi.sendUserMessage(
               "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.",
             );
-            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active);
+            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeRetry,
+            });
             if (!retrySettled || !runRef.active) {
               throw new Error("run_cancelled");
             }
@@ -577,6 +606,44 @@ export class SessionCoordinator {
             output = promptStepOutput(stepIndex, step.stepType, {
               evidence: capturedEvidence(eventCapture, stepEntries),
               rawText,
+            });
+          }
+
+          const outputValidation = definition.steps[stepIndex].outputValidation;
+          let validationErrors = outputValidation?.validate(rawText) ?? [];
+          if (outputValidation && validationErrors.length > 0) {
+            this.appendWorkflowEvent(pi, "output_validation_failed", {
+              stepType: step.stepType,
+              errors: validationErrors,
+            });
+            const entriesBeforeRepair = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeRepair;
+            eventCapture.rawText = "";
+            pi.sendUserMessage(outputValidation.repairPrompt(validationErrors));
+            const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeRepair,
+            });
+            if (!repairSettled || !runRef.active) {
+              throw new Error("run_cancelled");
+            }
+            stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
+            rawText = capturedText(eventCapture, stepEntries);
+            output = promptStepOutput(stepIndex, step.stepType, {
+              evidence: capturedEvidence(eventCapture, stepEntries),
+              rawText,
+            });
+            validationErrors = outputValidation.validate(rawText);
+            if (validationErrors.length > 0) {
+              this.appendWorkflowEvent(pi, "output_validation_failed", {
+                stepType: step.stepType,
+                errors: validationErrors,
+                repairAttempted: true,
+              });
+              throw new Error(`workflow_output_validation_failed: ${validationErrors.join("; ")}`);
+            }
+            this.appendWorkflowEvent(pi, "output_validation_passed", {
+              stepType: step.stepType,
+              repairAttempted: true,
             });
           }
 

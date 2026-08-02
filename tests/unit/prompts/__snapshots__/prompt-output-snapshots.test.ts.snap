@@ -700,6 +700,9 @@ Steps:
 4. Use analyze_correlation across all candidates to check diversification.
 
 Portfolio construction guardrails:
+- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
+- Use exactly 6 eligible positions, make allocations sum to 100%, and keep every position at or below 20%.
+- The eligible universe is "diversified_etf_building_blocks". Do not introduce an asset outside that universe during candidate selection or risk review.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
 - If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
@@ -729,14 +732,16 @@ Build a draft portfolio under these parameters:
 - Max single position: 20% [DEFAULT]
 
 Steps:
-1. Identify 6 diverse candidates appropriate for a balanced 1y_plus portfolio.
-   Avoid over-concentration in individual equities unless the user explicitly asked for stock picks; use diversified funds where they better fit the requested horizon and risk profile.
+1. Identify exactly 6 diverse candidates appropriate for a balanced 1y_plus portfolio.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use get_company_overview for fundamentals on each candidate.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 5. Use analyze_correlation across all candidates to check diversification.
 
 Portfolio construction guardrails:
+- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
+- Use exactly 6 eligible positions, make allocations sum to 100%, and keep every position at or below 20%.
+- The eligible universe is "large_cap_equities". Do not introduce an asset outside that universe during candidate selection or risk review.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
 - If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
