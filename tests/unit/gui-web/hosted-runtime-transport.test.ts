@@ -129,7 +129,7 @@ describe("hosted runtime transport", () => {
     });
   });
 
-  it("keeps a follower read-only when it receives the writer bootstrap", async () => {
+  it("keeps a follower action-capable while it forwards to the writer", async () => {
     const host = createHost();
     const followerHost = {
       ...host,
@@ -139,8 +139,8 @@ describe("hosted runtime transport", () => {
 
     await expect(transport.bootstrap()).resolves.toMatchObject({
       role: "follower",
-      supportsSessionActions: false,
-      coordination: { writable: false },
+      supportsSessionActions: true,
+      coordination: { writable: true },
     });
   });
 

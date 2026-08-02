@@ -497,6 +497,10 @@ class BrowserRuntimeHost {
     await this.stopRuntime();
   }
 
+  async prewarm() {
+    await this.ensureBooted();
+  }
+
   async ensureBooted() {
     this.bootPromise ??= this.boot();
     try {

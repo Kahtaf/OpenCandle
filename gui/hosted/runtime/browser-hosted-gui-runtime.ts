@@ -935,10 +935,11 @@ export class BrowserHostedGuiRuntime {
       marketStateDependencies: this.options.marketStateDependencies,
     });
     const providerReport = resolveHostedBrowserCapabilityReport(this.options.relayProviders);
-    const thinking =
-      this.options.modelProvider && this.options.modelId
-        ? (await this.resolveConfiguredPiSession(manager)).getThinkingState()
-        : null;
+    // Bootstrapping the transcript must not instantiate a full Pi agent only
+    // to render the thinking picker. A configured session is created lazily
+    // by the first chat turn or explicit thinking change and remains cached
+    // thereafter.
+    const thinking = this.piSessions.get(sessionId)?.getThinkingState() ?? null;
     this.flushState();
     const checkpoint = this.checkpoint();
     const checkpointSessionIds = new Set(

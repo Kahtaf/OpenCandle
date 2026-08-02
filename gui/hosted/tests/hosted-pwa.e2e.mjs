@@ -284,7 +284,7 @@ try {
     stage = "session reload";
     const restored = await context.newPage();
     await restored.goto(page.url(), { waitUntil: "domcontentloaded" });
-    await waitForText(restored, "Connected to the active tab", 120_000);
+    await waitForText(restored, "Ready through the active tab", 120_000);
     await waitForText(restored, prompt, 120_000);
     if (relayE2e) {
       await waitForText(restored, "Stock quote", 120_000);
@@ -364,7 +364,7 @@ try {
       await follower.evaluate(() => Boolean(navigator.serviceWorker.controller)),
       "service worker control on a subsequent navigation",
     );
-    await waitForText(follower, "Connected to the active tab", 120_000);
+    await waitForText(follower, "Ready through the active tab", 120_000);
     await waitForText(follower, "AAPL", 30_000);
     await follower.getByRole("button", { name: "New chat", exact: true }).click();
     await waitForText(
@@ -377,7 +377,7 @@ try {
     stage = "mobile layout";
     await mobile.setViewportSize({ width: 390, height: 844 });
     await mobile.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
-    await waitForText(mobile, "Connected to the active tab", 120_000);
+    await waitForText(mobile, "Ready through the active tab", 120_000);
     await waitForText(mobile, "AAPL", 30_000);
     await assertNoHorizontalOverflow(mobile, "mobile watchlist");
 

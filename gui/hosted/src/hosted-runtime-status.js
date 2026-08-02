@@ -11,7 +11,7 @@ export function refreshHostedRuntimeStatus(current, message, environment) {
     ...next,
     message: environment.online
       ? environment.role === "follower"
-        ? "Connected to the active tab"
+        ? "Ready through the active tab"
         : "Running on this device"
       : "Offline: saved research is read-only",
   };

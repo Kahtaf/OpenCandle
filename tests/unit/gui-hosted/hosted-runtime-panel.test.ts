@@ -30,4 +30,14 @@ describe("hosted runtime status", () => {
       ),
     ).toMatchObject({ message: "Runtime failed" });
   });
+
+  it("states that a follower can act through the active runtime tab", () => {
+    expect(
+      refreshHostedRuntimeStatus(
+        { role: "writer", online: true, message: "Running on this device", actionError: "" },
+        undefined,
+        { role: "follower", online: true },
+      ),
+    ).toMatchObject({ message: "Ready through the active tab" });
+  });
 });

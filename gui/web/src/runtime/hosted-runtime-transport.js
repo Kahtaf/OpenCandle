@@ -31,11 +31,15 @@ export function createHostedRuntimeTransport({ host }) {
     const role = host.getRole?.() || payload?.role || "writer";
     const payloadCoordination = payload?.coordination || {
       ownerKind: role === "offline" ? "offline" : "hosted",
-      writable: role === "writer",
+      writable: role !== "offline",
     };
     const coordination = {
       ...payloadCoordination,
-      writable: role === "writer" && payloadCoordination.writable !== false,
+      // Hosted followers forward session actions and streams to the elected
+      // writer. They are action-capable clients even though they do not own
+      // the WebContainer, so keep the shared composer and market-state UI
+      // enabled for every online hosted tab.
+      writable: role !== "offline" && payloadCoordination.writable !== false,
     };
     return {
       ...payload,

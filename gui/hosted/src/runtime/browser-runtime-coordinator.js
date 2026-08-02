@@ -158,6 +158,13 @@ class BrowserRuntimeCoordinator {
     this.writerId = this.tabId;
     this.role = "writer";
     this.host = this.createHost({ sessionCredential: this.sessionCredential });
+    // Overlap WebContainer startup with the UI's initial render. The first
+    // bootstrap request reuses this promise, so there is still exactly one
+    // runtime and no additional background execution surface.
+    void Promise.resolve(this.host.prewarm?.()).catch(() => {
+      // The first UI request surfaces boot errors through the normal status
+      // path. Avoid an unhandled rejection from an opportunistic prewarm.
+    });
     this.cachedModelSetup = this.host.getModelSetup?.() ?? null;
     this.resolveReady();
     this.broadcastStatus();

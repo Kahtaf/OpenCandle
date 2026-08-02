@@ -65,8 +65,10 @@ describe("browser runtime coordinator", () => {
     const locks = new FakeLockManager();
     const storage = createStorage();
     const calls: unknown[] = [];
+    const prewarm = vi.fn();
     const createHost = vi.fn(() => ({
       getModelSetup: () => ({ requirement: "ready", hosted: true }),
+      prewarm,
       request: async (_operation: string, payload: unknown) => {
         calls.push(payload);
         return { sessionId: "session-1", sessions: [], snapshot: {}, checkpoint: {} };
@@ -87,6 +89,7 @@ describe("browser runtime coordinator", () => {
 
     expect([first.getRole(), second.getRole()].sort()).toEqual(["follower", "writer"]);
     expect(createHost).toHaveBeenCalledTimes(1);
+    expect(prewarm).toHaveBeenCalledOnce();
     const follower = first.getRole() === "follower" ? first : second;
     await follower.request("gui", { action: "new_session" });
     await settle();
