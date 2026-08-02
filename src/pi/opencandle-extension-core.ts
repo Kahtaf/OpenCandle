@@ -653,7 +653,7 @@ export default function openCandleExtension(
             ],
           };
         }
-        // Cancelled, blocked-by-env, or invalid_key: fall through to skipped
+        // Cancelled or unsuccessful validation: fall through to skipped
         // with a result-specific explanation so the LLM can describe what
         // just happened in its final answer.
         const connectOutcomeDescription =
@@ -661,7 +661,9 @@ export default function openCandleExtension(
             ? "blocked by an existing environment variable"
             : connectResult.status === "invalid_key"
               ? `rejected by ${descriptor.displayName} (the key was invalid and nothing was saved)`
-              : "cancelled";
+              : connectResult.status === "verification_failed"
+                ? `not completed because ${descriptor.displayName} could not verify the key (nothing was saved)`
+                : "cancelled";
         return {
           content: [
             {

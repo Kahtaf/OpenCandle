@@ -70,6 +70,23 @@ describe("terminal model-key login guard", () => {
     expect(await credentials.read("openai")).toEqual({ type: "api_key", key: "valid-key" });
   });
 
+  it("does not persist a key when the provider probe cannot verify it", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const { credentials, modelRuntime } = await createTestModelRuntime();
+    guardModelRuntimeApiKeyLogins(modelRuntime);
+
+    await expect(
+      modelRuntime.login("openai", "api_key", {
+        prompt: vi.fn(async () => "unverified-key"),
+        notify: vi.fn(),
+      }),
+    ).rejects.toThrow("Couldn't verify");
+
+    expect(await credentials.read("openai")).toBeUndefined();
+  });
+
   it("does not persist a key when the login interaction is cancelled during its probe", async () => {
     let finishProbe: ((response: Response) => void) | undefined;
     globalThis.fetch = vi

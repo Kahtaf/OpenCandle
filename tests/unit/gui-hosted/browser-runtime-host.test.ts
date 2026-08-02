@@ -607,7 +607,9 @@ describe("browser runtime host", () => {
       sessionStorage,
       dataStore: {},
     });
-    host.request = vi.fn(async () => ({}));
+    host.request = vi.fn(async (_operation, body) =>
+      body.action.startsWith("validate_") ? { status: "valid" } : {},
+    );
 
     await host.handleCommand({
       type: "model.setup.save_api_key",
@@ -746,6 +748,49 @@ describe("browser runtime host", () => {
       credentials: { fred: "existing-valid-key" },
     });
     expect(host.stopRuntime).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing hosted credentials when validation cannot complete", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const storage = memoryStorage();
+    storage.setItem(
+      "opencandle.hosted.credentials.v1",
+      JSON.stringify({
+        version: 2,
+        credentials: { openai: { apiKey: "existing-model-key", storageMode: "persistent" } },
+      }),
+    );
+    storage.setItem(
+      "opencandle.hosted.provider-credentials.v1",
+      JSON.stringify({ version: 1, credentials: { fred: "existing-provider-key" } }),
+    );
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage,
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.request = vi.fn(async () => ({ status: "transient", reason: "relay unavailable" }));
+
+    await expect(
+      host.handleCommand({
+        type: "model.setup.save_api_key",
+        provider: "openai",
+        modelId: "gpt-5-mini",
+        apiKey: "unverified-model-key",
+      }),
+    ).rejects.toThrow("could not be verified");
+    await expect(
+      host.handleCommand({
+        type: "provider.save_api_key",
+        providerId: "fred",
+        apiKey: "unverified-provider-key",
+      }),
+    ).rejects.toThrow("could not be verified");
+
+    expect(host.readModelCredentials().openai.apiKey).toBe("existing-model-key");
+    expect(host.readProviderCredentials().fred).toBe("existing-provider-key");
   });
 
   it("withholds run.completed until the durable checkpoint succeeds", async () => {

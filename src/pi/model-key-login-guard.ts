@@ -53,6 +53,11 @@ function withModelKeyProbe(
       if (validation.status === "invalid") {
         throw new Error(`Key was rejected by ${validation.providerLabel}. Paste a different key.`);
       }
+      if (validation.status !== "valid") {
+        throw new Error(
+          `Couldn't verify the ${validation.providerLabel} key (${validation.reason}). The key was not saved.`,
+        );
+      }
       return normalizedKey;
     },
   };

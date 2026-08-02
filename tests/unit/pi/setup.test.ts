@@ -79,6 +79,22 @@ describe("OpenCandle setup", () => {
     );
   });
 
+  it("does not save a pasted model key when verification cannot complete", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const { credentials, modelRuntime, modelRegistry } = await createTestModelRuntime();
+    guardModelRuntimeApiKeyLogins(modelRuntime);
+    const ui = createUi({ input: vi.fn().mockResolvedValue("unverified-key") });
+
+    await expect(
+      runApiKeySetup({ ui, modelRegistry } as any, "openai", modelRuntime),
+    ).resolves.toBe(false);
+
+    expect(await credentials.read("openai")).toBeUndefined();
+    expect(ui.notify).toHaveBeenCalledWith(expect.stringContaining("Couldn't verify"), "error");
+  });
+
   it("writes an API key to Pi auth and auto-activates the default model without opening a picker", async () => {
     // 14.1 — with a defaultModelId that's available in getAvailable(), setModel should be
     // called exactly once without the model picker opening. The UI should receive only two

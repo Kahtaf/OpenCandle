@@ -159,6 +159,11 @@ export function createModelSetupController({
         `Key was rejected by ${validation.providerLabel}. The existing configuration was not changed.`,
       );
     }
+    if (validation.status !== "valid") {
+      throw new Error(
+        `Couldn't verify the ${validation.providerLabel} key (${validation.reason}). The existing configuration was not changed.`,
+      );
+    }
 
     const session = getSession();
     await session.modelRuntime.login(
@@ -182,9 +187,7 @@ export function createModelSetupController({
     await session.settingsManager.flush();
     getSessionManager().appendCustomMessageEntry(
       "opencandle-model-setup",
-      validation.status === "transient"
-        ? `Saved — couldn't verify (network issue). Connected ${provider.label} and selected ${model.provider}/${model.id}.`
-        : `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
+      `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );
@@ -218,13 +221,15 @@ export function createModelSetupController({
         `${descriptor.displayName} rejected the key${statusHint}${messageHint}. The existing configuration was not changed.`,
       );
     }
+    if (validation.status !== "valid") {
+      throw new Error(
+        `Couldn't verify the ${descriptor.displayName} key (${validation.reason}). The existing configuration was not changed.`,
+      );
+    }
 
     persistProviderCredential(descriptor.id, trimmed);
 
-    const verifiedNote =
-      validation.status === "transient"
-        ? `Saved ${descriptor.displayName} key but couldn't verify it (${validation.reason}). The next request will surface any issue.`
-        : `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
+    const verifiedNote = `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
 
     getSessionManager().appendCustomMessageEntry("opencandle-provider-setup", verifiedNote, true, {
       source: "gui",

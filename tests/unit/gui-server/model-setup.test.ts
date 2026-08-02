@@ -203,15 +203,15 @@ describe("GUI model setup", () => {
     expect(auth).toHaveLength(0);
   });
 
-  it("saves a model key with an honest notice when its probe has a network failure", async () => {
+  it("does not save a model key when its probe has a network failure", async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
-    const entries: unknown[] = [];
     const anthropic = model("anthropic", "claude-haiku-4-5");
+    const login = vi.fn(async () => {});
     const session = {
       modelRuntime: {
-        login: async () => {},
+        login,
         getAvailableSnapshot: () => [anthropic],
         hasConfiguredAuth: () => true,
         getModel: () => anthropic,
@@ -223,17 +223,15 @@ describe("GUI model setup", () => {
     const controller = createModelSetupController({
       role: "writer",
       getSession: () => session,
-      getSessionManager: () => ({
-        appendCustomMessageEntry: (...args: unknown[]) => entries.push(args),
-      }),
+      getSessionManager: () => ({ appendCustomMessageEntry: vi.fn() }),
       broadcastState: () => {},
     });
 
-    await controller.handleSaveModelApiKey("anthropic", "network-key");
-
-    expect(entries[0]).toEqual(
-      expect.arrayContaining([expect.stringContaining("Saved — couldn't verify (network issue)")]),
+    await expect(controller.handleSaveModelApiKey("anthropic", "network-key")).rejects.toThrow(
+      "Couldn't verify",
     );
+
+    expect(login).not.toHaveBeenCalled();
   });
 
   it("rejects model selection in follower mode", async () => {

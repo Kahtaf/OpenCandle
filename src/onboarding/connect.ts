@@ -12,10 +12,9 @@
 // validated via `validateCredential`, which makes a single cheap request to
 // the provider's canonical API and classifies the response. A hard
 // auth failure (401/403 or a provider-specific error-in-200-body) is
-// returned as `invalid_key` WITHOUT persisting the bad value; a transient
-// failure (timeout, 5xx, network error) warns the user but still persists
-// the key so they aren't blocked on a provider outage — the next real tool
-// call will surface any lingering issue via the credential-required tag.
+// returned as `invalid_key` WITHOUT persisting the bad value. A transient
+// failure (timeout, 5xx, network error) also fails closed: credentials are
+// persisted only after the provider positively verifies them.
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -39,6 +38,7 @@ export type ConnectResult =
   | { status: "connected" }
   | { status: "cancelled" }
   | { status: "blocked_by_env" }
+  | { status: "verification_failed"; reason: string }
   | { status: "invalid_key"; httpStatus?: number; message?: string };
 
 function writeNested(
@@ -136,9 +136,8 @@ export async function runProviderConnect(
     return { status: "cancelled" };
   }
 
-  // Validate the key with the provider BEFORE persisting. Hard auth failures
-  // short-circuit here without writing anything; transient failures warn
-  // but proceed to persist so users don't get stuck on a provider outage.
+  // Validate the key with the provider BEFORE persisting. Only a positive
+  // provider response may modify the stored credential.
   ctx.ui.notify(`Verifying your ${descriptor.displayName} key...`, "info");
   const validation = await validateCredential(descriptor.id, trimmed);
 
@@ -163,10 +162,10 @@ export async function runProviderConnect(
   if (validation.status === "transient") {
     ctx.ui.notify(
       `Couldn't reach ${descriptor.displayName} to verify the key (${validation.reason}). ` +
-        `Saving it anyway — the next request will surface any issue.`,
-      "warning",
+        `The key was not saved. Try again when the provider is reachable.`,
+      "error",
     );
-    // Fall through to persist.
+    return { status: "verification_failed", reason: validation.reason };
   }
 
   persistProviderCredential(descriptor.id, trimmed);

@@ -150,6 +150,11 @@ class BrowserRuntimeHost {
         if (validation?.status === "invalid") {
           throw new Error(`The ${setup?.label ?? provider} key was rejected. Your existing key was not changed.`);
         }
+        if (validation?.status !== "valid") {
+          throw new Error(
+            `The ${setup?.label ?? provider} key could not be verified. Your existing key was not changed.`,
+          );
+        }
         await this.request("gui", {
           action: "configure_model",
           provider,
@@ -200,6 +205,9 @@ class BrowserRuntimeHost {
         });
         if (validation?.status === "invalid") {
           throw new Error("The provider rejected this key. Your existing key was not changed.");
+        }
+        if (validation?.status !== "valid") {
+          throw new Error("The provider key could not be verified. Your existing key was not changed.");
         }
         const current = this.readProviderCredentials();
         this.storage.setItem(

@@ -216,6 +216,13 @@ export async function runApiKeySetup(
     );
     return false;
   }
+  if (validation.status !== "valid") {
+    ctx.ui.notify(
+      `Couldn't verify the ${validation.providerLabel} key (${validation.reason}). The key was not saved. Try again when the provider is reachable.`,
+      "error",
+    );
+    return false;
+  }
   await modelRuntime.login(
     provider,
     "api_key",
@@ -225,12 +232,7 @@ export async function runApiKeySetup(
     }),
   );
   await ctx.modelRegistry.refresh();
-  ctx.ui.notify(
-    validation.status === "transient"
-      ? `Saved — couldn't verify (network issue). ${label} API key saved to OpenCandle.`
-      : `${label} API key saved to OpenCandle.`,
-    "info",
-  );
+  ctx.ui.notify(`${label} API key saved to OpenCandle.`, "info");
   return true;
 }
 
