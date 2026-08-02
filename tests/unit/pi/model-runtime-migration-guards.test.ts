@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -24,34 +24,11 @@ describe("Pi model runtime migration guards", () => {
     expect(source).toContain("options.useInlineExtension === false");
   });
 
-  it("does not accept dismissed Codex reviews at the merge gate", () => {
-    const source = readFileSync(resolve(".github/workflows/codex-review-gate.yml"), "utf-8");
+  it("keeps Codex review advisory instead of blocking pull requests", () => {
+    expect(existsSync(resolve(".github/workflows/codex-review-gate.yml"))).toBe(false);
 
-    expect(source).toContain('["COMMENTED", "APPROVED"].includes(review.state)');
-    expect(source).not.toContain('review.state !== "PENDING"');
-  });
-
-  it("publishes the Codex gate result to the PR head commit", () => {
-    const source = readFileSync(resolve(".github/workflows/codex-review-gate.yml"), "utf-8");
-
-    expect(source).toContain("github.rest.repos.createCommitStatus({");
-    expect(source).toContain("sha: headSha,");
-    expect(source).toContain("context: statusContext,");
-    expect(source).toContain('await publishStatus("success"');
-  });
-
-  it("requires a head-specific review artifact for clean Codex completion", () => {
-    const source = readFileSync(resolve(".github/workflows/codex-review-gate.yml"), "utf-8");
-
-    expect(source).toContain("github.rest.pulls.listReviews");
-    expect(source).toContain("github.rest.issues.listComments");
-    expect(source).toContain("Codex Review: Didn't find any major issues");
-    expect(source).toContain("(?:\\\\*\\\\*)?Reviewed commit:(?:\\\\*\\\\*)?\\\\s+`");
-    expect(source).toContain("reviewedHeadPattern.test(comment.body)");
-    expect(source).not.toContain("github.rest.issues.createComment");
-    expect(source).toContain("github.rest.reactions.listForIssueComment");
-    expect(source).toContain('reaction.content === "+1"');
-    expect(source).toContain("comment.body?.includes(headSha.slice(0, 8))");
-    expect(source).not.toContain('reaction.content === "eyes"');
+    const contributing = readFileSync(resolve("CONTRIBUTING.md"), "utf-8");
+    expect(contributing).toContain("@codex review");
+    expect(contributing).not.toContain("required alongside CI");
   });
 });

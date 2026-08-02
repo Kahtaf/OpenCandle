@@ -67,7 +67,7 @@ Every PR should explain:
 
 For non-trivial work, link the issue or design discussion that established scope.
 
-Every PR's head commit also gets an asynchronous Codex review, required alongside CI and unresolved-conversation protection. Expect your PR to wait on that check and to resolve its review threads before merge.
+Codex reviews are advisory rather than a merge gate. A review may run automatically when a PR is opened, and maintainers can request one at any time by commenting `@codex review`. Address substantive findings, but do not wait for a Codex status check before merging.
 
 ## Release Notes and Changelog Discipline
 
