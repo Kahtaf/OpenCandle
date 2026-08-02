@@ -979,7 +979,7 @@ describe("browser runtime host", () => {
     );
   });
 
-  it("passes a stable relay identity and ephemeral Turnstile attestation only to the hosted process", async () => {
+  it("exchanges Turnstile in the trusted shell and passes only ephemeral signed authorization to the hosted process", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
@@ -989,6 +989,10 @@ describe("browser runtime host", () => {
       .fn()
       .mockResolvedValueOnce("attestation-one")
       .mockResolvedValueOnce("attestation-two");
+    const fetchRuntimeAuthorization = vi
+      .fn()
+      .mockResolvedValueOnce({ token: "runtime-one.signature", expiresAt: 2_000_000 })
+      .mockResolvedValueOnce({ token: "runtime-two.signature", expiresAt: 3_000_000 });
     const run = async () => {
       const container = {
         spawn: vi.fn(async (_command, _args, options) => {
@@ -1017,6 +1021,7 @@ describe("browser runtime host", () => {
         dataStore: {},
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
         getTurnstileToken,
+        fetchRuntimeAuthorization,
       });
       await host.startProcess(container);
     };
@@ -1030,9 +1035,11 @@ describe("browser runtime host", () => {
       "https://web.opencandle.app/v1/provider-fetch",
     );
     expect(first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID).toMatch(/^[a-f0-9]{32}$/);
-    expect(first.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN).toBe("attestation-one");
-    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN).toBeUndefined();
-    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT).toBeUndefined();
+    expect(first.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN).toBeUndefined();
+    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN).toBe("runtime-one.signature");
+    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT).toBe("2000000");
+    expect(second.OPENCANDLE_PROVIDER_RELAY_TOKEN).toBe("runtime-two.signature");
+    expect(second.OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT).toBe("3000000");
     expect(second.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID).toBe(
       first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
     );
@@ -1041,6 +1048,14 @@ describe("browser runtime host", () => {
     );
     expect(storage.getItem("opencandle.hosted.runtime-token")).toBeNull();
     expect(getTurnstileToken).toHaveBeenCalledTimes(2);
+    expect(fetchRuntimeAuthorization).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        clientId: first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
+        turnstileToken: "attestation-one",
+      }),
+    );
   });
 
   it("boots in degraded mode when runtime authorization is unavailable", async () => {

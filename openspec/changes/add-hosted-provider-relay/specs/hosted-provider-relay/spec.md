@@ -96,29 +96,30 @@ APIs SHALL remain direct. Local GUI and TUI fetch behavior MUST NOT change.
 ### Requirement: Generated runtime origins require stateless authorization
 
 The relay SHALL issue a first short-lived HMAC-signed runtime token only after
-the generated runtime presents a server-verified Turnstile attestation created
-on the approved top-level hosted origin. Refresh SHALL require an already valid
-runtime token. The relay SHALL bind each token to the exact runtime origin,
-hosted installation client id, one-hour access expiry, and a 30-day sliding renewal expiry, keep both secrets in Worker secrets,
-and store no attestation, token, or token claim. A WebContainer runtime origin
-MUST present a valid matching token for health,
-provider, and model requests before the Worker echoes that origin in CORS.
+the approved top-level hosted origin presents a server-verified Turnstile
+attestation. Refresh SHALL require an already valid runtime token. The relay
+SHALL bind each token to the hosted installation client id and expiry, keep
+both signing and Turnstile secrets in Worker secrets, and store no attestation,
+token, or token claim. Browser-origin health, provider, and model requests MUST
+present a valid matching token unless they come from the approved same-origin
+shell.
 
 #### Scenario: Hosted runtime completes the joined relay flow
 
-- **WHEN** the approved top-level app passes a one-time Turnstile attestation to
-  its generated WebContainer runtime and that runtime exchanges it for a token
+- **WHEN** the approved top-level app exchanges a one-time Turnstile
+  attestation and passes only the resulting signed token to its WebContainer
+  runtime
 - **THEN** that runtime can negotiate relay health and perform an allowlisted
-  provider request through the same token and client id
+  provider request through the exact-path browser fetch bridge using the same
+  token and client id
 - **AND** neither the attestation nor token is written to browser storage,
   SQLite, or Pi sessions
 
 #### Scenario: Shared runtime origin has no valid token
 
-- **WHEN** a generated WebContainer origin omits or fails Turnstile attestation,
-  tampers with a signed token, exceeds its renewal expiry, or changes the origin or client id
-  bound to its token
-- **THEN** the Worker does not echo that origin and does not call upstream
+- **WHEN** a browser caller omits, tampers with, or expires a signed token, or
+  changes the client id bound to its token
+- **THEN** the Worker grants no CORS access and does not call upstream
 
 ### Requirement: Relay health gates hosted tool registration
 

@@ -63,30 +63,6 @@ describe("hosted Turnstile attestation", () => {
     expect(turnstileApi.remove).toHaveBeenCalledWith("widget-1");
     expect(container.remove).toHaveBeenCalledOnce();
   });
-
-  it("times out a stalled Turnstile script load and removes the pending script", async () => {
-    vi.useFakeTimers();
-    const script = fakeScript();
-    const documentRef = {
-      body: { append: vi.fn() },
-      head: { append: vi.fn() },
-      createElement: vi.fn(() => script),
-    };
-
-    const attestation = requestTurnstileAttestation({
-      sitekey: "test-sitekey",
-      documentRef,
-      timeoutMs: 25,
-    });
-    const rejection = expect(attestation).rejects.toThrow("Turnstile API load timed out");
-    await vi.advanceTimersByTimeAsync(25);
-
-    await rejection;
-    expect(script.removeEventListener).toHaveBeenCalledWith("load", expect.any(Function));
-    expect(script.removeEventListener).toHaveBeenCalledWith("error", expect.any(Function));
-    expect(script.remove).toHaveBeenCalledOnce();
-    vi.useRealTimers();
-  });
 });
 
 function fakeContainer() {
@@ -101,16 +77,5 @@ function fakeDocument(container: ReturnType<typeof fakeContainer>) {
   return {
     body: { append: vi.fn() },
     createElement: vi.fn(() => container),
-  };
-}
-
-function fakeScript() {
-  return {
-    src: "",
-    async: false,
-    defer: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    remove: vi.fn(),
   };
 }

@@ -56,6 +56,19 @@ describe("hosted provider relay fetch", () => {
     }
   });
 
+  it("surfaces only the relay's bounded semantic authorization error", async () => {
+    await expect(
+      fetchHostedRuntimeAuthorization({
+        relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        clientId: "0123456789abcdef0123456789abcdef",
+        turnstileToken: "attestation-token",
+        fetchImpl: vi.fn(async () =>
+          Response.json({ error: "turnstile_verification_failed" }, { status: 403 }),
+        ),
+      }),
+    ).rejects.toThrow("403: turnstile_verification_failed");
+  });
+
   it("refreshes runtime authorization before expiry and coalesces concurrent refreshes", async () => {
     let now = 1_000_000;
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -344,6 +357,20 @@ describe("hosted provider relay fetch", () => {
     await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
     await expect(load()).resolves.toEqual({ version: 1, providers: ["yahoo"] });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a bounded relay negotiation failure to hosted diagnostics", async () => {
+    const onError = vi.fn();
+    const load = createHostedRelayManifestLoader({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      fetchImpl: vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+      onError,
+    });
+
+    await expect(load()).resolves.toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "fetch failed" }));
   });
 
   it("revalidates an expired manifest and fails closed when refresh fails", async () => {

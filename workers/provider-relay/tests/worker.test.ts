@@ -10,9 +10,86 @@ const modelEndpoint = "https://relay.test/v1/model-fetch";
 const runtimeTokenEndpoint = `https://relay.test${PROVIDER_RELAY_RUNTIME_TOKEN_PATH}`;
 const hostedOrigin = "https://web.opencandle.app";
 const runtimeOrigin = "https://runtime-123.local-corp.webcontainer-api.io";
+const stackblitzRuntimeOrigin = "https://stackblitz.com";
 const clientId = "0123456789abcdef0123456789abcdef";
 
 describe("hosted provider relay", () => {
+  it("accepts hostname-bound Turnstile issuance when a same-origin client omits Origin", async () => {
+    const relay = createProviderRelay({
+      fetchImpl: vi.fn(),
+      turnstileFetchImpl: successfulTurnstileFetch(),
+      now: () => 1_000_000,
+    });
+    const request = new Request(runtimeTokenEndpoint, {
+      method: "POST",
+      headers: {
+        "cf-connecting-ip": "203.0.113.10",
+        [MODEL_RELAY_HEADERS.client]: clientId,
+        [MODEL_RELAY_HEADERS.turnstileToken]: "attestation-token",
+      },
+    });
+
+    const issued = await relay.fetch(request, environment());
+
+    expect(issued.status).toBe(200);
+  });
+
+  it("permits sandboxed WebContainer preflight while requiring a signed actual request", async () => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn() });
+    const preflight = await relay.fetch(
+      new Request("https://relay.test/v1/health", {
+        method: "OPTIONS",
+        headers: {
+          origin: "null",
+          "access-control-request-headers": `${MODEL_RELAY_HEADERS.client}, ${MODEL_RELAY_HEADERS.runtimeToken}`,
+        },
+      }),
+      environment(),
+    );
+    const unsigned = await relay.fetch(
+      new Request("https://relay.test/v1/health", {
+        headers: { origin: "null", [MODEL_RELAY_HEADERS.client]: clientId },
+      }),
+      environment(),
+    );
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(unsigned.status).toBe(403);
+    expect(unsigned.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("accepts the actual StackBlitz WebContainer execution origin", async () => {
+    const relay = createProviderRelay({
+      fetchImpl: vi.fn(),
+      turnstileFetchImpl: successfulTurnstileFetch(),
+      now: () => 1_000_000,
+    });
+
+    const issued = await relay.fetch(
+      runtimeTokenRequest({
+        origin: hostedOrigin,
+        turnstileToken: "attestation-token",
+      }),
+      environment(),
+    );
+
+    expect(issued.status).toBe(200);
+    const { token } = (await issued.json()) as { token: string };
+    const health = await relay.fetch(
+      new Request("https://relay.test/v1/health", {
+        headers: {
+          origin: stackblitzRuntimeOrigin,
+          [MODEL_RELAY_HEADERS.client]: clientId,
+          [MODEL_RELAY_HEADERS.runtimeToken]: token,
+        },
+      }),
+      environment(),
+    );
+    expect(health.status).toBe(200);
+    expect(health.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
   it("authorizes an embedded runtime from token issuance through health and provider fetch", async () => {
     const upstreamFetch = vi.fn(async () => new Response('{"quotes":[{"symbol":"AAPL"}]}'));
     const turnstileFetch = successfulTurnstileFetch();
@@ -24,51 +101,49 @@ describe("hosted provider relay", () => {
     const env = environment();
 
     const issued = await relay.fetch(
-      runtimeTokenRequest({ origin: runtimeOrigin, turnstileToken: "attestation-token" }),
+      runtimeTokenRequest({ origin: hostedOrigin, turnstileToken: "attestation-token" }),
       env,
     );
     expect(issued.status).toBe(200);
-    expect(issued.headers.get("access-control-allow-origin")).toBe(runtimeOrigin);
+    expect(issued.headers.get("access-control-allow-origin")).toBe(hostedOrigin);
     const authorization = (await issued.json()) as { token: string; expiresAt: number };
     expect(authorization.token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
     expect(authorization.expiresAt).toBeGreaterThan(1_000_000);
     expect(turnstileFetch).toHaveBeenCalledOnce();
+    const siteverifyRequest = turnstileFetch.mock.calls[0]?.[0] as Request;
+    expect(siteverifyRequest.url).toBe(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    );
+    const siteverifyBody = new URLSearchParams(await siteverifyRequest.text());
+    expect(siteverifyBody.get("response")).toBe("attestation-token");
+    expect(siteverifyBody.get("remoteip")).toBe("203.0.113.10");
 
     const runtimeHeaders = {
       origin: runtimeOrigin,
       [MODEL_RELAY_HEADERS.client]: clientId,
       [MODEL_RELAY_HEADERS.runtimeToken]: authorization.token,
     };
-    for (const preflightEndpoint of [
-      "https://relay.test/v1/health",
-      endpoint,
-      modelEndpoint,
-    ]) {
-      const preflight = await relay.fetch(
-        new Request(preflightEndpoint, {
-          method: "OPTIONS",
-          headers: {
-            origin: runtimeOrigin,
-            "access-control-request-method": preflightEndpoint.endsWith("/health")
-              ? "GET"
-              : "POST",
-            "access-control-request-headers": `${MODEL_RELAY_HEADERS.client}, ${MODEL_RELAY_HEADERS.runtimeToken}`,
-          },
-        }),
-        env,
-      );
-      expect(preflight.status).toBe(204);
-      expect(preflight.headers.get("access-control-allow-origin")).toBe(runtimeOrigin);
-      expect(preflight.headers.get("access-control-allow-headers")).toContain(
-        "X-OpenCandle-Runtime-Token",
-      );
-    }
+    const preflight = await relay.fetch(
+      new Request("https://relay.test/v1/health", {
+        method: "OPTIONS",
+        headers: {
+          origin: runtimeOrigin,
+          "access-control-request-headers": `${MODEL_RELAY_HEADERS.client}, ${MODEL_RELAY_HEADERS.runtimeToken}`,
+        },
+      }),
+      env,
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain(
+      "X-OpenCandle-Runtime-Token",
+    );
     const health = await relay.fetch(
       new Request("https://relay.test/v1/health", { headers: runtimeHeaders }),
       env,
     );
     expect(health.status).toBe(200);
-    expect(health.headers.get("access-control-allow-origin")).toBe(runtimeOrigin);
+    expect(health.headers.get("access-control-allow-origin")).toBe("*");
 
     const provider = await relay.fetch(
       relayRequest(
@@ -85,7 +160,7 @@ describe("hosted provider relay", () => {
       env,
     );
     expect(provider.status).toBe(200);
-    expect(provider.headers.get("access-control-allow-origin")).toBe(runtimeOrigin);
+    expect(provider.headers.get("access-control-allow-origin")).toBe("*");
     expect(upstreamFetch).toHaveBeenCalledOnce();
   });
 
@@ -98,7 +173,7 @@ describe("hosted provider relay", () => {
     });
     const env = environment();
     const issued = await relay.fetch(
-      runtimeTokenRequest({ origin: runtimeOrigin, turnstileToken: "attestation-token" }),
+      runtimeTokenRequest({ origin: hostedOrigin, turnstileToken: "attestation-token" }),
       env,
     );
     const { token } = (await issued.json()) as { token: string };
@@ -133,7 +208,7 @@ describe("hosted provider relay", () => {
     expect(upstreamFetch).not.toHaveBeenCalled();
   });
 
-  it("renews an access-expired runtime token but rejects renewal-expired and client-mismatched tokens", async () => {
+  it("refreshes a valid runtime token but rejects expired and client-mismatched tokens", async () => {
     let now = 1_000_000;
     const turnstileFetch = successfulTurnstileFetch();
     const relay = createProviderRelay({
@@ -141,11 +216,10 @@ describe("hosted provider relay", () => {
       turnstileFetchImpl: turnstileFetch,
       now: () => now,
       runtimeTokenTtlMs: 1_000,
-      runtimeTokenRenewalTtlMs: 5_000,
     });
     const env = environment();
     const issued = await relay.fetch(
-      runtimeTokenRequest({ origin: runtimeOrigin, turnstileToken: "attestation-token" }),
+      runtimeTokenRequest({ origin: hostedOrigin, turnstileToken: "attestation-token" }),
       env,
     );
     const { token } = (await issued.json()) as { token: string };
@@ -162,26 +236,18 @@ describe("hosted provider relay", () => {
       env,
     );
     expect(refreshed.status).toBe(200);
-    expect(refreshed.headers.get("access-control-allow-origin")).toBe(runtimeOrigin);
+    expect(refreshed.headers.get("access-control-allow-origin")).toBe("*");
     expect(turnstileFetch).toHaveBeenCalledOnce();
 
     now += 1_000;
-    const renewedAfterSleep = await relay.fetch(
+    const expired = await relay.fetch(
       runtimeTokenRequest({ origin: runtimeOrigin, token }),
       env,
     );
-    expect(renewedAfterSleep.status).toBe(200);
-    expect(turnstileFetch).toHaveBeenCalledOnce();
-
-    now += 4_000;
-    const renewalExpired = await relay.fetch(
-      runtimeTokenRequest({ origin: runtimeOrigin, token }),
-      env,
-    );
-    expect(renewalExpired.status).toBe(403);
+    expect(expired.status).toBe(403);
   });
 
-  it("requires Turnstile for first issuance and binds authorization to the runtime origin", async () => {
+  it("requires Turnstile for first issuance and binds authorization to the client", async () => {
     const relay = createProviderRelay({
       fetchImpl: vi.fn(),
       turnstileFetchImpl: successfulTurnstileFetch(),
@@ -193,7 +259,7 @@ describe("hosted provider relay", () => {
     expect((await relay.fetch(runtimeTokenRequest({ origin: runtimeOrigin }), env)).status).toBe(403);
 
     const issued = await relay.fetch(
-      runtimeTokenRequest({ origin: runtimeOrigin, turnstileToken: "attestation-token" }),
+      runtimeTokenRequest({ origin: hostedOrigin, turnstileToken: "attestation-token" }),
       env,
     );
     const { token } = (await issued.json()) as { token: string };
@@ -207,24 +273,34 @@ describe("hosted provider relay", () => {
       }),
       env,
     );
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
   });
 
   it("rejects failed, wrong-action, and wrong-hostname Turnstile attestations", async () => {
-    for (const validation of [
-      { success: false, "error-codes": ["invalid-input-response"] },
-      { success: true, action: "login", hostname: "web.opencandle.app" },
-      { success: true, action: "turnstile-spin-v1", hostname: "attacker.example" },
-    ]) {
+    for (const [validation, error] of [
+      [
+        { success: false, "error-codes": ["invalid-input-response"] },
+        "turnstile_invalid_input_response",
+      ],
+      [
+        { success: true, action: "login", hostname: "web.opencandle.app" },
+        "turnstile_action_mismatch",
+      ],
+      [
+        { success: true, action: "turnstile-spin-v1", hostname: "attacker.example" },
+        "turnstile_hostname_mismatch",
+      ],
+    ] as const) {
       const relay = createProviderRelay({
         fetchImpl: vi.fn(),
         turnstileFetchImpl: vi.fn(async () => Response.json(validation)),
       });
       const response = await relay.fetch(
-        runtimeTokenRequest({ origin: runtimeOrigin, turnstileToken: "attestation-token" }),
+        runtimeTokenRequest({ origin: hostedOrigin, turnstileToken: "attestation-token" }),
         environment(),
       );
       expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({ error });
     }
   });
 
@@ -977,7 +1053,7 @@ function successfulTurnstileFetch() {
   return vi.fn(async (request: Request) => {
     expect(request.url).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
     expect(request.method).toBe("POST");
-    const body = new URLSearchParams(await request.text());
+    const body = new URLSearchParams(await request.clone().text());
     expect(body.get("secret")).toBe("test-turnstile-secret");
     expect(body.get("response")).toBe("attestation-token");
     expect(body.get("remoteip")).toBe("203.0.113.10");

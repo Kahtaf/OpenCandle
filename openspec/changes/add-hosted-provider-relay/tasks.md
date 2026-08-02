@@ -5,7 +5,7 @@
 - [x] 1.3 Add failing tests for bounded upstream response streaming, generic errors, credential non-reflection, no-store responses, and rate-limit rejection; implement the bounds.
 - [x] 1.4 Add Wrangler configuration with current compatibility date, generated Worker types, rate-limit binding, production route, disabled workers.dev, disabled invocation logs, and no persistence/analytics bindings.
 - [x] 1.5 Add a static audit test that rejects console logging, Cache API use, persistence bindings, observability logs, and credential-bearing diagnostics in the Worker package.
-- [x] 1.6 Add a Turnstile-attested stateless HMAC runtime-token endpoint and joined integration tests covering runtime issuance, generated-origin health, provider forwarding, refresh, expiry, tampering, origin binding, and client binding.
+- [x] 1.6 Add a Turnstile-attested stateless HMAC runtime-token endpoint and joined integration tests covering runtime issuance, browser health, provider forwarding, refresh, expiry, tampering, and client binding.
 
 ## 2. Hosted fetch transport
 
@@ -13,7 +13,8 @@
 - [x] 2.2 Implement the hosted relay fetch transport and install it only inside the browser-hosted runtime before provider construction.
 - [x] 2.3 Add installation identity and relay URL host configuration without writing either value into Pi sessions, SQLite, provider requests, or logs.
 - [x] 2.4 Add health/policy-version negotiation and fail closed when the relay is missing, outdated, or unreachable.
-- [x] 2.5 Pass only the one-time Turnstile attestation through the WebContainer process environment, exchange it from the generated origin, refresh signed authorization in memory, attach it to health/provider/model requests, and keep hosted boot available in degraded mode when issuance fails.
+- [x] 2.5 Exchange the one-time Turnstile attestation in the top-level shell, pass only signed authorization through the WebContainer process environment, refresh it in memory, and keep hosted boot available in degraded mode when issuance fails.
+- [x] 2.6 Preserve shared provider and Pi Fetch behavior through a bounded exact-path stdio bridge that streams relay responses through the trusted browser shell.
 
 ## 3. Provider and tool parity
 
@@ -25,7 +26,7 @@
 ## 4. End-to-end provider proofs
 
 - [ ] 4.1 Run fixture-backed end-to-end tests through local Wrangler for each provider policy and every enabled hosted tool group.
-- [ ] 4.2 Run a real browser Yahoo quote and history turn through the relay, proving Pi tool calls, evidence, session persistence, and no credential reflection.
+- [x] 4.2 Run a real browser Yahoo quote and model-backed turn through the production relay, proving cashtag autocomplete, Pi tool calls, streamed model output, evidence, session persistence, and no credential reflection.
 - [x] 4.3 Run live-key browser proofs for Alpha Vantage, FRED, Finnhub, Brave, Exa, and LSE when their keys are present; keep any unproven provider disabled.
 - [x] 4.4 Prove Yahoo options crumb/cookie behavior before enabling hosted options parity.
 

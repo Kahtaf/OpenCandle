@@ -12,7 +12,8 @@ export async function requestTurnstileAttestation(options = {}) {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
   const api = options.turnstileApi ?? (await loadTurnstileApi(documentRef, timeoutMs));
-  const remainingMs = Math.max(1, deadline - Date.now());
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) throw new Error("Turnstile verification timed out");
   const container = documentRef.createElement("div");
   container.style.position = "fixed";
   container.style.inset = "auto 1rem 1rem auto";
@@ -47,7 +48,10 @@ export async function requestTurnstileAttestation(options = {}) {
           typeof token === "string" && token.length > 0 && token.length <= 2_048
             ? finish(undefined, token)
             : finish(new Error("Turnstile verification failed")),
-        "error-callback": () => finish(new Error("Turnstile verification failed")),
+        "error-callback": (code) => {
+          const safeCode = /^\d{3,10}$/u.test(String(code ?? "")) ? ` (${code})` : "";
+          finish(new Error(`Turnstile verification failed${safeCode}`));
+        },
         "expired-callback": () => finish(new Error("Turnstile verification expired")),
       });
       api.execute(widgetId);
@@ -61,32 +65,32 @@ function loadTurnstileApi(documentRef, timeoutMs) {
   if (globalThis.turnstile) return Promise.resolve(globalThis.turnstile);
   turnstileApiPromise ??= new Promise((resolve, reject) => {
     const script = documentRef.createElement("script");
-    script.src = TURNSTILE_SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
     let settled = false;
-    const finish = (error, api, removeScript = false) => {
+    const finish = (error, api) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      script.removeEventListener("load", onLoad);
-      script.removeEventListener("error", onError);
-      if (removeScript) script.remove();
-      if (error) reject(error);
-      else resolve(api);
+      if (error) {
+        script.remove();
+        reject(error);
+      } else {
+        resolve(api);
+      }
     };
-    const onLoad = () =>
-      globalThis.turnstile
-        ? finish(undefined, globalThis.turnstile)
-        : finish(new Error("Turnstile API did not initialize"), undefined, true);
-    const onError = () =>
-      finish(new Error("Turnstile API failed to load"), undefined, true);
     const timeout = setTimeout(
-      () => finish(new Error("Turnstile API load timed out"), undefined, true),
+      () => finish(new Error("Turnstile verification timed out")),
       timeoutMs,
     );
-    script.addEventListener("load", onLoad);
-    script.addEventListener("error", onError);
+    script.src = TURNSTILE_SCRIPT_URL;
+    script.async = true;
+    script.defer = true;
+    script.addEventListener("load", () => {
+      if (globalThis.turnstile) finish(undefined, globalThis.turnstile);
+      else finish(new Error("Turnstile API did not initialize"));
+    }, { once: true });
+    script.addEventListener("error", () => finish(new Error("Turnstile API failed to load")), {
+      once: true,
+    });
     documentRef.head.append(script);
   }).catch((error) => {
     turnstileApiPromise = undefined;

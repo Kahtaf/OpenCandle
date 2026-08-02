@@ -6,6 +6,19 @@ import hostedViteConfig, { configuredRelayOrigin } from "../../../gui/hosted/vit
 const root = resolve(import.meta.dirname, "../../..");
 
 describe("hosted PWA assets", () => {
+  it("deploys as a private-preview SPA so direct application routes load the shell", () => {
+    const wrangler = JSON.parse(readFileSync(resolve(root, "gui/hosted/wrangler.jsonc"), "utf8"));
+    expect(wrangler).toMatchObject({
+      name: "opencandle-web",
+      workers_dev: false,
+      preview_urls: false,
+      assets: {
+        directory: "./dist",
+        not_found_handling: "single-page-application",
+      },
+    });
+  });
+
   it("defers generated runtime asset reads until Vite invokes the config", () => {
     expect(hostedViteConfig).toBeTypeOf("function");
   });

@@ -90,8 +90,12 @@ export async function fetchHostedRuntimeAuthorization(options: {
       redirect: "error",
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error("Hosted provider relay authorization failed");
     serialized = await readBoundedText(response, 4_096, controller.signal);
+    if (!response.ok) {
+      throw new Error(
+        `Hosted provider relay authorization failed (${response.status}: ${semanticRelayError(serialized)})`,
+      );
+    }
     if (controller.signal.aborted) {
       throw new Error("Hosted provider relay authorization timed out");
     }
@@ -125,6 +129,24 @@ export async function fetchHostedRuntimeAuthorization(options: {
     throw new Error("Hosted provider relay returned invalid authorization");
   }
   return { token: value.token, expiresAt: value.expiresAt };
+}
+
+function semanticRelayError(serialized: string): string {
+  try {
+    const value = JSON.parse(serialized) as unknown;
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).error === "string" &&
+      /^[a-z0-9_]{1,80}$/u.test((value as Record<string, string>).error)
+    ) {
+      return (value as Record<string, string>).error;
+    }
+  } catch {
+    // Fall through to the generic bounded reason.
+  }
+  return "authorization_rejected";
 }
 
 export function createHostedRuntimeTokenManager(options: {
@@ -176,6 +198,7 @@ export function createHostedRelayManifestLoader(options: {
   timeoutMs?: number;
   maxAgeMs?: number;
   now?: () => number;
+  onError?: (error: Error) => void;
 }): () => Promise<HostedRelayManifest | undefined> {
   let cached: HostedRelayManifest | undefined;
   let cachedAt = 0;
@@ -190,9 +213,12 @@ export function createHostedRelayManifestLoader(options: {
         cachedAt = now();
         return manifest;
       })
-      .catch(() => {
+      .catch((error) => {
         cached = undefined;
         cachedAt = 0;
+        options.onError?.(
+          error instanceof Error ? error : new Error("Hosted provider relay negotiation failed"),
+        );
         return undefined;
       })
       .finally(() => {

@@ -129,23 +129,23 @@ packages remain out of parity.
 ### 7. Authorize the generated WebContainer origin with a stateless token
 
 The top-level `web.opencandle.app` document obtains a one-time Cloudflare
-Turnstile attestation before starting its WebContainer process. It passes the
-attestation through process environment, and the runtime exchanges it from its
-actual generated origin for a one-hour HMAC-signed token. The signed token
-contains only the relay contract version, random installation client id, exact
-runtime origin, access expiry, and a bounded renewal expiry. It is retained
-only in memory, refreshed before expiry or renewed after device sleep, and never stored in browser storage, SQLite, Pi sessions, or Worker
-state.
+Turnstile attestation and exchanges it for a one-hour HMAC-signed token before
+starting its WebContainer process. The signed token contains only the relay
+contract version, random installation client id, and expiry. Only that signed
+token and its expiry enter the process environment. They are retained only in
+memory, refreshed before expiry, and never stored in browser storage, SQLite,
+Pi sessions, or Worker state.
 
-The Worker echoes CORS for a strict single-label
-`*.local-corp.webcontainer-api.io` origin only when the request carries a valid
-token bound to the same origin and client id. Initial issuance requires a
-server-verified Turnstile action and hostname; refresh requires the existing
-signed token. Preflight may name that origin and the token header, but the
-following health, provider, model, or refresh request must validate the
-signature. The operational secrets remain Cloudflare Worker secrets and are
-never shipped to the browser. This closes the generated-origin gap without
-trusting WebContainer's shared domain as a whole.
+Relay-bound Fetch calls keep using the shared provider and Pi implementations
+inside WebContainer. A bounded stdio bridge carries only the four exact relay
+paths to the trusted top-level shell, which performs the same-origin browser
+fetch and streams status, headers, and body chunks back into a normal
+`Response`. Initial issuance requires a server-verified Turnstile action and
+hostname; refresh requires the existing client-bound signed token. The Worker
+uses wildcard CORS only for candidate preflight or successfully authorized
+runtime requests with credentials omitted. Unsigned browser requests receive
+no CORS access. Operational secrets remain Cloudflare Worker secrets and are
+never shipped to the browser.
 
 ## Risks / Trade-offs
 
@@ -165,10 +165,11 @@ trusting WebContainer's shared domain as a whole.
   for normal research, return a generic 429, and retain zone-level abuse controls.
 - **Cloudflare metadata contradicts a zero-log claim** -> Claim only that
   OpenCandle configures no application/invocation logs or payload storage.
-- **Shared WebContainer domains permit drive-by relay calls** -> Require a
-  server-verified Turnstile attestation before issuing a short-lived token bound
-  to the exact generated runtime origin and client id; test attestation,
-  issuance, health negotiation, and a real provider fetch as one joined flow.
+- **Shared WebContainer domains permit drive-by relay calls** -> Exchange a
+  server-verified Turnstile attestation in the trusted top-level shell, issue a
+  short-lived client-bound token, and limit the runtime bridge to exact relay
+  paths; test issuance, health negotiation, and a real provider fetch as one
+  joined flow.
 
 ## Migration Plan
 

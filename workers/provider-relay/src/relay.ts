@@ -20,13 +20,14 @@ const DEFAULT_MAX_MODEL_RESPONSE_BYTES = 32 * 1024 * 1024;
 const CLIENT_ID_PATTERN = /^[a-f0-9]{32}$/;
 const WEB_CONTAINER_ORIGIN_PATTERN =
   /^https:\/\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local-corp\.webcontainer-api\.io$/;
+const STACKBLITZ_WEBCONTAINER_ORIGIN = "https://stackblitz.com";
 const DEFAULT_RUNTIME_TOKEN_TTL_MS = 60 * 60_000;
-const DEFAULT_RUNTIME_TOKEN_RENEWAL_TTL_MS = 30 * 24 * 60 * 60_000;
 const MIN_RUNTIME_TOKEN_SECRET_LENGTH = 32;
 const TURNSTILE_SITEVERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_ACTION = "turnstile-spin-v1";
 const MAX_TURNSTILE_TOKEN_LENGTH = 2_048;
+const LOOPBACK_TURNSTILE_HOSTNAMES = ["localhost", "127.0.0.1", "[::1]"] as const;
 
 type RelayProvider =
   | "brave"
@@ -64,7 +65,6 @@ interface ProviderRelayOptions {
   allowedOrigins?: readonly string[];
   now?: () => number;
   runtimeTokenTtlMs?: number;
-  runtimeTokenRenewalTtlMs?: number;
   turnstileTimeoutMs?: number;
 }
 
@@ -218,11 +218,12 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
   const allowedOrigins = new Set(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
   const now = options.now ?? Date.now;
   const runtimeTokenTtlMs = options.runtimeTokenTtlMs ?? DEFAULT_RUNTIME_TOKEN_TTL_MS;
-  const runtimeTokenRenewalTtlMs =
-    options.runtimeTokenRenewalTtlMs ?? DEFAULT_RUNTIME_TOKEN_RENEWAL_TTL_MS;
   const turnstileTimeoutMs = options.turnstileTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const allowedTurnstileHostnames = new Set(
-    [...allowedOrigins].map((origin) => new URL(origin).hostname),
+    [
+      ...[...allowedOrigins].map((origin) => new URL(origin).hostname),
+      ...LOOPBACK_TURNSTILE_HOSTNAMES,
+    ],
   );
 
   return {
@@ -230,33 +231,32 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
       const requestUrl = new URL(request.url);
       const requestOrigin = request.headers.get("origin");
       const clientId = request.headers.get(MODEL_RELAY_HEADERS.client) ?? "";
-      const runtimeOrigin = requestOrigin !== null && isWebContainerRuntimeOrigin(requestOrigin);
       const trustedTopLevelOrigin = requestOrigin !== null && allowedOrigins.has(requestOrigin);
-      const runtimeAuthorization = runtimeOrigin && CLIENT_ID_PATTERN.test(clientId)
+      const turnstileAttestation =
+        request.headers.get(MODEL_RELAY_HEADERS.turnstileToken) ?? "";
+      const runtimeAuthorized = CLIENT_ID_PATTERN.test(clientId)
         ? await verifyRuntimeToken(
             request.headers.get(MODEL_RELAY_HEADERS.runtimeToken) ?? "",
             clientId,
-            requestOrigin,
             env.RELAY_RUNTIME_TOKEN_SECRET,
             now(),
           )
         : false;
-      const runtimeAuthorized = runtimeAuthorization === "access";
-      const runtimeRenewalAuthorized =
-        runtimeAuthorization === "access" || runtimeAuthorization === "renewal";
       // The relay is intentionally public infrastructure. Origin filtering is
       // a CORS/drive-by-browser guard, not authentication: non-browser callers
       // can omit or spoof Origin and remain bounded by the exact provider
       // allowlist, body/time limits, and server-observed network rate limit.
-      const corsOrigin =
-        requestOrigin &&
-        (trustedTopLevelOrigin ||
-          runtimeAuthorized ||
-          (runtimeOrigin &&
-            (request.method === "OPTIONS" ||
-              requestUrl.pathname === PROVIDER_RELAY_RUNTIME_TOKEN_PATH)))
+      const corsOrigin = requestOrigin
+        ? trustedTopLevelOrigin
           ? requestOrigin
-          : null;
+          : runtimeAuthorized ||
+              (request.method === "OPTIONS" && isCorsCandidateOrigin(requestOrigin)) ||
+              (requestUrl.pathname === PROVIDER_RELAY_RUNTIME_TOKEN_PATH &&
+                Boolean(turnstileAttestation) &&
+                isCorsCandidateOrigin(requestOrigin))
+            ? "*"
+            : null
+        : null;
       const respondJson = (status: number, body: unknown) =>
         jsonResponse(status, body, corsOrigin);
       const respondError = (status: number, error: string) =>
@@ -264,29 +264,28 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
       if (requestUrl.pathname === PROVIDER_RELAY_RUNTIME_TOKEN_PATH) {
         if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
         if (request.method !== "POST") return respondError(405, "method_not_allowed");
-        if (!runtimeOrigin) return respondError(403, "origin_not_allowed");
+        if (!runtimeAuthorized && !turnstileAttestation) {
+          return respondError(403, "origin_not_allowed");
+        }
         if (!CLIENT_ID_PATTERN.test(clientId)) return respondError(400, "invalid_client");
         const rateLimitError = await applyRateLimit(request, env, respondError);
         if (rateLimitError) return rateLimitError;
-        if (!runtimeRenewalAuthorized) {
-          const attestation = request.headers.get(MODEL_RELAY_HEADERS.turnstileToken) ?? "";
-          const turnstileValid = await verifyTurnstileAttestation({
-            token: attestation,
+        if (!runtimeAuthorized) {
+          const turnstileError = await verifyTurnstileAttestation({
+            token: turnstileAttestation,
             secret: env.TURNSTILE_SECRET_KEY,
             connectingIp: request.headers.get("cf-connecting-ip")?.trim() ?? "",
             allowedHostnames: allowedTurnstileHostnames,
             fetchImpl: turnstileFetchImpl,
             timeoutMs: turnstileTimeoutMs,
           });
-          if (!turnstileValid) return respondError(403, "turnstile_verification_failed");
+          if (turnstileError) return respondError(403, turnstileError);
         }
         const authorization = await issueRuntimeToken(
           clientId,
-          requestOrigin,
           env.RELAY_RUNTIME_TOKEN_SECRET,
           now(),
           runtimeTokenTtlMs,
-          runtimeTokenRenewalTtlMs,
         );
         if (!authorization) return respondError(503, "runtime_token_unavailable");
         return respondJson(200, {
@@ -308,9 +307,6 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
       if (!isProviderFetch && !isModelFetch) {
         return respondError(404, "not_found");
       }
-      // A browser preflight carries only the names of the headers the eventual
-      // request will send. It cannot present the client-bound runtime token yet.
-      // Authorization is enforced on the POST that follows.
       if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
       if (requestOrigin && !trustedTopLevelOrigin && !runtimeAuthorized) {
         return respondError(403, "origin_not_allowed");
@@ -597,38 +593,36 @@ async function applyRateLimit(
   return rate.success ? undefined : respondError(429, "relay_rate_limited");
 }
 
-function isWebContainerRuntimeOrigin(origin: string): boolean {
-  return WEB_CONTAINER_ORIGIN_PATTERN.test(origin);
+function isCorsCandidateOrigin(origin: string): boolean {
+  if (origin === "null") return true;
+  if (origin === STACKBLITZ_WEBCONTAINER_ORIGIN || WEB_CONTAINER_ORIGIN_PATTERN.test(origin)) {
+    return true;
+  }
+  try {
+    const parsed = new URL(origin);
+    return (
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" &&
+        LOOPBACK_TURNSTILE_HOSTNAMES.includes(
+          parsed.hostname as (typeof LOOPBACK_TURNSTILE_HOSTNAMES)[number],
+        ))
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function issueRuntimeToken(
   clientId: string,
-  runtimeOrigin: string,
   secret: string,
   nowMs: number,
   ttlMs: number,
-  renewalTtlMs: number,
 ): Promise<{ token: string; expiresAt: number } | undefined> {
-  if (
-    !isRuntimeTokenSecret(secret) ||
-    !Number.isFinite(ttlMs) ||
-    ttlMs <= 0 ||
-    !Number.isFinite(renewalTtlMs) ||
-    renewalTtlMs < ttlMs
-  ) {
-    return undefined;
-  }
+  if (!isRuntimeTokenSecret(secret) || !Number.isFinite(ttlMs) || ttlMs <= 0) return undefined;
   const expiresAt = Math.floor(nowMs + ttlMs);
-  const renewableUntil = Math.floor(nowMs + renewalTtlMs);
   const payload = encodeBase64Url(
     new TextEncoder().encode(
-      JSON.stringify({
-        v: CONTRACT_VERSION,
-        cid: clientId,
-        origin: runtimeOrigin,
-        exp: expiresAt,
-        renew: renewableUntil,
-      }),
+      JSON.stringify({ v: CONTRACT_VERSION, cid: clientId, exp: expiresAt }),
     ),
   );
   const key = await importRuntimeTokenKey(secret);
@@ -641,10 +635,9 @@ async function issueRuntimeToken(
 async function verifyRuntimeToken(
   token: string,
   clientId: string,
-  runtimeOrigin: string,
   secret: string,
   nowMs: number,
-): Promise<"access" | "renewal" | false> {
+): Promise<boolean> {
   if (!isRuntimeTokenSecret(secret) || token.length > 2_048) return false;
   const [payload, encodedSignature, extra] = token.split(".");
   if (!payload || !encodedSignature || extra !== undefined) return false;
@@ -661,25 +654,19 @@ async function verifyRuntimeToken(
   if (
     value.v !== CONTRACT_VERSION ||
     value.cid !== clientId ||
-    value.origin !== runtimeOrigin ||
     typeof value.exp !== "number" ||
     !Number.isSafeInteger(value.exp) ||
-    typeof value.renew !== "number" ||
-    !Number.isSafeInteger(value.renew) ||
-    value.renew < value.exp ||
-    value.renew <= nowMs
+    value.exp <= nowMs
   ) {
     return false;
   }
   const key = await importRuntimeTokenKey(secret);
-  const valid = await crypto.subtle.verify(
+  return crypto.subtle.verify(
     "HMAC",
     key,
     signature,
     new TextEncoder().encode(payload),
   );
-  if (!valid) return false;
-  return value.exp > nowMs ? "access" : "renewal";
 }
 
 async function verifyTurnstileAttestation(options: {
@@ -689,14 +676,14 @@ async function verifyTurnstileAttestation(options: {
   allowedHostnames: ReadonlySet<string>;
   fetchImpl: (request: Request) => Promise<Response>;
   timeoutMs: number;
-}): Promise<boolean> {
+}): Promise<string | undefined> {
   if (
     !options.token ||
     options.token.length > MAX_TURNSTILE_TOKEN_LENGTH ||
     !options.secret ||
     options.secret.length > 512
   ) {
-    return false;
+    return "turnstile_invalid_request";
   }
   const body = new URLSearchParams({
     secret: options.secret,
@@ -705,31 +692,55 @@ async function verifyTurnstileAttestation(options: {
   });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  let response: Response;
   try {
-    const response = await options.fetchImpl(
+    response = await options.fetchImpl(
       new Request(TURNSTILE_SITEVERIFY_URL, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body,
-        redirect: "error",
         signal: controller.signal,
       }),
     );
-    if (!response.ok) return false;
-    const bytes = await readBounded(response.body, 4_096);
-    const result = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
-    if (!result || typeof result !== "object" || Array.isArray(result)) return false;
-    const value = result as Record<string, unknown>;
-    return (
-      value.success === true &&
-      value.action === TURNSTILE_ACTION &&
-      typeof value.hostname === "string" &&
-      options.allowedHostnames.has(value.hostname)
-    );
   } catch {
-    return false;
+    return "turnstile_siteverify_fetch_failed";
   } finally {
     clearTimeout(timeout);
+  }
+  if (!response.ok) return `turnstile_siteverify_http_${response.status}`;
+  let result: unknown;
+  try {
+    const bytes = await readBounded(response.body, 4_096);
+    result = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  } catch {
+    return "turnstile_siteverify_invalid_response";
+  }
+  try {
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      return "turnstile_invalid_response";
+    }
+    const value = result as Record<string, unknown>;
+    if (value.success !== true) {
+      const code = Array.isArray(value["error-codes"])
+        ? value["error-codes"].find(
+            (candidate): candidate is string =>
+              typeof candidate === "string" && /^[a-z0-9-]{1,64}$/u.test(candidate),
+          )
+        : undefined;
+      return code
+        ? `turnstile_${code.replaceAll("-", "_")}`
+        : "turnstile_verification_failed";
+    }
+    if (value.action !== TURNSTILE_ACTION) return "turnstile_action_mismatch";
+    if (
+      typeof value.hostname !== "string" ||
+      !options.allowedHostnames.has(value.hostname)
+    ) {
+      return "turnstile_hostname_mismatch";
+    }
+    return undefined;
+  } catch {
+    return "turnstile_invalid_response";
   }
 }
 

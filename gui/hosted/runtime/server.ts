@@ -30,37 +30,65 @@ import {
 
 // Four 5 MiB image attachments expand to roughly 27 MiB as base64 JSON.
 const MAX_BODY_BYTES = 32 * 1_024 * 1_024;
+const MAX_BROWSER_FETCH_BYTES = 32 * 1_024 * 1_024;
+const BROWSER_FETCH_INACTIVITY_TIMEOUT_MS = 5 * 60_000;
 const CAPABILITIES = ["pi-agent-session", "provider-relay"] as const;
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const MODEL_KEYS = modelSetupProviders.map((provider) => process.env[provider.envVar]);
 const providerRelayUrl = process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ?? "";
 const providerRelayClientId = process.env.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID?.trim() ?? "";
-const providerRelayAttestationToken =
-  process.env.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN?.trim() ?? "";
+const providerRelayToken = process.env.OPENCANDLE_PROVIDER_RELAY_TOKEN?.trim() ?? "";
+const providerRelayTokenExpiresAt = Number.parseInt(
+  process.env.OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT?.trim() ?? "",
+  10,
+);
 if (providerRelayUrl && !/^[a-f0-9]{32}$/.test(providerRelayClientId)) {
   throw new Error("OPENCANDLE_PROVIDER_RELAY_CLIENT_ID is invalid");
 }
+if (providerRelayUrl && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(providerRelayToken)) {
+  throw new Error("OPENCANDLE_PROVIDER_RELAY_TOKEN is invalid");
+}
 if (
   providerRelayUrl &&
-  (!providerRelayAttestationToken || providerRelayAttestationToken.length > 2_048)
+  (!Number.isSafeInteger(providerRelayTokenExpiresAt) || providerRelayTokenExpiresAt <= 0)
 ) {
-  throw new Error("OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN is invalid");
+  throw new Error("OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT is invalid");
 }
 const nativeFetch = globalThis.fetch.bind(globalThis);
+const browserFetchResponses = new Map<
+  string,
+  {
+    resolve: (response: Response) => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+    signal?: AbortSignal;
+    abort?: () => void;
+    controller?: ReadableStreamDefaultController<Uint8Array>;
+    receivedBytes: number;
+  }
+>();
+const hostedNetworkFetch = providerRelayUrl
+  ? createBrowserRelayFetch(providerRelayUrl, nativeFetch)
+  : nativeFetch;
 const getHostedRuntimeToken = providerRelayUrl
   ? createHostedRuntimeTokenManager({
       relayUrl: providerRelayUrl,
       clientId: providerRelayClientId,
-      turnstileToken: providerRelayAttestationToken,
-      fetchImpl: nativeFetch,
+      initialToken: providerRelayToken,
+      expiresAt: providerRelayTokenExpiresAt,
+      fetchImpl: hostedNetworkFetch,
     })
   : async () => "";
+let hostedRelayFailure = "";
 const loadHostedRelayManifest = providerRelayUrl
   ? createHostedRelayManifestLoader({
       relayUrl: providerRelayUrl,
       clientId: providerRelayClientId,
       getRuntimeToken: getHostedRuntimeToken,
-      fetchImpl: nativeFetch,
+      fetchImpl: hostedNetworkFetch,
+      onError: (error) => {
+        hostedRelayFailure = boundedRelayFailure(error);
+      },
     })
   : async () => undefined;
 const initialHostedRelayManifestPromise = loadHostedRelayManifest();
@@ -72,7 +100,7 @@ const hostedGuiRuntimePromise = initialHostedRelayManifestPromise.then((relayMan
   globalThis.fetch = createHostedProviderFetch({
     relayUrl: providerRelayUrl,
     clientId: providerRelayClientId,
-    fetchImpl: nativeFetch,
+    fetchImpl: hostedNetworkFetch,
     loadRelayManifest: loadHostedRelayManifest,
     getRuntimeToken: getHostedRuntimeToken,
   });
@@ -221,9 +249,9 @@ async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
             id: "provider-relay",
             label: "Audited provider relay",
             status: relayReady ? "pass" : "skip",
-            detail: relayReady
+            summary: relayReady
               ? `Policy v${relayManifest?.version}; ${relayManifest?.providers.length ?? 0} allowed providers.`
-              : "Unavailable or incompatible. Relayed tools fail closed.",
+              : hostedRelayFailure || "Unavailable or incompatible. Relayed tools fail closed.",
           },
         ],
       },
@@ -254,6 +282,11 @@ async function buildHostedDiagnostics(): Promise<Record<string, unknown>> {
       },
     ],
   };
+}
+
+function boundedRelayFailure(error: Error): string {
+  const message = error.message.replaceAll(/https?:\/\/\S+/gu, "[relay]").slice(0, 160);
+  return message || "Hosted provider relay negotiation failed";
 }
 
 startStdioTransport();
@@ -297,6 +330,15 @@ function startStdioTransport(): void {
       return;
     }
     const requestId = typeof message.requestId === "string" ? message.requestId : "";
+    if (
+      typeof message.type === "string" &&
+      message.type.startsWith("browser-fetch-") &&
+      message.runtimeEpoch === runtimeEpoch &&
+      requestId
+    ) {
+      settleBrowserFetch(requestId, message);
+      return;
+    }
     if (
       message.type === "checkpoint-ack" &&
       message.runtimeEpoch === runtimeEpoch &&
@@ -356,6 +398,134 @@ function startStdioTransport(): void {
       process.exitCode = 1;
       input.close();
     });
+}
+
+function createBrowserRelayFetch(relayUrl: string, fallbackFetch: typeof fetch): typeof fetch {
+  const relayOrigin = new URL(relayUrl).origin;
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init);
+    if (new URL(request.url).origin !== relayOrigin) return fallbackFetch(input, init);
+    if (request.signal.aborted) throw request.signal.reason;
+    const body = request.body ? new Uint8Array(await request.arrayBuffer()) : undefined;
+    if ((body?.byteLength ?? 0) > MAX_BROWSER_FETCH_BYTES) {
+      throw new Error("Browser fetch request is too large");
+    }
+    const requestId = crypto.randomUUID().replaceAll("-", "");
+    return new Promise<Response>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const pending = browserFetchResponses.get(requestId);
+        writeProcessFrame({ type: "browser-fetch-cancel", runtimeEpoch, requestId });
+        browserFetchResponses.delete(requestId);
+        const failure = new Error("Browser fetch timed out");
+        if (pending?.controller) pending.controller.error(failure);
+        else reject(failure);
+      }, BROWSER_FETCH_INACTIVITY_TIMEOUT_MS);
+      const abort = () => {
+        clearTimeout(timer);
+        const pending = browserFetchResponses.get(requestId);
+        writeProcessFrame({ type: "browser-fetch-cancel", runtimeEpoch, requestId });
+        browserFetchResponses.delete(requestId);
+        const failure = request.signal.reason instanceof Error
+          ? request.signal.reason
+          : new DOMException("The operation was aborted", "AbortError");
+        if (pending?.controller) pending.controller.error(failure);
+        else reject(failure);
+      };
+      request.signal.addEventListener("abort", abort, { once: true });
+      browserFetchResponses.set(requestId, {
+        resolve,
+        reject,
+        timer,
+        signal: request.signal,
+        abort,
+        receivedBytes: 0,
+      });
+      writeProcessFrame({
+        type: "browser-fetch",
+        runtimeEpoch,
+        requestId,
+        url: request.url,
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+        ...(body?.byteLength ? { bodyBase64: Buffer.from(body).toString("base64") } : {}),
+      });
+    });
+  };
+}
+
+function settleBrowserFetch(requestId: string, message: Record<string, unknown>): void {
+  const pending = browserFetchResponses.get(requestId);
+  if (!pending) return;
+  const resetDeadline = () => {
+    clearTimeout(pending.timer);
+    pending.timer = setTimeout(() => {
+      writeProcessFrame({ type: "browser-fetch-cancel", runtimeEpoch, requestId });
+      browserFetchResponses.delete(requestId);
+      pending.signal?.removeEventListener("abort", pending.abort as EventListener);
+      const failure = new Error("Browser fetch timed out");
+      if (pending.controller) pending.controller.error(failure);
+      else pending.reject(failure);
+    }, BROWSER_FETCH_INACTIVITY_TIMEOUT_MS);
+  };
+  const finish = () => {
+    browserFetchResponses.delete(requestId);
+    clearTimeout(pending.timer);
+    pending.signal?.removeEventListener("abort", pending.abort as EventListener);
+  };
+  try {
+    if (message.type === "browser-fetch-start") {
+      const status = Number(message.status);
+      if (!Number.isInteger(status) || status < 200 || status > 599 || pending.controller) {
+        throw new Error("Browser fetch returned an invalid response");
+      }
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          pending.controller = controller;
+        },
+        cancel() {
+          writeProcessFrame({ type: "browser-fetch-cancel", runtimeEpoch, requestId });
+          finish();
+        },
+      });
+      pending.resolve(new Response(body, {
+        status,
+        statusText: String(message.statusText ?? "").slice(0, 128),
+        headers:
+          message.headers && typeof message.headers === "object" && !Array.isArray(message.headers)
+            ? (message.headers as Record<string, string>)
+            : undefined,
+      }));
+      resetDeadline();
+      return;
+    }
+    if (message.type === "browser-fetch-chunk") {
+      if (!pending.controller) throw new Error("Browser fetch chunk arrived before headers");
+      const encodedBody = String(message.bodyBase64 ?? "");
+      if (encodedBody.length > 512 * 1_024) throw new Error("Browser fetch chunk is too large");
+      const chunk = Buffer.from(encodedBody, "base64");
+      pending.receivedBytes += chunk.byteLength;
+      if (pending.receivedBytes > MAX_BROWSER_FETCH_BYTES) {
+        throw new Error("Browser fetch response is too large");
+      }
+      pending.controller.enqueue(chunk);
+      resetDeadline();
+      return;
+    }
+    if (message.type === "browser-fetch-end") {
+      if (!pending.controller) throw new Error("Browser fetch ended before headers");
+      pending.controller.close();
+      finish();
+      return;
+    }
+    if (message.type === "browser-fetch-error") {
+      throw new Error(String(message.error || "Browser fetch failed").slice(0, 300));
+    }
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error("Browser fetch failed");
+    if (pending.controller) pending.controller.error(failure);
+    else pending.reject(failure);
+    finish();
+  }
 }
 
 async function runStdioRequest(

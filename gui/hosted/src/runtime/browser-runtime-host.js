@@ -7,6 +7,14 @@ import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generat
 import { resolveFirstClassModelEntry } from "../../../../src/pi/model-catalog-lookup.js";
 import { listApiKeyProviders } from "../../../../src/onboarding/providers.js";
 import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
+import { fetchHostedRuntimeAuthorization } from "../../runtime/provider-relay-fetch.ts";
+import {
+  MODEL_RELAY_HEADERS,
+  MODEL_RELAY_PATH,
+  PROVIDER_RELAY_HEALTH_PATH,
+  PROVIDER_RELAY_PATH,
+  PROVIDER_RELAY_RUNTIME_TOKEN_PATH,
+} from "../../../../src/runtime/provider-relay-contract.js";
 import { requestTurnstileAttestation } from "./turnstile-attestation.js";
 
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
@@ -16,6 +24,16 @@ const PROVIDER_CREDENTIAL_KEY = "opencandle.hosted.provider-credentials.v1";
 const CURRENT_SESSION_KEY = "opencandle.hosted.current-session.v1";
 const RELAY_CLIENT_KEY = "opencandle.hosted.relay-client.v1";
 const REQUEST_TIMEOUT_MS = 180_000;
+const MAX_BROWSER_FETCH_BYTES = 32 * 1_024 * 1_024;
+const MAX_BROWSER_FETCH_FRAME_BYTES = 384 * 1_024;
+const BROWSER_FETCH_INACTIVITY_TIMEOUT_MS = 5 * 60_000;
+const RUNTIME_AUTHORIZATION_REFRESH_WINDOW_MS = 5 * 60_000;
+const RELAY_PATHS = new Set([
+  PROVIDER_RELAY_PATH,
+  MODEL_RELAY_PATH,
+  PROVIDER_RELAY_HEALTH_PATH,
+  PROVIDER_RELAY_RUNTIME_TOKEN_PATH,
+]);
 
 export function createBrowserRuntimeHost(options = {}) {
   return new BrowserRuntimeHost(options);
@@ -39,6 +57,8 @@ class BrowserRuntimeHost {
     this.getTurnstileToken =
       options.getTurnstileToken ??
       (() => requestTurnstileAttestation({ sitekey: turnstileSitekey }));
+    this.fetchRuntimeAuthorization =
+      options.fetchRuntimeAuthorization ?? fetchHostedRuntimeAuthorization;
     this.storage = options.storage ?? globalThis.localStorage;
     this.sessionStorage = options.sessionStorage ?? globalThis.sessionStorage;
     this.relayUrl = hostedRelayUrl(
@@ -69,6 +89,9 @@ class BrowserRuntimeHost {
     this.preserveRecoveryBackupUntilBoot = false;
     this.lastBootError = "";
     this.pendingRequests = new Map();
+    this.browserFetchControllers = new Map();
+    this.relayAuthorization = null;
+    this.relayAuthorizationPromise = null;
     this.subscribers = new Set();
     this.runtimeThinking = null;
   }
@@ -559,22 +582,27 @@ class BrowserRuntimeHost {
     const modelCredentials = this.readModelCredentials();
     const selection = this.readModelSelection(modelCredentials);
     const providerCredentials = this.readProviderCredentials();
-    let relayAttestationToken;
+    let relayAuthorization;
     if (this.relayUrl) {
       try {
-        relayAttestationToken = await this.getTurnstileToken();
-      } catch {
+        relayAuthorization = await this.ensureRelayAuthorization();
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Turnstile verification failed";
+        console.warn(`Hosted provider relay unavailable: ${reason}`);
         // The hosted shell still boots without relay-backed providers. A later
         // process restart retries authorization without persisting the token.
       }
     }
     const environment = {
       OPENCANDLE_RUNTIME_EPOCH: this.runtimeEpoch,
-      ...(this.relayUrl && relayAttestationToken
+      ...(this.relayUrl && relayAuthorization
         ? {
             OPENCANDLE_PROVIDER_RELAY_URL: this.relayUrl,
             OPENCANDLE_PROVIDER_RELAY_CLIENT_ID: this.relayClientId,
-            OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN: relayAttestationToken,
+            OPENCANDLE_PROVIDER_RELAY_TOKEN: relayAuthorization.token,
+            OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT: String(
+              relayAuthorization.expiresAt,
+            ),
           }
         : {}),
       ...Object.fromEntries(
@@ -645,6 +673,8 @@ class BrowserRuntimeHost {
         pending.streamController?.error(error);
         this.pendingRequests.delete(requestId);
       }
+      for (const controller of this.browserFetchControllers.values()) controller.abort();
+      this.browserFetchControllers.clear();
       this.processWriter?.releaseLock?.();
       this.process = null;
       this.processWriter = null;
@@ -676,6 +706,8 @@ class BrowserRuntimeHost {
       }
       this.pendingRequests.delete(requestId);
     }
+    for (const controller of this.browserFetchControllers.values()) controller.abort();
+    this.browserFetchControllers.clear();
     this.process?.kill();
     this.processWriter?.releaseLock?.();
     this.process = null;
@@ -702,6 +734,14 @@ class BrowserRuntimeHost {
     if (message.type === "fatal") {
       this.runtimeReady?.reject(new Error(String(message.error || "Hosted runtime failed")));
       this.runtimeReady = null;
+      return;
+    }
+    if (message.type === "browser-fetch" && typeof message.requestId === "string") {
+      void this.handleBrowserFetch(message);
+      return;
+    }
+    if (message.type === "browser-fetch-cancel" && typeof message.requestId === "string") {
+      this.browserFetchControllers.get(message.requestId)?.abort();
       return;
     }
     if (
@@ -763,6 +803,152 @@ class BrowserRuntimeHost {
         ),
       ),
     );
+  }
+
+  async handleBrowserFetch(message) {
+    const requestId = String(message.requestId || "");
+    const requestEpoch = this.runtimeEpoch;
+    let controller;
+    let timeout;
+    const respond = async (type, value = {}) => {
+      if (!this.processWriter || this.runtimeEpoch !== requestEpoch) return false;
+      try {
+        await this.writeProcessMessage({
+          type,
+          runtimeEpoch: requestEpoch,
+          requestId,
+          ...value,
+        });
+        return true;
+      } catch (error) {
+        if (!this.processWriter || this.runtimeEpoch !== requestEpoch) return false;
+        throw error;
+      }
+    };
+    try {
+      if (!/^[a-f0-9]{32}$/.test(requestId)) throw new Error("Invalid browser fetch request");
+      const target = new URL(String(message.url || ""));
+      const relay = new URL(this.relayUrl);
+      if (target.origin !== relay.origin || !RELAY_PATHS.has(target.pathname)) {
+        throw new Error("Browser fetch target is not an approved relay endpoint");
+      }
+      if (target.search || target.hash || target.username || target.password) {
+        throw new Error("Browser fetch target is invalid");
+      }
+      const method = String(message.method || "GET").toUpperCase();
+      if (method !== "GET" && method !== "POST") throw new Error("Browser fetch method is invalid");
+      controller = new AbortController();
+      this.browserFetchControllers.set(requestId, controller);
+      const headers = new Headers();
+      if (message.headers && typeof message.headers === "object" && !Array.isArray(message.headers)) {
+        for (const [name, value] of Object.entries(message.headers)) {
+          if (typeof value !== "string" || value.length > 16_384) {
+            throw new Error("Browser fetch headers are invalid");
+          }
+          headers.set(name, value);
+        }
+      }
+      const authorization = await this.ensureRelayAuthorization();
+      if (!authorization) throw new Error("Hosted provider relay authorization is unavailable");
+      if (controller.signal.aborted) throw new DOMException("The operation was aborted", "AbortError");
+      headers.set(MODEL_RELAY_HEADERS.client, this.relayClientId);
+      headers.set(MODEL_RELAY_HEADERS.runtimeToken, authorization.token);
+      headers.delete(MODEL_RELAY_HEADERS.turnstileToken);
+      const body = message.bodyBase64
+        ? decodeBase64Bytes(String(message.bodyBase64), MAX_BROWSER_FETCH_BYTES)
+        : undefined;
+      const resetDeadline = () => {
+        globalThis.clearTimeout(timeout);
+        timeout = globalThis.setTimeout(
+          () => controller.abort(),
+          BROWSER_FETCH_INACTIVITY_TIMEOUT_MS,
+        );
+      };
+      resetDeadline();
+      let response;
+      try {
+        response = await this.fetchImpl(target, {
+          method,
+          headers,
+          ...(body?.byteLength ? { body } : {}),
+          cache: "no-store",
+          credentials: "omit",
+          redirect: "error",
+          signal: controller.signal,
+        });
+        if (!(await respond("browser-fetch-start", {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        }))) {
+          controller.abort();
+          return;
+        }
+        resetDeadline();
+        let responseBytes = 0;
+        if (response.body) {
+          const reader = response.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            responseBytes += value.byteLength;
+            if (responseBytes > MAX_BROWSER_FETCH_BYTES) {
+              await reader.cancel("Browser fetch response is too large");
+              throw new Error("Browser fetch response is too large");
+            }
+            for (let offset = 0; offset < value.byteLength; offset += MAX_BROWSER_FETCH_FRAME_BYTES) {
+              const frame = value.subarray(offset, offset + MAX_BROWSER_FETCH_FRAME_BYTES);
+              if (!(await respond("browser-fetch-chunk", { bodyBase64: encodeBase64Bytes(frame) }))) {
+                controller.abort();
+                return;
+              }
+              resetDeadline();
+            }
+          }
+        }
+        await respond("browser-fetch-end");
+      } finally {
+        globalThis.clearTimeout(timeout);
+      }
+    } catch (error) {
+      try {
+        await respond("browser-fetch-error", {
+          error: String(error instanceof Error ? error.message : error).slice(0, 300),
+        });
+      } catch {
+        // The runtime transport is already unusable; teardown owns cancellation.
+      }
+    } finally {
+      globalThis.clearTimeout(timeout);
+      this.browserFetchControllers.delete(requestId);
+    }
+  }
+
+  async ensureRelayAuthorization() {
+    if (!this.relayUrl) return undefined;
+    const now = Date.now();
+    if (
+      this.relayAuthorization &&
+      this.relayAuthorization.expiresAt - now > RUNTIME_AUTHORIZATION_REFRESH_WINDOW_MS
+    ) {
+      return this.relayAuthorization;
+    }
+    this.relayAuthorizationPromise ??= (async () => {
+      const current = this.relayAuthorization;
+      const currentToken = current && current.expiresAt > Date.now() ? current.token : "";
+      const turnstileToken = currentToken ? "" : await this.getTurnstileToken();
+      const authorization = await this.fetchRuntimeAuthorization({
+        relayUrl: this.relayUrl,
+        clientId: this.relayClientId,
+        ...(currentToken ? { currentToken } : { turnstileToken }),
+        fetchImpl: this.fetchImpl,
+      });
+      this.relayAuthorization = authorization;
+      return authorization;
+    })().finally(() => {
+      this.relayAuthorizationPromise = null;
+    });
+    return this.relayAuthorizationPromise;
   }
 
   async acknowledgeRuntimeCheckpoint(message) {
@@ -1250,10 +1436,41 @@ function captureProcessOutput(stream, onMessage = () => {}) {
 
 function isEchoedProcessRequest(line) {
   try {
-    return JSON.parse(line)?.type === "request";
+    const type = JSON.parse(line)?.type;
+    return (
+      ["request", "cancel", "checkpoint-ack"].includes(type) ||
+      [
+        "browser-fetch-start",
+        "browser-fetch-chunk",
+        "browser-fetch-end",
+        "browser-fetch-error",
+      ].includes(type)
+    );
   } catch {
     return false;
   }
+}
+
+function encodeBase64Bytes(bytes) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function decodeBase64Bytes(value, maxBytes) {
+  if (value.length > Math.ceil(maxBytes / 3) * 4 + 4) {
+    throw new Error("Browser fetch request is too large");
+  }
+  let binary;
+  try {
+    binary = atob(value);
+  } catch {
+    throw new Error("Browser fetch body is invalid");
+  }
+  if (binary.length > maxBytes) throw new Error("Browser fetch request is too large");
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function scrubSecrets(value, candidates) {
