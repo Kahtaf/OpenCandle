@@ -298,10 +298,11 @@ try {
     await waitForText(page, "Running on this device", 120_000);
   }
 
-  // Instrument selection deliberately crosses the relay. The ordinary CI
-  // smoke has no Turnstile-backed relay authorization, while the opt-in live
-  // relay smoke proves the real Yahoo suggestion flow below.
-  if (relayE2e) {
+  // The opt-in live relay smoke selects a real Yahoo candidate. Ordinary CI
+  // exercises the bounded exact-symbol fallback so persistence, multi-tab,
+  // offline, archive, update, and responsive coverage stay mandatory even
+  // when no relay authorization is available.
+  {
     stage = "watchlist state";
     await page.getByRole("link", { name: "Watchlists" }).click();
     await waitForText(page, "Watchlists", 30_000);
@@ -516,7 +517,7 @@ try {
   assert(!apiKey || !serverOutput.includes(apiKey), "model key absent from static host logs");
   assert(!googleApiKey || !serverOutput.includes(googleApiKey), "Google key absent from static host logs");
   process.stdout.write(
-    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} marketState=${relayE2e ? "PASS" : "SKIP"}\n`,
+    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} marketState=PASS multiTab=PASS offline=PASS archive=PASS mobile=PASS\n`,
   );
 } catch (error) {
   const pageText = await page?.locator("body").innerText().catch(() => "");
@@ -643,6 +644,11 @@ async function waitForTextExact(page, text, timeoutMs) {
 
 async function selectInstrumentCandidate(page, input, symbol) {
   await input.fill(symbol);
+  if (!relayE2e) {
+    await input.press("Enter");
+    await waitForText(page, `Selected ${symbol}`, 30_000);
+    return;
+  }
   const candidate = page.getByRole("option", { name: new RegExp(`^${symbol} `) });
   await waitFor(
     async () => (await candidate.count()) === 1,

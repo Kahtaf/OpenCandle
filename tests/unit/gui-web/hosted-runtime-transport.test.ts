@@ -129,6 +129,21 @@ describe("hosted runtime transport", () => {
     });
   });
 
+  it("keeps a follower read-only when it receives the writer bootstrap", async () => {
+    const host = createHost();
+    const followerHost = {
+      ...host,
+      getRole: vi.fn(() => "follower"),
+    };
+    const transport = createHostedRuntimeTransport({ host: followerHost });
+
+    await expect(transport.bootstrap()).resolves.toMatchObject({
+      role: "follower",
+      supportsSessionActions: false,
+      coordination: { writable: false },
+    });
+  });
+
   it("presents hosted Pi events as the same SSE response consumed by the local GUI", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

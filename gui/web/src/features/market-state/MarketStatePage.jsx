@@ -1018,6 +1018,7 @@ export function SymbolSearchInput({
   onSelectionVerificationChange,
   navigate,
 }) {
+  const transport = useRuntimeTransport();
   const inputId = useId();
   const listboxId = useId();
   const searchRef = useRef(null);
@@ -1082,6 +1083,16 @@ export function SymbolSearchInput({
               selectCandidate(activeCandidate);
               return;
             }
+            const exactSymbol =
+              transport.kind === "hosted" ? normalizeExactHostedSymbol(query) : "";
+            if (exactSymbol) {
+              event.preventDefault();
+              onSelectedChange(exactSymbol);
+              onSelectionVerificationChange?.(false);
+              onQueryChange(exactSymbol);
+              setCandidates([]);
+              setActiveIndex(-1);
+            }
           } else if (event.key === "Escape" && visibleCandidates.length > 0) {
             event.preventDefault();
             setCandidates([]);
@@ -1112,6 +1123,13 @@ export function SymbolSearchInput({
       ) : null}
     </div>
   );
+}
+
+export function normalizeExactHostedSymbol(value) {
+  const symbol = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  return /^[A-Z0-9][A-Z0-9.^/=_-]{0,31}$/.test(symbol) ? symbol : "";
 }
 
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;

@@ -26,10 +26,16 @@ export function createHostedRuntimeTransport({ host }) {
   };
 
   const withBrowserState = (payload) => {
-    const role = payload?.role || "writer";
-    const coordination = payload?.coordination || {
+    // A follower receives the writer's bootstrap payload over BroadcastChannel.
+    // The payload's role therefore describes the serving tab, not this tab.
+    const role = host.getRole?.() || payload?.role || "writer";
+    const payloadCoordination = payload?.coordination || {
       ownerKind: role === "offline" ? "offline" : "hosted",
-      writable: role !== "offline",
+      writable: role === "writer",
+    };
+    const coordination = {
+      ...payloadCoordination,
+      writable: role === "writer" && payloadCoordination.writable !== false,
     };
     return {
       ...payload,
