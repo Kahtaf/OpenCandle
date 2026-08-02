@@ -20,10 +20,6 @@ describe("hosted tool adapter", () => {
     expect(getHostedOpenCandleToolDefinitions().map((tool) => tool.name)).toEqual([
       "get_crypto_price",
       "get_crypto_history",
-      "get_company_overview",
-      "get_financials",
-      "get_earnings",
-      "compare_companies",
       "get_event_probabilities",
     ]);
   });
@@ -66,10 +62,26 @@ describe("hosted tool adapter", () => {
     const withKey = getHostedOpenCandleToolDefinitions().map((tool) => tool.name);
 
     expect(withoutKey).not.toEqual(
-      expect.arrayContaining(["get_stock_quote", "get_stock_history", "get_price_comparison"]),
+      expect.arrayContaining([
+        "get_stock_quote",
+        "get_stock_history",
+        "get_price_comparison",
+        "get_company_overview",
+        "get_financials",
+        "get_earnings",
+        "compare_companies",
+      ]),
     );
     expect(withKey).toEqual(
-      expect.arrayContaining(["get_stock_quote", "get_stock_history", "get_price_comparison"]),
+      expect.arrayContaining([
+        "get_stock_quote",
+        "get_stock_history",
+        "get_price_comparison",
+        "get_company_overview",
+        "get_financials",
+        "get_earnings",
+        "compare_companies",
+      ]),
     );
   });
 
@@ -112,7 +124,9 @@ describe("hosted tool adapter", () => {
   });
 
   it("registers HTTP-backed tools only when their relay providers are negotiated", () => {
-    hasCredential.mockImplementation((provider) => provider === "brave");
+    hasCredential.mockImplementation((provider) =>
+      ["alpha_vantage", "brave", "fred"].includes(String(provider)),
+    );
     const names = getHostedOpenCandleToolDefinitions({
       relayProviders: ["brave", "exa", "fear_greed", "fred", "tradingview", "yahoo"],
     }).map((tool) => tool.name);
