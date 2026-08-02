@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- Hosted portfolio and watchlist symbol pickers now use the same Yahoo-backed suggestion selection flow as the local GUI; they no longer advertise an unavailable hosted-only exact-symbol fallback.
 - Local GUI chat prompts submitted from a follower tab now queue behind the active writer turn instead of being rejected and silently disappearing, while direct non-chat tool actions remain fail-fast during an active run.
 - Workflow routing now keeps explicit funded portfolio-construction requests on Portfolio Builder, preserves an explicit U.S.-stocks-only scope, and honors maximum options horizons such as “within 60 days” instead of replacing them with model defaults.
 - Multi-step workflows now settle transformed first steps against Pi's persisted original user turn, while coordinator-generated later steps retain exact-prompt matching, so `/analyze` and the other shared workflows advance to durable completion without accepting an unrelated assistant response.

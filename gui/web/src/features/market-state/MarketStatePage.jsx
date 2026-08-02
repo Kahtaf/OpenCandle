@@ -1018,10 +1018,8 @@ export function SymbolSearchInput({
   onSelectionVerificationChange,
   navigate,
 }) {
-  const transport = useRuntimeTransport();
   const inputId = useId();
   const listboxId = useId();
-  const exactSymbolHintId = useId();
   const searchRef = useRef(null);
   const { candidates, setCandidates, activeIndex, setActiveIndex } = useInstrumentSearch({
     query,
@@ -1037,8 +1035,6 @@ export function SymbolSearchInput({
   const activeOptionId = activeCandidate
     ? instrumentSuggestionOptionId(listboxId, clampedActiveIndex)
     : undefined;
-  const allowExactSymbol = transport.kind === "hosted";
-
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
     onSelectionVerificationChange?.(true);
@@ -1063,7 +1059,6 @@ export function SymbolSearchInput({
         aria-expanded={visibleCandidates.length > 0}
         aria-controls={listboxId}
         aria-activedescendant={activeOptionId}
-        aria-describedby={allowExactSymbol ? exactSymbolHintId : undefined}
         className="pl-9"
         placeholder="Search ticker or company"
         value={query}
@@ -1087,15 +1082,6 @@ export function SymbolSearchInput({
               selectCandidate(activeCandidate);
               return;
             }
-            const exactSymbol = allowExactSymbol ? normalizeExactHostedSymbol(query) : "";
-            if (exactSymbol) {
-              event.preventDefault();
-              onSelectedChange(exactSymbol);
-              onSelectionVerificationChange?.(false);
-              onQueryChange(exactSymbol);
-              setCandidates([]);
-              setActiveIndex(-1);
-            }
           } else if (event.key === "Escape" && visibleCandidates.length > 0) {
             event.preventDefault();
             setCandidates([]);
@@ -1110,11 +1096,6 @@ export function SymbolSearchInput({
           onSelectionVerificationChange?.(undefined);
         }}
       />
-      {allowExactSymbol ? (
-        <p id={exactSymbolHintId} className="mt-1 text-xs text-muted-foreground">
-          Search is unavailable in hosted mode. Enter an exact symbol and press Enter.
-        </p>
-      ) : null}
       {visibleCandidates.length ? (
         <InstrumentSuggestionList
           id={listboxId}
@@ -1131,13 +1112,6 @@ export function SymbolSearchInput({
       ) : null}
     </div>
   );
-}
-
-export function normalizeExactHostedSymbol(value) {
-  const symbol = String(value ?? "")
-    .trim()
-    .toUpperCase();
-  return /^[A-Z0-9][A-Z0-9.^/=_-]{0,31}$/.test(symbol) ? symbol : "";
 }
 
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
