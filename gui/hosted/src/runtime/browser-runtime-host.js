@@ -84,6 +84,7 @@ class BrowserRuntimeHost {
     this.container = null;
     this.process = null;
     this.processWriter = null;
+    this.processHasRelayConfiguration = false;
     this.runtimeEpoch = "";
     this.bootPromise = null;
     this.preserveRecoveryBackupUntilBoot = false;
@@ -143,6 +144,9 @@ class BrowserRuntimeHost {
         if (!model) throw new Error("Unsupported provider or model.");
         const storageMode = command.storageMode === "session" ? "session" : "persistent";
         await this.ensureRelayAuthorization();
+        if (this.process && !this.processHasRelayConfiguration) {
+          await this.stopRuntime();
+        }
         const validation = await this.request("gui", {
           action: "validate_model_key",
           provider,
@@ -643,6 +647,7 @@ class BrowserRuntimeHost {
       env: environment,
       output: true,
     });
+    this.processHasRelayConfiguration = Boolean(this.relayUrl && relayAuthorization);
     const runtimeProcess = this.process;
     const runtimeEpoch = this.runtimeEpoch;
     const runtimeReady = new Promise((resolve, reject) => {
@@ -687,6 +692,7 @@ class BrowserRuntimeHost {
       this.processWriter?.releaseLock?.();
       this.process = null;
       this.processWriter = null;
+      this.processHasRelayConfiguration = false;
       this.runtimeReady = null;
       this.runtimeEpoch = "";
       this.bootPromise = null;
@@ -721,6 +727,7 @@ class BrowserRuntimeHost {
     this.processWriter?.releaseLock?.();
     this.process = null;
     this.processWriter = null;
+    this.processHasRelayConfiguration = false;
     this.runtimeEpoch = "";
   }
 

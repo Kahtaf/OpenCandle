@@ -648,6 +648,43 @@ describe("browser runtime host", () => {
     });
   });
 
+  it("restarts a runtime that booted before relay authorization before probing a model key", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.process = {};
+    host.processHasRelayConfiguration = false;
+    host.ensureRelayAuthorization = vi.fn(async () => ({
+      token: "runtime.signature",
+      expiresAt: Date.now() + 60_000,
+    }));
+    host.stopRuntime = vi.fn(async () => {
+      host.process = null;
+    });
+    host.request = vi.fn(async (_operation, body) =>
+      body.action === "validate_model_key" ? { status: "valid" } : {},
+    );
+
+    await host.handleCommand({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      modelId: "gpt-5-mini",
+      apiKey: "openai-key",
+      storageMode: "session",
+    });
+
+    expect(host.stopRuntime).toHaveBeenCalledOnce();
+    expect(host.request).toHaveBeenNthCalledWith(1, "gui", {
+      action: "validate_model_key",
+      provider: "openai",
+      apiKey: "openai-key",
+    });
+  });
+
   it("does not persist a model selection that the active runtime rejects", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
