@@ -25,6 +25,9 @@
 
 ### Fixed
 
+- Local GUI chat prompts submitted from a follower tab now queue behind the active writer turn instead of being rejected and silently disappearing, while direct non-chat tool actions remain fail-fast during an active run.
+- Workflow routing now keeps explicit funded portfolio-construction requests on Portfolio Builder, preserves an explicit U.S.-stocks-only scope, and honors maximum options horizons such as “within 60 days” instead of replacing them with model defaults.
+- Multi-step workflows now settle transformed first steps against Pi's persisted original user turn, while coordinator-generated later steps retain exact-prompt matching, so `/analyze` and the other shared workflows advance to durable completion without accepting an unrelated assistant response.
 - Shared local and hosted workflows now bind settlement to the exact queued prompt, fail on aborted or errored assistant turns, and treat a matching durable terminal response as complete even while an outer GUI request still owns the session's coarse busy state, preventing `/analyze` and other multi-step workflows from hanging or advancing on an older turn.
 - Portfolio Builder now preserves explicit asset scope, position count, and per-position caps through deterministic routing and every workflow stage, then validates the final allocation table and requests one bounded arithmetic repair instead of presenting a noncompliant portfolio as verified.
 - Persisted chat projection now closes a workflow group at its terminal validation record so ordinary follow-ups remain user turns, and hosted startup repairs legacy local checkpoints whose sidebar list still references an already-deleted session while keeping imports and malformed archives fail-closed.

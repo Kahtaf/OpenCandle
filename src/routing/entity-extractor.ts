@@ -487,6 +487,10 @@ function extractRiskProfile(input: string): string | undefined {
 
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
+  const withinDays = lower.match(
+    /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+)\s*(?:dte|days?)\b/,
+  );
+  if (withinDays) return `0-${withinDays[1]} days`;
   const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
   if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
   // An explicit user week range ("1-2 weeks out") must outrank the
@@ -541,6 +545,7 @@ function extractAssetScope(input: string): string | undefined {
     return "stocks_and_crypto";
   }
   if (/\bstocks?\s+only\b/.test(lower)) return "stocks_only";
+  if (/\b(?:u\.?s\.?\s+stocks?|individual\s+stocks?)\b/.test(lower)) return "stocks_only";
   if (/\betfs?\b/.test(lower)) return "etf_focused";
   if (/\bfunds?\b/.test(lower)) return "fund_focused";
   if (/\bindex\s+(?:funds?|products?)\b/.test(lower)) return "index_focused";

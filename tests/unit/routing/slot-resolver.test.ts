@@ -201,6 +201,17 @@ describe("resolveOptionsScreenerSlots", () => {
     }
   });
 
+  it("preserves an explicit maximum DTE window", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["AAPL"],
+      direction: "bullish",
+      dteHint: "0-60 days",
+    });
+
+    expect(result.resolved.dteTarget).toBe("0_to_60_days");
+    expect(result.sources.dteTarget).toBe("user");
+  });
+
   it("passes through covered-call strategy and cost basis", () => {
     const result = resolveOptionsScreenerSlots({
       symbols: ["MSFT"],

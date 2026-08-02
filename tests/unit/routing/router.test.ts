@@ -1121,6 +1121,35 @@ describe("route()", () => {
     );
   });
 
+  it("keeps an explicit funded portfolio construction request on the builder workflow", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Build me a long-term growth portfolio with 10000 USD, moderate risk, and four US stocks.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 10000 },
+          slots: {
+            budget: { value: 10000, source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "explicit portfolio construction request",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.route).toBe("workflow");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "portfolio_evaluation_corrected_to_agent_task" }),
+    );
+  });
+
   it("corrects compare-assets output for existing-portfolio crash-risk prompts", async () => {
     const result = await route(
       {
@@ -1687,6 +1716,28 @@ describe("route()", () => {
     expect(result.entities.shareQuantity).toBe(200);
     expect(result.entities.heldSymbol).toBe("NVDA");
     expect(result.entities.dteHint).toBe("30-45 days");
+  });
+
+  it("keeps an explicit maximum options horizon ahead of a model-normalized hint", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Screen bullish AAPL calls expiring within 60 days.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "60d" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "options request",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("0-60 days");
   });
 
   it("uses the owned underlying instead of a catalyst ticker for protective-put workflows", async () => {

@@ -243,8 +243,11 @@ export function postProcessRouterOutput(
       heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
       dteHint:
-        output.entities.dteHint ??
-        (output.workflow === "options_screener" ? extracted.dteHint : undefined),
+        output.workflow === "options_screener"
+          ? extracted.dteHint?.startsWith("0-")
+            ? extracted.dteHint
+            : (output.entities.dteHint ?? extracted.dteHint)
+          : output.entities.dteHint,
     },
     diagnostics,
   };
@@ -862,13 +865,18 @@ function isPortfolioEvaluationRequest(text: string): boolean {
   const hasOwnedAssetMix =
     /\b(?:my|current|have|holding|hold|own|invested|positions?|\d+(?:\.\d+)?%)\b/.test(lower) &&
     /\b(?:equity|fixed\s+income|bonds?|cash|stocks?|etfs?|funds?)\b/.test(lower);
-  const hasConstructionIntent =
-    /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
-    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
+  const hasExplicitConstructionIntent =
+    /\b(?:build|construct|put\s+together)\b/.test(lower) && hasExplicitPortfolioSubject;
+  const hasFundedConstructionIntent =
+    /\b(?:create|invest|allocate)\b/.test(lower) &&
+    /\$\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:k|usd|cad|eur|gbp|jpy|aud|chf)\b|\bbudget\b|\bcapital\b/.test(
+      lower,
+    );
   return (
     hasEvaluationIntent &&
     (hasExplicitPortfolioSubject || hasOwnedAssetMix) &&
-    !hasConstructionIntent
+    !hasExplicitConstructionIntent &&
+    !hasFundedConstructionIntent
   );
 }
 

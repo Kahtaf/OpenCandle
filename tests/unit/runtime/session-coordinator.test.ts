@@ -580,6 +580,42 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
   });
 
+  it("settles a transformed first step from Pi's persisted original user input", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(
+          () =>
+            entries.push(
+              assistantTextEntry(
+                "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+              ),
+            ),
+          10,
+        );
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    const transformed = coord.transformWorkflowInput(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+    entries.push(userTextEntry("/analyze AAPL"));
+    setTimeout(() => entries.push(assistantTextEntry("first-stage response")), 10);
+
+    expect(transformed).toBe("fetch prompt");
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+  });
+
   it("exposes the active workflow type so workflow turns can carry saved market state", () => {
     const coord = new SessionCoordinator();
     const pi = { sendUserMessage: vi.fn(), appendEntry: vi.fn() };

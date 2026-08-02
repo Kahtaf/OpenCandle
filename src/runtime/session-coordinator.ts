@@ -137,13 +137,16 @@ function messageContentText(content: unknown): string {
 function terminalAssistantOutcomeAfterPrompt(
   ctx: QueueContext,
   entryCount: number,
-  expectedPrompt: string,
+  expectedPrompt?: string,
 ): "success" | "failure" | undefined {
   const entries = readSessionEntries(ctx);
   const promptIndex = entries.findIndex((entry, index) => {
     if (index < entryCount || entry.type !== "message") return false;
     const message = entry.message as { role?: unknown; content?: unknown };
-    return message.role === "user" && messageContentText(message.content) === expectedPrompt.trim();
+    if (message.role !== "user") return false;
+    return (
+      expectedPrompt === undefined || messageContentText(message.content) === expectedPrompt.trim()
+    );
   });
   if (promptIndex < 0) return undefined;
 
@@ -179,7 +182,6 @@ async function waitForPromptSettlement(
     const ready = isReadyForNextPrompt(ctx);
     const terminalOutcome =
       options.entriesBeforePrompt !== undefined &&
-      options.expectedPrompt !== undefined &&
       !hasPendingMessages(ctx) &&
       terminalAssistantOutcomeAfterPrompt(ctx, options.entriesBeforePrompt, options.expectedPrompt);
     if (terminalOutcome === "failure") {
@@ -549,7 +551,7 @@ export class SessionCoordinator {
 
     const [firstStep] = definition.steps;
     let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
-    let activePrompt = firstStep.prompt;
+    let activePrompt = firstPromptMode === "send" ? firstStep.prompt : undefined;
 
     if (firstPromptMode === "send") {
       const startedBusy = !isReadyForNextPrompt(ctx);

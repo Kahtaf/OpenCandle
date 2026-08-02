@@ -369,6 +369,18 @@ describe("extractEntities", () => {
       );
       expect(result.assetScope).toBe("etf_focused");
     });
+
+    it("detects an explicit US-stock scope", () => {
+      const result = extractEntities(
+        "Build a long-term growth portfolio with four US stocks and moderate risk.",
+      );
+      expect(result.assetScope).toBe("stocks_only");
+    });
+  });
+
+  it("preserves an explicit maximum options horizon", () => {
+    const result = extractEntities("Screen AAPL calls expiring within 60 days.");
+    expect(result.dteHint).toBe("0-60 days");
   });
 
   describe("compare focus extraction", () => {
