@@ -43,13 +43,18 @@ const MODEL_KEY_PROBES: Record<ModelKeyProviderId, ModelKeyProbe> = {
 export async function validateModelKey(
   providerId: ModelKeyProviderId,
   key: string,
+  options: { timeoutMs?: number } = {},
 ): Promise<ModelKeyValidationResult> {
   const probe = MODEL_KEY_PROBES[providerId];
+  const timeoutMs =
+    Number.isSafeInteger(options.timeoutMs) && Number(options.timeoutMs) > 0
+      ? Number(options.timeoutMs)
+      : VALIDATION_TIMEOUT_MS;
   try {
     const response = await fetch(resolveProbeUrl(probe.url), {
       method: "GET",
       headers: probe.headers(key),
-      signal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       // Probes carry the typed key in headers that survive cross-origin
       // redirects (x-goog-api-key, x-api-key); provider probe endpoints do
       // not redirect, so any redirect is treated as a transient failure

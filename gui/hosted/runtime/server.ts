@@ -32,6 +32,7 @@ import {
 const MAX_BODY_BYTES = 32 * 1_024 * 1_024;
 const MAX_BROWSER_FETCH_BYTES = 32 * 1_024 * 1_024;
 const BROWSER_FETCH_INACTIVITY_TIMEOUT_MS = 5 * 60_000;
+const HOSTED_MODEL_KEY_VALIDATION_TIMEOUT_MS = 35_000;
 const CAPABILITIES = ["pi-agent-session", "provider-relay"] as const;
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const MODEL_KEYS = modelSetupProviders.map((provider) => process.env[provider.envVar]);
@@ -141,7 +142,9 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
     case "validate_provider_key":
       return validateCredential(request.providerId, request.apiKey);
     case "validate_model_key":
-      return validateModelKey(request.provider, request.apiKey);
+      return validateModelKey(request.provider, request.apiKey, {
+        timeoutMs: HOSTED_MODEL_KEY_VALIDATION_TIMEOUT_MS,
+      });
     case "new_session":
       return runtime.newSession();
     case "load_session":
