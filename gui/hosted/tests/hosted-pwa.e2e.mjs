@@ -70,7 +70,7 @@ try {
         .text()
         .then((body) => failedRequests.push(`BODY ${response.url()} ${body.slice(0, 1_000)}`))
         .catch(() => {});
-    }
+  }
   });
 
   const response = await page.goto(origin, { waitUntil: "domcontentloaded" });
@@ -298,214 +298,215 @@ try {
     await waitForText(page, "Running on this device", 120_000);
   }
 
-  stage = "watchlist state";
-  await page.getByRole("link", { name: "Watchlists" }).click();
-  await waitForText(page, "Watchlists", 30_000);
-  await page.getByRole("button", { name: "Add ticker" }).last().click();
-  const symbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
-  await symbolInput.fill("AAPL");
-  await symbolInput.press("Enter");
-  await waitForText(page, "Selected AAPL", 30_000);
-  await page.getByRole("button", { name: "Save" }).click();
-  await waitForText(page, "AAPL", 30_000);
+  // Instrument selection deliberately crosses the relay. The ordinary CI
+  // smoke has no Turnstile-backed relay authorization, while the opt-in live
+  // relay smoke proves the real Yahoo suggestion flow below.
+  if (relayE2e) {
+    stage = "watchlist state";
+    await page.getByRole("link", { name: "Watchlists" }).click();
+    await waitForText(page, "Watchlists", 30_000);
+    await page.getByRole("button", { name: "Add ticker" }).last().click();
+    const symbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
+    await selectInstrumentCandidate(page, symbolInput, "AAPL");
+    await page.getByRole("button", { name: "Save" }).click();
+    await waitForText(page, "AAPL", 30_000);
 
-  stage = "portfolio state";
-  await page.getByRole("link", { name: "Portfolios" }).click();
-  await waitForText(page, "Portfolios", 30_000);
-  await page.getByRole("button", { name: "Add holding" }).last().click();
-  const holdingSymbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
-  await holdingSymbolInput.fill("MSFT");
-  await holdingSymbolInput.press("Enter");
-  await waitForText(page, "Selected MSFT", 30_000);
-  await page.getByRole("spinbutton", { name: "Quantity" }).fill("2");
-  await page.getByRole("spinbutton", { name: "Average cost per share" }).fill("300");
-  await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
-  await page.getByRole("button", { name: "Save" }).click();
-  await waitFor(
-    async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,
-    30_000,
-    "holding save acknowledgement",
-  );
-  await waitForTextExact(page, "MSFT", 30_000);
-  const preReloadCounts = await inspectStateArchive(await readStateCheckpoint(page));
-  assert(preReloadCounts.portfolioLots >= 1, "portfolio checkpoint persisted before reload");
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await waitForText(page, "MSFT", 120_000);
-
-  if (completedLiveTurn) {
-    stage = "saved-state attachment";
-    await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await waitForEnabled(page.getByRole("textbox", { name: "Message OpenCandle" }), 120_000);
-    await page.getByRole("button", { name: "Attach context" }).click();
-    await page.getByRole("menuitem", { name: "Default", exact: true }).first().click();
-    await waitForText(page, "Portfolio: Default", 30_000);
-    const rowsBeforeAttachment = await page.locator("[data-chat-row-id]").count();
-    await page
-      .getByRole("textbox", { name: "Message OpenCandle" })
-      .fill("Name the ticker in the attached portfolio. Answer with the ticker only. Do not use tools.");
-    await page.getByRole("button", { name: "Send message" }).click();
-    await waitForCount(page.locator("[data-chat-row-id]"), rowsBeforeAttachment + 2, 180_000);
+    stage = "portfolio state";
+    await page.getByRole("link", { name: "Portfolios" }).click();
+    await waitForText(page, "Portfolios", 30_000);
+    await page.getByRole("button", { name: "Add holding" }).last().click();
+    const holdingSymbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
+    await selectInstrumentCandidate(page, holdingSymbolInput, "MSFT");
+    await page.getByRole("spinbutton", { name: "Quantity" }).fill("2");
+    await page.getByRole("spinbutton", { name: "Average cost per share" }).fill("300");
+    await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
+    await page.getByRole("button", { name: "Save" }).click();
     await waitFor(
-      async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("MSFT"),
-      180_000,
-      "an answer grounded in the attached portfolio",
+      async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,
+      30_000,
+      "holding save acknowledgement",
     );
-  }
+    await waitForTextExact(page, "MSFT", 30_000);
+    const preReloadCounts = await inspectStateArchive(await readStateCheckpoint(page));
+    assert(preReloadCounts.portfolioLots >= 1, "portfolio checkpoint persisted before reload");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForText(page, "MSFT", 120_000);
 
-  stage = "watchlist reload";
-  await page.getByRole("link", { name: "Watchlists" }).click();
-  await waitForText(page, "AAPL", 30_000);
+    if (completedLiveTurn) {
+      stage = "saved-state attachment";
+      await page.getByRole("button", { name: "New chat", exact: true }).click();
+      await waitForEnabled(page.getByRole("textbox", { name: "Message OpenCandle" }), 120_000);
+      await page.getByRole("button", { name: "Attach context" }).click();
+      await page.getByRole("menuitem", { name: "Default", exact: true }).first().click();
+      await waitForText(page, "Portfolio: Default", 30_000);
+      const rowsBeforeAttachment = await page.locator("[data-chat-row-id]").count();
+      await page
+        .getByRole("textbox", { name: "Message OpenCandle" })
+        .fill("Name the ticker in the attached portfolio. Answer with the ticker only. Do not use tools.");
+      await page.getByRole("button", { name: "Send message" }).click();
+      await waitForCount(page.locator("[data-chat-row-id]"), rowsBeforeAttachment + 2, 180_000);
+      await waitFor(
+        async () => (await page.locator("[data-chat-row-id]").last().innerText()).includes("MSFT"),
+        180_000,
+        "an answer grounded in the attached portfolio",
+      );
+    }
 
-  follower = await context.newPage();
-  stage = "multi-tab follower";
-  await follower.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
-  assert(
-    await follower.evaluate(() => Boolean(navigator.serviceWorker.controller)),
-    "service worker control on a subsequent navigation",
-  );
-  await waitForText(follower, "Connected to the active tab", 120_000);
-  await waitForText(follower, "AAPL", 30_000);
-  await follower.getByRole("button", { name: "New chat", exact: true }).click();
-  await waitForText(
-    follower,
-    completedLiveTurn ? "What are we watching?" : "Connect an AI model",
-    30_000,
-  );
+    stage = "watchlist reload";
+    await page.getByRole("link", { name: "Watchlists" }).click();
+    await waitForText(page, "AAPL", 30_000);
 
-  const mobile = await context.newPage();
-  stage = "mobile layout";
-  await mobile.setViewportSize({ width: 390, height: 844 });
-  await mobile.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
-  await waitForText(mobile, "Connected to the active tab", 120_000);
-  await waitForText(mobile, "AAPL", 30_000);
-  await assertNoHorizontalOverflow(mobile, "mobile watchlist");
+    follower = await context.newPage();
+    stage = "multi-tab follower";
+    await follower.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
+    assert(
+      await follower.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+      "service worker control on a subsequent navigation",
+    );
+    await waitForText(follower, "Connected to the active tab", 120_000);
+    await waitForText(follower, "AAPL", 30_000);
+    await follower.getByRole("button", { name: "New chat", exact: true }).click();
+    await waitForText(
+      follower,
+      completedLiveTurn ? "What are we watching?" : "Connect an AI model",
+      30_000,
+    );
 
-  const exportPath = join(tmpdir(), `opencandle-hosted-export-${Date.now()}.json`);
-  stage = "data export";
-  await openHostedPanel(page);
-  const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 60_000 }),
-    page.getByRole("button", { name: "Export data" }).click(),
-  ]);
-  await download.saveAs(exportPath);
-  const exported = await readFile(exportPath, "utf8");
-  assert(!apiKey || !exported.includes(apiKey), "archive excludes OpenAI model key");
-  assert(!googleApiKey || !exported.includes(googleApiKey), "archive excludes Google model key");
-  const archive = JSON.parse(exported);
-  assert(archive.version === 1, "archive version");
-  assert(archive.sessions.length >= 1, "archive includes canonical Pi session");
-  assert(Boolean(archive.stateBase64), "archive includes SQLite state");
-  const stateCounts = await inspectStateArchive(archive.stateBase64);
-  assert(stateCounts.watchlistItems >= 1, "SQLite archive includes the watchlist item");
-  assert(stateCounts.portfolioLots >= 1, "SQLite archive includes the portfolio lot");
-  if (completedLiveTurn) {
-    assert(stateCounts.preferences >= 1, "SQLite archive includes extracted user memory");
-    assert(stateCounts.workflowRuns >= 1, "SQLite archive includes workflow history");
-  }
+    const mobile = await context.newPage();
+    stage = "mobile layout";
+    await mobile.setViewportSize({ width: 390, height: 844 });
+    await mobile.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
+    await waitForText(mobile, "Connected to the active tab", 120_000);
+    await waitForText(mobile, "AAPL", 30_000);
+    await assertNoHorizontalOverflow(mobile, "mobile watchlist");
 
-  stage = "update handoff";
-  await page.evaluate(() => {
-    globalThis.__opencandleUpdateMessages = [];
-    dispatchEvent(
-      new CustomEvent("opencandle:update-ready", {
-        detail: {
-          registration: {
-            waiting: {
-              postMessage(message) {
-                globalThis.__opencandleUpdateMessages.push(message);
+    const exportPath = join(tmpdir(), `opencandle-hosted-export-${Date.now()}.json`);
+    stage = "data export";
+    await openHostedPanel(page);
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 60_000 }),
+      page.getByRole("button", { name: "Export data" }).click(),
+    ]);
+    await download.saveAs(exportPath);
+    const exported = await readFile(exportPath, "utf8");
+    assert(!apiKey || !exported.includes(apiKey), "archive excludes OpenAI model key");
+    assert(!googleApiKey || !exported.includes(googleApiKey), "archive excludes Google model key");
+    const archive = JSON.parse(exported);
+    assert(archive.version === 1, "archive version");
+    assert(archive.sessions.length >= 1, "archive includes canonical Pi session");
+    assert(Boolean(archive.stateBase64), "archive includes SQLite state");
+    const stateCounts = await inspectStateArchive(archive.stateBase64);
+    assert(stateCounts.watchlistItems >= 1, "SQLite archive includes the watchlist item");
+    assert(stateCounts.portfolioLots >= 1, "SQLite archive includes the portfolio lot");
+    if (completedLiveTurn) {
+      assert(stateCounts.preferences >= 1, "SQLite archive includes extracted user memory");
+      assert(stateCounts.workflowRuns >= 1, "SQLite archive includes workflow history");
+    }
+
+    stage = "update handoff";
+    await page.evaluate(() => {
+      globalThis.__opencandleUpdateMessages = [];
+      dispatchEvent(
+        new CustomEvent("opencandle:update-ready", {
+          detail: {
+            registration: {
+              waiting: {
+                postMessage(message) {
+                  globalThis.__opencandleUpdateMessages.push(message);
+                },
               },
             },
           },
-        },
-      }),
+        }),
+      );
+    });
+    await openHostedPanel(page);
+    await page.getByRole("button", { name: "Install update" }).click();
+    await waitFor(
+      () =>
+        page.evaluate(
+          () =>
+            globalThis.__opencandleUpdateMessages?.some(
+              (message) => message?.type === "ACTIVATE_UPDATE",
+            ) ?? false,
+        ),
+      120_000,
+      "durable update handoff",
     );
-  });
-  await openHostedPanel(page);
-  await page.getByRole("button", { name: "Install update" }).click();
-  await waitFor(
-    () =>
-      page.evaluate(
-        () =>
-          globalThis.__opencandleUpdateMessages?.some(
-            (message) => message?.type === "ACTIVATE_UPDATE",
-          ) ?? false,
-      ),
-    120_000,
-    "durable update handoff",
-  );
 
-  stage = "corrupt import";
-  await openHostedPanel(page);
-  const corruptChooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import data" }).click();
-  await (await corruptChooser).setFiles({
-    name: "corrupt-opencandle-archive.json",
-    mimeType: "application/json",
-    buffer: Buffer.from('{"version":999}'),
-  });
-  await waitForText(page, "Unsupported hosted archive version", 30_000);
-  await waitForText(page, "AAPL", 30_000);
+    stage = "corrupt import";
+    await openHostedPanel(page);
+    const corruptChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import data" }).click();
+    await (await corruptChooser).setFiles({
+      name: "corrupt-opencandle-archive.json",
+      mimeType: "application/json",
+      buffer: Buffer.from('{"version":999}'),
+    });
+    await waitForText(page, "Unsupported hosted archive version", 30_000);
+    await waitForText(page, "AAPL", 30_000);
 
-  stage = "newer SQLite schema import";
-  const newerSchemaArchive = await withStateSchemaVersion(exported, 999);
-  await openHostedPanel(page);
-  const newerSchemaChooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import data" }).click();
-  await (await newerSchemaChooser).setFiles({
-    name: "newer-opencandle-archive.json",
-    mimeType: "application/json",
-    buffer: Buffer.from(newerSchemaArchive),
-  });
-  await waitForText(page, "uses newer schema version 999", 30_000);
-  await waitForText(page, "AAPL", 30_000);
+    stage = "newer SQLite schema import";
+    const newerSchemaArchive = await withStateSchemaVersion(exported, 999);
+    await openHostedPanel(page);
+    const newerSchemaChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import data" }).click();
+    await (await newerSchemaChooser).setFiles({
+      name: "newer-opencandle-archive.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(newerSchemaArchive),
+    });
+    await waitForText(page, "uses newer schema version 999", 30_000);
+    await waitForText(page, "AAPL", 30_000);
 
-  stage = "clear model key";
-  await openHostedPanel(page);
-  await page.getByRole("button", { name: "Clear secrets" }).click();
-  assert(await credentialsAreAbsent(page), "clear model key removes persistent and session keys");
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await waitForText(page, "AAPL", 120_000);
+    stage = "clear model key";
+    await openHostedPanel(page);
+    await page.getByRole("button", { name: "Clear secrets" }).click();
+    assert(await credentialsAreAbsent(page), "clear model key removes persistent and session keys");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForText(page, "AAPL", 120_000);
 
-  await context.setOffline(true);
-  stage = "offline shell";
-  const cachedShell = await follower.evaluate(async () => (await fetch("/index.html")).text());
-  assert(cachedShell.includes('id="root"'), "offline cached application shell");
-  await waitForText(page, "Offline: saved research is read-only", 30_000);
-  await waitForText(page, "Saved-state changes are unavailable", 30_000);
-  await waitForText(page, "AAPL", 30_000);
-  await openHostedPanel(page);
-  assert(await page.getByRole("button", { name: "Export data" }).isEnabled(), "offline export");
-  const mutationButtons = await page.getByRole("button", { name: "Add ticker" }).all();
-  const visibleMutationStates = [];
-  for (const button of mutationButtons) {
-    if (await button.isVisible()) visibleMutationStates.push(await button.isDisabled());
+    await context.setOffline(true);
+    stage = "offline shell";
+    const cachedShell = await follower.evaluate(async () => (await fetch("/index.html")).text());
+    assert(cachedShell.includes('id="root"'), "offline cached application shell");
+    await waitForText(page, "Offline: saved research is read-only", 30_000);
+    await waitForText(page, "Saved-state changes are unavailable", 30_000);
+    await waitForText(page, "AAPL", 30_000);
+    await openHostedPanel(page);
+    assert(await page.getByRole("button", { name: "Export data" }).isEnabled(), "offline export");
+    const mutationButtons = await page.getByRole("button", { name: "Add ticker" }).all();
+    const visibleMutationStates = [];
+    for (const button of mutationButtons) {
+      if (await button.isVisible()) visibleMutationStates.push(await button.isDisabled());
+    }
+    assert(
+      visibleMutationStates.length > 0 && visibleMutationStates.every(Boolean),
+      "offline mutations disabled",
+    );
+    await context.setOffline(false);
+
+    await follower.close();
+    await mobile.close();
+    stage = "clear and restore";
+    await openHostedPanel(page);
+    page.once("dialog", (dialog) => dialog.accept());
+    await Promise.all([
+      page.waitForEvent("framenavigated", { timeout: 120_000 }),
+      page.getByRole("button", { name: "Clear all" }).click(),
+    ]);
+    await waitForText(page, "No tickers yet", 120_000);
+    assert((await page.getByText("AAPL", { exact: true }).count()) === 0, "clear removes watchlist");
+    assert(await credentialsAreAbsent(page), "clear removes persistent and session model keys");
+    await openHostedPanel(page);
+    const restoreChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import data" }).click();
+    const restoredNavigation = page.waitForEvent("framenavigated", { timeout: 120_000 });
+    await (await restoreChooser).setFiles(exportPath);
+    await restoredNavigation;
+    await waitForText(page, "AAPL", 120_000);
+    assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
   }
-  assert(
-    visibleMutationStates.length > 0 && visibleMutationStates.every(Boolean),
-    "offline mutations disabled",
-  );
-  await context.setOffline(false);
-
-  await follower.close();
-  await mobile.close();
-  stage = "clear and restore";
-  await openHostedPanel(page);
-  page.once("dialog", (dialog) => dialog.accept());
-  await Promise.all([
-    page.waitForEvent("framenavigated", { timeout: 120_000 }),
-    page.getByRole("button", { name: "Clear all" }).click(),
-  ]);
-  await waitForText(page, "No tickers yet", 120_000);
-  assert((await page.getByText("AAPL", { exact: true }).count()) === 0, "clear removes watchlist");
-  assert(await credentialsAreAbsent(page), "clear removes persistent and session model keys");
-  await openHostedPanel(page);
-  const restoreChooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import data" }).click();
-  const restoredNavigation = page.waitForEvent("framenavigated", { timeout: 120_000 });
-  await (await restoreChooser).setFiles(exportPath);
-  await restoredNavigation;
-  await waitForText(page, "AAPL", 120_000);
-  assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
 
   const secretErrors = apiKey ? browserErrors.filter((message) => message.includes(apiKey)) : [];
   if (googleApiKey) {
@@ -515,7 +516,7 @@ try {
   assert(!apiKey || !serverOutput.includes(apiKey), "model key absent from static host logs");
   assert(!googleApiKey || !serverOutput.includes(googleApiKey), "Google key absent from static host logs");
   process.stdout.write(
-    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} multiTab=PASS offline=PASS archive=PASS mobile=PASS\n`,
+    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} marketState=${relayE2e ? "PASS" : "SKIP"}\n`,
   );
 } catch (error) {
   const pageText = await page?.locator("body").innerText().catch(() => "");
@@ -638,6 +639,18 @@ async function waitForTextExact(page, text, timeoutMs) {
     timeoutMs,
     `exact visible text: ${text}`,
   );
+}
+
+async function selectInstrumentCandidate(page, input, symbol) {
+  await input.fill(symbol);
+  const candidate = page.getByRole("option", { name: new RegExp(`^${symbol} `) });
+  await waitFor(
+    async () => (await candidate.count()) === 1,
+    30_000,
+    `one ${symbol} instrument suggestion`,
+  );
+  await candidate.click();
+  await waitForText(page, `Selected ${symbol}`, 30_000);
 }
 
 async function waitForEnabled(locator, timeoutMs) {
