@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { refreshHostedRuntimeStatus } from "./hosted-runtime-status.js";
 
 export function HostedRuntimePanel({ host }) {
+  const initialProgress = host.getRuntimeProgress?.();
   const [status, setStatus] = useState({
     role: host.getRole?.() || "candidate",
     online: navigator.onLine,
     busy: false,
-    message: "Starting browser runtime…",
+    phase: initialProgress?.phase || "booting",
+    message: initialProgress?.message || "Starting browser runtime…",
     actionError: "",
   });
   const [waitingWorker, setWaitingWorker] = useState(null);
@@ -44,12 +46,13 @@ export function HostedRuntimePanel({ host }) {
     setStatus((current) => ({ ...current, busy: true, message, actionError: "" }));
     try {
       const result = await action();
-      setStatus((current) => ({
-        ...current,
-        busy: false,
-        message: navigator.onLine ? "Running on this device" : "Offline: saved research is read-only",
-        actionError: "",
-      }));
+      setStatus((current) =>
+        refreshHostedRuntimeStatus(
+          { ...current, busy: false, actionError: "" },
+          undefined,
+          { online: navigator.onLine, role: host.getRole?.() || current.role },
+        ),
+      );
       return result;
     } catch (error) {
       setStatus((current) => ({
@@ -110,7 +113,7 @@ export function HostedRuntimePanel({ host }) {
           {status.actionError ? <p role="alert">{status.actionError}</p> : null}
           <p>
             {status.role === "follower"
-              ? "This tab sends actions to the active writer tab."
+              ? "Requests from this tab run through the active browser runtime."
               : "The Pi runtime, sessions, and market state stay in this browser profile."}
           </p>
           <div className="hosted-runtime-actions">

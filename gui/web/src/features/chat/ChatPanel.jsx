@@ -91,7 +91,11 @@ export function ChatPanel({
     () => enrichGroupedRows(rawGroupedRows, sessionMarketFacts),
     [rawGroupedRows, sessionMarketFacts],
   );
-  const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
+  const runElapsedSeconds = useRunElapsedSeconds(runState);
+  const activity = useMemo(
+    () => buildAgentActivity(liveState, runState, role, runElapsedSeconds),
+    [liveState, role, runElapsedSeconds, runState],
+  );
   const hasAskUserPrompts = askUserPrompts.length > 0;
   const autoOpenRunId = useMemo(() => {
     if (!allowToolAutoOpen) return null;
@@ -752,11 +756,13 @@ function AgentActivity({ activity }) {
 
   return (
     <div className="max-w-[760px]">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+      <div
+        className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
         <StatusDot status={activity.status} />
-        <TextShimmer active={activity.status === "pending"}>
-          {hasThinking ? "Analyzing" : "Working"}
-        </TextShimmer>
+        <TextShimmer active={activity.status === "pending"}>{activity.label}</TextShimmer>
       </div>
       {hasThinking ? (
         <div className="border-l border-dashed border-border pl-4 text-sm leading-relaxed text-muted-foreground">
@@ -854,6 +860,7 @@ function MessageRowContent({
         content={entry.content}
         attachments={entry.attachments}
         knownSymbols={knownSymbols}
+        delivery={entry.delivery}
       />
     );
   if (entry.type === "tool_result")
@@ -913,23 +920,79 @@ function positionRowElement(viewport, row) {
   viewport.scrollTo({ top, behavior: "auto" });
 }
 
-function buildAgentActivity(liveState, runState) {
+function useRunElapsedSeconds(runState) {
+  const active = runState === "connecting" || runState === "streaming";
+  const startedAtRef = useRef(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      startedAtRef.current = 0;
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    startedAtRef.current ||= Date.now();
+    const update = () => setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, [active]);
+
+  return elapsedSeconds;
+}
+
+function buildAgentActivity(liveState, runState, role, elapsedSeconds) {
   const isActive = runState === "connecting" || runState === "streaming";
   if (!isActive) return null;
 
   const runs = [...liveState.runs.values()];
   const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
   const thinking = activeRun ? thinkingForRun(liveState, activeRun) : undefined;
-  const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
+  const activeTool = [...liveState.tools.values()].find((tool) => tool.status === "running");
   const assistantText = liveState.messages.some(
     (message) => message.role === "assistant" && message.text.trim(),
   );
 
-  if (!thinking?.text && (activeTool || assistantText)) return null;
+  if (thinking?.text) {
+    return {
+      status: thinking.status === "completed" ? "completed" : "pending",
+      label: "Analyzing",
+      thinkingText: thinking.text,
+    };
+  }
+  if (activeTool) {
+    return {
+      status: "pending",
+      label: `Running ${friendlyToolName(activeTool.name)}…`,
+      thinkingText: "",
+    };
+  }
+  if (assistantText) {
+    return { status: "pending", label: "Writing answer…", thinkingText: "" };
+  }
+  if (runState === "connecting") {
+    return {
+      status: "pending",
+      label: role === "follower" ? "Sending to the active tab…" : "Starting your request…",
+      thinkingText: "",
+    };
+  }
   return {
-    status: thinking?.status === "completed" ? "completed" : "pending",
-    thinkingText: thinking?.text || "",
+    status: "pending",
+    label:
+      elapsedSeconds >= 20
+        ? "Still working — research can take a little longer…"
+        : elapsedSeconds >= 8
+          ? "Waiting for the model response…"
+          : "Request received…",
+    thinkingText: "",
   };
+}
+
+function friendlyToolName(name) {
+  return String(name || "tool")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function thinkingForRun(liveState, run) {

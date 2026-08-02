@@ -188,6 +188,25 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Browse tools");
   });
 
+  it("shows receipt and forwarding progress before the canonical stream arrives", () => {
+    const html = renderChatPanelHtml({
+      role: "follower",
+      runState: "connecting",
+      liveEvents: [
+        { type: "message.created", messageId: "optimistic-user-1", role: "user", seq: 1 },
+        {
+          type: "message.completed",
+          messageId: "optimistic-user-1",
+          content: [{ type: "text", text: "Analyze AAPL" }],
+          seq: 2,
+        },
+      ],
+    });
+
+    expect(html).toContain("Queued");
+    expect(html).toContain("Sending to the active tab…");
+  });
+
   it("keeps ask_user controls available in non-owner windows for proxying", () => {
     const html = renderChatPanelHtml({
       role: "follower",

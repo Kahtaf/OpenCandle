@@ -40,4 +40,25 @@ describe("hosted runtime status", () => {
       ),
     ).toMatchObject({ message: "Ready through the active tab" });
   });
+
+  it("keeps browser boot progress visible until the runtime is ready", () => {
+    const current = {
+      role: "writer",
+      online: true,
+      phase: "booting",
+      message: "Preparing browser runtime…",
+      actionError: "",
+    };
+
+    expect(
+      refreshHostedRuntimeStatus(current, undefined, { role: "writer", online: true }),
+    ).toMatchObject({ message: "Preparing browser runtime…", phase: "booting" });
+    expect(
+      refreshHostedRuntimeStatus(
+        current,
+        { type: "runtime-progress", phase: "ready", message: "Running on this device" },
+        { role: "writer", online: true },
+      ),
+    ).toMatchObject({ message: "Running on this device", phase: "ready" });
+  });
 });

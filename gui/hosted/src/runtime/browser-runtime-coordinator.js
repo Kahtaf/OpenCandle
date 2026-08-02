@@ -29,6 +29,7 @@ class BrowserRuntimeCoordinator {
     this.epoch = 0;
     this.writerId = "";
     this.host = null;
+    this.runtimeProgress = { phase: "booting", message: "Starting browser runtime…" };
     this.cachedModelSetup = null;
     this.sessionCredential = readSessionCredential(this.sessionStorage);
     this.pending = new Map();
@@ -61,6 +62,10 @@ class BrowserRuntimeCoordinator {
 
   getEpoch() {
     return this.epoch;
+  }
+
+  getRuntimeProgress() {
+    return this.runtimeProgress;
   }
 
   getModelSetup() {
@@ -157,14 +162,36 @@ class BrowserRuntimeCoordinator {
     this.storage.setItem(EPOCH_KEY, String(this.epoch));
     this.writerId = this.tabId;
     this.role = "writer";
-    this.host = this.createHost({ sessionCredential: this.sessionCredential });
+    const host = this.createHost({ sessionCredential: this.sessionCredential });
+    this.host = host;
     // Overlap WebContainer startup with the UI's initial render. The first
     // bootstrap request reuses this promise, so there is still exactly one
     // runtime and no additional background execution surface.
-    void Promise.resolve(this.host.prewarm?.()).catch(() => {
-      // The first UI request surfaces boot errors through the normal status
-      // path. Avoid an unhandled rejection from an opportunistic prewarm.
-    });
+    this.runtimeProgress = {
+      type: "runtime-progress",
+      phase: "booting",
+      message: "Preparing browser runtime…",
+    };
+    this.notify(this.runtimeProgress);
+    void Promise.resolve(host.prewarm?.())
+      .then(() => {
+        if (this.host !== host || this.role !== "writer") return;
+        this.runtimeProgress = {
+          type: "runtime-progress",
+          phase: "ready",
+          message: "Running on this device",
+        };
+        this.notify(this.runtimeProgress);
+      })
+      .catch((error) => {
+        if (this.host !== host || this.role !== "writer") return;
+        this.runtimeProgress = {
+          type: "runtime-progress",
+          phase: "error",
+          error: error instanceof Error ? error.message : String(error),
+        };
+        this.notify(this.runtimeProgress);
+      });
     this.cachedModelSetup = this.host.getModelSetup?.() ?? null;
     this.resolveReady();
     this.broadcastStatus();
