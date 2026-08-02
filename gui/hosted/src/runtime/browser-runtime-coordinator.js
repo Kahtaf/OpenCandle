@@ -6,6 +6,7 @@ const EPOCH_KEY = "opencandle.hosted.runtime-epoch.v1";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 const MAX_FORWARDED_CHUNK_BYTES = 64 * 1024;
+const WRITER_TAKEOVER_TIMEOUT_MS = 15_000;
 
 export function createBrowserRuntimeCoordinator(options) {
   return new BrowserRuntimeCoordinator(options);
@@ -45,15 +46,8 @@ class BrowserRuntimeCoordinator {
       this.notify({ type: "invalidate", reason: "network", epoch: this.epoch });
     this.eventTarget.addEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.addEventListener?.("offline", this.handleNetworkChange);
-    this.writerLockPromise = this.lockManager.request(LOCK_NAME, async () => {
-      if (this.disposed) return;
-      await this.becomeWriter();
-      await new Promise((resolve) => {
-        this.releaseWriter = resolve;
-      });
-      await this.stopWriter();
-    });
-    void this.writerLockPromise.catch((error) => this.rejectReady(error));
+    this.writerLockPromise = null;
+    this.queueWriterLock();
     this.post({ type: "hello" });
   }
 
@@ -105,7 +99,11 @@ class BrowserRuntimeCoordinator {
       this.broadcastStatus();
       this.broadcastInvalidation();
     } else if (isCredentialBearingCommand(command)) {
-      throw new Error("Enter API keys in the active writer tab so credentials never cross tabs.");
+      await this.takeWriter();
+      value = await this.host.handleCommand(command);
+      this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
+      this.broadcastStatus();
+      this.broadcastInvalidation();
     } else {
       value = await this.forward({ kind: "command", command });
     }
@@ -166,11 +164,65 @@ class BrowserRuntimeCoordinator {
     this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
   }
 
+  queueWriterLock() {
+    const lockPromise = this.lockManager.request(LOCK_NAME, async () => {
+      if (this.disposed) return;
+      await this.becomeWriter();
+      await new Promise((resolve) => {
+        this.releaseWriter = resolve;
+      });
+      await this.stopWriter();
+    });
+    this.writerLockPromise = lockPromise;
+    void lockPromise.then(
+      () => {
+        if (!this.disposed) this.queueWriterLock();
+      },
+      (error) => this.rejectReady(error),
+    );
+  }
+
+  async takeWriter() {
+    if (this.role === "writer") return;
+    if (!this.writerId || !isEpoch(this.epoch)) {
+      throw new Error("The active hosted tab is not available. Reload this tab and try again.");
+    }
+    await new Promise((resolve, reject) => {
+      let requestedWriterId = "";
+      let unsubscribe = () => {};
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error("The active hosted tab did not release the browser runtime"));
+      }, Math.min(this.requestTimeoutMs, WRITER_TAKEOVER_TIMEOUT_MS));
+      unsubscribe = this.subscribe((message) => {
+        if (message?.type !== "coordination") return;
+        if (this.role === "writer") {
+          clearTimeout(timer);
+          unsubscribe();
+          resolve();
+          return;
+        }
+        requestCurrentWriterToYield();
+      });
+      const requestCurrentWriterToYield = () => {
+        if (!this.writerId || this.writerId === requestedWriterId || !isEpoch(this.epoch)) return;
+        requestedWriterId = this.writerId;
+        this.post({ type: "writer-yield-request", epoch: this.epoch, target: this.writerId });
+      };
+      requestCurrentWriterToYield();
+    });
+  }
+
   async stopWriter() {
     const host = this.host;
     this.host = null;
     this.releaseWriter = null;
     if (host) await host.dispose?.();
+    if (!this.disposed) {
+      this.role = "follower";
+      this.writerId = "";
+      this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
+    }
   }
 
   forward(payload, signal) {
@@ -275,6 +327,10 @@ class BrowserRuntimeCoordinator {
       return;
     }
     if (!isEpoch(message.epoch) || message.epoch !== this.epoch) return;
+    if (message.type === "writer-yield-request") {
+      if (this.role === "writer" && message.target === this.tabId) this.releaseWriter?.();
+      return;
+    }
     if (message.type === "credentials-purged") {
       this.clearSessionCredential();
       return;

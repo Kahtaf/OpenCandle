@@ -251,7 +251,7 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
-  it("never forwards credential-bearing commands from a follower", async () => {
+  it("never broadcasts provider credentials while handing the writer role to a follower", async () => {
     FakeBroadcastChannel.channels.clear();
     FakeBroadcastChannel.messages = [];
     const locks = new FakeLockManager();
@@ -259,7 +259,8 @@ describe("browser runtime coordinator", () => {
     const options = {
       createHost: () => ({
         request: vi.fn(),
-        handleCommand: vi.fn(),
+        handleCommand: vi.fn(async () => ({ configured: true })),
+        getModelSetup: vi.fn(() => ({ requirement: "ready", hosted: true })),
         dispose: vi.fn(),
       }),
       lockManager: locks,
@@ -273,14 +274,72 @@ describe("browser runtime coordinator", () => {
 
     await expect(
       follower.handleCommand({
-        type: "model.setup.save_api_key",
-        provider: "openai",
-        apiKey: "must-never-be-broadcast",
+        type: "provider.save_api_key",
+        provider: "fred",
+        apiKey: "must-stay-in-requesting-tab",
       }),
-    ).rejects.toThrow("active writer tab");
-    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain("must-never-be-broadcast");
+    ).resolves.toEqual({ configured: true });
+    expect(follower.getRole()).toBe("writer");
+    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain(
+      "must-stay-in-requesting-tab",
+    );
 
     await Promise.all([first.dispose(), second.dispose()]);
+  });
+
+  it("promotes the requesting follower through an older waiter before saving locally", async () => {
+    FakeBroadcastChannel.channels.clear();
+    FakeBroadcastChannel.messages = [];
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const hostCommands: Array<ReturnType<typeof vi.fn>> = [];
+    const options = {
+      createHost: () => {
+        const handleCommand = vi.fn(async () => ({ configured: true }));
+        hostCommands.push(handleCommand);
+        return {
+          request: vi.fn(),
+          handleCommand,
+          getModelSetup: vi.fn(() => ({ requirement: "ready", hosted: true })),
+          dispose: vi.fn(),
+        };
+      },
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    const requester = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready(), requester.ready()]);
+
+    expect(first.getRole()).toBe("writer");
+    expect(second.getRole()).toBe("follower");
+    expect(requester.getRole()).toBe("follower");
+
+    await expect(
+      requester.handleCommand({
+        type: "model.setup.save_api_key",
+        provider: "openai",
+        apiKey: "requesting-tab-only-secret",
+      }),
+    ).resolves.toEqual({ configured: true });
+
+    expect(requester.getRole()).toBe("writer");
+    expect(hostCommands).toHaveLength(3);
+    expect(hostCommands[0]).not.toHaveBeenCalled();
+    expect(hostCommands[1]).not.toHaveBeenCalled();
+    expect(hostCommands[2]).toHaveBeenCalledWith({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      apiKey: "requesting-tab-only-secret",
+    });
+    expect(JSON.stringify(FakeBroadcastChannel.messages)).not.toContain(
+      "requesting-tab-only-secret",
+    );
+
+    await Promise.all([first.dispose(), second.dispose(), requester.dispose()]);
   });
 
   it("uses only the promoted tab's own session credential", async () => {

@@ -43,7 +43,7 @@ OpenCandle exports, Pi sessions, and SQLite state.
 
 A session-only key remains scoped to the tab where it was entered and is never sent over the cross-tab coordination channel. If that writer closes, an independently opened follower can take over the saved session and market state but must be given the model key before research can continue. Choose device storage when seamless writer failover is more important than tab-scoped key isolation.
 
-Follower tabs forward ordinary research and market-state actions to the writer, but never forward model or provider credentials. Enter or change a key only in the active writer tab. A saved-state mutation is acknowledged only after its matching SQLite or Pi-session bytes have been checkpointed to OPFS.
+Follower tabs forward ordinary research and market-state actions to the writer, but never forward model or provider credentials. Saving a key from a follower first hands the single writer role to that tab, then validates and stores the key locally without placing it on the coordination channel. A saved-state mutation is acknowledged only after its matching SQLite or Pi-session bytes have been checkpointed to OPFS.
 
 Browser storage is not a secure vault. Same-origin script compromise, a malicious browser extension, physical access to the browser profile, or a compromised dependency could expose a saved key. Use session-only model storage on shared devices and clear secrets when needed.
 

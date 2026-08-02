@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- Hosted follower tabs now ask responsive older writer tabs to hand over the single browser runtime before validating or saving model and data-provider API keys, so hidden but active tabs no longer block credential setup while secrets remain confined to the requesting tab.
 - Every terminal, local GUI, and hosted GUI API-key entry path now requires a positive provider probe before changing stored model or data-provider credentials. Pi's built-in `/login` uses the same probe as `/setup`, and invalid, unavailable, or inconclusive verification leaves the existing credential untouched.
 - Local and hosted web sessions now persist slash-command input before Pi expands workflows, and the shared transcript adapter preserves that input across the workflow marker, so `/analyze SYMBOL` remains visible after session reload instead of reopening as internal workflow steps only. Persisted Pi model failures now render an explicit repair-and-retry card instead of disappearing as empty assistant messages, including failures inside workflows.
 - Portaled ticker suggestions remain pointer-interactive inside desktop market-state dialogs, so portfolio holdings and watchlist symbols can be selected with the mouse instead of clicks falling through to the form beneath them.
