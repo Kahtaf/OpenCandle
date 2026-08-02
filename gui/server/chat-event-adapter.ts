@@ -323,6 +323,15 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
       assignPendingWorkflowSteps(activeGroup, "validation", "Validation and synthesis");
       activeGroup = null;
       pendingOriginalInput = false;
+      continue;
+    }
+    if (
+      isCustomEntry(entry, "opencandle-workflow-complete") ||
+      isCustomEntry(entry, "opencandle-workflow-aborted")
+    ) {
+      activeGroup = null;
+      pendingOriginalInput = false;
+      continue;
     }
   }
 

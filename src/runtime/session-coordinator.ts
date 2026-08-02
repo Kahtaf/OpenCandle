@@ -714,7 +714,20 @@ export class SessionCoordinator {
           return structuredOutput;
         },
       )
-      .then(() => undefined)
+      .then((completedRun) => {
+        // Validation is only emitted by synthesis. Persist a neutral terminal
+        // marker for every completed or failed workflow so transcript
+        // consumers can end the workflow group before an ordinary later turn.
+        if (
+          this.activeWorkflowRunRef === runRef &&
+          (completedRun.status === "completed" || completedRun.status === "failed")
+        ) {
+          pi.appendEntry("opencandle-workflow-complete", {
+            workflow: completedRun.workflowType,
+            status: completedRun.status,
+          });
+        }
+      })
       .finally(() => {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeStepCapture = null;

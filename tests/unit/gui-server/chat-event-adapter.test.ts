@@ -406,6 +406,43 @@ describe("sessionEntriesToChatEvents", () => {
     ).toHaveLength(0);
   });
 
+  it("closes a non-synthesis workflow group after its terminal completion marker", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", { workflow: "portfolio_builder" }),
+        customEntry("original", "opencandle-user-input", { original: "Build a portfolio" }),
+        messageEntry("workflow-user-final", {
+          role: "user",
+          content: "Present the final portfolio draft",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-final", assistantMessage("Portfolio output")),
+        customEntry("workflow-complete", "opencandle-workflow-complete", {
+          workflow: "portfolio_builder",
+          status: "completed",
+        }),
+        messageEntry("genuine-follow-up", {
+          role: "user",
+          content: "What is the biggest risk?",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(
+      events.filter(
+        (event) => event.type === "message.completed" && event.messageId === "genuine-follow-up",
+      ),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.messageId === "workflow-step-genuine-follow-up",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("does not apply an analyst stage to earlier unclassified workflow prompts", () => {
     const events = sessionEntriesToChatEvents(
       [

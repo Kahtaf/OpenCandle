@@ -457,6 +457,10 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(completed).toBe(true);
     expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
     expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "comprehensive_analysis",
+      status: "completed",
+    });
     await completion;
   });
 
