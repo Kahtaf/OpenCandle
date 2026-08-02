@@ -1239,6 +1239,7 @@ function createRuntime(
     getSessionFile: () => join(sessionDir, "session-1.jsonl"),
     getSessionDir: () => sessionDir,
     getEntries: () => [],
+    appendMessage: vi.fn(),
   }));
   runtime.buildBootstrap = vi.fn(async () => ({
     role: "writer",

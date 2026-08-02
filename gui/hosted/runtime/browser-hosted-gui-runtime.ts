@@ -22,6 +22,7 @@ import {
   type GuiAskUserPrompt,
 } from "../../../gui/shared/ask-user-bridge.js";
 import { createLiveChatEventAdapter } from "../../../gui/shared/live-chat-event-adapter.js";
+import { invokeToolFromUi } from "../../../gui/shared/invoke-tool-from-ui.js";
 import { assertValidToolArguments } from "../../../gui/shared/tool-argument-validation.js";
 import { toolOutcomeNeedsInput } from "../../../gui/shared/tool-output.js";
 import {
@@ -727,12 +728,11 @@ export class BrowserHostedGuiRuntime {
           );
         }
         assertValidToolArguments(tool.parameters, args);
-        const output = await tool.execute(guardedActionId, args, undefined, () => undefined);
-        const result = { toolCallId: guardedActionId, result: output, isError: false as const };
+        const result = await invokeToolFromUi(manager, tool, args);
         const response = { result };
         cached.result = response;
         cached.persistencePending = true;
-        cached.acceptOnPersistence = !toolOutcomeNeedsInput(output);
+        cached.acceptOnPersistence = !toolOutcomeNeedsInput(result.result);
         this.flushState();
         if (cached.acceptOnPersistence) {
           recordAcceptedSessionAction(manager, guardedActionId, fingerprint);

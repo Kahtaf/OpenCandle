@@ -33,7 +33,9 @@ type RelayProvider =
   | "brave"
   | "exa"
   | "fear_greed"
+  | "finnhub"
   | "fred"
+  | "lse"
   | "tradingview"
   | "yahoo";
 type RelayMethod = "GET" | "POST";
@@ -102,8 +104,22 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
   fear_greed: policy(["GET"], COMMON_GET_HEADERS, (url) =>
     exact(url, "api.alternative.me", "/fng/"),
   ),
+  finnhub: policy(
+    ["GET"],
+    COMMON_GET_HEADERS,
+    (url) =>
+      exact(url, "finnhub.io", "/api/v1/company-news") ||
+      exact(url, "finnhub.io", "/api/v1/quote"),
+  ),
   fred: policy(["GET"], COMMON_GET_HEADERS, (url) =>
     pathMatches(url, "api.stlouisfed.org", /^\/fred\/series(?:\/observations)?$/),
+  ),
+  lse: policy(
+    ["GET"],
+    new Set([...COMMON_GET_HEADERS, "x-api-key"]),
+    (url) =>
+      exact(url, "api.londonstrategicedge.com", "/vault/candles") ||
+      exact(url, "api.londonstrategicedge.com", "/vault/ref/financial_reports"),
   ),
   tradingview: policy(
     ["POST"],

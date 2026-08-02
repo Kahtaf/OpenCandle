@@ -10,6 +10,7 @@
 
 ### Changed
 
+- Hosted relay now admits the exact Finnhub quote/company-news and London Strategic Edge candles/financial-reports endpoints behind its existing credential, body, timeout, and rate-limit boundaries, allowing browser-local keys to unlock their existing hosted tools.
 - Codex PR reviews are now advisory instead of merge-blocking: the polling review gate was removed, while reviews can still run automatically when a PR is created or be requested manually with `@codex review`.
 - Hosted relay authorization now exchanges a one-time Turnstile proof in the trusted top-level shell for a short-lived HMAC token bound to the installation client id. Only signed, memory-only authorization enters WebContainer, whose shared provider and Pi Fetch calls stream through a bounded exact-path browser bridge; local GUI and TUI networking is unchanged.
 - Hosted web now keeps one canonical Pi session per saved session, persists exactly-once action fingerprints across runtime failover, shares live event projection, stateful market tools, exact-symbol policy, quote and portfolio snapshot assembly, typed requests, provider metadata, model lookup, and Pi thinking controls with local GUI/TUI, and removes the earlier hosted HTTP server, completed-response stream fallback, market-state command interpreter, and parallel event adapter.

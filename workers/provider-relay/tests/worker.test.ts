@@ -641,8 +641,6 @@ describe("hosted provider relay", () => {
     ["coingecko", "https://api.coingecko.com/api/v3/coins/bitcoin"],
     ["polymarket", "https://gamma-api.polymarket.com/public-search?q=fed"],
     ["sec_edgar", "https://www.sec.gov/files/company_tickers.json"],
-    ["finnhub", "https://finnhub.io/api/v1/company-news?symbol=AAPL"],
-    ["lse", "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL"],
   ])("rejects browser-direct provider %s", async (provider, url) => {
     const upstreamFetch = vi.fn();
     const relay = createProviderRelay({ fetchImpl: upstreamFetch });
@@ -652,6 +650,56 @@ describe("hosted provider relay", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "finnhub",
+      "https://finnhub.io/api/v1/company-news?symbol=AAPL&from=2026-08-01&to=2026-08-02&token=test",
+      {},
+    ],
+    [
+      "finnhub",
+      "https://finnhub.io/api/v1/quote?symbol=AAPL&token=test",
+      { accept: "application/json" },
+    ],
+    [
+      "lse",
+      "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+      { "x-api-key": "test" },
+    ],
+    [
+      "lse",
+      "https://api.londonstrategicedge.com/vault/ref/financial_reports?symbol=AAPL&report_type=income&period=FY",
+      { "x-api-key": "test" },
+    ],
+  ])("forwards the audited %s provider endpoint", async (provider, url, headers) => {
+    const upstreamFetch = vi.fn(async () => new Response("[]"));
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({ provider, method: "GET", url, headers }),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(upstreamFetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["finnhub", "https://finnhub.io/api/v1/profile2?symbol=AAPL&token=test"],
+    ["lse", "https://api.londonstrategicedge.com/vault/admin"],
+  ])("rejects %s paths outside its audited contract", async (provider, url) => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({ provider, method: "GET", url }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
     expect(upstreamFetch).not.toHaveBeenCalled();
   });
 
@@ -999,6 +1047,8 @@ describe("hosted provider relay", () => {
     const body = (await response.json()) as { version: number; providers: string[] };
     expect(body.version).toBe(1);
     expect(body.providers).toContain("yahoo");
+    expect(body.providers).toContain("finnhub");
+    expect(body.providers).toContain("lse");
     expect(JSON.stringify(body)).not.toContain("url");
   });
 });

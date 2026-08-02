@@ -549,9 +549,10 @@ describe("GUI server route guards", () => {
 
   it("records tool actions as accepted once the tool transcript starts", () => {
     const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const sharedSource = readFileSync(resolve("gui/shared/invoke-tool-from-ui.ts"), "utf-8");
     const invokeIndex = source.indexOf("result = await invokeTool");
-    const transcriptIndex = source.indexOf("sessionManager.appendMessage(assistant);");
-    const hookIndex = source.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
+    const transcriptIndex = sharedSource.indexOf("sessionManager.appendMessage(assistant);");
+    const hookIndex = sharedSource.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
 
     expect(invokeIndex).toBeGreaterThan(-1);
     expect(source.slice(invokeIndex, source.indexOf("});", invokeIndex))).toContain(
