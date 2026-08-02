@@ -142,6 +142,7 @@ class BrowserRuntimeHost {
         const model = resolveFirstClassModelEntry(provider, requestedModel);
         if (!model) throw new Error("Unsupported provider or model.");
         const storageMode = command.storageMode === "session" ? "session" : "persistent";
+        await this.ensureRelayAuthorization();
         const validation = await this.request("gui", {
           action: "validate_model_key",
           provider,
