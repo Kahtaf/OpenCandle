@@ -2,15 +2,116 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHostedProviderFetch,
   createHostedRelayManifestLoader,
+  createHostedRuntimeTokenManager,
   fetchHostedRelayManifest,
+  fetchHostedRuntimeAuthorization,
 } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
 
 describe("hosted provider relay fetch", () => {
+  it("exchanges a Turnstile attestation for bounded runtime authorization", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe("https://web.opencandle.app/v1/runtime-token");
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("x-opencandle-client")).toBe("0123456789abcdef0123456789abcdef");
+      expect(request.headers.get("x-opencandle-turnstile-token")).toBe("attestation-token");
+      return new Response(
+        JSON.stringify({ version: 1, token: "payload.signature", expiresAt: 2_000_000 }),
+      );
+    });
+
+    await expect(
+      fetchHostedRuntimeAuthorization({
+        relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        clientId: "0123456789abcdef0123456789abcdef",
+        turnstileToken: "attestation-token",
+        fetchImpl,
+      }),
+    ).resolves.toEqual({ token: "payload.signature", expiresAt: 2_000_000 });
+  });
+
+  it("bounds runtime authorization when the relay stalls", async () => {
+    vi.useFakeTimers();
+    try {
+      const authorization = fetchHostedRuntimeAuthorization({
+        relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        clientId: "0123456789abcdef0123456789abcdef",
+        timeoutMs: 250,
+        fetchImpl: vi.fn(
+          async (_input, init) =>
+            new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener(
+                "abort",
+                () => reject(new DOMException("aborted", "AbortError")),
+                { once: true },
+              );
+            }),
+        ),
+      });
+      const rejection = expect(authorization).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(250);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes runtime authorization before expiry and coalesces concurrent refreshes", async () => {
+    let now = 1_000_000;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request("https://web.opencandle.app/v1/runtime-token", init);
+      expect(request.headers.get("x-opencandle-runtime-token")).toBe("old.signature");
+      return new Response(
+        JSON.stringify({ version: 1, token: "new.signature", expiresAt: 2_000_000 }),
+      );
+    });
+    const getRuntimeToken = createHostedRuntimeTokenManager({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      clientId: "0123456789abcdef0123456789abcdef",
+      initialToken: "old.signature",
+      expiresAt: 1_000_500,
+      fetchImpl,
+      now: () => now,
+    });
+
+    await expect(Promise.all([getRuntimeToken(), getRuntimeToken()])).resolves.toEqual([
+      "new.signature",
+      "new.signature",
+    ]);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    now += 1_000;
+    await expect(getRuntimeToken()).resolves.toBe("new.signature");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("lazily exchanges the initial Turnstile attestation inside the runtime", async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request("https://web.opencandle.app/v1/runtime-token", init);
+      expect(request.headers.get("x-opencandle-turnstile-token")).toBe("attestation-token");
+      expect(request.headers.get("x-opencandle-runtime-token")).toBeNull();
+      return Response.json({ version: 1, token: "runtime.signature", expiresAt: 2_000_000 });
+    });
+    const getRuntimeToken = createHostedRuntimeTokenManager({
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      clientId: "0123456789abcdef0123456789abcdef",
+      turnstileToken: "attestation-token",
+      fetchImpl,
+      now: () => 1_000_000,
+    });
+
+    await expect(Promise.all([getRuntimeToken(), getRuntimeToken()])).resolves.toEqual([
+      "runtime.signature",
+      "runtime.signature",
+    ]);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
   it("serializes a proxy-classified request and reconstructs a normal Response", async () => {
     const relayFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       expect(request.url).toBe("https://web.opencandle.app/v1/provider-fetch");
       expect(request.headers.get("x-opencandle-client")).toBe("0123456789abcdef0123456789abcdef");
+      expect(request.headers.get("x-opencandle-runtime-token")).toBe("payload.signature");
       await expect(request.json()).resolves.toMatchObject({
         version: 1,
         provider: "yahoo",
@@ -34,6 +135,7 @@ describe("hosted provider relay fetch", () => {
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
       clientId: "0123456789abcdef0123456789abcdef",
       fetchImpl: relayFetch,
+      getRuntimeToken: async () => "payload.signature",
     });
 
     const response = await hostedFetch(
@@ -85,6 +187,7 @@ describe("hosted provider relay fetch", () => {
       const request = new Request(input, init);
       expect(request.url).toBe("https://web.opencandle.app/v1/model-fetch");
       expect(request.headers.get("x-opencandle-client")).toBe("0123456789abcdef0123456789abcdef");
+      expect(request.headers.get("x-opencandle-runtime-token")).toBe("payload.signature");
       expect(request.headers.get("x-opencandle-provider")).toBe(provider);
       expect(request.headers.get("x-opencandle-upstream-url")).toBe(url);
       expect(request.headers.get("authorization")).toBe(
@@ -106,6 +209,7 @@ describe("hosted provider relay fetch", () => {
       clientId: "0123456789abcdef0123456789abcdef",
       fetchImpl: relayFetch,
       loadRelayManifest: async () => ({ version: 1, providers: [provider] }),
+      getRuntimeToken: async () => "payload.signature",
     });
 
     const response = await hostedFetch(url, {
@@ -195,13 +299,21 @@ describe("hosted provider relay fetch", () => {
   });
 
   it("negotiates the exact relay policy version before tools are enabled", async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://web.opencandle.app/v1/health");
+      expect(new Headers(init?.headers).get("x-opencandle-runtime-token")).toBe(
+        "payload.signature",
+      );
+      expect(new Headers(init?.headers).get("x-opencandle-client")).toBe(
+        "0123456789abcdef0123456789abcdef",
+      );
       return new Response(JSON.stringify({ version: 1, providers: ["yahoo", "fred"] }));
     });
     await expect(
       fetchHostedRelayManifest({
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        clientId: "0123456789abcdef0123456789abcdef",
+        getRuntimeToken: async () => "payload.signature",
         fetchImpl,
       }),
     ).resolves.toEqual({ version: 1, providers: ["fred", "yahoo"] });

@@ -17,6 +17,10 @@
     {
       "pattern": "https://web.opencandle.app/v1/health",
       "zone_name": "opencandle.app"
+    },
+    {
+      "pattern": "https://web.opencandle.app/v1/runtime-token",
+      "zone_name": "opencandle.app"
     }
   ],
   "ratelimits": [

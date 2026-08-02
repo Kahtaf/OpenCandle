@@ -2,7 +2,7 @@
   Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://ticker-line.com https://api.coingecko.com https://www.alphavantage.co https://gamma-api.polymarket.com https://*.webcontainer-api.io wss://*.webcontainer-api.io; frame-src https://stackblitz.com https://*.webcontainer-api.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com https://ticker-line.com https://api.coingecko.com https://www.alphavantage.co https://gamma-api.polymarket.com https://*.webcontainer-api.io wss://*.webcontainer-api.io; frame-src https://challenges.cloudflare.com https://stackblitz.com https://*.webcontainer-api.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff

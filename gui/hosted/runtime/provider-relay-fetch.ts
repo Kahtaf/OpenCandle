@@ -6,12 +6,17 @@ import {
   modelRelayProviderForUrl,
   PROVIDER_RELAY_CONTRACT_VERSION,
   PROVIDER_RELAY_HEALTH_PATH,
+  PROVIDER_RELAY_RUNTIME_TOKEN_PATH,
 } from "../../../src/runtime/provider-relay-contract.js";
 
 const RELAY_CONTRACT_VERSION = PROVIDER_RELAY_CONTRACT_VERSION;
 const MAX_RELAY_ENVELOPE_BYTES = 6 * 1024 * 1024;
 const DEFAULT_RELAY_HEALTH_TIMEOUT_MS = 5_000;
+// Siteverify is bounded to 15 seconds in the Worker. Authorization must wait
+// longer so a one-time proof is never consumed after the client has given up.
+const DEFAULT_RUNTIME_AUTHORIZATION_TIMEOUT_MS = 30_000;
 const DEFAULT_RELAY_MANIFEST_MAX_AGE_MS = 60_000;
+const DEFAULT_RUNTIME_TOKEN_REFRESH_WINDOW_MS = 5 * 60_000;
 const ABORTED = Symbol("aborted");
 
 type RelayProvider =
@@ -31,6 +36,7 @@ interface HostedProviderFetchOptions {
   clientId: string;
   fetchImpl?: typeof globalThis.fetch;
   loadRelayManifest?: () => Promise<HostedRelayManifest | undefined>;
+  getRuntimeToken?: () => Promise<string>;
 }
 
 interface RelayResponseEnvelope {
@@ -47,8 +53,125 @@ export interface HostedRelayManifest {
   providers: string[];
 }
 
+interface HostedRuntimeAuthorization {
+  token: string;
+  expiresAt: number;
+}
+
+export async function fetchHostedRuntimeAuthorization(options: {
+  relayUrl: string;
+  clientId: string;
+  turnstileToken?: string;
+  currentToken?: string;
+  fetchImpl?: typeof globalThis.fetch;
+  timeoutMs?: number;
+}): Promise<HostedRuntimeAuthorization> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const tokenUrl = relayEndpoint(options.relayUrl, PROVIDER_RELAY_RUNTIME_TOKEN_PATH);
+  const headers = new Headers({ [MODEL_RELAY_HEADERS.client]: options.clientId });
+  if (options.turnstileToken) {
+    headers.set(MODEL_RELAY_HEADERS.turnstileToken, options.turnstileToken);
+  }
+  if (options.currentToken) {
+    headers.set(MODEL_RELAY_HEADERS.runtimeToken, options.currentToken);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? DEFAULT_RUNTIME_AUTHORIZATION_TIMEOUT_MS,
+  );
+  let serialized: string;
+  try {
+    const response = await fetchImpl(tokenUrl, {
+      method: "POST",
+      headers,
+      cache: "no-store",
+      credentials: "omit",
+      redirect: "error",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error("Hosted provider relay authorization failed");
+    serialized = await readBoundedText(response, 4_096, controller.signal);
+    if (controller.signal.aborted) {
+      throw new Error("Hosted provider relay authorization timed out");
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("Hosted provider relay authorization timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    throw new Error("Hosted provider relay returned invalid authorization");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Hosted provider relay returned invalid authorization");
+  }
+  const value = parsed as Record<string, unknown>;
+  if (
+    value.version !== RELAY_CONTRACT_VERSION ||
+    typeof value.token !== "string" ||
+    !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(value.token) ||
+    value.token.length > 2_048 ||
+    typeof value.expiresAt !== "number" ||
+    !Number.isSafeInteger(value.expiresAt) ||
+    value.expiresAt <= 0
+  ) {
+    throw new Error("Hosted provider relay returned invalid authorization");
+  }
+  return { token: value.token, expiresAt: value.expiresAt };
+}
+
+export function createHostedRuntimeTokenManager(options: {
+  relayUrl: string;
+  clientId: string;
+  turnstileToken?: string;
+  initialToken?: string;
+  expiresAt?: number;
+  fetchImpl?: typeof globalThis.fetch;
+  now?: () => number;
+  refreshWindowMs?: number;
+}): () => Promise<string> {
+  let authorization: HostedRuntimeAuthorization | undefined = options.initialToken && options.expiresAt
+    ? { token: options.initialToken, expiresAt: options.expiresAt }
+    : undefined;
+  let turnstileToken = options.turnstileToken;
+  let inFlight: Promise<HostedRuntimeAuthorization> | undefined;
+  return async () => {
+    const now = options.now ?? Date.now;
+    const refreshWindowMs = options.refreshWindowMs ?? DEFAULT_RUNTIME_TOKEN_REFRESH_WINDOW_MS;
+    if (authorization && authorization.expiresAt - now() > refreshWindowMs) {
+      return authorization.token;
+    }
+    inFlight ??= fetchHostedRuntimeAuthorization({
+      relayUrl: options.relayUrl,
+      clientId: options.clientId,
+      ...(authorization
+        ? { currentToken: authorization.token }
+        : { turnstileToken }),
+      fetchImpl: options.fetchImpl,
+    })
+      .then((next) => {
+        turnstileToken = undefined;
+        return next;
+      })
+      .finally(() => {
+        inFlight = undefined;
+      });
+    authorization = await inFlight;
+    return authorization.token;
+  };
+}
+
 export function createHostedRelayManifestLoader(options: {
   relayUrl: string;
+  clientId?: string;
+  getRuntimeToken?: () => Promise<string>;
   fetchImpl?: typeof globalThis.fetch;
   timeoutMs?: number;
   maxAgeMs?: number;
@@ -81,14 +204,13 @@ export function createHostedRelayManifestLoader(options: {
 
 export async function fetchHostedRelayManifest(options: {
   relayUrl: string;
+  clientId?: string;
+  getRuntimeToken?: () => Promise<string>;
   fetchImpl?: typeof globalThis.fetch;
   timeoutMs?: number;
 }): Promise<HostedRelayManifest> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const healthUrl = new URL(options.relayUrl);
-  healthUrl.pathname = PROVIDER_RELAY_HEALTH_PATH;
-  healthUrl.search = "";
-  healthUrl.hash = "";
+  const healthUrl = relayEndpoint(options.relayUrl, PROVIDER_RELAY_HEALTH_PATH);
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -96,8 +218,13 @@ export async function fetchHostedRelayManifest(options: {
   );
   let serialized: string;
   try {
+    const headers = new Headers();
+    if (options.clientId) headers.set(MODEL_RELAY_HEADERS.client, options.clientId);
+    const runtimeToken = await options.getRuntimeToken?.();
+    if (runtimeToken) headers.set(MODEL_RELAY_HEADERS.runtimeToken, runtimeToken);
     const response = await fetchImpl(healthUrl.toString(), {
       method: "GET",
+      headers,
       cache: "no-store",
       credentials: "omit",
       redirect: "error",
@@ -163,6 +290,8 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
       relayEndpoint.hash = "";
       const headers = new Headers(request.headers);
       headers.set(MODEL_RELAY_HEADERS.client, options.clientId);
+      const runtimeToken = await options.getRuntimeToken?.();
+      if (runtimeToken) headers.set(MODEL_RELAY_HEADERS.runtimeToken, runtimeToken);
       headers.set(MODEL_RELAY_HEADERS.provider, provider);
       headers.set(MODEL_RELAY_HEADERS.upstreamMethod, request.method);
       headers.set(MODEL_RELAY_HEADERS.upstreamUrl, request.url);
@@ -196,12 +325,15 @@ export function createHostedProviderFetch(options: HostedProviderFetchOptions): 
       ...(body?.byteLength ? { bodyBase64: encodeBase64(body) } : {}),
     };
 
+    const relayHeaders = new Headers({
+      "content-type": "application/json",
+      [MODEL_RELAY_HEADERS.client]: options.clientId,
+    });
+    const runtimeToken = await options.getRuntimeToken?.();
+    if (runtimeToken) relayHeaders.set(MODEL_RELAY_HEADERS.runtimeToken, runtimeToken);
     const relayResponse = await fetchImpl(options.relayUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-opencandle-client": options.clientId,
-      },
+      headers: relayHeaders,
       body: JSON.stringify(envelope),
       signal: request.signal,
       cache: "no-store",
@@ -263,6 +395,14 @@ function requestUrl(input: RequestInfo | URL): URL {
   if (input instanceof URL) return input;
   if (typeof input === "string") return new URL(input);
   return new URL(input.url);
+}
+
+function relayEndpoint(relayUrl: string, pathname: string): URL {
+  const endpoint = new URL(relayUrl);
+  endpoint.pathname = pathname;
+  endpoint.search = "";
+  endpoint.hash = "";
+  return endpoint;
 }
 
 async function readBoundedText(

@@ -13,7 +13,9 @@ The Worker stores no credentials, request or response bodies, sessions, or user 
 
 Provider credentials still pass through Cloudflare in transit because the Worker must forward them to the selected provider. Cloudflare terminates and processes those requests and may retain platform-level security or operational metadata under its own policies. OpenCandle does not claim that Cloudflare observes nothing.
 
-The relay is deliberately public infrastructure because a browser-only application cannot hold an unforgeable shared secret. `Origin` filtering prevents unapproved websites from invoking it through a visitor's browser, but it is CORS policy, not client authentication: a non-browser caller can omit or spoof that header. Safety therefore comes from the fixed provider allowlist, strict request shape, byte and time bounds, and a server-observed per-network rate limit. It must never be described or operated as an authenticated OpenCandle-only endpoint.
+The relay is deliberately public infrastructure because a browser-only application cannot hold an unforgeable shared secret. The top-level app obtains a one-time Cloudflare Turnstile attestation and passes it only to its WebContainer process. The runtime exchanges that attestation from its actual generated origin for a short-lived token signed by the Worker and bound to that exact origin and the installation client id. Tokens stay in memory, expire for provider access after one hour, and remain renewable only at the token endpoint for 30 days so a sleeping device can recover. Each successful renewal resets that bounded window. Tokens are never written to browser storage, Pi sessions, or SQLite.
+
+This handshake prevents an arbitrary site on WebContainer's shared origin namespace from receiving CORS access. It does not turn the public relay into user authentication: a non-browser caller can omit or spoof `Origin`. Safety therefore still comes from the fixed provider allowlist, strict request shape, byte and time bounds, and a server-observed per-network rate limit. It must never be described or operated as an authenticated OpenCandle-only endpoint.
 
 ## Guardrails
 
@@ -22,7 +24,7 @@ The relay is deliberately public infrastructure because a browser-only applicati
 - Market-data requests are capped at 256 KiB, upstream responses at 4 MiB, and upstream time at 15 seconds.
 - Pi model requests use a separate raw transport capped at 32 MiB in each direction and five minutes to receive upstream headers. Responses stream through unchanged so Pi retains its native streaming, retry, error, and cancellation behavior.
 - A 120-request-per-minute Workers Rate Limiting binding keyed by a SHA-256 digest of Cloudflare's server-observed client IP. The raw address is not logged, persisted by OpenCandle, or passed to the binding.
-- Browser requests are accepted only from `https://web.opencandle.app`; the Worker rejects other browser origins before rate limiting or reading a request body and echoes the approved origin instead of using wildcard CORS. Originless non-browser requests are public and receive the same allowlist and abuse controls.
+- Browser requests are accepted from `https://web.opencandle.app` or from its exact WebContainer runtime origin with a valid short-lived token. The Worker rejects other browser origins before rate limiting or reading a request body and never uses wildcard CORS. Originless non-browser requests are public and receive the same allowlist and abuse controls.
 - `Cache-Control: no-store` on every Worker response.
 - A versioned health manifest. Hosted OpenCandle enables relayed tools only when the version matches.
 
@@ -32,26 +34,29 @@ The relay is deliberately public infrastructure because a browser-only applicati
 npm run relay:test
 npm run relay:types
 npm --workspace @opencandle/provider-relay exec wrangler deploy --dry-run
+npx --yes wrangler secret put RELAY_RUNTIME_TOKEN_SECRET --config workers/provider-relay/wrangler.jsonc
+npx --yes wrangler secret put TURNSTILE_SECRET_KEY --config workers/provider-relay/wrangler.jsonc
 npm --workspace @opencandle/provider-relay run deploy
 ```
 
-`wrangler.jsonc` routes only the exact HTTPS `web.opencandle.app/v1/provider-fetch`, `web.opencandle.app/v1/model-fetch`, and `web.opencandle.app/v1/health` endpoints to the Worker. `workers.dev` and preview URLs are disabled. Review the policy table and privacy audit before every deployment.
+Generate the operational HMAC secret with at least 32 random bytes and pipe it directly to `wrangler secret put`; do not print or commit it. Store the Turnstile widget secret through the same command, and provide its public sitekey to the hosted build as `VITE_TURNSTILE_SITE_KEY`. The production widget is restricted to `web.opencandle.app`. Rotating the HMAC secret immediately invalidates active runtime tokens, which recover after reloading the PWA.
 
-Production hosted builds accept only the same-origin relay route. Cross-origin relay URLs fail closed so the static production CSP and runtime policy cannot drift. Loopback cross-origin URLs remain available for local Wrangler development.
+`wrangler.jsonc` routes only the exact HTTPS `web.opencandle.app/v1/provider-fetch`, `web.opencandle.app/v1/model-fetch`, `web.opencandle.app/v1/health`, and `web.opencandle.app/v1/runtime-token` endpoints to the Worker. `workers.dev` and preview URLs are disabled. Review the policy table and privacy audit before every deployment.
 
-After deployment, exercise relay negotiation from the real hosted runtime rather than a localhost proxy:
+Production hosted builds accept only the same-origin relay route. Cross-origin relay URLs fail closed so the static production CSP and runtime policy cannot drift. Loopback URLs remain available for transport-level development, but a joined local Turnstile flow requires a separate non-production widget and Worker secret configured for that hostname.
+
+After deployment, exercise relay negotiation from the real hosted runtime at `https://web.opencandle.app` in a browser. The production Turnstile widget is restricted to that hostname, so a localhost preview cannot prove the joined production flow. A staging proof requires its own Worker secrets and widget that explicitly permits the staging hostname.
+
+The transport-only smoke command remains useful after deployment:
 
 ```bash
 OPENCANDLE_PROVIDER_RELAY_URL=https://web.opencandle.app/v1/provider-fetch \
 npm run relay:smoke:browser
 
-VITE_PROVIDER_RELAY_URL=https://web.opencandle.app/v1/provider-fetch \
-OPENCANDLE_PROVIDER_RELAY_E2E=1 \
-npm run test:gui:hosted
 ```
 
-The first command proves browser CORS, the production Worker, live provider response shapes, and a streamed OpenAI response through the fixed model route without exposing keys in output. The second proves the complete Pi turn and session path. The WebContainer runs on a separate public preview origin, so it cannot use a loopback Wrangler URL on the developer's machine. Do not claim production parity for a provider until its deployed browser proof passes.
+That command proves browser CORS, the production Worker, live provider response shapes, and a streamed OpenAI response through the fixed model route without exposing keys in output. The complete Pi turn and session path must be verified in the deployed PWA. The WebContainer runs on a separate public preview origin, so it cannot use a loopback Wrangler URL on the developer's machine. Do not claim production parity for a provider until its deployed browser proof passes.
 
 ## Rollback
 
-Remove the three production relay routes from the Worker configuration and redeploy it. Hosted builds intentionally default to the same-origin routes, so omitting `VITE_PROVIDER_RELAY_URL` alone does not disable production relay discovery. Once the routes are gone, startup negotiation fails closed and the PWA registers only independently proven direct-browser tools. Model calls also fail closed. The local GUI and TUI are unaffected because they never install the relay fetch transport.
+Remove the four production relay routes from the Worker configuration and redeploy it. Hosted builds intentionally default to the same-origin routes, so omitting `VITE_PROVIDER_RELAY_URL` alone does not disable production relay discovery. Once the routes are gone, startup negotiation fails closed and the PWA registers only independently proven direct-browser tools. Model calls also fail closed. The local GUI and TUI are unaffected because they never install the relay fetch transport.

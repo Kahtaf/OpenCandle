@@ -14,6 +14,7 @@ import {
 } from "./hosted-market-data-api.js";
 import {
   createHostedRelayManifestLoader,
+  createHostedRuntimeTokenManager,
   createHostedProviderFetch,
 } from "./provider-relay-fetch.js";
 import {
@@ -34,12 +35,33 @@ const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const MODEL_KEYS = modelSetupProviders.map((provider) => process.env[provider.envVar]);
 const providerRelayUrl = process.env.OPENCANDLE_PROVIDER_RELAY_URL?.trim() ?? "";
 const providerRelayClientId = process.env.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID?.trim() ?? "";
+const providerRelayAttestationToken =
+  process.env.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN?.trim() ?? "";
 if (providerRelayUrl && !/^[a-f0-9]{32}$/.test(providerRelayClientId)) {
   throw new Error("OPENCANDLE_PROVIDER_RELAY_CLIENT_ID is invalid");
 }
+if (
+  providerRelayUrl &&
+  (!providerRelayAttestationToken || providerRelayAttestationToken.length > 2_048)
+) {
+  throw new Error("OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN is invalid");
+}
 const nativeFetch = globalThis.fetch.bind(globalThis);
+const getHostedRuntimeToken = providerRelayUrl
+  ? createHostedRuntimeTokenManager({
+      relayUrl: providerRelayUrl,
+      clientId: providerRelayClientId,
+      turnstileToken: providerRelayAttestationToken,
+      fetchImpl: nativeFetch,
+    })
+  : async () => "";
 const loadHostedRelayManifest = providerRelayUrl
-  ? createHostedRelayManifestLoader({ relayUrl: providerRelayUrl, fetchImpl: nativeFetch })
+  ? createHostedRelayManifestLoader({
+      relayUrl: providerRelayUrl,
+      clientId: providerRelayClientId,
+      getRuntimeToken: getHostedRuntimeToken,
+      fetchImpl: nativeFetch,
+    })
   : async () => undefined;
 const initialHostedRelayManifestPromise = loadHostedRelayManifest();
 const runtimeEpoch = process.env.OPENCANDLE_RUNTIME_EPOCH;
@@ -52,6 +74,7 @@ const hostedGuiRuntimePromise = initialHostedRelayManifestPromise.then((relayMan
     clientId: providerRelayClientId,
     fetchImpl: nativeFetch,
     loadRelayManifest: loadHostedRelayManifest,
+    getRuntimeToken: getHostedRuntimeToken,
   });
   const selectedProvider = isFirstClassModelProvider(process.env.OPENCANDLE_MODEL_PROVIDER)
     ? process.env.OPENCANDLE_MODEL_PROVIDER

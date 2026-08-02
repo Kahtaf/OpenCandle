@@ -2,12 +2,15 @@ export const PROVIDER_RELAY_CONTRACT_VERSION = 1 as const;
 export const PROVIDER_RELAY_PATH = "/v1/provider-fetch";
 export const MODEL_RELAY_PATH = "/v1/model-fetch";
 export const PROVIDER_RELAY_HEALTH_PATH = "/v1/health";
+export const PROVIDER_RELAY_RUNTIME_TOKEN_PATH = "/v1/runtime-token";
 
 export const MODEL_RELAY_PROVIDER_IDS = ["anthropic", "google", "openai"] as const;
 export type ModelRelayProvider = (typeof MODEL_RELAY_PROVIDER_IDS)[number];
 
 export const MODEL_RELAY_HEADERS = Object.freeze({
   client: "x-opencandle-client",
+  runtimeToken: "x-opencandle-runtime-token",
+  turnstileToken: "x-opencandle-turnstile-token",
   provider: "x-opencandle-provider",
   upstreamMethod: "x-opencandle-upstream-method",
   upstreamUrl: "x-opencandle-upstream-url",

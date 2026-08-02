@@ -7,6 +7,7 @@ import {
   PROVIDER_RELAY_CONTRACT_VERSION,
   PROVIDER_RELAY_HEALTH_PATH,
   PROVIDER_RELAY_PATH,
+  PROVIDER_RELAY_RUNTIME_TOKEN_PATH,
 } from "../../../src/runtime/provider-relay-contract.js";
 
 const CONTRACT_VERSION = PROVIDER_RELAY_CONTRACT_VERSION;
@@ -17,6 +18,15 @@ const DEFAULT_MODEL_TIMEOUT_MS = 5 * 60_000;
 const DEFAULT_MAX_MODEL_REQUEST_BYTES = 32 * 1024 * 1024;
 const DEFAULT_MAX_MODEL_RESPONSE_BYTES = 32 * 1024 * 1024;
 const CLIENT_ID_PATTERN = /^[a-f0-9]{32}$/;
+const WEB_CONTAINER_ORIGIN_PATTERN =
+  /^https:\/\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local-corp\.webcontainer-api\.io$/;
+const DEFAULT_RUNTIME_TOKEN_TTL_MS = 60 * 60_000;
+const DEFAULT_RUNTIME_TOKEN_RENEWAL_TTL_MS = 30 * 24 * 60 * 60_000;
+const MIN_RUNTIME_TOKEN_SECRET_LENGTH = 32;
+const TURNSTILE_SITEVERIFY_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const TURNSTILE_ACTION = "turnstile-spin-v1";
+const MAX_TURNSTILE_TOKEN_LENGTH = 2_048;
 
 type RelayProvider =
   | "brave"
@@ -37,10 +47,14 @@ interface RelayRequestEnvelope {
   bodyBase64?: string;
 }
 
-export type ProviderRelayEnv = Pick<Env, "PROVIDER_RELAY_RATE_LIMITER">;
+export type ProviderRelayEnv = Pick<Env, "PROVIDER_RELAY_RATE_LIMITER"> & {
+  RELAY_RUNTIME_TOKEN_SECRET: string;
+  TURNSTILE_SECRET_KEY: string;
+};
 
 interface ProviderRelayOptions {
   fetchImpl?: (request: Request) => Promise<Response>;
+  turnstileFetchImpl?: (request: Request) => Promise<Response>;
   maxRequestBytes?: number;
   maxResponseBytes?: number;
   maxModelRequestBytes?: number;
@@ -48,6 +62,10 @@ interface ProviderRelayOptions {
   timeoutMs?: number;
   modelTimeoutMs?: number;
   allowedOrigins?: readonly string[];
+  now?: () => number;
+  runtimeTokenTtlMs?: number;
+  runtimeTokenRenewalTtlMs?: number;
+  turnstileTimeoutMs?: number;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = ["https://web.opencandle.app"] as const;
@@ -187,6 +205,8 @@ export const RELAY_POLICY_MANIFEST = Object.freeze({
 
 export function createProviderRelay(options: ProviderRelayOptions = {}) {
   const fetchImpl = options.fetchImpl ?? ((request: Request) => fetch(request));
+  const turnstileFetchImpl =
+    options.turnstileFetchImpl ?? ((request: Request) => fetch(request));
   const maxRequestBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
   const maxModelRequestBytes =
@@ -196,23 +216,91 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const modelTimeoutMs = options.modelTimeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
   const allowedOrigins = new Set(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
+  const now = options.now ?? Date.now;
+  const runtimeTokenTtlMs = options.runtimeTokenTtlMs ?? DEFAULT_RUNTIME_TOKEN_TTL_MS;
+  const runtimeTokenRenewalTtlMs =
+    options.runtimeTokenRenewalTtlMs ?? DEFAULT_RUNTIME_TOKEN_RENEWAL_TTL_MS;
+  const turnstileTimeoutMs = options.turnstileTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const allowedTurnstileHostnames = new Set(
+    [...allowedOrigins].map((origin) => new URL(origin).hostname),
+  );
 
   return {
     async fetch(request: Request, env: ProviderRelayEnv): Promise<Response> {
       const requestUrl = new URL(request.url);
       const requestOrigin = request.headers.get("origin");
+      const clientId = request.headers.get(MODEL_RELAY_HEADERS.client) ?? "";
+      const runtimeOrigin = requestOrigin !== null && isWebContainerRuntimeOrigin(requestOrigin);
+      const trustedTopLevelOrigin = requestOrigin !== null && allowedOrigins.has(requestOrigin);
+      const runtimeAuthorization = runtimeOrigin && CLIENT_ID_PATTERN.test(clientId)
+        ? await verifyRuntimeToken(
+            request.headers.get(MODEL_RELAY_HEADERS.runtimeToken) ?? "",
+            clientId,
+            requestOrigin,
+            env.RELAY_RUNTIME_TOKEN_SECRET,
+            now(),
+          )
+        : false;
+      const runtimeAuthorized = runtimeAuthorization === "access";
+      const runtimeRenewalAuthorized =
+        runtimeAuthorization === "access" || runtimeAuthorization === "renewal";
       // The relay is intentionally public infrastructure. Origin filtering is
       // a CORS/drive-by-browser guard, not authentication: non-browser callers
       // can omit or spoof Origin and remain bounded by the exact provider
       // allowlist, body/time limits, and server-observed network rate limit.
-      const corsOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : null;
+      const corsOrigin =
+        requestOrigin &&
+        (trustedTopLevelOrigin ||
+          runtimeAuthorized ||
+          (runtimeOrigin &&
+            (request.method === "OPTIONS" ||
+              requestUrl.pathname === PROVIDER_RELAY_RUNTIME_TOKEN_PATH)))
+          ? requestOrigin
+          : null;
       const respondJson = (status: number, body: unknown) =>
         jsonResponse(status, body, corsOrigin);
       const respondError = (status: number, error: string) =>
         errorResponse(status, error, corsOrigin);
+      if (requestUrl.pathname === PROVIDER_RELAY_RUNTIME_TOKEN_PATH) {
+        if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
+        if (request.method !== "POST") return respondError(405, "method_not_allowed");
+        if (!runtimeOrigin) return respondError(403, "origin_not_allowed");
+        if (!CLIENT_ID_PATTERN.test(clientId)) return respondError(400, "invalid_client");
+        const rateLimitError = await applyRateLimit(request, env, respondError);
+        if (rateLimitError) return rateLimitError;
+        if (!runtimeRenewalAuthorized) {
+          const attestation = request.headers.get(MODEL_RELAY_HEADERS.turnstileToken) ?? "";
+          const turnstileValid = await verifyTurnstileAttestation({
+            token: attestation,
+            secret: env.TURNSTILE_SECRET_KEY,
+            connectingIp: request.headers.get("cf-connecting-ip")?.trim() ?? "",
+            allowedHostnames: allowedTurnstileHostnames,
+            fetchImpl: turnstileFetchImpl,
+            timeoutMs: turnstileTimeoutMs,
+          });
+          if (!turnstileValid) return respondError(403, "turnstile_verification_failed");
+        }
+        const authorization = await issueRuntimeToken(
+          clientId,
+          requestOrigin,
+          env.RELAY_RUNTIME_TOKEN_SECRET,
+          now(),
+          runtimeTokenTtlMs,
+          runtimeTokenRenewalTtlMs,
+        );
+        if (!authorization) return respondError(503, "runtime_token_unavailable");
+        return respondJson(200, {
+          version: CONTRACT_VERSION,
+          token: authorization.token,
+          expiresAt: authorization.expiresAt,
+        });
+      }
       if (requestUrl.pathname === PROVIDER_RELAY_HEALTH_PATH) {
         if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
         if (request.method !== "GET") return respondError(405, "method_not_allowed");
+        if (requestOrigin && !trustedTopLevelOrigin && !runtimeAuthorized) {
+          return respondError(403, "origin_not_allowed");
+        }
         return respondJson(200, RELAY_POLICY_MANIFEST);
       }
       const isProviderFetch = requestUrl.pathname === PROVIDER_RELAY_PATH;
@@ -220,23 +308,18 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
       if (!isProviderFetch && !isModelFetch) {
         return respondError(404, "not_found");
       }
-      if (requestOrigin && !corsOrigin) return respondError(403, "origin_not_allowed");
+      // A browser preflight carries only the names of the headers the eventual
+      // request will send. It cannot present the client-bound runtime token yet.
+      // Authorization is enforced on the POST that follows.
       if (request.method === "OPTIONS") return corsPreflight(corsOrigin);
+      if (requestOrigin && !trustedTopLevelOrigin && !runtimeAuthorized) {
+        return respondError(403, "origin_not_allowed");
+      }
       if (request.method !== "POST") return respondError(405, "method_not_allowed");
 
-      const clientId = request.headers.get("x-opencandle-client") ?? "";
       if (!CLIENT_ID_PATTERN.test(clientId)) return respondError(400, "invalid_client");
-      const connectingIp = request.headers.get("cf-connecting-ip")?.trim() ?? "";
-      if (!/^[0-9a-f:.]{2,64}$/i.test(connectingIp)) {
-        return respondError(503, "relay_rate_limit_identity_unavailable");
-      }
-      if (!env.PROVIDER_RELAY_RATE_LIMITER) {
-        return respondError(503, "relay_rate_limiter_unavailable");
-      }
-      const rate = await env.PROVIDER_RELAY_RATE_LIMITER.limit({
-        key: await pseudonymousRateLimitKey(connectingIp),
-      });
-      if (!rate.success) return respondError(429, "relay_rate_limited");
+      const rateLimitError = await applyRateLimit(request, env, respondError);
+      if (rateLimitError) return rateLimitError;
 
       if (isModelFetch) {
         return relayModelRequest({
@@ -496,6 +579,184 @@ async function pseudonymousRateLimitKey(connectingIp: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function applyRateLimit(
+  request: Request,
+  env: ProviderRelayEnv,
+  respondError: (status: number, error: string) => Response,
+): Promise<Response | undefined> {
+  const connectingIp = request.headers.get("cf-connecting-ip")?.trim() ?? "";
+  if (!/^[0-9a-f:.]{2,64}$/i.test(connectingIp)) {
+    return respondError(503, "relay_rate_limit_identity_unavailable");
+  }
+  if (!env.PROVIDER_RELAY_RATE_LIMITER) {
+    return respondError(503, "relay_rate_limiter_unavailable");
+  }
+  const rate = await env.PROVIDER_RELAY_RATE_LIMITER.limit({
+    key: await pseudonymousRateLimitKey(connectingIp),
+  });
+  return rate.success ? undefined : respondError(429, "relay_rate_limited");
+}
+
+function isWebContainerRuntimeOrigin(origin: string): boolean {
+  return WEB_CONTAINER_ORIGIN_PATTERN.test(origin);
+}
+
+async function issueRuntimeToken(
+  clientId: string,
+  runtimeOrigin: string,
+  secret: string,
+  nowMs: number,
+  ttlMs: number,
+  renewalTtlMs: number,
+): Promise<{ token: string; expiresAt: number } | undefined> {
+  if (
+    !isRuntimeTokenSecret(secret) ||
+    !Number.isFinite(ttlMs) ||
+    ttlMs <= 0 ||
+    !Number.isFinite(renewalTtlMs) ||
+    renewalTtlMs < ttlMs
+  ) {
+    return undefined;
+  }
+  const expiresAt = Math.floor(nowMs + ttlMs);
+  const renewableUntil = Math.floor(nowMs + renewalTtlMs);
+  const payload = encodeBase64Url(
+    new TextEncoder().encode(
+      JSON.stringify({
+        v: CONTRACT_VERSION,
+        cid: clientId,
+        origin: runtimeOrigin,
+        exp: expiresAt,
+        renew: renewableUntil,
+      }),
+    ),
+  );
+  const key = await importRuntimeTokenKey(secret);
+  const signature = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)),
+  );
+  return { token: `${payload}.${encodeBase64Url(signature)}`, expiresAt };
+}
+
+async function verifyRuntimeToken(
+  token: string,
+  clientId: string,
+  runtimeOrigin: string,
+  secret: string,
+  nowMs: number,
+): Promise<"access" | "renewal" | false> {
+  if (!isRuntimeTokenSecret(secret) || token.length > 2_048) return false;
+  const [payload, encodedSignature, extra] = token.split(".");
+  if (!payload || !encodedSignature || extra !== undefined) return false;
+  let signature: Uint8Array;
+  let claims: unknown;
+  try {
+    signature = decodeBase64Url(encodedSignature);
+    claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as unknown;
+  } catch {
+    return false;
+  }
+  if (!claims || typeof claims !== "object" || Array.isArray(claims)) return false;
+  const value = claims as Record<string, unknown>;
+  if (
+    value.v !== CONTRACT_VERSION ||
+    value.cid !== clientId ||
+    value.origin !== runtimeOrigin ||
+    typeof value.exp !== "number" ||
+    !Number.isSafeInteger(value.exp) ||
+    typeof value.renew !== "number" ||
+    !Number.isSafeInteger(value.renew) ||
+    value.renew < value.exp ||
+    value.renew <= nowMs
+  ) {
+    return false;
+  }
+  const key = await importRuntimeTokenKey(secret);
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    signature,
+    new TextEncoder().encode(payload),
+  );
+  if (!valid) return false;
+  return value.exp > nowMs ? "access" : "renewal";
+}
+
+async function verifyTurnstileAttestation(options: {
+  token: string;
+  secret: string;
+  connectingIp: string;
+  allowedHostnames: ReadonlySet<string>;
+  fetchImpl: (request: Request) => Promise<Response>;
+  timeoutMs: number;
+}): Promise<boolean> {
+  if (
+    !options.token ||
+    options.token.length > MAX_TURNSTILE_TOKEN_LENGTH ||
+    !options.secret ||
+    options.secret.length > 512
+  ) {
+    return false;
+  }
+  const body = new URLSearchParams({
+    secret: options.secret,
+    response: options.token,
+    ...(options.connectingIp ? { remoteip: options.connectingIp } : {}),
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  try {
+    const response = await options.fetchImpl(
+      new Request(TURNSTILE_SITEVERIFY_URL, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body,
+        redirect: "error",
+        signal: controller.signal,
+      }),
+    );
+    if (!response.ok) return false;
+    const bytes = await readBounded(response.body, 4_096);
+    const result = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+    if (!result || typeof result !== "object" || Array.isArray(result)) return false;
+    const value = result as Record<string, unknown>;
+    return (
+      value.success === true &&
+      value.action === TURNSTILE_ACTION &&
+      typeof value.hostname === "string" &&
+      options.allowedHostnames.has(value.hostname)
+    );
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isRuntimeTokenSecret(secret: string): boolean {
+  return typeof secret === "string" && secret.length >= MIN_RUNTIME_TOKEN_SECRET_LENGTH;
+}
+
+function importRuntimeTokenKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  return encodeBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) throw new Error("invalid base64url");
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  return decodeBase64(`${value.replaceAll("-", "+").replaceAll("_", "/")}${padding}`);
+}
+
 function policy(
   methods: readonly RelayMethod[],
   allowedHeaders: ReadonlySet<string>,
@@ -740,6 +1001,8 @@ function corsHeaders(origin: string | null): Record<string, string> {
       "X-Goog-Api-Key",
       "X-OpenCandle-Client",
       "X-OpenCandle-Provider",
+      "X-OpenCandle-Runtime-Token",
+      "X-OpenCandle-Turnstile-Token",
       "X-OpenCandle-Upstream-Method",
       "X-OpenCandle-Upstream-URL",
     ].join(", "),

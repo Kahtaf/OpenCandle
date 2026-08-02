@@ -126,6 +126,27 @@ State-edit tools continue locally in browser SQLite. Alerts, notification
 delivery, scheduled reports, X, Reddit, shell execution, and dynamic tool
 packages remain out of parity.
 
+### 7. Authorize the generated WebContainer origin with a stateless token
+
+The top-level `web.opencandle.app` document obtains a one-time Cloudflare
+Turnstile attestation before starting its WebContainer process. It passes the
+attestation through process environment, and the runtime exchanges it from its
+actual generated origin for a one-hour HMAC-signed token. The signed token
+contains only the relay contract version, random installation client id, exact
+runtime origin, access expiry, and a bounded renewal expiry. It is retained
+only in memory, refreshed before expiry or renewed after device sleep, and never stored in browser storage, SQLite, Pi sessions, or Worker
+state.
+
+The Worker echoes CORS for a strict single-label
+`*.local-corp.webcontainer-api.io` origin only when the request carries a valid
+token bound to the same origin and client id. Initial issuance requires a
+server-verified Turnstile action and hostname; refresh requires the existing
+signed token. Preflight may name that origin and the token header, but the
+following health, provider, model, or refresh request must validate the
+signature. The operational secrets remain Cloudflare Worker secrets and are
+never shipped to the browser. This closes the generated-origin gap without
+trusting WebContainer's shared domain as a whole.
+
 ## Risks / Trade-offs
 
 - **Public endpoint abuse** -> Exact upstream policy, body/time limits, per-client
@@ -144,6 +165,10 @@ packages remain out of parity.
   for normal research, return a generic 429, and retain zone-level abuse controls.
 - **Cloudflare metadata contradicts a zero-log claim** -> Claim only that
   OpenCandle configures no application/invocation logs or payload storage.
+- **Shared WebContainer domains permit drive-by relay calls** -> Require a
+  server-verified Turnstile attestation before issuing a short-lived token bound
+  to the exact generated runtime origin and client id; test attestation,
+  issuance, health negotiation, and a real provider fetch as one joined flow.
 
 ## Migration Plan
 
@@ -163,6 +188,7 @@ tools to unavailable. The local GUI and TUI remain unchanged throughout.
 
 - Production uses the same-origin `web.opencandle.app/v1/provider-fetch` route.
   Cross-origin production relay configuration fails closed; loopback remains
-  available for local Wrangler development.
+  available for transport-level Wrangler development. Joined local attestation
+  requires a separate non-production widget and Worker secret for that hostname.
 - Yahoo options must pass a live crumb/cookie proof through the envelope before
   hosted options can be called parity-complete.

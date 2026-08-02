@@ -979,12 +979,16 @@ describe("browser runtime host", () => {
     );
   });
 
-  it("passes a stable non-secret relay identity only to the hosted process", async () => {
+  it("passes a stable relay identity and ephemeral Turnstile attestation only to the hosted process", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
     const storage = memoryStorage();
     const environments: Array<Record<string, string>> = [];
+    const getTurnstileToken = vi
+      .fn()
+      .mockResolvedValueOnce("attestation-one")
+      .mockResolvedValueOnce("attestation-two");
     const run = async () => {
       const container = {
         spawn: vi.fn(async (_command, _args, options) => {
@@ -1012,6 +1016,7 @@ describe("browser runtime host", () => {
         sessionStorage: memoryStorage(),
         dataStore: {},
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+        getTurnstileToken,
       });
       await host.startProcess(container);
     };
@@ -1025,12 +1030,58 @@ describe("browser runtime host", () => {
       "https://web.opencandle.app/v1/provider-fetch",
     );
     expect(first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID).toMatch(/^[a-f0-9]{32}$/);
+    expect(first.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN).toBe("attestation-one");
+    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN).toBeUndefined();
+    expect(first.OPENCANDLE_PROVIDER_RELAY_TOKEN_EXPIRES_AT).toBeUndefined();
     expect(second.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID).toBe(
       first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
     );
     expect(storage.getItem("opencandle.hosted.relay-client.v1")).toBe(
       first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
     );
+    expect(storage.getItem("opencandle.hosted.runtime-token")).toBeNull();
+    expect(getTurnstileToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("boots in degraded mode when runtime authorization is unavailable", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
+    let environment: Record<string, string> = {};
+    const container = {
+      spawn: vi.fn(async (_command, _args, options) => {
+        environment = options.env;
+        return {
+          input: new WritableStream(),
+          output: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                `@@OPENCANDLE@@${JSON.stringify({
+                  type: "ready",
+                  runtimeEpoch: options.env.OPENCANDLE_RUNTIME_EPOCH,
+                })}\n`,
+              );
+            },
+          }),
+          exit: new Promise(() => {}),
+          kill: vi.fn(),
+        };
+      }),
+    };
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+      relayUrl: "https://web.opencandle.app/v1/provider-fetch",
+      getTurnstileToken: vi.fn(async () => {
+        throw new Error("unavailable");
+      }),
+    });
+
+    await expect(host.startProcess(container)).resolves.toBeUndefined();
+    expect(environment.OPENCANDLE_PROVIDER_RELAY_URL).toBeUndefined();
+    expect(environment.OPENCANDLE_PROVIDER_RELAY_TOKEN).toBeUndefined();
+    expect(environment.OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN).toBeUndefined();
   });
 
   it("tears down a partially created WebContainer when boot fails", async () => {
@@ -1042,6 +1093,7 @@ describe("browser runtime host", () => {
       storage: memoryStorage(),
       sessionStorage: memoryStorage(),
       dataStore: {},
+      relayUrl: "",
     });
     host.boot = vi.fn(async () => {
       host.container = { teardown };
@@ -1064,6 +1116,7 @@ describe("browser runtime host", () => {
       storage: memoryStorage(),
       sessionStorage: memoryStorage(),
       dataStore: {},
+      relayUrl: "",
     });
     const process = {
       input: new WritableStream(),

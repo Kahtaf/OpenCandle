@@ -10,6 +10,7 @@
 
 ### Changed
 
+- Hosted relay authorization now exchanges a one-time Turnstile proof from the generated WebContainer origin for a short-lived HMAC token bound to that exact origin and installation client id. Attestations and runtime tokens remain memory-only, while local GUI and TUI networking is unchanged.
 - Hosted web now keeps one canonical Pi session per saved session, persists exactly-once action fingerprints across runtime failover, shares live event projection, stateful market tools, exact-symbol policy, quote and portfolio snapshot assembly, typed requests, provider metadata, model lookup, and Pi thinking controls with local GUI/TUI, and removes the earlier hosted HTTP server, completed-response stream fallback, market-state command interpreter, and parallel event adapter.
 - Hosted web now creates Pi's canonical `AgentSession` through the shared OpenCandle session core and uses Pi's concrete `ModelRuntime`, provider implementations, model discovery, authentication, streaming, completion, command dispatch, retries, context accounting, compaction, and extension lifecycle for the full browser-safe OpenAI, Anthropic, and Google catalogs. A provider-restricted raw relay path carries those unchanged Pi streams across model APIs that reject browser CORS, without a second hosted model client or credential persistence. This replaces both the OpenAI-only compatibility client and the partial hosted session shim. The local GUI, TUI, and hosted web share provider metadata, model selection rules, routing behavior, attachment parsing, `ask_user` lifecycle, tool/workflow metadata, and canonical Pi session records; hosted credentials remain provider-scoped browser secrets.
 - DuckDuckGo Web and News search now uses the provenance-backed `ddg-kit` client, pinned to its audited `0.1.0` release, adding bounded requests, typed provider failures, bot-challenge cooldowns, and Web representation fallback while preserving OpenCandle's provider cascade.
@@ -23,6 +24,7 @@
 
 ### Fixed
 
+- Hosted relay health negotiation and provider calls now work from the generated WebContainer origin through a Turnstile-attested, origin-bound signed token that stays in memory and refreshes before expiry. Missing, tampered, expired, or mismatched tokens fail closed, and an integration test now covers attestation, token issuance, health, and a Yahoo provider request as one cross-origin flow.
 - Public documentation link checks now recognize HTTP 405 responses as proof that method-specific endpoints exist, so documented POST-only relay URLs do not fail CI when probed with HEAD and GET.
 - Hosted Vite configuration now defers hashing generated runtime assets until Vite invokes the config, so the clean-checkout unit-test job can import its helpers before the hosted runtime build runs.
 - Hosted OpenCandle now persists the durable watchlist, portfolio, alert, and report snapshot with each browser checkpoint and serves it read-only while offline, so saved market-state pages no longer reopen empty.

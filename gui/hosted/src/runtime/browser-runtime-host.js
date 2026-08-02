@@ -7,6 +7,7 @@ import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generat
 import { resolveFirstClassModelEntry } from "../../../../src/pi/model-catalog-lookup.js";
 import { listApiKeyProviders } from "../../../../src/onboarding/providers.js";
 import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
+import { requestTurnstileAttestation } from "./turnstile-attestation.js";
 
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
@@ -32,6 +33,12 @@ class BrowserRuntimeHost {
       : configuredWebContainerApiKey;
     this.webContainerApiConfigured = false;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    const turnstileSitekey = String(
+      options.turnstileSitekey ?? import.meta.env?.VITE_TURNSTILE_SITE_KEY ?? "",
+    ).trim();
+    this.getTurnstileToken =
+      options.getTurnstileToken ??
+      (() => requestTurnstileAttestation({ sitekey: turnstileSitekey }));
     this.storage = options.storage ?? globalThis.localStorage;
     this.sessionStorage = options.sessionStorage ?? globalThis.sessionStorage;
     this.relayUrl = hostedRelayUrl(
@@ -552,12 +559,22 @@ class BrowserRuntimeHost {
     const modelCredentials = this.readModelCredentials();
     const selection = this.readModelSelection(modelCredentials);
     const providerCredentials = this.readProviderCredentials();
+    let relayAttestationToken;
+    if (this.relayUrl) {
+      try {
+        relayAttestationToken = await this.getTurnstileToken();
+      } catch {
+        // The hosted shell still boots without relay-backed providers. A later
+        // process restart retries authorization without persisting the token.
+      }
+    }
     const environment = {
       OPENCANDLE_RUNTIME_EPOCH: this.runtimeEpoch,
-      ...(this.relayUrl
+      ...(this.relayUrl && relayAttestationToken
         ? {
             OPENCANDLE_PROVIDER_RELAY_URL: this.relayUrl,
             OPENCANDLE_PROVIDER_RELAY_CLIENT_ID: this.relayClientId,
+            OPENCANDLE_PROVIDER_RELAY_ATTESTATION_TOKEN: relayAttestationToken,
           }
         : {}),
       ...Object.fromEntries(
