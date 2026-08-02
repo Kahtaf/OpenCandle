@@ -477,13 +477,21 @@ function sanitizeBootstrap(value) {
 
 function validateBootstrap(value, currentSessionId, archiveSessionIds) {
   if (!isRecord(value) || typeof value.sessionId !== "string" || !Array.isArray(value.sessions)) {
-    throw new Error("Offline bootstrap snapshot is invalid");
+    throw new Error("Offline bootstrap snapshot is invalid: missing session metadata");
+  }
+  if (value.sessionId.length > 220) {
+    throw new Error("Offline bootstrap snapshot is invalid: session identity is too long");
+  }
+  if (currentSessionId && value.sessionId !== currentSessionId) {
+    throw new Error("Offline bootstrap snapshot is invalid: current session identity disagrees");
+  }
+  if (value.sessionId && !archiveSessionIds.has(value.sessionId)) {
+    throw new Error("Offline bootstrap snapshot is invalid: current session file is missing");
+  }
+  if (typeof value.role !== "string") {
+    throw new Error("Offline bootstrap snapshot is invalid: runtime role is missing");
   }
   if (
-    value.sessionId.length > 220 ||
-    (currentSessionId && value.sessionId !== currentSessionId) ||
-    (value.sessionId && !archiveSessionIds.has(value.sessionId)) ||
-    typeof value.role !== "string" ||
     value.sessions.some(
       (session) =>
         !isRecord(session) ||
@@ -492,24 +500,45 @@ function validateBootstrap(value, currentSessionId, archiveSessionIds) {
         session.id.length > 220 ||
         !archiveSessionIds.has(session.id) ||
         (session.name !== undefined && typeof session.name !== "string"),
-    ) ||
-    !isRecord(value.snapshot) ||
-    (value.snapshot.sessionId !== undefined && value.snapshot.sessionId !== value.sessionId) ||
-    !Array.isArray(value.snapshot.entries) ||
-    !Array.isArray(value.snapshot.events) ||
-    !isRecord(value.snapshot.state) ||
-    (value.marketState !== undefined && !isRecord(value.marketState)) ||
+    )
+  ) {
+    throw new Error("Offline bootstrap snapshot is invalid: saved session list disagrees");
+  }
+  if (!isRecord(value.snapshot)) {
+    throw new Error("Offline bootstrap snapshot is invalid: session projection is missing");
+  }
+  if (value.snapshot.sessionId !== undefined && value.snapshot.sessionId !== value.sessionId) {
+    throw new Error("Offline bootstrap snapshot is invalid: projected session identity disagrees");
+  }
+  if (!Array.isArray(value.snapshot.entries) || !Array.isArray(value.snapshot.events)) {
+    throw new Error("Offline bootstrap snapshot is invalid: transcript projection is malformed");
+  }
+  if (!isRecord(value.snapshot.state)) {
+    throw new Error("Offline bootstrap snapshot is invalid: dashboard projection is malformed");
+  }
+  if (value.marketState !== undefined && !isRecord(value.marketState)) {
+    throw new Error("Offline bootstrap snapshot is invalid: market state is malformed");
+  }
+  if (
     !isRecord(value.coordination) ||
     (value.coordination.writable !== undefined &&
-      typeof value.coordination.writable !== "boolean") ||
+      typeof value.coordination.writable !== "boolean")
+  ) {
+    throw new Error("Offline bootstrap snapshot is invalid: coordination state is malformed");
+  }
+  if (
     !isRecord(value.catalog) ||
     !Array.isArray(value.catalog.tools) ||
     !Array.isArray(value.catalog.workflows) ||
-    !Array.isArray(value.catalog.providers) ||
-    (value.supportsSessionActions !== undefined &&
-      typeof value.supportsSessionActions !== "boolean")
+    !Array.isArray(value.catalog.providers)
   ) {
-    throw new Error("Offline bootstrap snapshot is invalid");
+    throw new Error("Offline bootstrap snapshot is invalid: capability catalog is malformed");
+  }
+  if (
+    value.supportsSessionActions !== undefined &&
+    typeof value.supportsSessionActions !== "boolean"
+  ) {
+    throw new Error("Offline bootstrap snapshot is invalid: session action state is malformed");
   }
   const serialized = JSON.stringify(value);
   if (byteLength(serialized) > MAX_SESSION_BYTES) {
