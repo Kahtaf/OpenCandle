@@ -261,6 +261,25 @@ function reconcileLocalBootstrapSessions(value) {
     }
     if (archiveSessionIds.has(session.id)) sessions.push(session);
   }
+  const bootstrapSessionId = value.bootstrap.sessionId;
+  const snapshotSessionId = isRecord(value.bootstrap.snapshot)
+    ? value.bootstrap.snapshot.sessionId
+    : undefined;
+  const currentSessionMatches =
+    typeof bootstrapSessionId === "string" &&
+    (!bootstrapSessionId || archiveSessionIds.has(bootstrapSessionId));
+  const projectionMatches =
+    snapshotSessionId === undefined || snapshotSessionId === bootstrapSessionId;
+
+  // The archive's JSONL sessions are durable; the bootstrap is only a cached
+  // read-only projection for offline startup. If a previous build left that
+  // projection pointing at a removed session, do not let it prevent an online
+  // boot or leak a transient validation error to the UI. The next successful
+  // bootstrap will write a fresh projection from the durable session files.
+  if (!currentSessionMatches || !projectionMatches) {
+    const { bootstrap: _bootstrap, ...archive } = value;
+    return { value: archive, repaired: true };
+  }
   if (sessions.length === value.bootstrap.sessions.length) {
     return { value, repaired: false };
   }

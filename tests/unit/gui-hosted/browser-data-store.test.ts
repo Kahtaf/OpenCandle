@@ -315,6 +315,34 @@ describe("hosted browser archive", () => {
     expect(() => validateHostedArchive(archive)).toThrow("saved session list disagrees");
   });
 
+  it("discards an offline projection whose current session was removed", async () => {
+    const archive = createHostedArchive({
+      sessions: [session],
+      currentSessionId: "session-1",
+      bootstrap: {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [{ id: "session-1" }],
+        snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+        coordination: { writable: true },
+        catalog: { tools: [], workflows: [], providers: [] },
+      },
+    });
+    archive.bootstrap.sessionId = "deleted-session";
+    archive.bootstrap.snapshot.sessionId = "deleted-session";
+    const files = new Map([["checkpoint-v1.json", JSON.stringify(archive)]]);
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+    });
+
+    await expect(store.readRuntimeSnapshot()).resolves.toMatchObject({
+      currentSessionId: "session-1",
+      sessions: [session],
+    });
+    await expect(store.readOfflineBootstrap()).resolves.toBeNull();
+    expect(JSON.parse(files.get("checkpoint-v1.json") || "null").bootstrap).toBeUndefined();
+  });
+
   it("serializes archive reads and writes across concurrent GUI checkpoints", async () => {
     let content = JSON.stringify(
       createHostedArchive({
