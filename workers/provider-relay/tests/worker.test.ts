@@ -543,6 +543,30 @@ describe("hosted provider relay", () => {
     await expect(response.text()).rejects.toBeDefined();
   });
 
+  it("accepts a GET model probe carried by a zero-length relay request stream", async () => {
+    const upstreamFetch = vi.fn(async () => Response.json({ data: [] }));
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+    const response = await relay.fetch(
+      new Request(modelEndpoint, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test",
+          "x-opencandle-client": "0123456789abcdef0123456789abcdef",
+          "x-opencandle-provider": "openai",
+          "x-opencandle-upstream-method": "GET",
+          "x-opencandle-upstream-url": "https://api.openai.com/v1/models",
+          "cf-connecting-ip": "203.0.113.10",
+        },
+        body: new Uint8Array(),
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(upstreamFetch).toHaveBeenCalledOnce();
+    expect(upstreamFetch.mock.calls[0]?.[0].method).toBe("GET");
+  });
+
   it("cancels a model stream that stalls after response headers", async () => {
     let cancelled = false;
     const upstream = new ReadableStream<Uint8Array>({

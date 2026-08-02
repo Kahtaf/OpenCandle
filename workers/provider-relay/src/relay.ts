@@ -440,14 +440,14 @@ async function relayModelRequest(options: {
   if (!policy.hasCredential(upstreamHeaders)) {
     return options.respondError(400, "missing_model_credential");
   }
-  if (method === "GET" && options.request.body) {
-    return options.respondError(400, "invalid_request");
-  }
-
   let body: Uint8Array | undefined;
-  if (method === "POST" && options.request.body) {
+  if (options.request.body) {
     try {
-      body = await readBounded(options.request.body, options.maxRequestBytes);
+      const requestBody = await readBounded(options.request.body, options.maxRequestBytes);
+      if (method === "GET" && requestBody.byteLength > 0) {
+        return options.respondError(400, "invalid_request");
+      }
+      if (method === "POST" && requestBody.byteLength > 0) body = requestBody;
     } catch (error) {
       return options.respondError(
         error instanceof RequestTooLargeError ? 413 : 400,

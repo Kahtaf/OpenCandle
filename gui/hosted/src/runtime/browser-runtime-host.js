@@ -156,8 +156,9 @@ class BrowserRuntimeHost {
           throw new Error(`The ${setup?.label ?? provider} key was rejected. Your existing key was not changed.`);
         }
         if (validation?.status !== "valid") {
+          const reason = String(validation?.reason ?? "provider unavailable").slice(0, 160);
           throw new Error(
-            `The ${setup?.label ?? provider} key could not be verified. Your existing key was not changed.`,
+            `The ${setup?.label ?? provider} key could not be verified (${reason}). Your existing key was not changed.`,
           );
         }
         await this.request("gui", {

@@ -188,9 +188,19 @@ export function createHostedRuntimeTransport({ host }) {
               await refresh();
             })
             .catch((error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              if (String(command.type || "").startsWith("model.setup.")) {
+                publish({
+                  type: "model.setup",
+                  modelSetup: {
+                    ...(host.getModelSetup?.() || EMPTY_MODEL_SETUP),
+                    error: message,
+                  },
+                });
+              }
               publish({
                 type: "error",
-                message: error instanceof Error ? error.message : String(error),
+                message,
               });
             });
         },
