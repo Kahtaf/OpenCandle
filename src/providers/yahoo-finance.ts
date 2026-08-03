@@ -18,6 +18,7 @@ import { InvalidSymbolError } from "./errors.js";
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
 const STALE_QUOTE_MAX_RETRY_AFTER_MS = 1_000;
+const EXTENDED_QUOTE_TIMEOUT_MS = 3_000;
 
 let yahooFinance2Client: InstanceType<typeof YahooFinance> | undefined;
 
@@ -247,7 +248,10 @@ async function enrichQuoteWithExtendedHours(
 ): Promise<StockQuote> {
   try {
     await rateLimiter.acquire("yahoo");
-    const yahooQuote = (await getYahooFinance2Client().quote(symbol)) as YahooFinance2Quote | null;
+    const yahooQuote = (await withTimeout(
+      getYahooFinance2Client().quote(symbol),
+      EXTENDED_QUOTE_TIMEOUT_MS,
+    )) as YahooFinance2Quote | null;
     if (!yahooQuote) return quote;
 
     const marketState = normalizeMarketState(yahooQuote.marketState);
@@ -268,6 +272,20 @@ async function enrichQuoteWithExtendedHours(
     };
   } catch {
     return quote;
+  }
+}
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Yahoo extended-hours lookup timed out")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -422,6 +422,10 @@ mocked transport or local browser runtime:
   cross-tab bootstrap responses, and retries a dropped idempotent session
   read. A clean follower loaded the same persisted Gemini session and its
   pointer-submitted reply rendered in both the follower and writer;
+- deployment `f2824037-180a-4ccb-88ed-dc576e865958` bounds Yahoo's optional
+  extended-hours enrichment. The PWA Stock Quote catalog action then returned
+  an AAPL market-lookup card with live price, day range, volume, and 52-week
+  range instead of remaining indefinitely in the running state;
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 
