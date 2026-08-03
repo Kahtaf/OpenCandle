@@ -234,6 +234,30 @@ describe("GUI model setup", () => {
     expect(login).not.toHaveBeenCalled();
   });
 
+  it("does not advertise or record a provider key when its shared probe cannot verify it", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const appendCustomMessageEntry = vi.fn();
+    const broadcastState = vi.fn();
+    const controller = createModelSetupController({
+      role: "writer",
+      // Provider admission must fail before it can touch the Pi session.
+      getSession: () => {
+        throw new Error("provider validation must not access the session");
+      },
+      getSessionManager: () => ({ appendCustomMessageEntry }),
+      broadcastState,
+    });
+
+    await expect(controller.handleSaveProviderApiKey("fred", "unverified-key")).rejects.toThrow(
+      "Couldn't verify the FRED key",
+    );
+
+    expect(appendCustomMessageEntry).not.toHaveBeenCalled();
+    expect(broadcastState).not.toHaveBeenCalled();
+  });
+
   it("rejects model selection in follower mode", async () => {
     const controller = createModelSetupController({
       role: "follower",

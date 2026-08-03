@@ -1002,20 +1002,35 @@ class BrowserRuntimeHost {
   }
 
   async acknowledgeRuntimeCheckpoint(message) {
+    const runtimeEpoch = this.runtimeEpoch;
+    const pending = this.pendingRequests.get(message.requestId);
+    // A checkpoint write can outlive the request that caused it. Never send
+    // that late acknowledgement into a replacement runtime: the replacement
+    // may have reused a checkpoint id, but it cannot safely reconcile the
+    // original action.
+    if (!pending || !runtimeEpoch) return;
     try {
       const persisted = await this.persistCheckpoint(message.value);
       if (persisted === false) throw new Error("Hosted runtime checkpoint is invalid");
+      if (
+        this.runtimeEpoch !== runtimeEpoch ||
+        this.pendingRequests.get(message.requestId) !== pending
+      ) return;
       await this.writeProcessMessage({
         type: "checkpoint-ack",
-        runtimeEpoch: this.runtimeEpoch,
+        runtimeEpoch,
         requestId: message.requestId,
         checkpointId: message.checkpointId,
         ok: true,
       });
     } catch (error) {
+      if (
+        this.runtimeEpoch !== runtimeEpoch ||
+        this.pendingRequests.get(message.requestId) !== pending
+      ) return;
       await this.writeProcessMessage({
         type: "checkpoint-ack",
-        runtimeEpoch: this.runtimeEpoch,
+        runtimeEpoch,
         requestId: message.requestId,
         checkpointId: message.checkpointId,
         ok: false,

@@ -59,8 +59,8 @@ export function createHostedRuntimeTransport({ host }) {
 
   const requestGui = (payload, options) => host.request("gui", payload, options);
 
-  const refresh = async () => {
-    const bootstrap = withBrowserState(await requestGui({ action: "bootstrap" }));
+  const publishBootstrap = (payload) => {
+    const bootstrap = withBrowserState(payload);
     publish({
       type: "runtime.status",
       role: bootstrap.role,
@@ -83,6 +83,10 @@ export function createHostedRuntimeTransport({ host }) {
       });
     }
     return bootstrap;
+  };
+
+  const refresh = async () => {
+    return publishBootstrap(await requestGui({ action: "bootstrap" }));
   };
 
   const transport = {
@@ -230,13 +234,13 @@ export function createHostedRuntimeTransport({ host }) {
     },
 
     async invokeTool(body) {
-      const result = await requestGui({ action: "tool_invoke", ...body });
-      // The hosted runtime returns a durable bootstrap with every mutation and
-      // also invalidates subscribed tabs. A second synchronous bootstrap here
-      // serializes another large WebContainer round trip before the UI can
-      // acknowledge the save. Market-state callers refresh their lightweight
-      // state explicitly, and catalog callers receive the invalidation.
-      return result?.result;
+      const bootstrap = await requestGui({ action: "tool_invoke", ...body });
+      // A direct catalog run persists an actual Pi assistant/tool-result pair.
+      // Project that returned durable snapshot immediately: relying only on a
+      // later cross-tab invalidation can leave the originating tab without its
+      // result card when the notification races or is dropped.
+      if (bootstrap?.snapshot) publishBootstrap(bootstrap);
+      return bootstrap?.result;
     },
 
     async createSession() {

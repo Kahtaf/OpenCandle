@@ -38,6 +38,38 @@ describe("browser runtime host", () => {
     expect(teardown).toHaveBeenCalledOnce();
   });
 
+  it("does not acknowledge a checkpoint after its request has timed out or changed runtime", async () => {
+    let resolvePersist!: (value: boolean) => void;
+    const write = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        persistCheckpoint: vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolvePersist = resolve;
+            }),
+        ),
+      },
+    });
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.processWriter = { write };
+    host.pendingRequests.set("request-1", {});
+
+    const acknowledgement = host.acknowledgeRuntimeCheckpoint({
+      requestId: "request-1",
+      checkpointId: "checkpoint-1",
+      value: {},
+    });
+    host.pendingRequests.delete("request-1");
+    host.runtimeEpoch = "fedcba9876543210fedcba9876543210";
+    resolvePersist(true);
+
+    await acknowledgement;
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("validates an import before stopping the active runtime", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());

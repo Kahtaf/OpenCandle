@@ -46,7 +46,31 @@ function createHost() {
             ],
           };
         case "tool_invoke":
-          return { result: { saved: true, symbol: "AAPL" } };
+          return {
+            ...bootstrap,
+            snapshot: {
+              ...bootstrap.snapshot,
+              events: [
+                {
+                  type: "tool.started",
+                  sessionId: "session-1",
+                  seq: 1,
+                  toolCallId: "tool-1",
+                  messageId: "assistant-1",
+                  name: "get_stock_quote",
+                  input: { symbol: "AAPL" },
+                },
+                {
+                  type: "tool.completed",
+                  sessionId: "session-1",
+                  seq: 2,
+                  toolCallId: "tool-1",
+                  output: { content: [{ type: "text", text: "AAPL quote" }] },
+                },
+              ],
+            },
+            result: { saved: true, symbol: "AAPL" },
+          };
         default:
           return { ok: true };
       }
@@ -447,6 +471,18 @@ describe("hosted runtime transport", () => {
     expect(
       host.request.mock.calls.filter(([, payload]) => payload.action === "bootstrap"),
     ).toHaveLength(1);
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "state.snapshot",
+          snapshot: expect.objectContaining({
+            events: expect.arrayContaining([
+              expect.objectContaining({ type: "tool.completed", toolCallId: "tool-1" }),
+            ]),
+          }),
+        }),
+      ),
+    );
     expect(host.handleCommand).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "tool.invoke" }),
     );
