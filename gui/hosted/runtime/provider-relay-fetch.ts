@@ -22,6 +22,7 @@ const ABORTED = Symbol("aborted");
 type RelayProvider =
   | ModelRelayProvider
   | "brave"
+  | "ddg"
   | "exa"
   | "fear_greed"
   | "finnhub"
@@ -391,6 +392,11 @@ export function relayProviderForUrl(url: URL): RelayProvider | undefined {
   switch (url.hostname) {
     case "api.search.brave.com":
       return "brave";
+    case "duckduckgo.com":
+    case "links.duckduckgo.com":
+    case "html.duckduckgo.com":
+    case "lite.duckduckgo.com":
+      return "ddg";
     case "api.exa.ai":
     case "mcp.exa.ai":
       return "exa";

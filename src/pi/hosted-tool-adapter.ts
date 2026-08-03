@@ -107,6 +107,7 @@ function hostedSearchProviders(available: ReadonlySet<string>) {
   return [
     ...(available.has("exa") ? (["exa"] as const) : []),
     ...(available.has("brave") && hasCredential("brave") ? (["brave"] as const) : []),
+    ...(available.has("ddg") ? (["ddg"] as const) : []),
   ];
 }
 

@@ -5,6 +5,7 @@ import {
   createHostedRuntimeTokenManager,
   fetchHostedRelayManifest,
   fetchHostedRuntimeAuthorization,
+  relayProviderForUrl,
 } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
 
 describe("hosted provider relay fetch", () => {
@@ -161,6 +162,13 @@ describe("hosted provider relay fetch", () => {
     expect(response.headers.get("x-opencandle-upstream-set-cookie")).toBe("A=1");
     await expect(response.json()).resolves.toEqual({ chart: { result: [] } });
     expect(relayFetch).toHaveBeenCalledOnce();
+  });
+
+  it("routes the fixed DuckDuckGo request hosts through the relay", () => {
+    expect(relayProviderForUrl(new URL("https://duckduckgo.com/?q=AAPL"))).toBe("ddg");
+    expect(relayProviderForUrl(new URL("https://links.duckduckgo.com/d.js?vqd=1-1"))).toBe("ddg");
+    expect(relayProviderForUrl(new URL("https://html.duckduckgo.com/html/"))).toBe("ddg");
+    expect(relayProviderForUrl(new URL("https://lite.duckduckgo.com/lite/"))).toBe("ddg");
   });
 
   it.each([

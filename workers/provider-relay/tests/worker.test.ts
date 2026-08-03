@@ -664,6 +664,9 @@ describe("hosted provider relay", () => {
       "https://finnhub.io/api/v1/quote?symbol=AAPL&token=test",
       { accept: "application/json" },
     ],
+    ["ddg", "https://duckduckgo.com/?q=AAPL&ia=news", { "user-agent": "OpenCandle/1.0" }],
+    ["ddg", "https://duckduckgo.com/news.js?q=AAPL&vqd=1-1", {}],
+    ["ddg", "https://links.duckduckgo.com/d.js?q=AAPL&vqd=1-1", {}],
     [
       "lse",
       "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
@@ -688,7 +691,30 @@ describe("hosted provider relay", () => {
   });
 
   it.each([
+    ["https://html.duckduckgo.com/html/", "q=AAPL"],
+    ["https://lite.duckduckgo.com/lite/", "q=AAPL"],
+  ])("forwards the audited DDG fallback %s endpoint", async (url, body) => {
+    const upstreamFetch = vi.fn(async () => new Response("[]"));
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "ddg",
+        method: "POST",
+        url,
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        bodyBase64: Buffer.from(body).toString("base64"),
+      }),
+      environment(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(upstreamFetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
     ["finnhub", "https://finnhub.io/api/v1/profile2?symbol=AAPL&token=test"],
+    ["ddg", "https://duckduckgo.com/settings"],
     ["lse", "https://api.londonstrategicedge.com/vault/admin"],
   ])("rejects %s paths outside its audited contract", async (provider, url) => {
     const upstreamFetch = vi.fn();
@@ -696,6 +722,38 @@ describe("hosted provider relay", () => {
 
     const response = await relay.fetch(
       relayRequest({ provider, method: "GET", url }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects DDG methods outside its audited request shapes", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({ provider: "ddg", method: "POST", url: "https://duckduckgo.com/" }),
+      environment(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(upstreamFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects DDG form posts with a non-form content type", async () => {
+    const upstreamFetch = vi.fn();
+    const relay = createProviderRelay({ fetchImpl: upstreamFetch });
+
+    const response = await relay.fetch(
+      relayRequest({
+        provider: "ddg",
+        method: "POST",
+        url: "https://html.duckduckgo.com/html/",
+        headers: { "content-type": "application/json" },
+        bodyBase64: Buffer.from('{"q":"AAPL"}').toString("base64"),
+      }),
       environment(),
     );
 

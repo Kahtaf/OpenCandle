@@ -31,6 +31,7 @@ const LOOPBACK_TURNSTILE_HOSTNAMES = ["localhost", "127.0.0.1", "[::1]"] as cons
 
 type RelayProvider =
   | "brave"
+  | "ddg"
   | "exa"
   | "fear_greed"
   | "finnhub"
@@ -75,7 +76,7 @@ const DEFAULT_ALLOWED_ORIGINS = ["https://web.opencandle.app"] as const;
 interface ProviderPolicy {
   readonly methods: readonly RelayMethod[];
   readonly allowedHeaders: ReadonlySet<string>;
-  matches(url: URL): boolean;
+  matches(url: URL, method: RelayMethod): boolean;
 }
 
 interface ModelProviderPolicy {
@@ -87,6 +88,7 @@ interface ModelProviderPolicy {
 
 const COMMON_GET_HEADERS = new Set(["accept", "user-agent"]);
 const JSON_POST_HEADERS = new Set(["accept", "content-type", "user-agent"]);
+const FORM_POST_HEADERS = new Set([...COMMON_GET_HEADERS, "content-type"]);
 
 const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
   brave: policy(
@@ -95,6 +97,18 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
     (url) =>
       exact(url, "api.search.brave.com", "/res/v1/web/search") ||
       exact(url, "api.search.brave.com", "/res/v1/news/search"),
+  ),
+  ddg: policy(
+    ["GET", "POST"],
+    FORM_POST_HEADERS,
+    (url, method) =>
+      (method === "GET" &&
+        ((url.hostname === "duckduckgo.com" &&
+          (url.pathname === "/" || url.pathname === "/news.js")) ||
+          (url.hostname === "links.duckduckgo.com" && url.pathname === "/d.js"))) ||
+      (method === "POST" &&
+        ((url.hostname === "html.duckduckgo.com" && url.pathname === "/html/") ||
+          (url.hostname === "lite.duckduckgo.com" && url.pathname === "/lite/"))),
   ),
   exa: policy(
     ["POST"],
@@ -787,7 +801,7 @@ function decodeBase64Url(value: string): Uint8Array {
 function policy(
   methods: readonly RelayMethod[],
   allowedHeaders: ReadonlySet<string>,
-  matches: (url: URL) => boolean,
+  matches: (url: URL, method: RelayMethod) => boolean,
 ): ProviderPolicy {
   return { methods, allowedHeaders, matches };
 }
@@ -889,7 +903,9 @@ function validateProviderRequest(envelope: RelayRequestEnvelope): {
   }
 
   const provider = PROVIDER_POLICIES[envelope.provider];
-  if (!provider.methods.includes(envelope.method) || !provider.matches(url)) return null;
+  if (!provider.methods.includes(envelope.method) || !provider.matches(url, envelope.method)) {
+    return null;
+  }
 
   const headers = new Headers();
   for (const [name, value] of Object.entries(envelope.headers ?? {})) {
@@ -906,6 +922,13 @@ function validateProviderRequest(envelope: RelayRequestEnvelope): {
       normalized === "referer" &&
       envelope.provider === "tradingview" &&
       value !== "https://www.tradingview.com/"
+    ) {
+      return null;
+    }
+    if (
+      normalized === "content-type" &&
+      envelope.provider === "ddg" &&
+      value.toLowerCase() !== "application/x-www-form-urlencoded"
     ) {
       return null;
     }

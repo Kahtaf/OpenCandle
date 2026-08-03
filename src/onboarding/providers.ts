@@ -14,6 +14,7 @@ export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | 
 export type ExternalToolProviderId = "twitter" | "reddit";
 export type PublicHttpProviderId =
   | "coingecko"
+  | "ddg"
   | "fear_greed"
   | "polymarket"
   | "sec_edgar"
@@ -180,6 +181,24 @@ export const PROVIDERS = [
     browserTransport: {
       mode: "proxy",
       reason: "Finnhub has not passed the hosted Chromium CORS and API-key handling proof.",
+    },
+  },
+  {
+    id: "ddg",
+    kind: "public-http",
+    displayName: "DuckDuckGo",
+    category: "web_search",
+    tier: "soft",
+    aliases: ["ddg", "duckduckgo"],
+    probeUrl: "https://duckduckgo.com/",
+    unlocks: ["keyless web and news search fallback"],
+    fallbackDescription: "Web search remains available through configured Exa or Brave Search",
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle uses DuckDuckGo as the keyless search fallback",
+    browserTransport: {
+      mode: "proxy",
+      reason:
+        "The shared DDG client uses Node transport, so hosted requests use the audited relay's fixed DuckDuckGo endpoints.",
     },
   },
   {

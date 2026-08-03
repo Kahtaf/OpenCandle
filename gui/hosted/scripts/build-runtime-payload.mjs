@@ -58,6 +58,7 @@ const result = await build({
     },
   ],
   alias: {
+    undici: resolve(hostedRoot, "runtime/undici-browser.ts"),
     "safe-buffer": resolve(hostedRoot, "runtime/safer-buffer-browser.ts"),
     "safer-buffer": resolve(hostedRoot, "runtime/safer-buffer-browser.ts"),
     "@earendil-works/pi-coding-agent": resolve(

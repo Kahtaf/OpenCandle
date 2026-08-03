@@ -119,6 +119,7 @@ describe("provider registry — shape", () => {
         "alpha_vantage",
         "brave",
         "coingecko",
+        "ddg",
         "exa",
         "fear_greed",
         "finnhub",
@@ -191,7 +192,7 @@ describe("provider registry — shape", () => {
   it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
     expect(soft.map((p) => p.id).sort()).toEqual(
-      ["brave", "exa", "fear_greed", "finnhub", "lse", "reddit", "tradingview", "twitter"].sort(),
+      ["brave", "ddg", "exa", "fear_greed", "finnhub", "lse", "reddit", "tradingview", "twitter"].sort(),
     );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();
@@ -331,6 +332,7 @@ describe("provider registry — lookup helpers", () => {
       .sort();
     expect(ids).toEqual([
       "brave",
+      "ddg",
       "exa",
       "fear_greed",
       "finnhub",
@@ -437,7 +439,7 @@ describe("provider registry — resolveProviderFromArgument", () => {
     expect(Array.isArray(result)).toBe(true);
     const arr = result as ReadonlyArray<{ id: ProviderId }>;
     const ids = arr.map((p) => p.id).sort();
-    expect(ids).toEqual(["brave", "exa"]);
+    expect(ids).toEqual(["brave", "ddg", "exa"]);
   });
 
   it("returns undefined for unknown argument", () => {
@@ -465,7 +467,7 @@ describe("provider registry — import safety", () => {
     const loadFileConfigMock = configModule.loadFileConfig as ReturnType<typeof vi.fn>;
     // Freshly import the registry after the mock is in place.
     const providersModule = await import("../../../src/onboarding/providers.js");
-    expect(providersModule.PROVIDERS.length).toBe(14);
+    expect(providersModule.PROVIDERS.length).toBe(15);
     // Module evaluation must not trigger loadFileConfig.
     expect(loadFileConfigMock).not.toHaveBeenCalled();
     // Calling a credential helper SHOULD invoke loadFileConfig (lazy, on demand).

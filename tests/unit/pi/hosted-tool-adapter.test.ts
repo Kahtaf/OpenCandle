@@ -163,7 +163,7 @@ describe("hosted tool adapter", () => {
 
   it("narrows hosted web-search overrides to usable browser providers", () => {
     const withoutBraveKey = getHostedOpenCandleToolDefinitions({
-      relayProviders: ["brave", "exa"],
+      relayProviders: ["brave", "ddg", "exa"],
     }).find((tool) => tool.name === "search_web");
     expect(withoutBraveKey).toBeDefined();
     expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "exa" })).toBe(
@@ -172,13 +172,11 @@ describe("hosted tool adapter", () => {
     expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "brave" })).toBe(
       false,
     );
-    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "ddg" })).toBe(
-      false,
-    );
+    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "ddg" })).toBe(true);
 
     hasCredential.mockImplementation((provider) => provider === "brave");
     const withBraveKey = getHostedOpenCandleToolDefinitions({
-      relayProviders: ["brave", "exa"],
+      relayProviders: ["brave", "ddg", "exa"],
     }).find((tool) => tool.name === "search_web");
     expect(Value.Check(withBraveKey?.parameters, { query: "markets", provider: "brave" })).toBe(
       true,
@@ -187,16 +185,16 @@ describe("hosted tool adapter", () => {
 
   it("binds implicit hosted search execution to the negotiated providers", async () => {
     hasCredential.mockImplementation((provider) => provider === "brave");
-    const search = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave"] }).find(
+    const search = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave", "ddg"] }).find(
       (tool) => tool.name === "search_web",
     );
     expect(search).toBeDefined();
-    expect((search as any).__hostedAllowedProviders).toEqual(["brave"]);
+    expect((search as any).__hostedAllowedProviders).toEqual(["brave", "ddg"]);
 
-    const sentiment = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave"] }).find(
+    const sentiment = getHostedOpenCandleToolDefinitions({ relayProviders: ["brave", "ddg"] }).find(
       (tool) => tool.name === "get_sentiment_summary",
     );
-    expect((sentiment as any).__hostedAllowedProviders).toEqual(["brave"]);
+    expect((sentiment as any).__hostedAllowedProviders).toEqual(["brave", "ddg"]);
     expect((sentiment as any).__hostedEvidenceProviders).toEqual([]);
 
     const yahooSentiment = getHostedOpenCandleToolDefinitions({
