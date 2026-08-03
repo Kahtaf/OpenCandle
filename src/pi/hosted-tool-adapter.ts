@@ -196,18 +196,13 @@ export function getHostedOpenCandleToolDefinitions(
   const sentimentProviders = hostedSearchProviders(available);
   const sentimentEvidenceProviders = [
     ...(available.has("yahoo") ? (["yahoo"] as const) : []),
-    ...(available.has("finnhub") && hasCredential("finnhub")
-      ? (["finnhub"] as const)
-      : []),
+    ...(available.has("finnhub") && hasCredential("finnhub") ? (["finnhub"] as const) : []),
   ];
   const sentiment =
     sentimentProviders.length > 0
       ? Object.assign(
           agentToolToPiTool(
-            createHostedSentimentSummaryTool(
-              sentimentProviders,
-              sentimentEvidenceProviders,
-            ),
+            createHostedSentimentSummaryTool(sentimentProviders, sentimentEvidenceProviders),
           ) as ReturnType<typeof agentToolToPiTool>,
           {
             __hostedAllowedProviders: sentimentProviders,
