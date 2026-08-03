@@ -203,6 +203,12 @@ describe("hosted tool adapter", () => {
       relayProviders: ["brave", "yahoo"],
     }).find((tool) => tool.name === "get_sentiment_summary");
     expect((yahooSentiment as any).__hostedEvidenceProviders).toEqual(["yahoo"]);
+
+    hasCredential.mockImplementation((provider) => provider === "finnhub");
+    const finnhubSentiment = getHostedOpenCandleToolDefinitions({
+      relayProviders: ["ddg", "finnhub"],
+    }).find((tool) => tool.name === "get_sentiment_summary");
+    expect((finnhubSentiment as any).__hostedEvidenceProviders).toEqual(["finnhub"]);
   });
 
   it("does not change the native local tool composition", () => {

@@ -194,18 +194,24 @@ export function getHostedOpenCandleToolDefinitions(
   });
   const search = hostedWebSearchTool(available);
   const sentimentProviders = hostedSearchProviders(available);
+  const sentimentEvidenceProviders = [
+    ...(available.has("yahoo") ? (["yahoo"] as const) : []),
+    ...(available.has("finnhub") && hasCredential("finnhub")
+      ? (["finnhub"] as const)
+      : []),
+  ];
   const sentiment =
     sentimentProviders.length > 0
       ? Object.assign(
           agentToolToPiTool(
             createHostedSentimentSummaryTool(
               sentimentProviders,
-              available.has("yahoo") ? ["yahoo"] : [],
+              sentimentEvidenceProviders,
             ),
           ) as ReturnType<typeof agentToolToPiTool>,
           {
             __hostedAllowedProviders: sentimentProviders,
-            __hostedEvidenceProviders: available.has("yahoo") ? ["yahoo"] : [],
+            __hostedEvidenceProviders: sentimentEvidenceProviders,
           },
         )
       : null;
