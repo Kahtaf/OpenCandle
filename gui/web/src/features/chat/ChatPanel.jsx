@@ -186,7 +186,12 @@ export function ChatPanel({
   ) {
     setAllowToolAutoOpen(false);
   }
-  const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
+  // Hosted followers begin with a deliberately non-secret placeholder model
+  // setup while they wait for the writer's canonical bootstrap. Do not present
+  // that placeholder as a first-run credential flow: the shared connection
+  // state already disables actions and shows its reconnecting status.
+  const needsSetup =
+    role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
   // Drafting stays available during first-run setup (shipped 0.11.0
   // behavior); needsSetup blocks only sending, via chatDisabled and submit.
   const composerDisabled = inputDisabled;
