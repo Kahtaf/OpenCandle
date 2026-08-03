@@ -216,7 +216,10 @@ class BrowserRuntimeHost {
           throw new Error("The provider rejected this key. Your existing key was not changed.");
         }
         if (validation?.status !== "valid") {
-          throw new Error("The provider key could not be verified. Your existing key was not changed.");
+          const reason = String(validation?.reason ?? "provider unavailable").slice(0, 160);
+          throw new Error(
+            `The provider key could not be verified (${reason}). Your existing key was not changed.`,
+          );
         }
         const current = this.readProviderCredentials();
         this.storage.setItem(

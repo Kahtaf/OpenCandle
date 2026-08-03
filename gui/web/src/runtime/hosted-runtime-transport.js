@@ -129,10 +129,17 @@ export function createHostedRuntimeTransport({ host }) {
         .bootstrap()
         .then((bootstrap) => {
           if (channelClosed) return;
+          // The initial bootstrap can complete after the user has already
+          // created or opened another session. Never let that stale response
+          // move the shared UI back to its original session and erase a
+          // direct tool card that has just been projected for the new one.
+          const appliesToSelection =
+            !selectedSessionId || bootstrap.sessionId === selectedSessionId;
+          if (appliesToSelection) selectedSessionId ||= bootstrap.sessionId || "";
           publish({
             type: "boot",
             role: bootstrap.role,
-            sessionId: bootstrap.sessionId,
+            sessionId: appliesToSelection ? bootstrap.sessionId : selectedSessionId,
             coordination: bootstrap.coordination,
             supportsSessionActions: bootstrap.supportsSessionActions,
             catalog: bootstrap.catalog,
@@ -143,12 +150,14 @@ export function createHostedRuntimeTransport({ host }) {
             type: "sessions",
             sessions: bootstrap.sessions || [],
           });
-          publish({
-            type: "state.snapshot",
-            sessionId: bootstrap.sessionId,
-            coordination: bootstrap.coordination,
-            snapshot: bootstrap.snapshot,
-          });
+          if (appliesToSelection) {
+            publish({
+              type: "state.snapshot",
+              sessionId: bootstrap.sessionId,
+              coordination: bootstrap.coordination,
+              snapshot: bootstrap.snapshot,
+            });
+          }
         })
         .catch((error) => {
           if (channelClosed) return;
@@ -234,6 +243,10 @@ export function createHostedRuntimeTransport({ host }) {
     },
 
     async invokeTool(body) {
+      // Fresh catalog runs may navigate before the route-triggered load has
+      // updated this transport's selection. Keep the returned durable snapshot
+      // scoped to the actual tool target instead of the previous home session.
+      selectedSessionId = body?.sessionId || selectedSessionId;
       const bootstrap = await requestGui({ action: "tool_invoke", ...body });
       // A direct catalog run persists an actual Pi assistant/tool-result pair.
       // Project that returned durable snapshot immediately: relying only on a

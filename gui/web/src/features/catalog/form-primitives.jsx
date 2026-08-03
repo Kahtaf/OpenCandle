@@ -58,7 +58,7 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
           <label
             key={option.value}
             className={cn(
-              "inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm px-2.5 text-xs font-medium tabular-nums transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card",
+              "relative inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm px-2.5 text-xs font-medium tabular-nums transition-[background-color,color,transform,scale] duration-150 ease-out active:scale-[0.96] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card",
               selected
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
@@ -70,7 +70,7 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
               value={option.value}
               checked={selected}
               onChange={() => onChange(option.value)}
-              className="sr-only"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
             {option.label}
           </label>
