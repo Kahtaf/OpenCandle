@@ -7,6 +7,7 @@ const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 const FORWARDED_READ_RETRY_MS = 1_500;
 const MAX_FORWARDED_READ_ATTEMPTS = 3;
+const FORWARDED_SESSION_READ_TIMEOUT_MS = 15_000;
 const MAX_FORWARDED_CHUNK_BYTES = 64 * 1024;
 const WRITER_TAKEOVER_TIMEOUT_MS = 15_000;
 
@@ -96,7 +97,15 @@ class BrowserRuntimeCoordinator {
       // it responds; retry it once against the new owner instead of leaving the
       // route permanently in its loading state.
       if (!shouldRetryAfterWriterChange(error, operation, payload, options.signal, this.disposed)) {
-        throw error;
+        if (!shouldRecoverUnavailableSessionRead(error, operation, payload, options.signal, this.disposed)) {
+          throw error;
+        }
+        // A visible tab must not remain dependent on a background tab that
+        // holds the lock but is no longer servicing BroadcastChannel work.
+        // Take over this session read so the local browser checkpoint remains
+        // available without asking the user to close another tab first.
+        await this.takeWriter();
+        return this.requestFromCurrentWriter(operation, payload, options);
       }
       return this.requestFromCurrentWriter(operation, payload, options);
     }
@@ -280,6 +289,12 @@ class BrowserRuntimeCoordinator {
     if (!this.writerId || !isEpoch(this.epoch)) {
       throw new Error("The active hosted tab is not available. Reload this tab and try again.");
     }
+    this.runtimeProgress = {
+      type: "runtime-progress",
+      phase: "switching",
+      message: "Switching browser runtime to this tab…",
+    };
+    this.notify(this.runtimeProgress);
     await new Promise((resolve, reject) => {
       let requestedWriterId = "";
       let unsubscribe = () => {};
@@ -343,11 +358,14 @@ class BrowserRuntimeCoordinator {
         this.pending.delete(requestId);
         reject(new DOMException("The operation was aborted", "AbortError"));
       };
+      const timeoutMs = isRetryableForwardedRead(payload)
+        ? Math.min(this.requestTimeoutMs, FORWARDED_SESSION_READ_TIMEOUT_MS)
+        : this.requestTimeoutMs;
       const timer = setTimeout(() => {
         clearRetry();
         this.pending.delete(requestId);
         reject(new Error("The active hosted tab did not respond"));
-      }, this.requestTimeoutMs);
+      }, timeoutMs);
       if (signal?.aborted) {
         abort();
         return;
@@ -720,6 +738,17 @@ function shouldRetryAfterWriterChange(error, operation, payload, signal, dispose
     !disposed &&
     !signal?.aborted &&
     error?.code === "HOSTED_WRITER_CHANGED" &&
+    operation === "gui" &&
+    (payload?.action === "bootstrap" || payload?.action === "load_session")
+  );
+}
+
+function shouldRecoverUnavailableSessionRead(error, operation, payload, signal, disposed) {
+  return (
+    !disposed &&
+    !signal?.aborted &&
+    error instanceof Error &&
+    error.message === "The active hosted tab did not respond" &&
     operation === "gui" &&
     (payload?.action === "bootstrap" || payload?.action === "load_session")
   );
