@@ -343,6 +343,35 @@ describe("hosted browser archive", () => {
     expect(JSON.parse(files.get("checkpoint-v1.json") || "null").bootstrap).toBeUndefined();
   });
 
+  it("self-heals a malformed offline projection while preserving durable state", async () => {
+    const archive = createHostedArchive({
+      sessions: [session],
+      stateBytes: sqlite,
+      currentSessionId: "session-1",
+      bootstrap: {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [{ id: "session-1" }],
+        snapshot: { sessionId: "session-1", entries: [], events: [], state: {} },
+        coordination: { writable: true },
+        catalog: { tools: [], workflows: [], providers: [] },
+      },
+    });
+    archive.bootstrap.snapshot.entries = {};
+    const files = new Map([["checkpoint-v1.json", JSON.stringify(archive)]]);
+    const store = createBrowserDataStore({
+      getRoot: async () => createMemoryDirectory(files),
+    });
+
+    await expect(store.readRuntimeSnapshot()).resolves.toMatchObject({
+      currentSessionId: "session-1",
+      sessions: [session],
+      stateBytes: sqlite,
+    });
+    await expect(store.readOfflineBootstrap()).resolves.toBeNull();
+    expect(JSON.parse(files.get("checkpoint-v1.json") || "null").bootstrap).toBeUndefined();
+  });
+
   it("serializes archive reads and writes across concurrent GUI checkpoints", async () => {
     let content = JSON.stringify(
       createHostedArchive({

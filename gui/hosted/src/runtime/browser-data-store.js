@@ -185,8 +185,9 @@ class BrowserDataStore {
       const file = await handle.getFile();
       if (file.size > MAX_ARCHIVE_BYTES) throw new Error("Hosted archive is too large");
       const localArchive = reconcileLocalBootstrapSessions(JSON.parse(await file.text()));
-      const archive = validateHostedArchive(localArchive.value);
-      if (localArchive.repaired) {
+      const repairedArchive = discardInvalidBootstrapProjection(localArchive.value);
+      const archive = validateHostedArchive(repairedArchive.value);
+      if (localArchive.repaired || repairedArchive.repaired) {
         await writeFile(root, ARCHIVE_FILENAME, JSON.stringify(archive));
       }
       return archive;
@@ -220,7 +221,8 @@ class BrowserDataStore {
       const localArchive = reconcileLocalBootstrapSessions(
         JSON.parse(await (await handle.getFile()).text()),
       );
-      const archive = validateHostedArchive(localArchive.value);
+      const repairedArchive = discardInvalidBootstrapProjection(localArchive.value);
+      const archive = validateHostedArchive(repairedArchive.value);
       await this.writeArchive(archive);
       return true;
     } catch (error) {
@@ -287,6 +289,27 @@ function reconcileLocalBootstrapSessions(value) {
     value: { ...value, bootstrap: { ...value.bootstrap, sessions } },
     repaired: true,
   };
+}
+
+function discardInvalidBootstrapProjection(value) {
+  if (!isRecord(value) || !Object.prototype.hasOwnProperty.call(value, "bootstrap")) {
+    return { value, repaired: false };
+  }
+  try {
+    validateHostedArchive(value);
+    return { value, repaired: false };
+  } catch (error) {
+    // The bootstrap payload is a regenerated offline projection. It has no
+    // authority over the canonical JSONL and SQLite checkpoint, so a stale
+    // projection from an older build (or one that was interrupted mid-write)
+    // must not make durable browser state impossible to load.
+    if (!(error instanceof Error) || !error.message.startsWith("Offline bootstrap snapshot")) {
+      throw error;
+    }
+    const { bootstrap: _bootstrap, ...archive } = value;
+    validateHostedArchive(archive);
+    return { value: archive, repaired: true };
+  }
 }
 
 async function validateStateDatabaseBytes(bytes) {
