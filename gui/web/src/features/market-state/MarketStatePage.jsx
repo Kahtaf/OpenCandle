@@ -97,7 +97,11 @@ export async function invokeMarketStateMutation({
       });
       return false;
     }
-    await refresh();
+    // A hosted direct-tool response is only released after the browser host
+    // has persisted its checkpoint. Do not keep the form open behind a second
+    // WebContainer request just to reread the same durable market state;
+    // polling and the hosted invalidation will reconcile the visible list.
+    void refresh();
     if (refreshQuotes) {
       void Promise.resolve(refreshQuotes()).catch((quoteError) => {
         const message = quoteError instanceof Error ? quoteError.message : String(quoteError);
