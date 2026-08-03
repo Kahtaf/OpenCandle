@@ -38,20 +38,21 @@ describe("useChatRun terminal state", () => {
   it("clears the optimistic queued projection when SSE reports a terminal failure", async () => {
     const onRunError = vi.fn();
     const transport = {
-      startChatRun: vi.fn(async () =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(
-                new TextEncoder().encode(
-                  'data: {"type":"run.failed","error":{"message":"Runtime stopped"}}\n\n',
-                ),
-              );
-              controller.close();
-            },
-          }),
-          { headers: { "content-type": "text/event-stream" } },
-        ),
+      startChatRun: vi.fn(
+        async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    'data: {"type":"run.failed","error":{"message":"Runtime stopped"}}\n\n',
+                  ),
+                );
+                controller.close();
+              },
+            }),
+            { headers: { "content-type": "text/event-stream" } },
+          ),
       ),
     };
 
