@@ -84,6 +84,21 @@ export function AppShell() {
       },
       [activeSessionId, pathname, routeSessionId, navigate, gui],
     ),
+    onRunError: useCallback((sessionId) => {
+      if (!sessionId) return;
+      setLiveEventsBySession((current) => {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
+      setLiveBaseEventCountBySession((current) => {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
+    }, []),
   });
   const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
@@ -93,7 +108,17 @@ export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const homeResetSessionRef = useRef("");
+  const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);
+  const createFreshHomeSession = useCallback(() => {
+    if (homeSessionCreationRef.current) return homeSessionCreationRef.current;
+    const creation = gui.newSession();
+    homeSessionCreationRef.current = creation;
+    void creation.finally(() => {
+      if (homeSessionCreationRef.current === creation) homeSessionCreationRef.current = null;
+    });
+    return creation;
+  }, [gui.newSession]);
   const sessionView = routeSessionView({
     pathname,
     currentSessionId:
@@ -188,13 +213,15 @@ export function AppShell() {
     )
       return;
     homeResetSessionRef.current = gui.currentSessionId;
-    void gui.newSession();
+    void createFreshHomeSession().then((sessionId) => {
+      if (sessionId) homeResetSessionRef.current = sessionId;
+    });
   }, [
     pathname,
     gui.currentSessionId,
     hasGuiSessionContent,
     guiEventCount,
-    gui.newSession,
+    createFreshHomeSession,
     gui.role,
     gui.supportsSessionActions,
     search?.messageId,
@@ -273,7 +300,7 @@ export function AppShell() {
       freshRunPendingRef.current = true;
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
-          const freshSessionId = await gui.newSession();
+          const freshSessionId = await createFreshHomeSession();
           if (!freshSessionId) return;
           homeResetSessionRef.current = freshSessionId;
           const result = await chatRun.startChatRun(prompt, {
@@ -297,7 +324,7 @@ export function AppShell() {
       hasGuiSessionContent,
       gui.role,
       gui.supportsSessionActions,
-      gui.newSession,
+      createFreshHomeSession,
       gui.setToast,
       chatRun.startChatRun,
       clearLiveEventsForSession,

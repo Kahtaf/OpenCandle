@@ -52,7 +52,7 @@ export function isDuplicateChatRunAck(body) {
   return body?.ok === true && body?.duplicate === true;
 }
 
-export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart }) {
+export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
   const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
   const runStatesRef = useRef({});
@@ -145,6 +145,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           return updated;
         });
       } catch (error) {
+        onRunError?.(targetSessionId);
         if (error?.name === "AbortError") {
           setToast("Stopped response.");
           setRunStateFor(key, "ready");
@@ -156,7 +157,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         abortsRef.current.delete(key);
       }
     },
-    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart, transport],
+    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart, onRunError, transport],
   );
 
   const stopRun = useCallback(

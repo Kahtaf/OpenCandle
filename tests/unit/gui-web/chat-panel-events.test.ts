@@ -260,7 +260,8 @@ describe("ChatPanel event transcript rendering", () => {
 
     expect(appSource).toContain('canStartFreshHomeSession: gui.role === "writer"');
     expect(appSource).toContain("for (let attempt = 0; attempt < 2; attempt++)");
-    expect(appSource).toContain("const freshSessionId = await gui.newSession()");
+    expect(appSource).toContain("const freshSessionId = await createFreshHomeSession()");
+    expect(appSource).toContain("const homeSessionCreationRef = useRef(null)");
     expect(appSource).toContain("baseEventCount: 0");
     expect(appSource).toContain('event.type !== "run.started"');
     expect(appSource).toContain("gui.adoptSessionId(sessionId)");
