@@ -1,5 +1,9 @@
 export const runtimeTransportContractVersion = 1;
 
+export function actionSurfaceRole(role, supportsSessionActions) {
+  return supportsSessionActions ? "writer" : role;
+}
+
 export function createLoopbackRuntimeTransport(options = {}) {
   const fetchImpl = options.fetchImpl ?? ((...args) => globalThis.fetch(...args));
   const WebSocketImpl = options.WebSocketImpl ?? globalThis.WebSocket;

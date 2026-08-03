@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  actionSurfaceRole,
   createLoopbackRuntimeTransport,
   runtimeTransportContractVersion,
 } from "../../../gui/web/src/runtime/runtime-transport.js";
@@ -13,6 +14,12 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("loopback runtime transport", () => {
+  it("keeps online forwarding tabs actionable without enabling offline or local followers", () => {
+    expect(actionSurfaceRole("follower", true)).toBe("writer");
+    expect(actionSurfaceRole("follower", false)).toBe("follower");
+    expect(actionSurfaceRole("offline", false)).toBe("offline");
+  });
+
   it("uses the existing bootstrap, session, tool, and run contracts", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {

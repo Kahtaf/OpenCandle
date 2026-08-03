@@ -113,6 +113,7 @@ describe("hosted runtime transport", () => {
 
   it("advertises offline hosted bootstraps as read-only for session actions", async () => {
     const host = createHost();
+    Object.assign(host, { getRole: vi.fn(() => "follower") });
     host.request.mockResolvedValueOnce({
       role: "offline",
       sessionId: "session-1",

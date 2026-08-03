@@ -20,6 +20,7 @@ import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
 import { domainFromPath, tickerFromPath } from "./route-resolution.js";
+import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
 const CatalogOverlay = lazy(() =>
@@ -119,6 +120,7 @@ export function AppShell() {
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
     !gui.supportsSessionActions;
+  const actionRole = actionSurfaceRole(gui.role, gui.supportsSessionActions);
 
   const openDrawer = useCallback(
     (drawer) => {
@@ -412,7 +414,7 @@ export function AppShell() {
             startChatRun={startRoutedChatRun}
             navigate={navigate}
             invokeTool={invokeToolForVisibleSession}
-            role={gui.role}
+            role={actionRole}
             setToast={gui.setToast}
             onOpenSidebar={() => openDrawer("history")}
             onOpenHome={openHome}
@@ -423,7 +425,7 @@ export function AppShell() {
           <MarketStatePage
             domain={marketDomain}
             alertSymbol={search?.alertSymbol}
-            role={gui.role}
+            role={actionRole}
             send={gui.send}
             invokeTool={invokeToolForVisibleSession}
             navigate={navigate}

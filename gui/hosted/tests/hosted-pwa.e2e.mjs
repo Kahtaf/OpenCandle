@@ -377,6 +377,21 @@ try {
     );
     await waitForText(follower, "Ready through the active tab", 120_000);
     await waitForText(follower, "AAPL", 30_000);
+    const followerAddTicker = follower.getByRole("button", { name: "Add ticker" }).last();
+    await waitForEnabled(followerAddTicker, 30_000);
+    await followerAddTicker.click();
+    const followerSymbolInput = follower.getByRole("combobox", {
+      name: "Search ticker or company",
+    });
+    await selectInstrumentCandidate(follower, followerSymbolInput, "NVDA");
+    await follower.getByRole("button", { name: "Save" }).click();
+    await waitFor(
+      async () => (await follower.getByRole("button", { name: "Save", exact: true }).count()) === 0,
+      30_000,
+      "follower watchlist mutation acknowledgement",
+    );
+    await waitForTextExact(follower, "NVDA", 30_000);
+    await waitForTextExact(page, "NVDA", 30_000);
     await follower.getByRole("button", { name: "New chat", exact: true }).click();
     await waitForText(
       follower,

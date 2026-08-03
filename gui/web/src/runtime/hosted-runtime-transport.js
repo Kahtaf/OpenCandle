@@ -28,7 +28,10 @@ export function createHostedRuntimeTransport({ host }) {
   const withBrowserState = (payload) => {
     // A follower receives the writer's bootstrap payload over BroadcastChannel.
     // The payload's role therefore describes the serving tab, not this tab.
-    const role = host.getRole?.() || payload?.role || "writer";
+    // The host owns the live writer/follower role, but an offline bootstrap is
+    // authoritative: no tab may forward mutations while the browser is offline.
+    const role =
+      payload?.role === "offline" ? "offline" : host.getRole?.() || payload?.role || "writer";
     const payloadCoordination = payload?.coordination || {
       ownerKind: role === "offline" ? "offline" : "hosted",
       writable: role !== "offline",
