@@ -119,6 +119,19 @@ export function AppShell() {
     });
     return creation;
   }, [gui.newSession]);
+  const canPrepareFreshHomeSession =
+    gui.role === "writer" &&
+    gui.supportsSessionActions &&
+    !search?.messageId &&
+    chatRun.runState !== "connecting" &&
+    chatRun.runState !== "streaming";
+  const shouldPrepareFreshHomeSession = shouldStartFreshHomeSession({
+    pathname,
+    currentSessionId: gui.currentSessionId,
+    entryCount: visibleEvents.length,
+    lastResetSessionId: homeResetSessionRef.current,
+    canStartFreshHomeSession: canPrepareFreshHomeSession,
+  });
   const sessionView = routeSessionView({
     pathname,
     currentSessionId:
@@ -126,8 +139,8 @@ export function AppShell() {
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
-    canStartFreshHomeSession:
-      gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
+    canStartFreshHomeSession: canPrepareFreshHomeSession,
+    pendingFreshHomeSession: shouldPrepareFreshHomeSession,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
@@ -140,7 +153,6 @@ export function AppShell() {
         (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
       );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
-  const guiEventCount = visibleEvents.length;
   const inputDisabled =
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
@@ -201,31 +213,12 @@ export function AppShell() {
       homeResetSessionRef.current = "";
       return;
     }
-    if (
-      !shouldStartFreshHomeSession({
-        pathname,
-        currentSessionId: gui.currentSessionId,
-        entryCount: hasGuiSessionContent ? guiEventCount : 0,
-        lastResetSessionId: homeResetSessionRef.current,
-        canStartFreshHomeSession:
-          gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
-      })
-    )
-      return;
+    if (!shouldPrepareFreshHomeSession) return;
     homeResetSessionRef.current = gui.currentSessionId;
     void createFreshHomeSession().then((sessionId) => {
       if (sessionId) homeResetSessionRef.current = sessionId;
     });
-  }, [
-    pathname,
-    gui.currentSessionId,
-    hasGuiSessionContent,
-    guiEventCount,
-    createFreshHomeSession,
-    gui.role,
-    gui.supportsSessionActions,
-    search?.messageId,
-  ]);
+  }, [pathname, gui.currentSessionId, createFreshHomeSession, shouldPrepareFreshHomeSession]);
 
   useEffect(() => {
     if (
@@ -279,10 +272,6 @@ export function AppShell() {
         hasCurrentSessionContent: hasGuiSessionContent,
         canStartFreshHomeSession: gui.role === "writer",
       });
-      if (target.mode === "current") {
-        void chatRun.startChatRun(prompt, options);
-        return;
-      }
       if (target.mode === "route") {
         const result = await chatRun.startChatRun(prompt, {
           ...options,
@@ -294,6 +283,15 @@ export function AppShell() {
             destructive: true,
           });
         }
+        return;
+      }
+      // A freshly opened follower can render the home dashboard before it has
+      // received a current session projection. Give its first submission a
+      // durable session instead of passing an empty id into useChatRun and
+      // silently dropping the prompt while writer ownership changes.
+      const needsInitialHomeSession = target.mode === "current" && !activeSessionId;
+      if (target.mode === "current" && !needsInitialHomeSession) {
+        void chatRun.startChatRun(prompt, options);
         return;
       }
       if (freshRunPendingRef.current) return;

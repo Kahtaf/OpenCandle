@@ -60,7 +60,7 @@ async function settle() {
 }
 
 describe("browser runtime coordinator", () => {
-  it("elects one writer and forwards a follower action exactly once", async () => {
+  it("elects one writer and gives a follower mutation to its initiating tab", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -93,7 +93,8 @@ describe("browser runtime coordinator", () => {
     const follower = first.getRole() === "follower" ? first : second;
     await follower.request("gui", { action: "new_session" });
     await settle();
-    expect(calls).toEqual([{ action: "new_session" }]);
+    expect(calls).toEqual([{ action: "bootstrap" }, { action: "new_session" }]);
+    expect(follower.getRole()).toBe("writer");
 
     await Promise.all([first.dispose(), second.dispose()]);
   });
@@ -437,7 +438,7 @@ describe("browser runtime coordinator", () => {
     await follower.dispose();
   });
 
-  it("rejects an in-flight follower action immediately when the writer epoch changes", async () => {
+  it("rejects an in-flight forwarded read immediately when the writer epoch changes", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
@@ -458,7 +459,7 @@ describe("browser runtime coordinator", () => {
     const writer = first.getRole() === "writer" ? first : second;
     const follower = writer === first ? second : first;
 
-    const forwarded = follower.request("gui", { action: "new_session" });
+    const forwarded = follower.request("gui", { action: "market_state" });
     await settle();
     await writer.dispose();
 
@@ -743,20 +744,17 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
-  it("cancels the writer's stream reader when a follower stream times out", async () => {
+  it("promotes the initiating follower before it starts a chat stream", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
-    let producerCancelled = false;
     const streamRequest = vi.fn(
       async () =>
         new Response(
           new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode("first"));
-            },
-            cancel() {
-              producerCancelled = true;
+              controller.close();
             },
           }),
           { headers: { "content-type": "text/event-stream" } },
@@ -779,11 +777,9 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.ready(), second.ready()]);
     const follower = first.getRole() === "follower" ? first : second;
     const response = await follower.streamRequest("gui", { action: "chat_run" });
-    const reader = response.body!.getReader();
-
-    await expect(reader.read()).resolves.toMatchObject({ done: false });
-    await expect(reader.read()).rejects.toThrow("did not complete the stream");
-    await vi.waitFor(() => expect(producerCancelled).toBe(true));
+    expect(await response.text()).toBe("first");
+    await vi.waitFor(() => expect(follower.getRole()).toBe("writer"));
+    expect(streamRequest).toHaveBeenCalledTimes(1);
 
     await Promise.all([first.dispose(), second.dispose()]);
   });

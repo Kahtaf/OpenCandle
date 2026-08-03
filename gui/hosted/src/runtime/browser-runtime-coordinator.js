@@ -40,6 +40,7 @@ class BrowserRuntimeCoordinator {
     this.subscribers = new Set();
     this.disposed = false;
     this.releaseWriter = null;
+    this.writerReadyPromise = null;
     this.readyPromise = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -102,8 +103,15 @@ class BrowserRuntimeCoordinator {
   }
 
   async requestFromCurrentWriter(operation, payload, options) {
+    // Session-changing UI actions must execute in the tab that initiated them.
+    // A background writer can be throttled while a user is actively navigating
+    // or saving in another tab, which otherwise surfaces as "did not respond".
+    if (this.role !== "writer" && isMutatingRequest(operation, payload)) {
+      await this.takeWriter();
+    }
     if (this.role === "writer") {
-      const value = await this.host.request(operation, payload, options);
+      const host = await this.waitForWriterReady();
+      const value = await host.request(operation, payload, options);
       if (isMutatingRequest(operation, payload)) this.broadcastInvalidation();
       return this.decorate(value);
     }
@@ -116,14 +124,16 @@ class BrowserRuntimeCoordinator {
       command?.type === "hosted.data.clear_secrets" || command?.type === "hosted.data.clear_all";
     let value;
     if (this.role === "writer") {
-      value = await this.host.handleCommand(command);
-      this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
+      const host = await this.waitForWriterReady();
+      value = await host.handleCommand(command);
+      this.cachedModelSetup = host.getModelSetup?.() ?? this.cachedModelSetup;
       this.broadcastStatus();
       this.broadcastInvalidation();
-    } else if (isCredentialBearingCommand(command)) {
+    } else if (isInteractiveCommand(command)) {
       await this.takeWriter();
-      value = await this.host.handleCommand(command);
-      this.cachedModelSetup = this.host.getModelSetup?.() ?? this.cachedModelSetup;
+      const host = await this.waitForWriterReady();
+      value = await host.handleCommand(command);
+      this.cachedModelSetup = host.getModelSetup?.() ?? this.cachedModelSetup;
       this.broadcastStatus();
       this.broadcastInvalidation();
     } else {
@@ -138,11 +148,19 @@ class BrowserRuntimeCoordinator {
 
   async streamRequest(operation, payload = {}, options = {}) {
     await this.ready();
-    if (this.role === "writer") {
-      const response = await this.host.streamRequest(operation, payload, options);
-      return this.wrapWriterStream(response);
+    // A chat turn is stateful and long-lived. Forwarding its stream through a
+    // background tab leaves the initiating tab dependent on a second event
+    // loop, and can strand the visible turn when that writer is suspended.
+    // Promote the tab where the user pressed Send instead. This keeps one
+    // WebContainer at a time while making the active tab the owner of its
+    // own model request, matching the local GUI's interaction model.
+    if (this.role !== "writer") await this.takeWriter();
+    if (this.role !== "writer") {
+      throw new Error("The active hosted tab did not become the browser runtime writer");
     }
-    return this.forwardStream({ operation, payload }, options.signal);
+    const host = await this.waitForWriterReady();
+    const response = await host.streamRequest(operation, payload, options);
+    return this.wrapWriterStream(response);
   }
 
   async dispose() {
@@ -173,6 +191,7 @@ class BrowserRuntimeCoordinator {
   }
 
   async becomeWriter() {
+    const restoringExistingWriter = this.role === "follower";
     const previous = Number.parseInt(this.storage.getItem(EPOCH_KEY) ?? "0", 10);
     const nextEpoch = Number.isSafeInteger(previous) && previous >= 0 ? previous + 1 : 1;
     if (nextEpoch !== this.epoch) this.rejectPendingForWriterChange();
@@ -182,16 +201,33 @@ class BrowserRuntimeCoordinator {
     this.role = "writer";
     const host = this.createHost({ sessionCredential: this.sessionCredential });
     this.host = host;
-    // Overlap WebContainer startup with the UI's initial render. The first
-    // bootstrap request reuses this promise, so there is still exactly one
-    // runtime and no additional background execution surface.
+    // Overlap WebContainer startup with the UI's initial render while keeping
+    // each writer's request surface behind one readiness barrier. A replacement
+    // writer additionally restores its durable session before it accepts chat.
     this.runtimeProgress = {
       type: "runtime-progress",
       phase: "booting",
       message: "Preparing browser runtime…",
     };
     this.notify(this.runtimeProgress);
-    void Promise.resolve(host.prewarm?.())
+    this.writerReadyPromise = Promise.resolve(host.prewarm?.())
+      .then(() => {
+        if (this.host !== host || this.role !== "writer") return;
+        if (restoringExistingWriter) {
+          this.runtimeProgress = {
+            type: "runtime-progress",
+            phase: "restoring",
+            message: "Restoring local OpenCandle session…",
+          };
+          this.notify(this.runtimeProgress);
+          // A follower takes ownership only after the old WebContainer is
+          // gone. Prime the replacement from the durable browser checkpoint
+          // before allowing a new chat to write its first checkpoint; without
+          // this barrier, a chat and bootstrap can race and strand the visible
+          // run before its run.started event.
+          return host.request("gui", { action: "bootstrap" });
+        }
+      })
       .then(() => {
         if (this.host !== host || this.role !== "writer") return;
         this.runtimeProgress = {
@@ -209,7 +245,12 @@ class BrowserRuntimeCoordinator {
           error: error instanceof Error ? error.message : String(error),
         };
         this.notify(this.runtimeProgress);
+        throw error;
       });
+    // The barrier is also awaited by every writer operation. Mark its rejected
+    // branch handled now so a boot error is surfaced by the UI request instead
+    // of becoming an unhandled background rejection.
+    void this.writerReadyPromise.catch(() => {});
     this.cachedModelSetup = this.host.getModelSetup?.() ?? null;
     this.resolveReady();
     this.broadcastStatus();
@@ -277,6 +318,7 @@ class BrowserRuntimeCoordinator {
     }
     const host = this.host;
     this.host = null;
+    this.writerReadyPromise = null;
     this.releaseWriter = null;
     if (host) await host.dispose?.();
     if (!this.disposed) {
@@ -472,9 +514,10 @@ class BrowserRuntimeCoordinator {
     let operation = this.completed.get(message.requestId);
     if (!operation) {
       operation = (async () => {
-        if (message.kind === "command") return this.host.handleCommand(message.command);
+        const host = await this.waitForWriterReady();
+        if (message.kind === "command") return host.handleCommand(message.command);
         if (message.kind === "request" && typeof message.operation === "string") {
-          return this.host.request(message.operation, message.payload ?? {});
+          return host.request(message.operation, message.payload ?? {});
         }
         throw new Error("Hosted follower action is invalid");
       })();
@@ -516,7 +559,8 @@ class BrowserRuntimeCoordinator {
     const active = { controller, reader: null };
     this.activeForwardedStreams.set(message.requestId, active);
     try {
-      const response = await this.host.streamRequest(
+      const host = await this.waitForWriterReady();
+      const response = await host.streamRequest(
         message.operation,
         message.payload ?? {},
         { signal: controller.signal },
@@ -565,6 +609,18 @@ class BrowserRuntimeCoordinator {
     } finally {
       this.activeForwardedStreams.delete(message.requestId);
     }
+  }
+
+  async waitForWriterReady() {
+    const host = this.host;
+    if (this.role !== "writer" || !host) {
+      throw new Error("The active hosted tab did not become the browser runtime writer");
+    }
+    await this.writerReadyPromise;
+    if (this.role !== "writer" || this.host !== host) {
+      throw writerChangedError();
+    }
+    return host;
   }
 
   wrapWriterStream(response) {
@@ -679,8 +735,8 @@ function refreshStreamInactivityTimer(pending) {
   pending.timer = setTimeout(pending.onTimeout, pending.timeoutMs);
 }
 
-function isCredentialBearingCommand(command) {
-  return command?.type === "model.setup.save_api_key" || command?.type === "provider.save_api_key";
+function isInteractiveCommand(command) {
+  return Boolean(command?.type);
 }
 
 function isMutatingRequest(operation, payload) {

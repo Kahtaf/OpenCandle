@@ -10,20 +10,21 @@ export function routeSessionView({
   runState,
   liveBaseEventCount,
   canStartFreshHomeSession = true,
+  pendingFreshHomeSession = false,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession =
-    canStartFreshHomeSession && pathname === "/" && hasSessionContent(events);
+  const shouldHideHomeSession =
+    canStartFreshHomeSession && pathname === "/" && pendingFreshHomeSession;
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
     routeSessionId,
     pendingSessionSwitch,
-    pendingFreshHomeSession,
+    pendingFreshHomeSession: shouldHideHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
     events:
-      pendingSessionSwitch || pendingFreshHomeSession
+      pendingSessionSwitch || shouldHideHomeSession
         ? []
         : streaming
           ? events.slice(0, liveBaseEventCount)

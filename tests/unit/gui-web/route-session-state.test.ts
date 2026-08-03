@@ -34,11 +34,27 @@ describe("route session state", () => {
       events: [messageCompleted("stale-home-entry", "stale home transcript")],
       runState: "ready",
       liveBaseEventCount: 0,
+      pendingFreshHomeSession: true,
     });
 
     expect(view.activeSessionId).toBe("session-with-history");
     expect(view.pendingFreshHomeSession).toBe(true);
     expect(view.events).toEqual([]);
+  });
+
+  it("keeps home action-capable when its already-fresh session receives content", () => {
+    const events = [messageCompleted("forwarded-entry", "follower response")];
+    const view = routeSessionView({
+      pathname: "/",
+      currentSessionId: "fresh-home-session",
+      events,
+      runState: "ready",
+      liveBaseEventCount: 0,
+      pendingFreshHomeSession: false,
+    });
+
+    expect(view.pendingFreshHomeSession).toBe(false);
+    expect(view.events).toBe(events);
   });
 
   it("does not treat session metadata events as stale home transcript content", () => {
