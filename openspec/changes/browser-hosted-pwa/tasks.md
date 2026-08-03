@@ -99,4 +99,4 @@
 - [x] 14.4 Repair canonical workflow and direct-tool event/result rendering so hosted workflows produce result cards and terminal states rather than only step prompts.
 - [x] 14.5 Produce current-production Browser evidence for every enabled hosted model and tool path, including Yahoo, Finnhub, LSE, FRED, TradingView, Fear & Greed, DDG, and configured Exa/Brave; document intentional Reddit/X and closed-tab exclusions.
 - [ ] 14.6 Run the release acceptance matrix on desktop and mobile: bootstrap, credential setup, model selection, autocomplete, chat/stream/stop, tools, workflows, market state, reload/update/offline/error, and writer/follower handoff; run matching local GUI and TUI regression journeys.
-- [ ] 14.7 Run focused checks, the hosted build, full root gates, production deployment acceptance, graph refresh, and code review only after the hardening batch is stable.
+- [x] 14.7 Run focused checks, the hosted build, full root gates, production deployment acceptance, graph refresh, and code review only after the hardening batch is stable.
