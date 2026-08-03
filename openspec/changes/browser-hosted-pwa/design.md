@@ -501,6 +501,10 @@ mocked transport or local browser runtime:
   it became `Running on this device` without surfacing the former
   `The active hosted tab did not respond` error. A 390px mobile bootstrap also
   reached model setup without horizontal overflow.
+- the same production build completed `/analyze AAPL` on `gpt-4.1-mini` with
+  both a workflow-step card and a completed shared tool-result card. This is
+  explicit evidence that workflows no longer stop at their durable prompt
+  steps in the deployed UI.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
