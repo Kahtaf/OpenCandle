@@ -458,6 +458,12 @@ mocked transport or local browser runtime:
   returned the tab to `Running on this device`.
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
+- deployment `69143dba-c74c-4428-8b84-7ec485f65534` bounds a forwarded
+  bootstrap/session-load read to 15 seconds. If the current writer no longer
+  answers BroadcastChannel work, the visible tab now reports that it is
+  switching the browser runtime, takes the writer lock, restores the canonical
+  browser checkpoint, and retries locally rather than showing “The active
+  hosted tab did not respond”.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
