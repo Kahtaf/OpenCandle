@@ -416,6 +416,54 @@ export function AppShell() {
     },
     [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );
+  const runCatalogTool = useCallback(
+    async (toolName, args) => {
+      const target = chatRunSessionTarget({
+        pathname,
+        supportsSessionActions: gui.supportsSessionActions,
+        hasCurrentSessionContent: hasGuiSessionContent,
+        canStartFreshHomeSession: gui.role === "writer",
+      });
+      let targetSessionId =
+        target.mode === "route" ? target.sessionId : sessionView.activeSessionId;
+
+      if (target.mode === "fresh") {
+        if (freshRunPendingRef.current) {
+          throw new Error("A new session is already being prepared. Please retry shortly.");
+        }
+        freshRunPendingRef.current = true;
+        try {
+          targetSessionId = await createFreshHomeSession();
+          if (!targetSessionId) throw new Error("Unable to create a session for this tool run.");
+          homeResetSessionRef.current = targetSessionId;
+          const result = await invokeToolForVisibleSession(toolName, args, targetSessionId);
+          gui.adoptSessionId(targetSessionId);
+          await navigate({
+            to: "/sessions/$sessionId",
+            params: { sessionId: targetSessionId },
+            search: (current) => ({ ...current, drawer: undefined }),
+          });
+          return result;
+        } finally {
+          freshRunPendingRef.current = false;
+        }
+      }
+
+      if (!targetSessionId) throw new Error("Open a session before running this tool.");
+      return invokeToolForVisibleSession(toolName, args, targetSessionId);
+    },
+    [
+      pathname,
+      gui.supportsSessionActions,
+      gui.role,
+      gui.adoptSessionId,
+      hasGuiSessionContent,
+      sessionView.activeSessionId,
+      createFreshHomeSession,
+      invokeToolForVisibleSession,
+      navigate,
+    ],
+  );
   const scrollAnchorId = search?.messageId || search?.researchId || search?.synthesisId || "";
 
   return (
@@ -508,6 +556,7 @@ export function AppShell() {
             send={gui.send}
             setToast={gui.setToast}
             startChatRun={startRoutedChatRun}
+            invokeTool={runCatalogTool}
             fillComposer={fillComposer}
             sessionId={sessionView.activeSessionId}
           />

@@ -53,6 +53,7 @@ export function CatalogOverlay({
   send,
   setToast,
   startChatRun,
+  invokeTool,
   fillComposer,
   sessionId,
 }) {
@@ -118,6 +119,7 @@ export function CatalogOverlay({
                 send={send}
                 setToast={setToast}
                 startChatRun={startChatRun}
+                invokeTool={invokeTool}
                 fillComposer={fillComposer}
                 onClose={close}
                 lookupSymbol={lookupSymbol}
@@ -476,6 +478,7 @@ function BuilderBody({
   send,
   setToast,
   startChatRun,
+  invokeTool,
   fillComposer,
   onClose,
   lookupSymbol,
@@ -509,8 +512,8 @@ function BuilderBody({
     return (
       <ToolBuilder
         tool={entity}
-        send={send}
         startChatRun={startChatRun}
+        invokeTool={invokeTool}
         fillComposer={fillComposer}
         onClose={onClose}
         setToast={setToast}
@@ -644,8 +647,8 @@ export function buildCatalogToolInvokePayload(toolName, args, sessionId = "") {
 
 function ToolBuilder({
   tool,
-  send,
   startChatRun,
+  invokeTool,
   fillComposer,
   onClose,
   setToast,
@@ -654,6 +657,7 @@ function ToolBuilder({
 }) {
   const schema = useMemo(() => fieldsForTool(tool), [tool]);
   const [values, setValues] = useState(() => defaultValuesFor(schema));
+  const [running, setRunning] = useState(false);
   const setField = useCallback(
     (name, value) => setValues((prev) => ({ ...prev, [name]: value })),
     [],
@@ -666,7 +670,7 @@ function ToolBuilder({
     [tool, cleanArgs],
   );
 
-  const submit = (mode) => {
+  const submit = async (mode) => {
     if (issues.length > 0) {
       setToast?.(issues[0]);
       return;
@@ -683,9 +687,19 @@ function ToolBuilder({
       return;
     }
     if (mode === "run") {
-      if (send?.("tool.invoke", buildCatalogToolInvokePayload(tool.name, cleanArgs, sessionId))) {
-        setToast?.(`Running ${tool.label || tool.name}…`);
+      if (!invokeTool) {
+        setToast?.("This tool cannot run until the GUI connection is ready.");
+        return;
+      }
+      setRunning(true);
+      try {
+        await invokeTool(tool.name, cleanArgs, sessionId);
+        setToast?.(`${tool.label || tool.name} completed.`);
         onClose();
+      } catch (error) {
+        setToast?.(error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
       }
     }
   };
@@ -715,8 +729,14 @@ function ToolBuilder({
         <Button variant="bordered" size="sm" onClick={() => submit("draft")}>
           Edit in chat
         </Button>
-        <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>
-          Run now
+        <Button
+          variant="brand"
+          size="sm"
+          prefixIcon={Play}
+          disabled={running}
+          onClick={() => void submit("run")}
+        >
+          {running ? "Running…" : "Run now"}
         </Button>
       </div>
     </div>
