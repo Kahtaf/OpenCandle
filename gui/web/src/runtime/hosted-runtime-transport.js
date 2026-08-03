@@ -18,6 +18,7 @@ export function createHostedRuntimeTransport({ host }) {
   const subscribers = new Set();
   let closed = false;
   let selectedSessionId = "";
+  let refreshGeneration = 0;
 
   const publish = (message) => {
     if (closed) return;
@@ -86,7 +87,13 @@ export function createHostedRuntimeTransport({ host }) {
   };
 
   const refresh = async () => {
-    return publishBootstrap(await requestGui({ action: "bootstrap" }));
+    const generation = ++refreshGeneration;
+    const bootstrap = await requestGui({ action: "bootstrap" });
+    // Network and ownership changes can overlap ordinary market-state polls.
+    // A late online bootstrap must not overwrite a newer offline (or
+    // replacement-writer) projection and make saved-state controls writable.
+    if (generation !== refreshGeneration) return withBrowserState(bootstrap);
+    return publishBootstrap(bootstrap);
   };
 
   const transport = {
@@ -104,6 +111,16 @@ export function createHostedRuntimeTransport({ host }) {
       closed = false;
       subscribers.add(onMessage);
       let channelClosed = false;
+      const publishOffline = () => {
+        publish({
+          type: "runtime.status",
+          role: "offline",
+          coordination: { ownerKind: "offline", writable: false },
+          supportsSessionActions: false,
+          modelSetup: host.getModelSetup?.() || EMPTY_MODEL_SETUP,
+        });
+      };
+      globalThis.addEventListener?.("offline", publishOffline);
       const unsubscribeHost = host.subscribe?.((message) => {
         if (channelClosed) return;
         if (message?.type === "ask_user.prompt" || message?.type === "ask_user.resolved") {
@@ -131,7 +148,17 @@ export function createHostedRuntimeTransport({ host }) {
           });
           return;
         }
+        if (message?.type === "restored-bootstrap") {
+          refreshGeneration += 1;
+          selectedSessionId = message.bootstrap?.sessionId || selectedSessionId;
+          publishBootstrap(message.bootstrap);
+          return;
+        }
         if (message?.type !== "invalidate") return;
+        if (navigator.onLine === false) {
+          publishOffline();
+          return;
+        }
         void refresh().catch((error) => {
           publish({
             type: "error",
@@ -143,6 +170,7 @@ export function createHostedRuntimeTransport({ host }) {
         if (channelClosed) return;
         channelClosed = true;
         subscribers.delete(onMessage);
+        globalThis.removeEventListener?.("offline", publishOffline);
         unsubscribeHost?.();
         onClose?.();
       };

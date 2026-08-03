@@ -358,7 +358,11 @@ export function useGuiConnection() {
             } else if (message.type === "state.snapshot") {
               const nextSnapshot = sessionSnapshotFromPayload(message);
               setEntries(nextSnapshot?.entries || []);
-              setCurrentSessionId(message.sessionId || "");
+              // Runtime-status and partial projections can arrive while a
+              // replacement writer is restoring its checkpoint. They do not
+              // always repeat the selected session id, and must not erase the
+              // valid id received in the preceding boot payload.
+              setCurrentSessionId((currentSessionId) => message.sessionId || currentSessionId);
               setCoordination((current) =>
                 resolveSnapshotCoordination(current, message.coordination),
               );
@@ -445,11 +449,25 @@ export function useGuiConnection() {
     };
 
     connect();
+    const handleOffline = () => {
+      // The browser runtime can retain its elected writer role while a network
+      // transition is still propagating through the hosted transport. Disable
+      // every action surface immediately; saved checkpoints remain readable,
+      // but no mutation may be queued until the connection is restored.
+      setSupportsSessionActions(false);
+      setRole("offline");
+    };
+    const handleOnline = () => reconnectOnForeground();
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    if (navigator.onLine === false) handleOffline();
     window.addEventListener("focus", reconnectOnForeground);
     document.addEventListener("visibilitychange", reconnectOnForeground);
     return () => {
       disposed = true;
       window.clearTimeout(reconnect);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", reconnectOnForeground);
       document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
@@ -501,14 +519,29 @@ export function useGuiConnection() {
 
   const invokeTool = useCallback(
     async (toolName, args = {}, targetSessionId = "", options = {}) => {
+      let resolvedSessionId = String(targetSessionId || currentSessionId).trim();
+      if (!resolvedSessionId) {
+        try {
+          const bootstrap = await transport.bootstrap();
+          resolvedSessionId = String(
+            bootstrap?.sessionId || bootstrap?.snapshot?.sessionId || "",
+          ).trim();
+          if (!resolvedSessionId) throw new Error("Open a session before running this tool.");
+          setCurrentSessionId(resolvedSessionId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setToast(message, { destructive: true });
+          return Promise.reject(new Error(message));
+        }
+      }
       const socket = wsRef.current;
       if (socket?.readyState !== 1 || typeof socket.send !== "function") {
         try {
           const request = buildToolInvokeHttpFallbackRequest(
             toolName,
             args,
-            currentSessionId,
-            targetSessionId,
+            resolvedSessionId,
+            resolvedSessionId,
             options,
           );
           return await transport.invokeTool(request.body);
@@ -540,8 +573,8 @@ export function useGuiConnection() {
                 args,
                 ...(options.recordTranscript === false ? { recordTranscript: false } : {}),
               },
-              currentSessionId,
-              targetSessionId,
+              resolvedSessionId,
+              resolvedSessionId,
             ),
           ),
         );

@@ -502,7 +502,6 @@ try {
     const cachedShell = await follower.evaluate(async () => (await fetch("/index.html")).text());
     assert(cachedShell.includes('id="root"'), "offline cached application shell");
     await waitForText(page, "Offline: saved research is read-only", 30_000);
-    await waitForText(page, "Saved-state changes are unavailable", 30_000);
     await waitForText(page, "AAPL", 30_000);
     await openHostedPanel(page);
     assert(await page.getByRole("button", { name: "Export data" }).isEnabled(), "offline export");

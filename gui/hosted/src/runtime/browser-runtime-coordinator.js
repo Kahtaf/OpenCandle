@@ -33,6 +33,7 @@ class BrowserRuntimeCoordinator {
     this.writerId = "";
     this.host = null;
     this.runtimeProgress = { phase: "booting", message: "Starting browser runtime…" };
+    this.writerBootstrap = null;
     this.cachedModelSetup = null;
     this.sessionCredential = readSessionCredential(this.sessionStorage);
     this.pending = new Map();
@@ -120,7 +121,11 @@ class BrowserRuntimeCoordinator {
     }
     if (this.role === "writer") {
       const host = await this.waitForWriterReady();
-      const value = await host.request(operation, payload, options);
+      const value = await host.request(
+        operation,
+        this.reconcileRestoredSessionTarget(operation, payload),
+        options,
+      );
       if (isMutatingRequest(operation, payload)) this.broadcastInvalidation();
       return this.decorate(value);
     }
@@ -232,6 +237,7 @@ class BrowserRuntimeCoordinator {
       message: "Preparing browser runtime…",
     };
     this.notify(this.runtimeProgress);
+    this.writerBootstrap = null;
     this.writerReadyPromise = Promise.resolve(host.prewarm?.())
       .then(() => {
         if (this.host !== host || this.role !== "writer") return;
@@ -249,9 +255,14 @@ class BrowserRuntimeCoordinator {
           // run before its run.started event.
           return host.request("gui", { action: "bootstrap" });
         }
+        return null;
       })
-      .then(() => {
+      .then((bootstrap) => {
         if (this.host !== host || this.role !== "writer") return;
+        if (bootstrap?.sessionId) {
+          this.writerBootstrap = bootstrap;
+          this.notify({ type: "restored-bootstrap", bootstrap: this.decorate(bootstrap) });
+        }
         this.runtimeProgress = {
           type: "runtime-progress",
           phase: "ready",
@@ -358,6 +369,7 @@ class BrowserRuntimeCoordinator {
     }
     const host = this.host;
     this.host = null;
+    this.writerBootstrap = null;
     this.writerReadyPromise = null;
     this.releaseWriter = null;
     if (host) await host.dispose?.();
@@ -366,6 +378,33 @@ class BrowserRuntimeCoordinator {
       this.writerId = "";
       this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
     }
+  }
+
+  reconcileRestoredSessionTarget(operation, payload) {
+    if (operation !== "gui" || payload?.action !== "tool_invoke") return payload;
+    const requestedSessionId = String(payload.sessionId || "").trim();
+    const restoredSessionId = String(this.writerBootstrap?.sessionId || "").trim();
+    if (!requestedSessionId || !restoredSessionId || requestedSessionId === restoredSessionId) {
+      return payload;
+    }
+    // Market-state changes are global and deliberately opt out of transcript
+    // recording. During a writer handoff they can safely follow the canonical
+    // restored session, even if the page still holds a route id from before
+    // the old runtime yielded.
+    if (payload.recordTranscript === false) {
+      return { ...payload, sessionId: restoredSessionId };
+    }
+    const restoredSessionIds = new Set(
+      (this.writerBootstrap?.checkpoint?.sessions || [])
+        .map((session) => String(session?.sessionId || "").trim())
+        .filter(Boolean),
+    );
+    if (restoredSessionIds.has(requestedSessionId)) return payload;
+    // A handoff only mounts the durable checkpoint that its replacement writer
+    // restored. Do not send a direct UI action to a stale route/session id
+    // which the new runtime cannot resolve; attach it to the canonical restored
+    // session and publish that snapshot to the visible tab.
+    return { ...payload, sessionId: restoredSessionId };
   }
 
   forward(payload, signal) {
