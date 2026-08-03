@@ -110,7 +110,28 @@ export function createHostedRuntimeTransport({ host }) {
           publish(message);
           return;
         }
-        if (message?.type !== "invalidate" && message?.type !== "coordination") return;
+        if (message?.type === "coordination") {
+          // Ownership notifications fire while a replacement WebContainer is
+          // still restoring its checkpoint. Publishing the local role here is
+          // enough to keep the controls usable; issuing an extra bootstrap at
+          // the same instant races the action that prompted the handoff (for
+          // example, a watchlist Save) for the new runtime's first request.
+          const role = host.getRole?.() || "writer";
+          const coordination = {
+            ownerKind:
+              role === "offline" ? "offline" : role === "writer" ? "hosted" : "hosted-follower",
+            writable: role !== "offline",
+          };
+          publish({
+            type: "runtime.status",
+            role,
+            coordination,
+            supportsSessionActions: role !== "offline",
+            modelSetup: host.getModelSetup?.() || EMPTY_MODEL_SETUP,
+          });
+          return;
+        }
+        if (message?.type !== "invalidate") return;
         void refresh().catch((error) => {
           publish({
             type: "error",

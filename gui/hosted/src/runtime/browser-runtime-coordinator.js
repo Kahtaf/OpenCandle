@@ -146,7 +146,20 @@ class BrowserRuntimeCoordinator {
       this.broadcastStatus();
       this.broadcastInvalidation();
     } else {
-      value = await this.forward({ kind: "command", command });
+      try {
+        value = await this.forward({ kind: "command", command });
+      } catch (error) {
+        // A read-only command such as a setup refresh or local export should
+        // not leave the foreground tab stuck behind an unresponsive writer.
+        // These commands have no remote side effect, so rerun them locally
+        // after ownership moves just as we do for idempotent GUI reads.
+        if (!shouldRecoverUnavailableForwardedCommand(error, command, this.disposed)) throw error;
+        await this.takeWriter();
+        const host = await this.waitForWriterReady();
+        value = await host.handleCommand(command);
+        this.cachedModelSetup = host.getModelSetup?.() ?? this.cachedModelSetup;
+        this.broadcastStatus();
+      }
     }
     if (purgesSecrets) {
       this.clearSessionCredential();
@@ -762,6 +775,15 @@ function shouldRecoverUnavailableGuiRead(error, operation, payload, signal, disp
     error instanceof Error &&
     error.message === "The active hosted tab did not respond" &&
     isRecoverableGuiRead(operation, payload)
+  );
+}
+
+function shouldRecoverUnavailableForwardedCommand(error, command, disposed) {
+  return (
+    !disposed &&
+    error instanceof Error &&
+    error.message === "The active hosted tab did not respond" &&
+    !isInteractiveCommand(command)
   );
 }
 

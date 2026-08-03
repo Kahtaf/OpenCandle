@@ -630,6 +630,45 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("moves a timed-out read-only command to the visible follower", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let hostNumber = 0;
+    const commands: Array<ReturnType<typeof vi.fn>> = [];
+    const options = {
+      createHost: () => {
+        const ownHostNumber = ++hostNumber;
+        const handleCommand = vi.fn(async () => {
+          if (ownHostNumber === 1) return new Promise(() => {});
+          return { modelSetup: { requirement: "ready" } };
+        });
+        commands.push(handleCommand);
+        return {
+          request: vi.fn(async () => ({ sessionId: "session-1", sessions: [], snapshot: {} })),
+          handleCommand,
+          dispose: vi.fn(),
+        };
+      },
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 25,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+
+    await expect(follower.handleCommand({ type: "model.setup.refresh" })).resolves.toEqual({
+      modelSetup: { requirement: "ready" },
+    });
+    expect(follower.getRole()).toBe("writer");
+    expect(commands).toHaveLength(2);
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("replaces a failed writer takeover status instead of leaving switching progress", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();

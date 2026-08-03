@@ -329,7 +329,7 @@ describe("hosted runtime transport", () => {
     );
   });
 
-  it("publishes hosted role changes without re-emitting boot on runtime invalidation", async () => {
+  it("publishes hosted role changes without racing a bootstrap during runtime handoff", async () => {
     const host = createHost();
     let role = "writer";
     let invalidate = (_message?: { type: string }) => {};
@@ -349,6 +349,7 @@ describe("hosted runtime transport", () => {
       },
     );
     Object.assign(host, {
+      getRole: () => role,
       subscribe: (listener: () => void) => {
         invalidate = listener;
         return () => {};
@@ -363,18 +364,25 @@ describe("hosted runtime transport", () => {
     await vi.waitFor(() => expect(messages.some((message) => message.type === "boot")).toBe(true));
 
     const bootCount = messages.filter((message) => message.type === "boot").length;
+    const bootstrapRequests = host.request.mock.calls.filter(
+      ([, payload]) => payload.action === "bootstrap",
+    ).length;
     role = "offline";
     invalidate({ type: "coordination" });
 
     await vi.waitFor(() =>
       expect(messages).toContainEqual(
         expect.objectContaining({
-          type: "state.snapshot",
-          coordination: expect.anything(),
+          type: "runtime.status",
+          role: "offline",
+          coordination: expect.objectContaining({ writable: false }),
         }),
       ),
     );
     expect(messages.filter((message) => message.type === "boot")).toHaveLength(bootCount);
+    expect(
+      host.request.mock.calls.filter(([, payload]) => payload.action === "bootstrap"),
+    ).toHaveLength(bootstrapRequests);
     channel?.close();
   });
 
