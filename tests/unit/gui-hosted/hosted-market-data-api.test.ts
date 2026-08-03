@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildHostedMarketQuoteSnapshot,
   buildHostedUnavailableMarketQuoteSnapshot,
@@ -16,6 +16,8 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 
 describe("hosted market data API", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-31T20:05:00.000Z"));
     cache.clear();
     vi.clearAllMocks();
     vi.mocked(getHistory).mockResolvedValue([
@@ -57,6 +59,10 @@ describe("hosted market data API", () => {
       asOf: "2026-07-31T20:00:00.000Z",
       currency: "USD",
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns the same quote fields the symbol page expects", async () => {

@@ -621,11 +621,14 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       appendEntry: vi.fn(),
     };
 
-    coord.executeWorkflow(
-      pi as never,
-      definition,
-      fakeQueueContext(() => true, entries),
-    );
+    coord.executeWorkflow(pi as never, definition, {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+      // Pi's public extension context exposes the read-only branch rather
+      // than the hosted runtime's getEntries() helper.
+      sessionManager: { getBranch: () => entries },
+    });
 
     // The second prompt is accepted only after the first response. Its own
     // enqueue has not reached Pi yet, so a transient idle queue must not

@@ -105,7 +105,10 @@ type QueueContext =
       isIdle(): boolean;
       hasPendingMessages?(): boolean;
       ui?: { notify(message: string, level?: string): void };
-      sessionManager?: { getEntries(): SessionEntry[] };
+      sessionManager?: {
+        getEntries?(): SessionEntry[];
+        getBranch?(): SessionEntry[];
+      };
     };
 
 function hasPendingMessages(ctx: QueueContext): boolean {
@@ -118,7 +121,13 @@ function isReadyForNextPrompt(ctx: QueueContext): boolean {
 
 function readSessionEntries(ctx: QueueContext): SessionEntry[] {
   const manager = "sessionManager" in ctx ? ctx.sessionManager : undefined;
-  return manager?.getEntries?.() ?? [];
+  const entries = manager?.getEntries?.() ?? manager?.getBranch?.();
+  return Array.isArray(entries) ? entries : [];
+}
+
+function canObserveSessionEntries(ctx: QueueContext): boolean {
+  const manager = "sessionManager" in ctx ? ctx.sessionManager : undefined;
+  return typeof manager?.getEntries === "function" || typeof manager?.getBranch === "function";
 }
 
 function messageContentText(content: unknown): string {
@@ -176,6 +185,11 @@ async function waitForPromptSettlement(
   } = {},
 ): Promise<boolean> {
   let sawBusyOrPending = !isReadyForNextPrompt(ctx);
+  // Browser-hosted composition exposes getEntries(), while Pi's canonical
+  // extension context exposes its read-only getBranch() view. If neither is
+  // available, retain the queue-only fallback rather than deadlocking an
+  // extension host that cannot provide transcript observation at all.
+  const requiresObservableActivity = options.requireActivity && canObserveSessionEntries(ctx);
   const startedAt = Date.now();
 
   while (isCurrentRun()) {
@@ -196,7 +210,7 @@ async function waitForPromptSettlement(
     }
 
     if (
-      !options.requireActivity &&
+      !requiresObservableActivity &&
       !sawBusyOrPending &&
       ready &&
       Date.now() - startedAt >= IMMEDIATE_IDLE_GRACE_MS
