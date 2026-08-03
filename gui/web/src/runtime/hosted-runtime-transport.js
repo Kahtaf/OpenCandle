@@ -252,6 +252,12 @@ export function createHostedRuntimeTransport({ host }) {
       // Project that returned durable snapshot immediately: relying only on a
       // later cross-tab invalidation can leave the originating tab without its
       // result card when the notification races or is dropped.
+      // Catalog invocation may create a fresh durable Pi session. Its result
+      // is authoritative for the route we just navigated to, so adopt that
+      // returned session before the stale-bootstrap guard decides whether to
+      // project the snapshot. Keeping the previous home session here leaves
+      // the new URL rendering the home dashboard until a later reload.
+      if (bootstrap?.sessionId) selectedSessionId = bootstrap.sessionId;
       if (bootstrap?.snapshot) publishBootstrap(bootstrap);
       return bootstrap?.result;
     },
