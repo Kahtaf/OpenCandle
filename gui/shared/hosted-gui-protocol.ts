@@ -60,6 +60,7 @@ export type GuiRequest =
       sessionId: string;
       actionId: string;
       args: Record<string, unknown>;
+      recordTranscript?: boolean;
     }
   | {
       action: "chat_run";

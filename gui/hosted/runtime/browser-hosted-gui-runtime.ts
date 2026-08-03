@@ -668,6 +668,7 @@ export class BrowserHostedGuiRuntime {
     actionId: string,
     toolName: string,
     args: Record<string, unknown>,
+    recordTranscript = true,
   ): Promise<Record<string, unknown>> {
     const guardedSessionId = requireSessionId(sessionId);
     const guardedActionId = requireActionId(actionId);
@@ -728,7 +729,7 @@ export class BrowserHostedGuiRuntime {
           );
         }
         assertValidToolArguments(tool.parameters, args);
-        const result = await invokeToolFromUi(manager, tool, args);
+        const result = await invokeToolFromUi(manager, tool, args, "ui", { recordTranscript });
         const response = { result };
         cached.result = response;
         cached.persistencePending = true;

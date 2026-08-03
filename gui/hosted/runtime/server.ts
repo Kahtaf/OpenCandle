@@ -165,6 +165,7 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
         request.actionId,
         request.toolName,
         request.args,
+        request.recordTranscript !== false,
       );
     case "market_state":
       return runtime.marketState();
