@@ -488,6 +488,14 @@ mocked transport or local browser runtime:
   Focused runtime and React-hook regressions cover both bounded terminal
   states; deployed browser acceptance remains required before this release
   gate can close.
+- PWA deployment `d71a0112-ed68-4a7d-ba29-58b917ff886b` passed a fresh
+  Chromium production bootstrap and session-only OpenAI setup journey. The
+  shared model selector changed from `gpt-5-mini` to `gpt-4.1-mini`, and a
+  real `get_fear_greed` turn streamed the `Fear & Greed Index: 28 — Fear`
+  result card. The configured OpenAI organization cannot use `gpt-5-mini`
+  until it completes OpenAI organization verification; that upstream model
+  admission error is rendered as a bounded model failure rather than being
+  misreported as a hosted runtime or relay failure.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
