@@ -313,9 +313,20 @@ try {
     await waitForText(page, "AAPL", 30_000);
 
     stage = "portfolio state";
-    await page.getByRole("link", { name: "Portfolios" }).click();
+    // Keep the route transition inside the running PWA: a full navigation
+    // tears down the writer while the just-saved watchlist is persisting.
+    // Chromium on Node 24 can transiently classify this sidebar link as
+    // non-actionable even though it is present, so dispatch its normal click
+    // without depending on that visibility heuristic.
+    const portfoliosLink = page.locator('a[href="/portfolios"]').first();
+    await Promise.all([
+      page.waitForURL("**/portfolios", { timeout: 30_000 }),
+      portfoliosLink.evaluate((link) => link.click()),
+    ]);
     await waitForText(page, "Portfolios", 30_000);
-    await page.getByRole("button", { name: "Add holding" }).last().click();
+    const addHoldingButton = page.getByRole("button", { name: "Add holding" }).last();
+    await waitForEnabled(addHoldingButton, 30_000);
+    await addHoldingButton.click();
     const holdingSymbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
     await selectInstrumentCandidate(page, holdingSymbolInput, "MSFT");
     await page.getByRole("spinbutton", { name: "Quantity" }).fill("2");
