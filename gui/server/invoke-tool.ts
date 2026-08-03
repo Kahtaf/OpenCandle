@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
+import { getDefaults } from "../../src/memory/tool-defaults.js";
 import {
   clearPendingSessionAction,
   hasAcceptedSessionAction,
@@ -8,6 +9,7 @@ import {
   recordAcceptedSessionAction,
   recordPendingSessionAction,
 } from "../../src/pi/session-action-dedupe.js";
+import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import {
@@ -353,10 +355,16 @@ export async function invokeToolFromUi(
     onTranscriptStarted?: () => void;
   } = {},
 ): Promise<InvokeToolResult> {
-  return invokeToolFromUiShared(sessionManager, tool, args, source, {
-    ...options,
-    toolResultDetails: (result) => stateChangeDetails(tool.name, args, result.details, source),
-  });
+  return invokeToolFromUiShared(
+    sessionManager,
+    wrapWithDefaults(tool, getDefaults(tool.name)),
+    args,
+    source,
+    {
+      ...options,
+      toolResultDetails: (result) => stateChangeDetails(tool.name, args, result.details, source),
+    },
+  );
 }
 
 function stateChangeDetails(

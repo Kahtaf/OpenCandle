@@ -2,8 +2,6 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message, ToolCall, Usage } from "@earendil-works/pi-ai";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
-import { getDefaults } from "../../src/memory/tool-defaults.js";
-import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import { assertValidToolArguments } from "./tool-argument-validation.js";
 
@@ -56,18 +54,17 @@ export async function invokeToolFromUi(
     options.onTranscriptStarted?.();
   }
 
-  const wrapped = wrapWithDefaults(tool, getDefaults(tool.name));
   let result: AgentToolResult<unknown>;
   let isError = false;
   try {
     result = await (
-      wrapped.execute as (
+      tool.execute as (
         id: string,
         params: never,
         signal: AbortSignal | undefined,
         onUpdate: undefined,
         ctx: { askUserHandler?: AskUserHandler; hasUI: false },
-      ) => ReturnType<typeof wrapped.execute>
+      ) => ReturnType<typeof tool.execute>
     )(toolCallId, args as never, undefined, undefined, {
       askUserHandler: options.askUserHandler,
       hasUI: false,
