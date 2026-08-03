@@ -328,6 +328,38 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("forwards a follower model refresh without changing writer ownership", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const handleCommand = vi.fn(async () => ({ modelSetup: { requirement: "ready" } }));
+    const options = {
+      createHost: () => ({
+        request: vi.fn(),
+        handleCommand,
+        getModelSetup: vi.fn(() => ({ requirement: "ready", hosted: true })),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const writer = first.getRole() === "writer" ? first : second;
+    const follower = writer === first ? second : first;
+
+    await expect(follower.handleCommand({ type: "model.setup.refresh" })).resolves.toEqual({
+      modelSetup: { requirement: "ready" },
+    });
+    expect(follower.getRole()).toBe("follower");
+    expect(writer.getRole()).toBe("writer");
+    expect(handleCommand).toHaveBeenCalledWith({ type: "model.setup.refresh" });
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("promotes the requesting follower through an older waiter before saving locally", async () => {
     FakeBroadcastChannel.channels.clear();
     FakeBroadcastChannel.messages = [];
