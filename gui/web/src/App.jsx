@@ -119,6 +119,7 @@ export function AppShell() {
     });
     return creation;
   }, [gui.newSession]);
+  const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const canPrepareFreshHomeSession =
     gui.role === "writer" &&
     gui.supportsSessionActions &&
@@ -128,7 +129,7 @@ export function AppShell() {
   const shouldPrepareFreshHomeSession = shouldStartFreshHomeSession({
     pathname,
     currentSessionId: gui.currentSessionId,
-    entryCount: visibleEvents.length,
+    entryCount: hasGuiSessionContent ? visibleEvents.length : 0,
     lastResetSessionId: homeResetSessionRef.current,
     canStartFreshHomeSession: canPrepareFreshHomeSession,
   });
@@ -152,7 +153,6 @@ export function AppShell() {
     : gui.askUserPrompts.filter(
         (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
       );
-  const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const inputDisabled =
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||

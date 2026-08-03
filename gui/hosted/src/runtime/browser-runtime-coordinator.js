@@ -736,7 +736,11 @@ function refreshStreamInactivityTimer(pending) {
 }
 
 function isInteractiveCommand(command) {
-  return Boolean(command?.type);
+  return (
+    typeof command?.type === "string" &&
+    command.type !== "model.setup.refresh" &&
+    command.type !== "hosted.data.export"
+  );
 }
 
 function isMutatingRequest(operation, payload) {
