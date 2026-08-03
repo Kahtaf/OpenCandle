@@ -464,6 +464,11 @@ mocked transport or local browser runtime:
   switching the browser runtime, takes the writer lock, restores the canonical
   browser checkpoint, and retries locally rather than showing “The active
   hosted tab did not respond”.
+- deployment `2aa4e884-478a-413b-a839-d8a7f0b8323b` treats the offline
+  bootstrap as the disposable projection that it is. If that projection is
+  malformed or stale while its JSONL sessions and SQLite checkpoint validate,
+  it is removed and regenerated on the next successful bootstrap instead of
+  intermittently surfacing an invalid-snapshot error.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
