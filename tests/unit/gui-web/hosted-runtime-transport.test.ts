@@ -386,6 +386,46 @@ describe("hosted runtime transport", () => {
     channel?.close();
   });
 
+  it("keeps controls read-only when an offline coordination notification reports a stale writer", async () => {
+    const host = createHost();
+    let notify = (_message?: { type: string }) => {};
+    Object.assign(host, {
+      getRole: () => "writer",
+      subscribe: (listener: (message: { type: string }) => void) => {
+        notify = listener;
+        return () => {};
+      },
+    });
+    vi.stubGlobal("navigator", { onLine: false });
+    try {
+      const transport = createHostedRuntimeTransport({ host });
+      const messages: Array<Record<string, unknown>> = [];
+      const channel = transport.openEventChannel({
+        onMessage: (message: string) => messages.push(JSON.parse(message)),
+        onClose: vi.fn(),
+      });
+      await vi.waitFor(() =>
+        expect(messages.some((message) => message.type === "boot")).toBe(true),
+      );
+
+      notify({ type: "coordination" });
+
+      await vi.waitFor(() =>
+        expect(messages).toContainEqual(
+          expect.objectContaining({
+            type: "runtime.status",
+            role: "offline",
+            coordination: expect.objectContaining({ writable: false }),
+            supportsSessionActions: false,
+          }),
+        ),
+      );
+      channel?.close();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("routes model setup and session actions through the host command boundary", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

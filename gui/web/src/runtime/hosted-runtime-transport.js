@@ -128,6 +128,14 @@ export function createHostedRuntimeTransport({ host }) {
           return;
         }
         if (message?.type === "coordination") {
+          // A browser can emit an ownership notification while it is already
+          // offline (for example after Playwright or the browser network stack
+          // cuts connectivity). Never let that stale writer/follower role make
+          // persisted market-state controls writable again.
+          if (navigator.onLine === false) {
+            publishOffline();
+            return;
+          }
           // Ownership notifications fire while a replacement WebContainer is
           // still restoring its checkpoint. Publishing the local role here is
           // enough to keep the controls usable; issuing an extra bootstrap at
