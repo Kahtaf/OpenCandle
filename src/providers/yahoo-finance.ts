@@ -281,7 +281,10 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise
     return await Promise.race([
       operation,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Yahoo extended-hours lookup timed out")), timeoutMs);
+        timer = setTimeout(
+          () => reject(new Error("Yahoo extended-hours lookup timed out")),
+          timeoutMs,
+        );
       }),
     ]);
   } finally {
