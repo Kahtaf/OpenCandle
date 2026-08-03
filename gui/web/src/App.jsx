@@ -426,6 +426,16 @@ export function AppShell() {
       });
       let targetSessionId =
         target.mode === "route" ? target.sessionId : sessionView.activeSessionId;
+      const routeToToolSession = async (sessionId) => {
+        if (pathname !== "/") return;
+        homeResetSessionRef.current = sessionId;
+        gui.adoptSessionId(sessionId);
+        await navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId },
+          search: (current) => ({ ...current, drawer: undefined }),
+        });
+      };
 
       if (target.mode === "fresh") {
         if (freshRunPendingRef.current) {
@@ -435,21 +445,15 @@ export function AppShell() {
         try {
           targetSessionId = await createFreshHomeSession();
           if (!targetSessionId) throw new Error("Unable to create a session for this tool run.");
-          homeResetSessionRef.current = targetSessionId;
-          const result = await invokeToolForVisibleSession(toolName, args, targetSessionId);
-          gui.adoptSessionId(targetSessionId);
-          await navigate({
-            to: "/sessions/$sessionId",
-            params: { sessionId: targetSessionId },
-            search: (current) => ({ ...current, drawer: undefined }),
-          });
-          return result;
+          await routeToToolSession(targetSessionId);
+          return invokeToolForVisibleSession(toolName, args, targetSessionId);
         } finally {
           freshRunPendingRef.current = false;
         }
       }
 
       if (!targetSessionId) throw new Error("Open a session before running this tool.");
+      await routeToToolSession(targetSessionId);
       return invokeToolForVisibleSession(toolName, args, targetSessionId);
     },
     [
