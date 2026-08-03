@@ -67,3 +67,32 @@ and announce a new epoch. Messages from older epochs MUST be ignored.
   acknowledgement
 - **THEN** the follower rejects the action promptly with bounded retry guidance
 - **AND** it does not blindly replay an operation whose completion is unknown
+
+### Requirement: Writer ownership converges without stranding active clients
+
+The hosted PWA SHALL boot WebContainer only in the elected writer and SHALL
+make every online tab an action-capable client through the coordination bridge.
+Writer change handling MUST either complete an idempotent read against the new
+writer or end the action with bounded, actionable state; it MUST NOT leave a
+session, prompt, tool invocation, or cancellation indefinitely loading.
+
+#### Scenario: Session navigation crosses a writer epoch
+
+- **WHEN** a follower starts a session load while the old writer is yielding or
+  closing
+- **THEN** the load retries once against the newly announced writer when its
+  effect is read-only
+- **AND** the route renders the requested canonical session or a bounded error
+
+#### Scenario: Writer is replaced during an active stream
+
+- **WHEN** an active prompt, tool stream, or cancellation loses its writer
+- **THEN** both tabs receive an explicit terminal or recovery state
+- **AND** no follower continues to display an unbounded queued or running UI
+
+#### Scenario: Credential entry is attempted from a follower
+
+- **WHEN** a follower opens model or provider setup
+- **THEN** the UI identifies the active writer before accepting a secret
+- **AND** it either transfers ownership before entry or provides bounded
+  guidance without putting the secret on BroadcastChannel

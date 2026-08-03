@@ -51,3 +51,18 @@ bounded response, and secret handling.
 - **WHEN** provider documentation says browser access is supported but the live
   browser proof is absent or failing
 - **THEN** the provider remains `proxy` or `blocked`
+
+### Requirement: Hosted capability claims have current production evidence
+
+The hosted capability matrix SHALL distinguish verified production journeys,
+configured-but-unverified providers, and intentional unsupported boundaries.
+The PWA SHALL not claim local feature parity for a provider, direct tool, or
+workflow until its current deployed browser path returns and renders a real
+result with the required credentials.
+
+#### Scenario: Configured provider awaits proof
+
+- **WHEN** a supported credential such as Finnhub or LSE is configured but has
+  not completed a production browser journey
+- **THEN** diagnostics records it as configured but unverified
+- **AND** release acceptance does not count it as feature parity

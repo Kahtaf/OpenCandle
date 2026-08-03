@@ -90,3 +90,13 @@
 - [x] 13.5 Extract a shared headless Pi/OpenCandle session factory beneath local GUI, TUI, and hosted compositions; remove the partial hosted ExtensionAPI lifecycle.
 - [x] 13.6 Reuse the canonical live chat-event adapter and assert equivalent ordered progress, tool, source, cancellation, and completion traces on hosted and local web.
 - [x] 13.7 Consolidate hosted/local market snapshot builders, provider requirements, tool capability metadata, and typed transport requests so platform adapters only handle transport and persistence.
+
+## 14. Harden production PWA behavior after live UI testing
+
+- [ ] 14.1 Make writer ownership converge before WebContainer boot, expose a clear active-writer state, and cover prompt, tool, cancellation, session-load, and credential handoff across runtime epochs without unbounded UI states.
+- [ ] 14.2 Make bootstrap, reload, service-worker activation, writer promotion, and offline recovery converge on canonical OPFS session/model/checkpoint state without false first-run or invalid-snapshot UI.
+- [ ] 14.3 Apply the shared API-key validation probes to every local GUI, hosted PWA, and TUI entry surface; allow required probe endpoints through the bounded relay and reject unverified keys before they appear configured.
+- [ ] 14.4 Repair canonical workflow and direct-tool event/result rendering so hosted workflows produce result cards and terminal states rather than only step prompts.
+- [ ] 14.5 Produce current-production Browser evidence for every enabled hosted model and tool path, including Yahoo, Finnhub, LSE, FRED, TradingView, Fear & Greed, DDG, and configured Exa/Brave; document intentional Reddit/X and closed-tab exclusions.
+- [ ] 14.6 Run the release acceptance matrix on desktop and mobile: bootstrap, credential setup, model selection, autocomplete, chat/stream/stop, tools, workflows, market state, reload/update/offline/error, and writer/follower handoff; run matching local GUI and TUI regression journeys.
+- [ ] 14.7 Run focused checks, the hosted build, full root gates, production deployment acceptance, graph refresh, and code review only after the hardening batch is stable.

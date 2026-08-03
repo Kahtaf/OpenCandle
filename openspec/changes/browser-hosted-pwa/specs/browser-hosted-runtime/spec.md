@@ -146,3 +146,28 @@ text, or logs.
 - **WHEN** a sentinel key is saved, restored, used for a turn, and cleared
 - **THEN** it does not appear in the password field after restore, runtime
   health, chat events, logs, browser errors, URLs, or generated assets
+
+### Requirement: Credential admission and workflows use shared execution paths
+
+Every API-key entry surface SHALL use the shared provider validation probe and
+shall accept a key only after that probe succeeds. Hosted probes MUST traverse
+the same bounded relay policy required by the corresponding Pi provider; local
+GUI and TUI retain their direct native transport. Hosted workflows and manual
+tool invocations SHALL render canonical streamed/durable result cards from the
+shared event contract, not only their prompt or plan text.
+
+#### Scenario: Hosted key probe is required before save
+
+- **WHEN** a user enters a model or supported provider key in hosted setup
+- **THEN** the shared validation probe reaches the allowed provider endpoint
+  through the relay where browser CORS requires it
+- **AND** a rejected, malformed, or unavailable key is not represented as
+  configured on any surface
+
+#### Scenario: Workflow produces result cards
+
+- **WHEN** a hosted user runs a browser-capable workflow with a configured
+  model and its required tools
+- **THEN** canonical tool, progress, result, error, and completion events render
+  through the shared workflow/chat card components
+- **AND** the transcript does not stop at workflow step prompts

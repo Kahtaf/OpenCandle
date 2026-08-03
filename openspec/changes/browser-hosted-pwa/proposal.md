@@ -34,6 +34,10 @@ product surface without weakening the existing local products.
 - Preserve the local GUI's trusted loopback server, writer lock, native SQLite,
   and filesystem Pi sessions, and preserve the local TUI's Node/filesystem
   behavior.
+- Add a post-live-testing hardening gate before the PWA is described as feature
+  parity: writer ownership, bootstrap/reload convergence, credential probes,
+  workflow rendering, durable acknowledgements, and real-production tool
+  journeys must be proven rather than inferred from unit or build checks.
 - **BREAKING** for hosted mode only: tools whose providers require native
   addons, child processes, desktop cookies, or lack a proven direct or fixed
   relay path are absent from the hosted Pi tool set instead of failing after

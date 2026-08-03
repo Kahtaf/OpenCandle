@@ -130,3 +130,26 @@ snapshots, and explicit recovery for unsupported or corrupt data.
   supports
 - **THEN** it refuses to open the state without resetting or overwriting it
 - **AND** a recovery backup remains available for export or a newer build
+
+### Requirement: Bootstrap and updates converge on durable browser state
+
+The hosted PWA MUST make first launch, reload, service-worker activation,
+writer promotion, and a return from offline converge on the last durable
+session, model setup, and state checkpoint. Transient snapshots MUST NOT be
+presented as a false first-run configuration or a valid ready state.
+
+#### Scenario: Reload while durable credentials and model selection exist
+
+- **WHEN** a user reloads a hosted PWA with a persistent configured provider
+- **THEN** setup restores the selected model and configured state before the UI
+  permits a conflicting first-run flow
+- **AND** any bootstrap failure is recoverable and bounded
+
+#### Scenario: Checkpoint acknowledgement is delayed or fails
+
+- **WHEN** a hosted mutation cannot receive a checkpoint acknowledgement in its
+  bounded window
+- **THEN** the UI identifies whether the mutation is durable, pending, or
+  retryable
+- **AND** a subsequent bootstrap reconciles canonical OPFS state without
+  claiming an unknown mutation succeeded

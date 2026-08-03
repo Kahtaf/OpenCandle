@@ -358,6 +358,38 @@ hosted action allowlist, and hosted live-event adapter are intentionally not
 retained as fallbacks. Stdio transport, OPFS persistence, and browser secret
 storage are the only hosted-specific runtime responsibilities.
 
+### 12. Release hardening is a production journey gate
+
+The previous completion evidence establishes the architecture and contract
+surface; it is not sufficient release evidence after live UI testing. Before
+hosted web can be called successful, production journeys must prove the actual
+PWA bundle and relay deployment, including each transition that crosses a tab,
+runtime epoch, process bootstrap, OPFS checkpoint, or service-worker update.
+
+The release gate is deliberately narrower than redesigning the runtime:
+
+- a healthy writer is the only tab that boots WebContainer; followers remain
+  action-capable through forwarding and visible ownership/progress state;
+- every safe read-only bootstrap and session load recovers across a writer epoch
+  change, while ambiguous mutations and paid streams fail explicitly rather
+  than replaying;
+- first launch, reload, update, and offline-to-online recovery converge on the
+  durable model setup, selected session, and checkpoint without a false
+  first-run state or stale snapshot;
+- provider credentials are accepted only after the shared provider probe
+  succeeds through the same relay policy used at runtime;
+- workflows must render canonical streamed cards/results, not just persisted
+  prompt text, and direct tool invocation must surface its durable transcript
+  result;
+- browser-supported provider/tool claims are based on a current production
+  journey with configured credentials. Native Reddit/X and closed-tab
+  background work remain documented exclusions, not parity failures.
+
+The UI may expose progress while a runtime is doing legitimate work, but it
+must distinguish booting, queued/forwarded, running, checkpointing, retryable
+failure, and durable completion. It must never leave an action indefinitely
+loading after an epoch change or checkpoint timeout.
+
 ## Risks / Trade-offs
 
 - **WebContainer availability or licensing changes** -> disclose the dependency,
