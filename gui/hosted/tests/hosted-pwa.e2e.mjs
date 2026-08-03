@@ -310,6 +310,11 @@ try {
     const symbolInput = page.getByRole("combobox", { name: "Search ticker or company" });
     await selectInstrumentCandidate(page, symbolInput, "AAPL");
     await page.getByRole("button", { name: "Save" }).click();
+    await waitFor(
+      async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,
+      30_000,
+      "watchlist save acknowledgement",
+    );
     await waitForText(page, "AAPL", 30_000);
 
     stage = "portfolio state";
