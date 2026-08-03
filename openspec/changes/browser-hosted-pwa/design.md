@@ -451,6 +451,11 @@ mocked transport or local browser runtime:
   diagnostics/catalog URL without a startup wait: the runtime reported Ready,
   the relay reported 12 allowed providers, and the catalog populated all four
   workflows, 25 tools, and 12 provider entries.
+- the same PWA build then completed live user-visible runs for Google
+  `gemini-2.5-flash`, Finnhub company news, London Strategic Edge financials,
+  Fear & Greed, TradingView screening, FRED `FEDFUNDS`, DDG, Brave, and Exa.
+  Reloading that multi-tool session rebuilt its complete transcript and
+  returned the tab to `Running on this device`.
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 
