@@ -27,7 +27,7 @@ const params = Type.Object({
  * than this tool, interprets the collected evidence as bullish or bearish.
  */
 export function createHostedSentimentSummaryTool(
-  allowedProviders?: readonly ("exa" | "brave")[],
+  allowedProviders?: readonly ("ddg" | "exa" | "brave")[],
   allowedEvidenceProviders?: readonly ("yahoo" | "finnhub")[],
 ): AgentTool<typeof params> & {
   __hostedAllowedProviders?: readonly string[];
