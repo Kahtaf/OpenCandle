@@ -474,6 +474,12 @@ mocked transport or local browser runtime:
   symbol, and diagnostics views. A visible follower no longer waits for the
   normal three-minute forwarded-request deadline when its background writer
   has stopped servicing the browser channel.
+- deployment `7a8fc681-75ea-4d92-b540-0bea43752dd7` keeps a writer-promotion
+  notification lightweight while the replacement WebContainer restores. The
+  initiating tab updates its ownership UI immediately, but does not issue a
+  competing bootstrap before its pending mutation can obtain the first
+  runtime request. Read-only setup and export commands also take over and
+  retry locally if their prior writer stops answering.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
