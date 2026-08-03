@@ -446,6 +446,11 @@ mocked transport or local browser runtime:
   removes that challenge dependency while retaining the rate-limited,
   memory-only token relay, and requires a fresh deployed bootstrap proof before
   this release gate can close;
+- relay deployment `ef30c5a0-f3ec-4154-8202-a19e06f88750` and PWA deployment
+  `5a53108f-f4cb-4cf0-a19e-496cf86914fd` then rebuilt the same production
+  diagnostics/catalog URL without a startup wait: the runtime reported Ready,
+  the relay reported 12 allowed providers, and the catalog populated all four
+  workflows, 25 tools, and 12 provider entries.
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 
