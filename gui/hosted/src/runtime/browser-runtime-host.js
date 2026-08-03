@@ -98,6 +98,12 @@ class BrowserRuntimeHost {
     this.relayAuthorizationPromise = null;
     this.subscribers = new Set();
     this.runtimeThinking = null;
+    // Read-only bootstrap replies carry a point-in-time checkpoint so the
+    // first browser boot can establish an archive. Once one exists, letting a
+    // delayed read reply write it back can erase a newer session created by a
+    // mutation that completed first. Mutations and stream checkpoints remain
+    // the only durable writers after that initial seed.
+    this.hasDurableCheckpoint = false;
   }
 
   subscribe(callback) {
@@ -400,7 +406,11 @@ class BrowserRuntimeHost {
         reject(error);
       });
     });
-    if (operation === "gui") {
+    const shouldPersistGuiResponse =
+      operation === "gui" &&
+      (requestBlocksUpdate(operation, payload) ||
+        (!this.hasDurableCheckpoint && payload?.action === "bootstrap"));
+    if (shouldPersistGuiResponse) {
       const persisted = await this.persistCheckpoint(result);
       if (requestBlocksUpdate(operation, payload) && persisted === false) {
         throw new Error("Hosted GUI mutation did not include a durable checkpoint.");
@@ -566,6 +576,7 @@ class BrowserRuntimeHost {
     );
     this.assertBootCurrent(lifecycleEpoch);
     const { sessions: sessionFiles, stateBytes, currentSessionId } = persisted;
+    this.hasDurableCheckpoint = sessionFiles.length > 0 || Boolean(stateBytes);
     if (stateBytes && !this.preserveRecoveryBackupUntilBoot) await this.dataStore.createBackup();
     const runtimeFiles = {
       ...Object.fromEntries(
@@ -1136,6 +1147,7 @@ class BrowserRuntimeHost {
     if (typeof value.sessionId === "string") {
       this.storage.setItem(CURRENT_SESSION_KEY, value.sessionId);
     }
+    if (persisted !== false) this.hasDurableCheckpoint = true;
     return persisted;
   }
 
@@ -1166,6 +1178,7 @@ class BrowserRuntimeHost {
   async clearAll() {
     await this.stopRuntime();
     await this.dataStore.clearAll();
+    this.hasDurableCheckpoint = false;
     this.clearSecrets();
     this.storage.removeItem(CURRENT_SESSION_KEY);
     this.storage.removeItem(RELAY_CLIENT_KEY);

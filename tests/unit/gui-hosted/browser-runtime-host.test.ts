@@ -954,6 +954,53 @@ describe("browser runtime host", () => {
     });
   });
 
+  it("does not let a delayed bootstrap checkpoint erase a newer session mutation", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("navigator", { onLine: true });
+    const write = vi.fn(async () => {});
+    const persistCheckpoint = vi.fn(async () => true);
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { persistCheckpoint },
+    });
+    host.processWriter = { write };
+    host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+    host.bootPromise = Promise.resolve();
+
+    const staleBootstrap = host.request("gui", { action: "bootstrap" });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const bootstrapRequest = JSON.parse(write.mock.calls[0][0]);
+
+    const newSession = host.request("gui", { action: "new_session" });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    const mutationRequest = JSON.parse(write.mock.calls[1][0]);
+    host.handleRuntimeMessage({
+      type: "response",
+      runtimeEpoch: host.runtimeEpoch,
+      requestId: mutationRequest.requestId,
+      ok: true,
+      result: { sessionId: "fresh-session", checkpoint: { sessions: [] } },
+    });
+    await expect(newSession).resolves.toMatchObject({ sessionId: "fresh-session" });
+
+    host.handleRuntimeMessage({
+      type: "response",
+      runtimeEpoch: host.runtimeEpoch,
+      requestId: bootstrapRequest.requestId,
+      ok: true,
+      result: { sessionId: "stale-session", checkpoint: { sessions: [] } },
+    });
+    await expect(staleBootstrap).resolves.toMatchObject({ sessionId: "stale-session" });
+
+    expect(persistCheckpoint).toHaveBeenCalledTimes(1);
+    expect(persistCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "fresh-session" }),
+    );
+  });
+
   it("rejects an acknowledged GUI mutation when its durable checkpoint is missing", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());

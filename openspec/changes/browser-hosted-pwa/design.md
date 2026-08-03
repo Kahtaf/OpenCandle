@@ -406,19 +406,26 @@ mocked transport or local browser runtime:
   returned ten sources; configured Exa Web Search rendered its new session's
   research card and sources; and Fear & Greed rendered its current numeric
   card;
+- a configured FRED credential passed its in-app validation, exposed the FRED
+  Economic Data tool, and returned three durable `FEDFUNDS` observations;
+- deployment `a2622a03-d525-4cd6-8f22-3e2810739171` fixed a production
+  checkpoint-ordering race: a delayed read-only bootstrap can no longer
+  overwrite a newer session mutation. A FRED catalog action now renders its
+  new-session result immediately and reloads with the same durable card;
 - a follower tab submitted a keyboard prompt to the writer and both tabs
   received the durable completed turn;
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 
-This evidence does **not** yet make the release gate complete. FRED is not in
-the current hosted catalog tool surface, so it cannot be claimed as a verified
-hosted tool journey. Reddit/X and closed-tab background work remain intentional
-hosted exclusions. Brave does not currently pass the hosted Chromium CORS
-proof and therefore is not exposed as a selectable hosted search provider.
+This evidence does **not** yet make the release gate complete. FRED is exposed
+only after its browser-local credential has been verified; that configured
+journey is now proven. The bounded relay policy and live relay smoke prove that
+Brave can cross the browser bridge, but Brave is not yet a selectable hosted
+Web Search provider, so transport proof is not product-journey proof.
+Reddit/X and closed-tab background work remain intentional hosted exclusions.
 Writer-promotion session hydration and the remaining mobile, offline/update,
-Brave/FRED boundary, and model/provider acceptance journeys still require
-production proof before task group 14 can close.
+Brave catalog, and model/provider acceptance journeys still require production
+proof before task group 14 can close.
 
 ## Risks / Trade-offs
 
