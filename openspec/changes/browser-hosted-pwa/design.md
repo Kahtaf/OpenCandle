@@ -505,6 +505,12 @@ mocked transport or local browser runtime:
   both a workflow-step card and a completed shared tool-result card. This is
   explicit evidence that workflows no longer stop at their durable prompt
   steps in the deployed UI.
+- PWA deployment `955d7a02-14d9-4e78-bad8-e5b9d44c846e` closes an offline
+  ownership-notification race: a stale writer/follower coordination event can
+  no longer make persisted market-state controls writable after the browser is
+  offline. Chromium production acceptance forced the PWA offline and confirmed
+  that every visible `Add ticker` control was disabled while the read-only
+  shell remained available.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
