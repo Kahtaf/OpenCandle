@@ -85,6 +85,21 @@ class BrowserRuntimeCoordinator {
   async request(operation, payload = {}, options = {}) {
     await this.ready();
     if (this.disposed) throw new Error("Hosted runtime coordinator is closed");
+    try {
+      return await this.requestFromCurrentWriter(operation, payload, options);
+    } catch (error) {
+      // Session navigation is read-only from the caller's perspective. A writer
+      // handoff can happen after the old writer receives the request but before
+      // it responds; retry it once against the new owner instead of leaving the
+      // route permanently in its loading state.
+      if (!shouldRetryAfterWriterChange(error, operation, payload, options.signal, this.disposed)) {
+        throw error;
+      }
+      return this.requestFromCurrentWriter(operation, payload, options);
+    }
+  }
+
+  async requestFromCurrentWriter(operation, payload, options) {
     if (this.role === "writer") {
       const value = await this.host.request(operation, payload, options);
       if (isMutatingRequest(operation, payload)) this.broadcastInvalidation();
@@ -549,9 +564,7 @@ class BrowserRuntimeCoordinator {
   }
 
   rejectPendingForWriterChange() {
-    const error = new Error(
-      "The hosted writer changed before the action completed. Check the current state, then retry.",
-    );
+    const error = writerChangedError();
     for (const [requestId, pending] of this.pending) {
       clearTimeout(pending.timer);
       pending.signal?.removeEventListener("abort", pending.abort);
@@ -594,6 +607,24 @@ class BrowserRuntimeCoordinator {
   post(message) {
     this.channel.postMessage({ channel: CHANNEL_NAME, from: this.tabId, ...message });
   }
+}
+
+function writerChangedError() {
+  const error = new Error(
+    "The hosted writer changed before the action completed. Check the current state, then retry.",
+  );
+  error.code = "HOSTED_WRITER_CHANGED";
+  return error;
+}
+
+function shouldRetryAfterWriterChange(error, operation, payload, signal, disposed) {
+  return (
+    !disposed &&
+    !signal?.aborted &&
+    error?.code === "HOSTED_WRITER_CHANGED" &&
+    operation === "gui" &&
+    (payload?.action === "bootstrap" || payload?.action === "load_session")
+  );
 }
 
 function refreshStreamInactivityTimer(pending) {

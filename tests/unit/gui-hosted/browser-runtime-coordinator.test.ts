@@ -430,6 +430,46 @@ describe("browser runtime coordinator", () => {
     await follower.dispose();
   });
 
+  it("retries an in-flight session load with the promoted writer", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let hostNumber = 0;
+    const options = {
+      createHost: () => {
+        const ownHostNumber = ++hostNumber;
+        return {
+          request: vi.fn(async () => {
+            if (ownHostNumber === 1) return new Promise(() => {});
+            return { sessionId: "session-to-load", sessions: [], snapshot: {}, checkpoint: {} };
+          }),
+          handleCommand: vi.fn(),
+          dispose: vi.fn(),
+        };
+      },
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 10_000,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const writer = first.getRole() === "writer" ? first : second;
+    const follower = writer === first ? second : first;
+
+    const loading = follower.request("gui", {
+      action: "load_session",
+      sessionId: "session-to-load",
+    });
+    await settle();
+    await writer.dispose();
+
+    await expect(loading).resolves.toMatchObject({ sessionId: "session-to-load" });
+    expect(follower.getRole()).toBe("writer");
+    await follower.dispose();
+  });
+
   it("tears down the writer host before dispose resolves", async () => {
     FakeBroadcastChannel.channels.clear();
     let finishHostDispose!: () => void;
