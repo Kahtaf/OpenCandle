@@ -403,7 +403,9 @@ mocked transport or local browser runtime:
 - the Financial Statements catalog action returned AAPL data whose durable
   raw result named London Strategic Edge as its source;
 - the Stock Screener rendered a live TradingView result table; DDG Web Search
-  returned ten sources; and Fear & Greed rendered its current numeric card;
+  returned ten sources; configured Exa Web Search rendered its new session's
+  research card and sources; and Fear & Greed rendered its current numeric
+  card;
 - a follower tab submitted a keyboard prompt to the writer and both tabs
   received the durable completed turn;
 - local GUI ticker selection and a real TUI quote turn continued to use the
@@ -412,9 +414,11 @@ mocked transport or local browser runtime:
 This evidence does **not** yet make the release gate complete. FRED is not in
 the current hosted catalog tool surface, so it cannot be claimed as a verified
 hosted tool journey. Reddit/X and closed-tab background work remain intentional
-hosted exclusions. Writer-promotion session hydration and the remaining mobile,
-offline/update, configured Exa/Brave, and model/provider acceptance journeys
-still require production proof before task group 14 can close.
+hosted exclusions. Brave does not currently pass the hosted Chromium CORS
+proof and therefore is not exposed as a selectable hosted search provider.
+Writer-promotion session hydration and the remaining mobile, offline/update,
+Brave/FRED boundary, and model/provider acceptance journeys still require
+production proof before task group 14 can close.
 
 ## Risks / Trade-offs
 
