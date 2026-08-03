@@ -469,6 +469,11 @@ mocked transport or local browser runtime:
   malformed or stale while its JSONL sessions and SQLite checkpoint validate,
   it is removed and regenerated on the next successful bootstrap instead of
   intermittently surfacing an invalid-snapshot error.
+- deployment `87c70d4f-035b-44f9-94df-a1bf60f1782a` applies the same bounded
+  writer failover to every idempotent hosted GUI read, including market,
+  symbol, and diagnostics views. A visible follower no longer waits for the
+  normal three-minute forwarded-request deadline when its background writer
+  has stopped servicing the browser channel.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
