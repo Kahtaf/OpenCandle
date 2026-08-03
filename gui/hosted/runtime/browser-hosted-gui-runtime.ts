@@ -739,7 +739,11 @@ export class BrowserHostedGuiRuntime {
         } else {
           clearPendingSessionAction(manager, guardedActionId);
         }
-        const bootstrap = await this.buildBootstrap(manager);
+        // The host only needs a durable checkpoint to acknowledge a direct
+        // tool mutation. Re-listing every Pi session here can stall a market
+        // save in WebContainer; ordinary bootstrap/refresh requests retain
+        // the full session list.
+        const bootstrap = await this.buildBootstrap(manager, true, false);
         cached.result = { ...bootstrap, result };
         cached.persistencePending = false;
         return cached.result;
@@ -920,6 +924,7 @@ export class BrowserHostedGuiRuntime {
   private async buildBootstrap(
     manager: SessionManager,
     selectCurrent = true,
+    includeDisplaySessions = true,
   ): Promise<BrowserHostedBootstrap> {
     if (selectCurrent) this.currentSessionId = manager.getSessionId();
     const entries = manager.getEntries();
@@ -945,9 +950,9 @@ export class BrowserHostedGuiRuntime {
     const checkpointSessionIds = new Set(
       checkpoint.sessions.map((session) => session.sessionId),
     );
-    const displaySessions = (await this.listDisplaySessions()).filter((session) =>
-      checkpointSessionIds.has(session.id),
-    );
+    const displaySessions = includeDisplaySessions
+      ? (await this.listDisplaySessions()).filter((session) => checkpointSessionIds.has(session.id))
+      : [];
     const bootstrap: BrowserHostedBootstrap = {
       role: "writer",
       sessionId,
