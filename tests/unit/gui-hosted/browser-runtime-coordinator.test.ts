@@ -98,6 +98,43 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("does not clone the durable checkpoint into a follower bootstrap response", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(async () => ({
+          sessionId: "session-1",
+          sessions: [],
+          snapshot: {},
+          checkpoint: { sessions: [{ content: "durable-session-data" }] },
+        })),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+
+    await expect(follower.request("gui", { action: "bootstrap" })).resolves.toMatchObject({
+      sessionId: "session-1",
+      sessions: [],
+      snapshot: {},
+    });
+    await expect(follower.request("gui", { action: "bootstrap" })).resolves.not.toHaveProperty(
+      "checkpoint",
+    );
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("promotes the follower with a newer epoch and ignores stale responses", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();

@@ -579,7 +579,6 @@ export function useGuiConnection() {
           resolveSupportsSessionActions(data.supportsSessionActions, data.role, data.coordination),
         );
         return applyBootstrap(data, targetSessionId, {
-          updateCurrentSessionId: false,
           updateRole: false,
           updateVisibleState: false,
         });

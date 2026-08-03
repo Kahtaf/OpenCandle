@@ -408,24 +408,31 @@ mocked transport or local browser runtime:
   card;
 - a configured FRED credential passed its in-app validation, exposed the FRED
   Economic Data tool, and returned three durable `FEDFUNDS` observations;
+- a configured Brave credential passed its in-app validation, exposed Brave in
+  the Web Search provider picker, and returned a durable research card with ten
+  Brave results;
 - deployment `a2622a03-d525-4cd6-8f22-3e2810739171` fixed a production
   checkpoint-ordering race: a delayed read-only bootstrap can no longer
   overwrite a newer session mutation. A FRED catalog action now renders its
   new-session result immediately and reloads with the same durable card;
 - a follower tab submitted a keyboard prompt to the writer and both tabs
   received the durable completed turn;
+- deployment `1feee01d-d477-46d6-ba60-b4cf7e7a1000` keeps the hosted status
+  control away from the composer, excludes durable checkpoints from
+  cross-tab bootstrap responses, and retries a dropped idempotent session
+  read. A clean follower loaded the same persisted Gemini session and its
+  pointer-submitted reply rendered in both the follower and writer;
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 
-This evidence does **not** yet make the release gate complete. FRED is exposed
-only after its browser-local credential has been verified; that configured
-journey is now proven. The bounded relay policy and live relay smoke prove that
-Brave can cross the browser bridge, but Brave is not yet a selectable hosted
-Web Search provider, so transport proof is not product-journey proof.
+This evidence does **not** yet make the release gate complete. FRED and Brave
+are exposed only after their browser-local credentials have been verified, and
+their configured product journeys are now proven. The remaining provider and
+model acceptance flows still need current-production evidence.
 Reddit/X and closed-tab background work remain intentional hosted exclusions.
-Writer-promotion session hydration and the remaining mobile, offline/update,
-Brave catalog, and model/provider acceptance journeys still require production
-proof before task group 14 can close.
+The remaining mobile, offline/update, and model/provider acceptance journeys,
+plus further writer-promotion recovery cases, still require production proof
+before task group 14 can close.
 
 ## Risks / Trade-offs
 

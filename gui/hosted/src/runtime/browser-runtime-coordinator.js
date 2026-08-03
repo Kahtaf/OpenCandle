@@ -5,6 +5,8 @@ const LOCK_NAME = "opencandle-hosted-writer-v1";
 const EPOCH_KEY = "opencandle.hosted.runtime-epoch.v1";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+const FORWARDED_READ_RETRY_MS = 1_500;
+const MAX_FORWARDED_READ_ATTEMPTS = 3;
 const MAX_FORWARDED_CHUNK_BYTES = 64 * 1024;
 const WRITER_TAKEOVER_TIMEOUT_MS = 15_000;
 
@@ -153,6 +155,7 @@ class BrowserRuntimeCoordinator {
     this.activeForwardedStreams.clear();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
+      pending.clearRetry?.();
       if (pending.streamController) {
         pending.streamController.error(new Error("Hosted runtime coordinator closed"));
       } else {
@@ -286,12 +289,20 @@ class BrowserRuntimeCoordinator {
   forward(payload, signal) {
     const requestId = randomId();
     return new Promise((resolve, reject) => {
+      let retryTimer = null;
+      let attempts = 0;
+      const clearRetry = () => {
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = null;
+      };
       const abort = () => {
         clearTimeout(timer);
+        clearRetry();
         this.pending.delete(requestId);
         reject(new DOMException("The operation was aborted", "AbortError"));
       };
       const timer = setTimeout(() => {
+        clearRetry();
         this.pending.delete(requestId);
         reject(new Error("The active hosted tab did not respond"));
       }, this.requestTimeoutMs);
@@ -300,14 +311,21 @@ class BrowserRuntimeCoordinator {
         return;
       }
       signal?.addEventListener("abort", abort, { once: true });
-      this.pending.set(requestId, { resolve, reject, timer, signal, abort });
-      this.post({
-        type: "request",
-        epoch: this.epoch,
-        requestId,
-        target: this.writerId,
-        ...payload,
-      });
+      const post = () => {
+        attempts += 1;
+        this.post({
+          type: "request",
+          epoch: this.epoch,
+          requestId,
+          target: this.writerId,
+          ...payload,
+        });
+        if (isRetryableForwardedRead(payload) && attempts < MAX_FORWARDED_READ_ATTEMPTS) {
+          retryTimer = setTimeout(post, FORWARDED_READ_RETRY_MS);
+        }
+      };
+      this.pending.set(requestId, { resolve, reject, timer, signal, abort, clearRetry });
+      post();
     });
   }
 
@@ -412,6 +430,7 @@ class BrowserRuntimeCoordinator {
       const pending = this.pending.get(message.requestId);
       if (!pending) return;
       clearTimeout(pending.timer);
+      pending.clearRetry?.();
       pending.signal?.removeEventListener("abort", pending.abort);
       this.pending.delete(message.requestId);
       if (message.ok) pending.resolve(this.decorate(message.value));
@@ -471,7 +490,12 @@ class BrowserRuntimeCoordinator {
         requestId: message.requestId,
         target: message.from,
         ok: true,
-        value,
+        // Checkpoints can contain every session JSONL file and the SQLite
+        // database. The writer has already persisted that archive in the
+        // shared browser profile; a follower needs only the projected GUI
+        // snapshot. Sending the archive through BroadcastChannel can exceed
+        // its structured-clone budget and leave a route loading indefinitely.
+        value: withoutDurableCheckpoint(value),
       });
       this.broadcastStatus();
       if (forwardedRequestMutates(message)) this.broadcastInvalidation();
@@ -584,6 +608,7 @@ class BrowserRuntimeCoordinator {
     const error = writerChangedError();
     for (const [requestId, pending] of this.pending) {
       clearTimeout(pending.timer);
+      pending.clearRetry?.();
       pending.signal?.removeEventListener("abort", pending.abort);
       if (pending.streamController) pending.streamController.error(error);
       else pending.reject(error);
@@ -666,6 +691,21 @@ function isMutatingRequest(operation, payload) {
 function forwardedRequestMutates(message) {
   if (message.kind === "command") return true;
   return message.kind === "request" && isMutatingRequest(message.operation, message.payload ?? {});
+}
+
+function isRetryableForwardedRead(payload) {
+  return (
+    payload?.kind === "request" &&
+    payload.operation === "gui" &&
+    (payload.payload?.action === "bootstrap" || payload.payload?.action === "load_session")
+  );
+}
+
+function withoutDurableCheckpoint(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  if (!Object.prototype.hasOwnProperty.call(value, "checkpoint")) return value;
+  const { checkpoint: _checkpoint, ...projected } = value;
+  return projected;
 }
 
 function isMessage(value) {
