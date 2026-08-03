@@ -131,6 +131,12 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
               ...current,
               [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "", ...runExtras },
             }));
+            // A terminal failure can arrive as a valid SSE event rather than a
+            // transport exception. Remove the local queued projection in both
+            // cases; otherwise the composer leaves a permanently "Queued"
+            // message even though the run has already reached its terminal
+            // state.
+            onRunError?.(targetSessionId);
             setRunStateFor(key, "failed");
             setToast(event.error?.message || "Run failed");
           }

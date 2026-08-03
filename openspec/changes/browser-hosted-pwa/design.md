@@ -480,6 +480,14 @@ mocked transport or local browser runtime:
   competing bootstrap before its pending mutation can obtain the first
   runtime request. Read-only setup and export commands also take over and
   retry locally if their prior writer stops answering.
+- the subsequent hardening batch single-flights fresh-session creation in the
+  hosted runtime itself, so overlapping home, catalog, or recovery requests
+  share one durable session identity. It also removes the optimistic queued
+  user projection when a stream reaches a terminal `run.failed` event, rather
+  than leaving a permanently queued message beside an actionable failure.
+  Focused runtime and React-hook regressions cover both bounded terminal
+  states; deployed browser acceptance remains required before this release
+  gate can close.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and

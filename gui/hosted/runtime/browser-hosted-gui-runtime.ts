@@ -214,6 +214,7 @@ export class BrowserHostedGuiRuntime {
   private readonly piSessions = new Map<string, BrowserPiSession>();
   private readonly piSessionCreations = new Map<string, Promise<BrowserPiSession>>();
   private readonly piSessionVersions = new Map<string, number>();
+  private newSessionInFlight: Promise<BrowserHostedBootstrap> | undefined;
   private piSessionEpoch = 0;
   private readonly activeEventEmitters = new Map<
     string,
@@ -285,6 +286,17 @@ export class BrowserHostedGuiRuntime {
   }
 
   async newSession(): Promise<BrowserHostedBootstrap> {
+    if (this.newSessionInFlight) return this.newSessionInFlight;
+    const creation = this.createNewSession();
+    this.newSessionInFlight = creation;
+    try {
+      return await creation;
+    } finally {
+      if (this.newSessionInFlight === creation) this.newSessionInFlight = undefined;
+    }
+  }
+
+  private async createNewSession(): Promise<BrowserHostedBootstrap> {
     this.assertArchiveAdmission(await this.bootstrap(), SESSION_COMPLETION_RESERVE_BYTES);
     const existing = await SessionManager.list(this.options.cwd, this.options.sessionDir);
     if (new Set(existing.map((session) => session.id)).size >= MAX_SESSION_FILES) {
