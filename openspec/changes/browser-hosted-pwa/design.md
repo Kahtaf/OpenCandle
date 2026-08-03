@@ -496,6 +496,11 @@ mocked transport or local browser runtime:
   until it completes OpenAI organization verification; that upstream model
   admission error is rendered as a bounded model failure rather than being
   misreported as a hosted runtime or relay failure.
+- a fresh two-tab Chromium production journey on that same deployment showed a
+  follower as `Ready through the active tab`; after the original writer closed,
+  it became `Running on this device` without surfacing the former
+  `The active hosted tab did not respond` error. A 390px mobile bootstrap also
+  reached model setup without horizontal overflow.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
