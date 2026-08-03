@@ -24,6 +24,20 @@ class FakeBroadcastChannel {
   }
 }
 
+class YieldIgnoringBroadcastChannel extends FakeBroadcastChannel {
+  postMessage(data: unknown) {
+    if (
+      data &&
+      typeof data === "object" &&
+      "type" in data &&
+      data.type === "writer-yield-request"
+    ) {
+      return;
+    }
+    super.postMessage(data);
+  }
+}
+
 class FakeLockManager {
   private held = false;
   private queue: Array<(lock: object) => void> = [];
@@ -577,6 +591,41 @@ describe("browser runtime coordinator", () => {
     expect(follower.getRole()).toBe("writer");
     expect(requests).toHaveLength(2);
 
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
+  it("replaces a failed writer takeover status instead of leaving switching progress", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(() => new Promise(() => {})),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new YieldIgnoringBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 25,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const follower = first.getRole() === "follower" ? first : second;
+    const progress: unknown[] = [];
+    const unsubscribe = follower.subscribe((message) => {
+      if (message?.type === "runtime-progress") progress.push(message);
+    });
+
+    await expect(
+      follower.request("gui", { action: "load_session", sessionId: "session-to-load" }),
+    ).rejects.toThrow("did not release the browser runtime");
+    expect(progress).toContainEqual(
+      expect.objectContaining({ phase: "error", error: "The active hosted tab did not release the browser runtime" }),
+    );
+
+    unsubscribe();
     await Promise.all([first.dispose(), second.dispose()]);
   });
 

@@ -295,30 +295,42 @@ class BrowserRuntimeCoordinator {
       message: "Switching browser runtime to this tab…",
     };
     this.notify(this.runtimeProgress);
-    await new Promise((resolve, reject) => {
-      let requestedWriterId = "";
-      let unsubscribe = () => {};
-      const timer = setTimeout(() => {
-        unsubscribe();
-        reject(new Error("The active hosted tab did not release the browser runtime"));
-      }, Math.min(this.requestTimeoutMs, WRITER_TAKEOVER_TIMEOUT_MS));
-      unsubscribe = this.subscribe((message) => {
-        if (message?.type !== "coordination") return;
-        if (this.role === "writer") {
-          clearTimeout(timer);
+    try {
+      await new Promise((resolve, reject) => {
+        let requestedWriterId = "";
+        let unsubscribe = () => {};
+        const timer = setTimeout(() => {
           unsubscribe();
-          resolve();
-          return;
-        }
+          reject(new Error("The active hosted tab did not release the browser runtime"));
+        }, Math.min(this.requestTimeoutMs, WRITER_TAKEOVER_TIMEOUT_MS));
+        unsubscribe = this.subscribe((message) => {
+          if (message?.type !== "coordination") return;
+          if (this.role === "writer") {
+            clearTimeout(timer);
+            unsubscribe();
+            resolve();
+            return;
+          }
+          requestCurrentWriterToYield();
+        });
+        const requestCurrentWriterToYield = () => {
+          if (!this.writerId || this.writerId === requestedWriterId || !isEpoch(this.epoch)) return;
+          requestedWriterId = this.writerId;
+          this.post({ type: "writer-yield-request", epoch: this.epoch, target: this.writerId });
+        };
         requestCurrentWriterToYield();
       });
-      const requestCurrentWriterToYield = () => {
-        if (!this.writerId || this.writerId === requestedWriterId || !isEpoch(this.epoch)) return;
-        requestedWriterId = this.writerId;
-        this.post({ type: "writer-yield-request", epoch: this.epoch, target: this.writerId });
-      };
-      requestCurrentWriterToYield();
-    });
+    } catch (error) {
+      if (this.role !== "writer") {
+        this.runtimeProgress = {
+          type: "runtime-progress",
+          phase: "error",
+          error: error instanceof Error ? error.message : String(error),
+        };
+        this.notify(this.runtimeProgress);
+      }
+      throw error;
+    }
   }
 
   async stopWriter() {
