@@ -609,7 +609,12 @@ export class SessionCoordinator {
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
             entriesBeforePrompt: entriesBeforeStep,
             expectedPrompt: activePrompt,
-            requireActivity: stepIndex === 0 && firstPromptMode === "transform",
+            // Pi accepts follow-up messages asynchronously. Do not interpret a
+            // briefly idle queue as a completed workflow step before that
+            // prompt is actually observed; doing so queues every remaining
+            // workflow instruction without any assistant/tool events between
+            // them.
+            requireActivity: true,
           });
           if (!settled || !runRef.active) {
             throw new Error("run_cancelled");
@@ -635,6 +640,7 @@ export class SessionCoordinator {
             const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
               entriesBeforePrompt: entriesBeforeRetry,
               expectedPrompt: retryPrompt,
+              requireActivity: true,
             });
             if (!retrySettled || !runRef.active) {
               throw new Error("run_cancelled");
@@ -663,6 +669,7 @@ export class SessionCoordinator {
             const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
               entriesBeforePrompt: entriesBeforeRepair,
               expectedPrompt: repairPrompt,
+              requireActivity: true,
             });
             if (!repairSettled || !runRef.active) {
               throw new Error("run_cancelled");

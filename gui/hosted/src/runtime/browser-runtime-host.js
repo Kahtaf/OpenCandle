@@ -87,6 +87,9 @@ class BrowserRuntimeHost {
     this.processHasRelayConfiguration = false;
     this.runtimeEpoch = "";
     this.bootPromise = null;
+    // Invalidation is separate from the runtime request epoch: it also covers
+    // the period before a WebContainer has been assigned to this host.
+    this.lifecycleEpoch = 0;
     this.preserveRecoveryBackupUntilBoot = false;
     this.lastBootError = "";
     this.pendingRequests = new Map();
@@ -518,6 +521,7 @@ class BrowserRuntimeHost {
   }
 
   async boot() {
+    const lifecycleEpoch = this.lifecycleEpoch;
     let WebContainerImpl = this.WebContainerImpl;
     let configureWebContainerApiKey = this.configureWebContainerApiKey;
     if (!WebContainerImpl || (this.webContainerApiKey && !configureWebContainerApiKey)) {
@@ -530,6 +534,10 @@ class BrowserRuntimeHost {
       this.webContainerApiConfigured = true;
     }
     const container = await WebContainerImpl.boot({ coep: "require-corp" });
+    if (!this.isBootCurrent(lifecycleEpoch)) {
+      await container.teardown?.();
+      throw new Error("Hosted runtime boot was superseded");
+    }
     this.container = container;
     const [runtimeManifestText, sqlWasm, sqlCommonJs, persisted] = await Promise.all([
       this.fetchAssetText(
@@ -543,6 +551,7 @@ class BrowserRuntimeHost {
       ),
       this.dataStore.readRuntimeSnapshot(),
     ]);
+    this.assertBootCurrent(lifecycleEpoch);
     const runtimeManifest = parseRuntimeManifest(runtimeManifestText);
     const runtimeModules = await Promise.all(
       runtimeManifest.files.map(async (filename) => [
@@ -552,6 +561,7 @@ class BrowserRuntimeHost {
         ),
       ]),
     );
+    this.assertBootCurrent(lifecycleEpoch);
     const { sessions: sessionFiles, stateBytes, currentSessionId } = persisted;
     if (stateBytes && !this.preserveRecoveryBackupUntilBoot) await this.dataStore.createBackup();
     const runtimeFiles = {
@@ -587,6 +597,7 @@ class BrowserRuntimeHost {
       };
     }
     await container.mount(runtimeFiles);
+    this.assertBootCurrent(lifecycleEpoch);
 
     await this.startProcess(
       container,
@@ -708,10 +719,26 @@ class BrowserRuntimeHost {
   }
 
   async stopRuntime() {
+    // A caller can yield the writer while `WebContainer.boot()` is still
+    // pending. Invalidate that boot first, then wait for it to tear down
+    // before releasing the coordinator lock to another tab.
+    this.lifecycleEpoch += 1;
+    const bootPromise = this.bootPromise;
     await this.stopProcess();
     await this.container?.teardown?.();
     this.container = null;
     this.bootPromise = null;
+    if (bootPromise) await bootPromise.catch(() => {});
+  }
+
+  isBootCurrent(lifecycleEpoch) {
+    return this.lifecycleEpoch === lifecycleEpoch;
+  }
+
+  assertBootCurrent(lifecycleEpoch) {
+    if (!this.isBootCurrent(lifecycleEpoch)) {
+      throw new Error("Hosted runtime boot was superseded");
+    }
   }
 
   async stopProcess() {
@@ -734,6 +761,8 @@ class BrowserRuntimeHost {
     this.processWriter = null;
     this.processHasRelayConfiguration = false;
     this.runtimeEpoch = "";
+    this.runtimeReady?.reject(new Error("Hosted runtime boot was superseded"));
+    this.runtimeReady = null;
   }
 
   async writeProcessMessage(message) {

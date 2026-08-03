@@ -580,6 +580,62 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
   });
 
+  it("does not advance through queued workflow prompts before Pi observes each prompt", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const definition: WorkflowDefinition = {
+      workflowType: "queued-prompt-guard",
+      steps: [
+        {
+          stepType: "one",
+          description: "one",
+          prompt: "one",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+        {
+          stepType: "two",
+          description: "two",
+          prompt: "two",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+        {
+          stepType: "three",
+          description: "three",
+          prompt: "three",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+      ],
+    };
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        setTimeout(() => entries.push(userTextEntry(prompt)), 300);
+        setTimeout(() => entries.push(assistantTextEntry(`${prompt} response`)), 310);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      definition,
+      fakeQueueContext(() => true, entries),
+    );
+
+    // The second prompt is accepted only after the first response. Its own
+    // enqueue has not reached Pi yet, so a transient idle queue must not
+    // cause the third prompt to be sent.
+    await vi.advanceTimersByTimeAsync(450);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+
+    coord.cancelActiveWorkflow();
+  });
+
   it("settles a transformed first step from Pi's persisted original user input", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
@@ -675,13 +731,13 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     const entries: SessionEntry[] = [];
     let sendCount = 0;
     const pi = {
-      sendUserMessage: vi.fn(() => {
+      sendUserMessage: vi.fn((prompt: string) => {
         sendCount += 1;
         const currentSend = sendCount;
         const stepCallId = `tc-${sendCount}`;
         const toolName = sendCount === 1 ? "get_stock_quote" : "get_company_overview";
         const symbol = sendCount === 1 ? "NVDA" : "AAPL";
-        entries.push(userTextEntry(`prompt ${sendCount}`));
+        entries.push(userTextEntry(prompt));
         setTimeout(() => {
           entries.push(assistantToolOnlyEntry(toolName));
           const toolResult = toolResultEntry(`${symbol} result`);
@@ -782,6 +838,11 @@ describe("SessionCoordinator workflow runtime ownership", () => {
                 "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
             },
           });
+          entries.push(
+            assistantTextEntry(
+              "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
+            ),
+          );
         }, 10);
       }),
       appendEntry: vi.fn(),

@@ -543,20 +543,38 @@ describe("hosted provider relay", () => {
     await expect(response.text()).rejects.toBeDefined();
   });
 
-  it("accepts a GET model probe carried by a zero-length relay request stream", async () => {
+  it.each([
+    ["openai", "https://api.openai.com/v1/models", { authorization: "Bearer test" }],
+    [
+      "anthropic",
+      "https://api.anthropic.com/v1/models",
+      {
+        "x-api-key": "test",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+    ],
+    [
+      "google",
+      "https://generativelanguage.googleapis.com/v1beta/models",
+      { "x-goog-api-key": "test" },
+    ],
+  ] as const)("accepts the %s shared GET model-key probe through the relay", async (provider, url, headers) => {
     const upstreamFetch = vi.fn(async () => Response.json({ data: [] }));
     const relay = createProviderRelay({ fetchImpl: upstreamFetch });
     const response = await relay.fetch(
       new Request(modelEndpoint, {
         method: "POST",
         headers: {
-          authorization: "Bearer test",
+          ...headers,
           "x-opencandle-client": "0123456789abcdef0123456789abcdef",
-          "x-opencandle-provider": "openai",
+          "x-opencandle-provider": provider,
           "x-opencandle-upstream-method": "GET",
-          "x-opencandle-upstream-url": "https://api.openai.com/v1/models",
+          "x-opencandle-upstream-url": url,
           "cf-connecting-ip": "203.0.113.10",
         },
+        // Fetch may materialize an empty body for an otherwise bodyless GET
+        // probe. The relay must accept that empty stream but reject bytes.
         body: new Uint8Array(),
       }),
       environment(),
@@ -564,7 +582,12 @@ describe("hosted provider relay", () => {
 
     expect(response.status).toBe(200);
     expect(upstreamFetch).toHaveBeenCalledOnce();
-    expect(upstreamFetch.mock.calls[0]?.[0].method).toBe("GET");
+    const upstream = upstreamFetch.mock.calls[0]?.[0] as Request;
+    expect(upstream.method).toBe("GET");
+    expect(upstream.url).toBe(url);
+    for (const [name, value] of Object.entries(headers)) {
+      expect(upstream.headers.get(name)).toBe(value);
+    }
   });
 
   it("cancels a model stream that stalls after response headers", async () => {

@@ -263,6 +263,15 @@ class BrowserRuntimeCoordinator {
   }
 
   async stopWriter() {
+    // A yielded writer must not keep a forwarded run alive while the next
+    // lock owner is starting. Abort both the runtime request and its reader:
+    // cancellation can arrive before `streamRequest()` has returned.
+    const activeStreams = [...this.activeForwardedStreams.values()];
+    this.activeForwardedStreams.clear();
+    for (const active of activeStreams) {
+      active.controller.abort();
+      void active.reader?.cancel("Hosted writer yielded the stream");
+    }
     const host = this.host;
     this.host = null;
     this.releaseWriter = null;
@@ -491,9 +500,17 @@ class BrowserRuntimeCoordinator {
       if (!response.ok || !response.body) throw new Error("Hosted writer could not start the stream");
       const reader = response.body.getReader();
       active.reader = reader;
+      if (controller.signal.aborted) {
+        await reader.cancel("Hosted follower cancelled before the stream started");
+        return;
+      }
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (controller.signal.aborted) {
+          await reader.cancel("Hosted follower cancelled the stream");
+          return;
+        }
         for (let offset = 0; offset < value.byteLength; offset += MAX_FORWARDED_CHUNK_BYTES) {
           this.post({
             type: "stream-chunk",

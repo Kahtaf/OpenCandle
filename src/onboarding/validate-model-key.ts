@@ -38,7 +38,9 @@ const MODEL_KEY_PROBES: Record<ModelKeyProviderId, ModelKeyProbe> = {
 
 /**
  * Checks whether an API key is accepted by a model provider without saving it.
- * Transient failures deliberately permit saving so offline setup remains usable.
+ * Callers must persist the key only after a `valid` result; a transient result
+ * means the provider (or, in hosted mode, its bounded relay) could not verify
+ * admission.
  */
 export async function validateModelKey(
   providerId: ModelKeyProviderId,

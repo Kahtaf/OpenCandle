@@ -10,6 +10,34 @@ describe("browser runtime host", () => {
     vi.unstubAllGlobals();
   });
 
+  it("waits for a superseded WebContainer boot to tear down before disposal completes", async () => {
+    let resolveBoot!: (container: { teardown: ReturnType<typeof vi.fn> }) => void;
+    const teardown = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+      webContainerApiKey: "",
+      WebContainerImpl: {
+        boot: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveBoot = resolve;
+            }),
+        ),
+      },
+    });
+
+    const prewarm = host.prewarm();
+    await Promise.resolve();
+    const disposal = host.dispose();
+    resolveBoot({ teardown });
+
+    await expect(prewarm).rejects.toThrow("superseded");
+    await disposal;
+    expect(teardown).toHaveBeenCalledOnce();
+  });
+
   it("validates an import before stopping the active runtime", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
