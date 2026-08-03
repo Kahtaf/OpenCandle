@@ -390,6 +390,32 @@ must distinguish booting, queued/forwarded, running, checkpointing, retryable
 failure, and durable completion. It must never leave an action indefinitely
 loading after an epoch change or checkpoint timeout.
 
+#### Current production evidence (2026-08-03)
+
+The following journeys were exercised against `web.opencandle.app`, not a
+mocked transport or local browser runtime:
+
+- a Pi `gpt-4.1-mini` compare-assets workflow completed, rendered its
+  financial, chart, technical, risk, correlation, and final-answer cards, and
+  rebuilt the transcript after a reload;
+- the Sentiment Evidence catalog action returned AAPL company-news entries
+  marked `(Finnhub)` through the relay;
+- the Financial Statements catalog action returned AAPL data whose durable
+  raw result named London Strategic Edge as its source;
+- the Stock Screener rendered a live TradingView result table; DDG Web Search
+  returned ten sources; and Fear & Greed rendered its current numeric card;
+- a follower tab submitted a keyboard prompt to the writer and both tabs
+  received the durable completed turn;
+- local GUI ticker selection and a real TUI quote turn continued to use the
+  canonical shared product paths.
+
+This evidence does **not** yet make the release gate complete. FRED is not in
+the current hosted catalog tool surface, so it cannot be claimed as a verified
+hosted tool journey. Reddit/X and closed-tab background work remain intentional
+hosted exclusions. Writer-promotion session hydration and the remaining mobile,
+offline/update, configured Exa/Brave, and model/provider acceptance journeys
+still require production proof before task group 14 can close.
+
 ## Risks / Trade-offs
 
 - **WebContainer availability or licensing changes** -> disclose the dependency,
