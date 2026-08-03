@@ -14,6 +14,7 @@ import {
   resolveEventChannelBootTimeout,
   resolveSnapshotCoordination,
   resolveSupportsSessionActions,
+  resolveToolInvokeTimeout,
   resolveWritableRole,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
@@ -22,6 +23,11 @@ import {
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("useGuiConnection helpers", () => {
+  it("allows hosted mutations time for durable browser checkpoints", () => {
+    expect(resolveToolInvokeTimeout("hosted")).toBe(120_000);
+    expect(resolveToolInvokeTimeout("loopback")).toBe(30_000);
+  });
+
   it("allows the hosted event channel to finish booting its WebContainer", () => {
     expect(resolveEventChannelBootTimeout("hosted")).toBe(120_000);
     expect(resolveEventChannelBootTimeout("loopback")).toBe(1_500);

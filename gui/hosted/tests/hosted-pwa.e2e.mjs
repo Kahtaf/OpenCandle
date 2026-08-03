@@ -312,7 +312,7 @@ try {
     await page.getByRole("button", { name: "Save" }).click();
     await waitFor(
       async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,
-      30_000,
+      120_000,
       "watchlist save acknowledgement",
     );
     await waitForText(page, "AAPL", 30_000);
@@ -340,7 +340,7 @@ try {
     await page.getByRole("button", { name: "Save" }).click();
     await waitFor(
       async () => (await page.getByRole("button", { name: "Save", exact: true }).count()) === 0,
-      30_000,
+      120_000,
       "holding save acknowledgement",
     );
     await waitForTextExact(page, "MSFT", 30_000);
@@ -391,7 +391,7 @@ try {
     await follower.getByRole("button", { name: "Save" }).click();
     await waitFor(
       async () => (await follower.getByRole("button", { name: "Save", exact: true }).count()) === 0,
-      30_000,
+      120_000,
       "follower watchlist mutation acknowledgement",
     );
     await waitForTextExact(follower, "NVDA", 30_000);

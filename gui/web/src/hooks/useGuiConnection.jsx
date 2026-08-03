@@ -23,6 +23,13 @@ const GLOBAL_GUI_COMMANDS = new Set([
 export const TOOL_INVOKE_TIMEOUT_MESSAGE =
   "The operation is still running. OpenCandle will refresh state when the server finishes.";
 
+export function resolveToolInvokeTimeout(transportKind) {
+  // A hosted mutation includes a durable browser checkpoint after the Pi tool
+  // result. WebContainer/OPFS can legitimately take longer than the local
+  // server round trip, so do not abandon an acknowledged save at 30 seconds.
+  return transportKind === "hosted" ? 120_000 : 30_000;
+}
+
 export function buildGuiToastPayload(message, options = {}) {
   if (!message) return null;
   return {
@@ -516,7 +523,7 @@ export function useGuiConnection() {
       const actionId = createSessionActionId("tool");
       const timeout = window.setTimeout(() => {
         rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
-      }, 30_000);
+      }, resolveToolInvokeTimeout(transport.kind));
 
       const promise = new Promise((resolve, reject) => {
         pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
