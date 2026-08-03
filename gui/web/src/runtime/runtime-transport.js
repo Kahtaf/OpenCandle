@@ -1,7 +1,10 @@
 export const runtimeTransportContractVersion = 1;
 
 export function actionSurfaceRole(role, supportsSessionActions) {
-  return supportsSessionActions ? "writer" : role;
+  if (supportsSessionActions) return "writer";
+  // A hosted tab may retain its last elected role while the runtime switches
+  // to offline state. Never let that stale writer label re-enable mutations.
+  return role === "writer" ? "offline" : role;
 }
 
 export function createLoopbackRuntimeTransport(options = {}) {

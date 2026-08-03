@@ -231,7 +231,11 @@ export function createHostedRuntimeTransport({ host }) {
 
     async invokeTool(body) {
       const result = await requestGui({ action: "tool_invoke", ...body });
-      await refresh();
+      // The hosted runtime returns a durable bootstrap with every mutation and
+      // also invalidates subscribed tabs. A second synchronous bootstrap here
+      // serializes another large WebContainer round trip before the UI can
+      // acknowledge the save. Market-state callers refresh their lightweight
+      // state explicitly, and catalog callers receive the invalidation.
       return result?.result;
     },
 

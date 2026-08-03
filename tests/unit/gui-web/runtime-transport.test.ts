@@ -17,6 +17,7 @@ describe("loopback runtime transport", () => {
   it("keeps online forwarding tabs actionable without enabling offline or local followers", () => {
     expect(actionSurfaceRole("follower", true)).toBe("writer");
     expect(actionSurfaceRole("follower", false)).toBe("follower");
+    expect(actionSurfaceRole("writer", false)).toBe("offline");
     expect(actionSurfaceRole("offline", false)).toBe("offline");
   });
 

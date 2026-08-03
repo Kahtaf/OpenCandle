@@ -444,6 +444,9 @@ describe("hosted runtime transport", () => {
       expect.objectContaining({ action: "tool_invoke", toolName: "manage_watchlist" }),
       undefined,
     );
+    expect(
+      host.request.mock.calls.filter(([, payload]) => payload.action === "bootstrap"),
+    ).toHaveLength(1);
     expect(host.handleCommand).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "tool.invoke" }),
     );

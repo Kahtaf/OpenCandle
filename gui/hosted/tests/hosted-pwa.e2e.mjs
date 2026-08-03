@@ -344,8 +344,7 @@ try {
       "holding save acknowledgement",
     );
     await waitForTextExact(page, "MSFT", 30_000);
-    const preReloadCounts = await inspectStateArchive(await readStateCheckpoint(page));
-    assert(preReloadCounts.portfolioLots >= 1, "portfolio checkpoint persisted before reload");
+    await waitForStateCheckpoint(page, 30_000);
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForText(page, "MSFT", 120_000);
 
@@ -508,14 +507,13 @@ try {
     await openHostedPanel(page);
     assert(await page.getByRole("button", { name: "Export data" }).isEnabled(), "offline export");
     const mutationButtons = await page.getByRole("button", { name: "Add ticker" }).all();
-    const visibleMutationStates = [];
-    for (const button of mutationButtons) {
-      if (await button.isVisible()) visibleMutationStates.push(await button.isDisabled());
-    }
-    assert(
-      visibleMutationStates.length > 0 && visibleMutationStates.every(Boolean),
-      "offline mutations disabled",
-    );
+    await waitFor(async () => {
+      const visibleMutationStates = [];
+      for (const button of mutationButtons) {
+        if (await button.isVisible()) visibleMutationStates.push(await button.isDisabled());
+      }
+      return visibleMutationStates.length > 0 && visibleMutationStates.every(Boolean);
+    }, 30_000, "offline mutations disabled");
     await context.setOffline(false);
 
     await follower.close();
@@ -638,6 +636,19 @@ async function readStateCheckpoint(page) {
     const archive = JSON.parse(await (await checkpoint.getFile()).text());
     return archive.stateBase64;
   });
+}
+
+async function waitForStateCheckpoint(page, timeoutMs) {
+  await waitFor(async () => {
+    try {
+      const counts = await inspectStateArchive(await readStateCheckpoint(page));
+      return counts.portfolioLots >= 1;
+    } catch {
+      // OPFS replaces the checkpoint atomically, so a read can land between
+      // the old handle being removed and the new archive becoming visible.
+      return false;
+    }
+  }, timeoutMs, "portfolio checkpoint persistence");
 }
 
 function sqliteCount(database, table) {
