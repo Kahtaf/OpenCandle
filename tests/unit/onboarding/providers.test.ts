@@ -192,7 +192,17 @@ describe("provider registry — shape", () => {
   it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
     expect(soft.map((p) => p.id).sort()).toEqual(
-      ["brave", "ddg", "exa", "fear_greed", "finnhub", "lse", "reddit", "tradingview", "twitter"].sort(),
+      [
+        "brave",
+        "ddg",
+        "exa",
+        "fear_greed",
+        "finnhub",
+        "lse",
+        "reddit",
+        "tradingview",
+        "twitter",
+      ].sort(),
     );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();

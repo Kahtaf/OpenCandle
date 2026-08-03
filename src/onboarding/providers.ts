@@ -194,7 +194,8 @@ export const PROVIDERS = [
     unlocks: ["keyless web and news search fallback"],
     fallbackDescription: "Web search remains available through configured Exa or Brave Search",
     snoozeDurationDays: 7,
-    instructionsHint: "No account needed; OpenCandle uses DuckDuckGo as the keyless search fallback",
+    instructionsHint:
+      "No account needed; OpenCandle uses DuckDuckGo as the keyless search fallback",
     browserTransport: {
       mode: "proxy",
       reason:

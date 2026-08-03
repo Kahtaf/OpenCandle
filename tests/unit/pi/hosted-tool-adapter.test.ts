@@ -172,7 +172,9 @@ describe("hosted tool adapter", () => {
     expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "brave" })).toBe(
       false,
     );
-    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "ddg" })).toBe(true);
+    expect(Value.Check(withoutBraveKey?.parameters, { query: "markets", provider: "ddg" })).toBe(
+      true,
+    );
 
     hasCredential.mockImplementation((provider) => provider === "brave");
     const withBraveKey = getHostedOpenCandleToolDefinitions({
