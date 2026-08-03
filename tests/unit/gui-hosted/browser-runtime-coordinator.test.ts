@@ -594,6 +594,42 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("moves a timed-out market read to the visible follower", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    let hostNumber = 0;
+    const options = {
+      createHost: () => {
+        const ownHostNumber = ++hostNumber;
+        return {
+          request: vi.fn(async () => {
+            if (ownHostNumber === 1) return new Promise(() => {});
+            return { watchlist: [{ symbol: "AAPL" }] };
+          }),
+          handleCommand: vi.fn(),
+          dispose: vi.fn(),
+        };
+      },
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 25,
+    };
+    const first = createBrowserRuntimeCoordinator(options);
+    const second = createBrowserRuntimeCoordinator(options);
+    await Promise.all([first.ready(), second.ready()]);
+    const writer = first.getRole() === "writer" ? first : second;
+    const follower = writer === first ? second : first;
+
+    await expect(follower.request("gui", { action: "market_state" })).resolves.toEqual({
+      watchlist: [{ symbol: "AAPL" }],
+    });
+    expect(follower.getRole()).toBe("writer");
+
+    await Promise.all([first.dispose(), second.dispose()]);
+  });
+
   it("replaces a failed writer takeover status instead of leaving switching progress", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
@@ -622,7 +658,10 @@ describe("browser runtime coordinator", () => {
       follower.request("gui", { action: "load_session", sessionId: "session-to-load" }),
     ).rejects.toThrow("did not release the browser runtime");
     expect(progress).toContainEqual(
-      expect.objectContaining({ phase: "error", error: "The active hosted tab did not release the browser runtime" }),
+      expect.objectContaining({
+        phase: "error",
+        error: "The active hosted tab did not release the browser runtime",
+      }),
     );
 
     unsubscribe();

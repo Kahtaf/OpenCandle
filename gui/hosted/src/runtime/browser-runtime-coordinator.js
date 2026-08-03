@@ -92,12 +92,12 @@ class BrowserRuntimeCoordinator {
     try {
       return await this.requestFromCurrentWriter(operation, payload, options);
     } catch (error) {
-      // Session navigation is read-only from the caller's perspective. A writer
+      // GUI reads are idempotent from the caller's perspective. A writer
       // handoff can happen after the old writer receives the request but before
-      // it responds; retry it once against the new owner instead of leaving the
+      // it responds; retry it once against the new owner instead of leaving a
       // route permanently in its loading state.
       if (!shouldRetryAfterWriterChange(error, operation, payload, options.signal, this.disposed)) {
-        if (!shouldRecoverUnavailableSessionRead(error, operation, payload, options.signal, this.disposed)) {
+        if (!shouldRecoverUnavailableGuiRead(error, operation, payload, options.signal, this.disposed)) {
           throw error;
         }
         // A visible tab must not remain dependent on a background tab that
@@ -370,7 +370,7 @@ class BrowserRuntimeCoordinator {
         this.pending.delete(requestId);
         reject(new DOMException("The operation was aborted", "AbortError"));
       };
-      const timeoutMs = isRetryableForwardedRead(payload)
+      const timeoutMs = isRecoverableForwardedGuiRead(payload)
         ? Math.min(this.requestTimeoutMs, FORWARDED_SESSION_READ_TIMEOUT_MS)
         : this.requestTimeoutMs;
       const timer = setTimeout(() => {
@@ -392,7 +392,7 @@ class BrowserRuntimeCoordinator {
           target: this.writerId,
           ...payload,
         });
-        if (isRetryableForwardedRead(payload) && attempts < MAX_FORWARDED_READ_ATTEMPTS) {
+        if (isRecoverableForwardedGuiRead(payload) && attempts < MAX_FORWARDED_READ_ATTEMPTS) {
           retryTimer = setTimeout(post, FORWARDED_READ_RETRY_MS);
         }
       };
@@ -755,14 +755,13 @@ function shouldRetryAfterWriterChange(error, operation, payload, signal, dispose
   );
 }
 
-function shouldRecoverUnavailableSessionRead(error, operation, payload, signal, disposed) {
+function shouldRecoverUnavailableGuiRead(error, operation, payload, signal, disposed) {
   return (
     !disposed &&
     !signal?.aborted &&
     error instanceof Error &&
     error.message === "The active hosted tab did not respond" &&
-    operation === "gui" &&
-    (payload?.action === "bootstrap" || payload?.action === "load_session")
+    isRecoverableGuiRead(operation, payload)
   );
 }
 
@@ -794,11 +793,22 @@ function forwardedRequestMutates(message) {
   return message.kind === "request" && isMutatingRequest(message.operation, message.payload ?? {});
 }
 
-function isRetryableForwardedRead(payload) {
+function isRecoverableForwardedGuiRead(payload) {
   return (
     payload?.kind === "request" &&
-    payload.operation === "gui" &&
-    (payload.payload?.action === "bootstrap" || payload.payload?.action === "load_session")
+    isRecoverableGuiRead(payload.operation, payload.payload)
+  );
+}
+
+function isRecoverableGuiRead(operation, payload) {
+  // `load_session` changes the runtime's current manager, but remains safe to
+  // retry after takeover because it has no external side effect. Every
+  // protocol-declared GUI read is likewise idempotent; keeping them on the
+  // short failover path prevents a visible diagnostics or market page from
+  // waiting behind a background tab for the normal three-minute deadline.
+  return (
+    operation === "gui" &&
+    (payload?.action === "load_session" || !hostedGuiActionBlocksUpdate(payload?.action))
   );
 }
 
