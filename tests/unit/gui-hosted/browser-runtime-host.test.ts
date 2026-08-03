@@ -1168,16 +1168,12 @@ describe("browser runtime host", () => {
     );
   });
 
-  it("exchanges Turnstile in the trusted shell and passes only ephemeral signed authorization to the hosted process", async () => {
+  it("passes only ephemeral signed relay authorization to the hosted process", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
     vi.stubGlobal("location", { origin: "https://web.opencandle.app" });
     const storage = memoryStorage();
     const environments: Array<Record<string, string>> = [];
-    const getTurnstileToken = vi
-      .fn()
-      .mockResolvedValueOnce("attestation-one")
-      .mockResolvedValueOnce("attestation-two");
     const fetchRuntimeAuthorization = vi
       .fn()
       .mockResolvedValueOnce({ token: "runtime-one.signature", expiresAt: 2_000_000 })
@@ -1209,7 +1205,6 @@ describe("browser runtime host", () => {
         sessionStorage: memoryStorage(),
         dataStore: {},
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
-        getTurnstileToken,
         fetchRuntimeAuthorization,
       });
       await host.startProcess(container);
@@ -1236,13 +1231,11 @@ describe("browser runtime host", () => {
       first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
     );
     expect(storage.getItem("opencandle.hosted.runtime-token")).toBeNull();
-    expect(getTurnstileToken).toHaveBeenCalledTimes(2);
     expect(fetchRuntimeAuthorization).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
         clientId: first.OPENCANDLE_PROVIDER_RELAY_CLIENT_ID,
-        turnstileToken: "attestation-one",
       }),
     );
   });
@@ -1277,7 +1270,7 @@ describe("browser runtime host", () => {
       sessionStorage: memoryStorage(),
       dataStore: {},
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
-      getTurnstileToken: vi.fn(async () => {
+      fetchRuntimeAuthorization: vi.fn(async () => {
         throw new Error("unavailable");
       }),
     });

@@ -13,7 +13,7 @@ The Worker stores no credentials, request or response bodies, sessions, or user 
 
 Provider credentials still pass through Cloudflare in transit because the Worker must forward them to the selected provider. Cloudflare terminates and processes those requests and may retain platform-level security or operational metadata under its own policies. OpenCandle does not claim that Cloudflare observes nothing.
 
-The relay is deliberately public infrastructure because a browser-only application cannot hold an unforgeable shared secret. The top-level app obtains a one-time Cloudflare Turnstile attestation and exchanges it for a short-lived token signed by the Worker and bound to the installation client id. Only the signed token and expiry enter the WebContainer process. Tokens stay in memory, expire after one hour, refresh before expiry, and are never written to browser storage, Pi sessions, or SQLite. If a suspended tab wakes after expiry, the top-level shell obtains a fresh attestation before the next relay request.
+The relay is deliberately public infrastructure because a browser-only application cannot hold an unforgeable shared secret. The top-level app exchanges its installation client id for a short-lived Worker-signed token. Only the signed token and expiry enter the WebContainer process. Tokens stay in memory, expire after one hour, refresh before expiry, and are never written to browser storage, Pi sessions, or SQLite. The Worker applies its server-observed per-network rate limit before issuing or refreshing a token and before every relay request, so startup does not depend on a third-party challenge script.
 
 The WebContainer preserves the normal provider and Pi fetch interfaces but sends relay-bound requests over its private stdio channel to the trusted top-level browser shell. The shell accepts only the four exact same-origin relay paths, streams bounded response frames back into the runtime, propagates cancellation to the upstream fetch, and rejects arbitrary destinations. This avoids relying on the generated WebContainer origin's network behavior without creating a second provider or model implementation.
 
@@ -37,17 +37,16 @@ npm run relay:test
 npm run relay:types
 npm --workspace @opencandle/provider-relay exec wrangler deploy --dry-run
 npx --yes wrangler secret put RELAY_RUNTIME_TOKEN_SECRET --config workers/provider-relay/wrangler.jsonc
-npx --yes wrangler secret put TURNSTILE_SECRET_KEY --config workers/provider-relay/wrangler.jsonc
 npm --workspace @opencandle/provider-relay run deploy
 ```
 
-Generate the operational HMAC secret with at least 32 random bytes and pipe it directly to `wrangler secret put`; do not print or commit it. Store the Turnstile widget secret through the same command, and provide its public sitekey to the hosted build as `VITE_TURNSTILE_SITE_KEY`. The production widget is restricted to `web.opencandle.app`; local and automated checks use Cloudflare's documented test keys. Rotating the HMAC secret immediately invalidates active runtime tokens, which recover after reloading the PWA.
+Generate the operational HMAC secret with at least 32 random bytes and pipe it directly to `wrangler secret put`; do not print or commit it. Rotating the HMAC secret immediately invalidates active runtime tokens, which recover after reloading the PWA.
 
 `wrangler.jsonc` routes only the exact HTTPS `web.opencandle.app/v1/provider-fetch`, `web.opencandle.app/v1/model-fetch`, `web.opencandle.app/v1/health`, and `web.opencandle.app/v1/runtime-token` endpoints to the Worker. `workers.dev` and preview URLs are disabled. Review the policy table and privacy audit before every deployment.
 
-Production hosted builds accept only the same-origin relay route. Cross-origin relay URLs fail closed so the static production CSP and runtime policy cannot drift. Loopback URLs remain available for transport-level development, but a joined local Turnstile flow requires a separate non-production widget and Worker secret configured for that hostname.
+Production hosted builds accept only the same-origin relay route. Cross-origin relay URLs fail closed so the static production CSP and runtime policy cannot drift. Loopback URLs remain available for transport-level development, but cannot prove the production route or its rate-limit binding.
 
-After deployment, exercise relay negotiation from the real hosted runtime at `https://web.opencandle.app` in a browser. The production Turnstile widget is restricted to that hostname, so a localhost preview cannot prove the joined production flow. A staging proof requires its own Worker secrets and widget that explicitly permits the staging hostname.
+After deployment, exercise relay negotiation from the real hosted runtime at `https://web.opencandle.app` in a browser. A localhost preview cannot prove the joined production flow because production uses the exact production route and rate-limit binding.
 
 The transport-only smoke command remains useful after deployment:
 

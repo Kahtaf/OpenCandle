@@ -9,13 +9,12 @@ import {
 } from "../../../gui/hosted/runtime/provider-relay-fetch.js";
 
 describe("hosted provider relay fetch", () => {
-  it("exchanges a Turnstile attestation for bounded runtime authorization", async () => {
+  it("exchanges a rate-limited client request for bounded runtime authorization", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       expect(request.url).toBe("https://web.opencandle.app/v1/runtime-token");
       expect(request.method).toBe("POST");
       expect(request.headers.get("x-opencandle-client")).toBe("0123456789abcdef0123456789abcdef");
-      expect(request.headers.get("x-opencandle-turnstile-token")).toBe("attestation-token");
       return new Response(
         JSON.stringify({ version: 1, token: "payload.signature", expiresAt: 2_000_000 }),
       );
@@ -25,7 +24,6 @@ describe("hosted provider relay fetch", () => {
       fetchHostedRuntimeAuthorization({
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
         clientId: "0123456789abcdef0123456789abcdef",
-        turnstileToken: "attestation-token",
         fetchImpl,
       }),
     ).resolves.toEqual({ token: "payload.signature", expiresAt: 2_000_000 });
@@ -62,12 +60,11 @@ describe("hosted provider relay fetch", () => {
       fetchHostedRuntimeAuthorization({
         relayUrl: "https://web.opencandle.app/v1/provider-fetch",
         clientId: "0123456789abcdef0123456789abcdef",
-        turnstileToken: "attestation-token",
         fetchImpl: vi.fn(async () =>
-          Response.json({ error: "turnstile_verification_failed" }, { status: 403 }),
+          Response.json({ error: "relay_rate_limited" }, { status: 429 }),
         ),
       }),
-    ).rejects.toThrow("403: turnstile_verification_failed");
+    ).rejects.toThrow("429: relay_rate_limited");
   });
 
   it("refreshes runtime authorization before expiry and coalesces concurrent refreshes", async () => {
@@ -98,17 +95,15 @@ describe("hosted provider relay fetch", () => {
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
-  it("lazily exchanges the initial Turnstile attestation inside the runtime", async () => {
+  it("lazily exchanges initial runtime authorization inside the runtime", async () => {
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request("https://web.opencandle.app/v1/runtime-token", init);
-      expect(request.headers.get("x-opencandle-turnstile-token")).toBe("attestation-token");
       expect(request.headers.get("x-opencandle-runtime-token")).toBeNull();
       return Response.json({ version: 1, token: "runtime.signature", expiresAt: 2_000_000 });
     });
     const getRuntimeToken = createHostedRuntimeTokenManager({
       relayUrl: "https://web.opencandle.app/v1/provider-fetch",
       clientId: "0123456789abcdef0123456789abcdef",
-      turnstileToken: "attestation-token",
       fetchImpl,
       now: () => 1_000_000,
     });

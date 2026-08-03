@@ -10,7 +10,6 @@ export type ModelRelayProvider = (typeof MODEL_RELAY_PROVIDER_IDS)[number];
 export const MODEL_RELAY_HEADERS = Object.freeze({
   client: "x-opencandle-client",
   runtimeToken: "x-opencandle-runtime-token",
-  turnstileToken: "x-opencandle-turnstile-token",
   provider: "x-opencandle-provider",
   upstreamMethod: "x-opencandle-upstream-method",
   upstreamUrl: "x-opencandle-upstream-url",

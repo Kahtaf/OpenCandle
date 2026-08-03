@@ -390,6 +390,16 @@ must distinguish booting, queued/forwarded, running, checkpointing, retryable
 failure, and durable completion. It must never leave an action indefinitely
 loading after an epoch change or checkpoint timeout.
 
+The relay remains public, bounded infrastructure: an installation client id
+and a short-lived signed token are transport coordination rather than user
+authentication. The Worker rate-limits token issuance and every forwarded
+request using Cloudflare's server-observed network identity, alongside the
+exact provider/model allowlists, strict header and URL policy, and bounded
+request, response, and timeout limits. Hosted startup must not wait for a
+third-party browser challenge before it can boot the canonical WebContainer
+runtime; the signed token remains memory-only and is never placed in OPFS,
+SQLite, sessions, exports, or logs.
+
 #### Current production evidence (2026-08-03)
 
 The following journeys were exercised against `web.opencandle.app`, not a
@@ -398,8 +408,8 @@ mocked transport or local browser runtime:
 - a Pi `gpt-4.1-mini` compare-assets workflow completed, rendered its
   financial, chart, technical, risk, correlation, and final-answer cards, and
   rebuilt the transcript after a reload;
-- the Sentiment Evidence catalog action returned AAPL company-news entries
-  marked `(Finnhub)` through the relay;
+- an earlier Sentiment Evidence catalog action returned AAPL company-news
+  entries marked `(Finnhub)` through the relay;
 - the Financial Statements catalog action returned AAPL data whose durable
   raw result named London Strategic Edge as its source;
 - the Stock Screener rendered a live TradingView result table; DDG Web Search
@@ -426,6 +436,16 @@ mocked transport or local browser runtime:
   extended-hours enrichment. The PWA Stock Quote catalog action then returned
   an AAPL market-lookup card with live price, day range, volume, and 52-week
   range instead of remaining indefinitely in the running state;
+- a current DDG PWA research journey returned two live NVIDIA news sources and
+  rendered a completed five-step workflow with source cards. A current Finnhub
+  AAPL sentiment journey completed without hanging but reported no company-news
+  evidence; the supplied key itself returned HTTP 200 with an empty current-day
+  article set, so this is not yet content-path acceptance;
+- a production catalog reload exposed a 30-second Turnstile attestation timeout
+  that kept the shell in `Preparing browser runtime`. The follow-up batch
+  removes that challenge dependency while retaining the rate-limited,
+  memory-only token relay, and requires a fresh deployed bootstrap proof before
+  this release gate can close;
 - local GUI ticker selection and a real TUI quote turn continued to use the
   canonical shared product paths.
 

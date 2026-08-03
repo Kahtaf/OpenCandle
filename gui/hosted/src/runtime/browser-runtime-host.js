@@ -15,7 +15,6 @@ import {
   PROVIDER_RELAY_PATH,
   PROVIDER_RELAY_RUNTIME_TOKEN_PATH,
 } from "../../../../src/runtime/provider-relay-contract.js";
-import { requestTurnstileAttestation } from "./turnstile-attestation.js";
 
 const PROCESS_FRAME_PREFIX = "@@OPENCANDLE@@";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
@@ -51,12 +50,6 @@ class BrowserRuntimeHost {
       : configuredWebContainerApiKey;
     this.webContainerApiConfigured = false;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-    const turnstileSitekey = String(
-      options.turnstileSitekey ?? import.meta.env?.VITE_TURNSTILE_SITE_KEY ?? "",
-    ).trim();
-    this.getTurnstileToken =
-      options.getTurnstileToken ??
-      (() => requestTurnstileAttestation({ sitekey: turnstileSitekey }));
     this.fetchRuntimeAuthorization =
       options.fetchRuntimeAuthorization ?? fetchHostedRuntimeAuthorization;
     this.storage = options.storage ?? globalThis.localStorage;
@@ -630,7 +623,7 @@ class BrowserRuntimeHost {
       try {
         relayAuthorization = await this.ensureRelayAuthorization();
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "Turnstile verification failed";
+        const reason = error instanceof Error ? error.message : "relay authorization failed";
         console.warn(`Hosted provider relay unavailable: ${reason}`);
         // The hosted shell still boots without relay-backed providers. A later
         // process restart retries authorization without persisting the token.
@@ -917,7 +910,6 @@ class BrowserRuntimeHost {
       if (controller.signal.aborted) throw new DOMException("The operation was aborted", "AbortError");
       headers.set(MODEL_RELAY_HEADERS.client, this.relayClientId);
       headers.set(MODEL_RELAY_HEADERS.runtimeToken, authorization.token);
-      headers.delete(MODEL_RELAY_HEADERS.turnstileToken);
       const body = message.bodyBase64
         ? decodeBase64Bytes(String(message.bodyBase64), MAX_BROWSER_FETCH_BYTES)
         : undefined;
@@ -1000,11 +992,10 @@ class BrowserRuntimeHost {
     this.relayAuthorizationPromise ??= (async () => {
       const current = this.relayAuthorization;
       const currentToken = current && current.expiresAt > Date.now() ? current.token : "";
-      const turnstileToken = currentToken ? "" : await this.getTurnstileToken();
       const authorization = await this.fetchRuntimeAuthorization({
         relayUrl: this.relayUrl,
         clientId: this.relayClientId,
-        ...(currentToken ? { currentToken } : { turnstileToken }),
+        ...(currentToken ? { currentToken } : {}),
         fetchImpl: this.fetchImpl,
       });
       this.relayAuthorization = authorization;

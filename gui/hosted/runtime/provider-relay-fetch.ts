@@ -12,8 +12,6 @@ import {
 const RELAY_CONTRACT_VERSION = PROVIDER_RELAY_CONTRACT_VERSION;
 const MAX_RELAY_ENVELOPE_BYTES = 6 * 1024 * 1024;
 const DEFAULT_RELAY_HEALTH_TIMEOUT_MS = 5_000;
-// Siteverify is bounded to 15 seconds in the Worker. Authorization must wait
-// longer so a one-time proof is never consumed after the client has given up.
 const DEFAULT_RUNTIME_AUTHORIZATION_TIMEOUT_MS = 30_000;
 const DEFAULT_RELAY_MANIFEST_MAX_AGE_MS = 60_000;
 const DEFAULT_RUNTIME_TOKEN_REFRESH_WINDOW_MS = 5 * 60_000;
@@ -62,7 +60,6 @@ interface HostedRuntimeAuthorization {
 export async function fetchHostedRuntimeAuthorization(options: {
   relayUrl: string;
   clientId: string;
-  turnstileToken?: string;
   currentToken?: string;
   fetchImpl?: typeof globalThis.fetch;
   timeoutMs?: number;
@@ -70,9 +67,6 @@ export async function fetchHostedRuntimeAuthorization(options: {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const tokenUrl = relayEndpoint(options.relayUrl, PROVIDER_RELAY_RUNTIME_TOKEN_PATH);
   const headers = new Headers({ [MODEL_RELAY_HEADERS.client]: options.clientId });
-  if (options.turnstileToken) {
-    headers.set(MODEL_RELAY_HEADERS.turnstileToken, options.turnstileToken);
-  }
   if (options.currentToken) {
     headers.set(MODEL_RELAY_HEADERS.runtimeToken, options.currentToken);
   }
@@ -153,7 +147,6 @@ function semanticRelayError(serialized: string): string {
 export function createHostedRuntimeTokenManager(options: {
   relayUrl: string;
   clientId: string;
-  turnstileToken?: string;
   initialToken?: string;
   expiresAt?: number;
   fetchImpl?: typeof globalThis.fetch;
@@ -163,7 +156,6 @@ export function createHostedRuntimeTokenManager(options: {
   let authorization: HostedRuntimeAuthorization | undefined = options.initialToken && options.expiresAt
     ? { token: options.initialToken, expiresAt: options.expiresAt }
     : undefined;
-  let turnstileToken = options.turnstileToken;
   let inFlight: Promise<HostedRuntimeAuthorization> | undefined;
   return async () => {
     const now = options.now ?? Date.now;
@@ -174,15 +166,9 @@ export function createHostedRuntimeTokenManager(options: {
     inFlight ??= fetchHostedRuntimeAuthorization({
       relayUrl: options.relayUrl,
       clientId: options.clientId,
-      ...(authorization
-        ? { currentToken: authorization.token }
-        : { turnstileToken }),
+      ...(authorization ? { currentToken: authorization.token } : {}),
       fetchImpl: options.fetchImpl,
     })
-      .then((next) => {
-        turnstileToken = undefined;
-        return next;
-      })
       .finally(() => {
         inFlight = undefined;
       });
