@@ -511,6 +511,18 @@ mocked transport or local browser runtime:
   offline. Chromium production acceptance forced the PWA offline and confirmed
   that every visible `Add ticker` control was disabled while the read-only
   shell remained available.
+- PWA deployment `a7661235-1aee-4ab9-bdeb-ea9c01017d11` carries the durable
+  session-persistence signal through both transports, so the shared home view
+  does not rotate away from a transient Pi session before it can be addressed.
+  A fresh production session and a completed `gpt-4.1-mini` NVDA quote both
+  reloaded at their exact session URLs with their transcript and result card.
+- PWA deployment `81dc15f2-f08b-4def-88e6-d7a627110914` publishes a
+  non-secret writer identity alongside the existing coordination epoch. A new
+  tab can therefore forward its initial bootstrap even if it misses the first
+  BroadcastChannel status message, instead of waiting indefinitely for an
+  unknown active tab. In Chromium production, the foreground tab took writer
+  ownership, configured the model, created a fresh chat, and completed an
+  AAPL quote with the shared result card while the older tab followed it.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
