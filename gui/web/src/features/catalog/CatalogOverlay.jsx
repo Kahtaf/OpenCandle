@@ -486,11 +486,16 @@ function BuilderBody({
 }) {
   const entity = resolveSelection(selection, catalog);
   if (!entity) {
+    const catalogIsStillLoading = !catalogHasEntries(catalog);
     return (
       <div className="grid gap-2 p-12 text-center">
-        <p className="text-sm font-medium text-foreground">Selection no longer available</p>
+        <p className="text-sm font-medium text-foreground">
+          {catalogIsStillLoading ? "Loading catalog…" : "Selection no longer available"}
+        </p>
         <p className="text-xs text-muted-foreground">
-          The catalog refreshed while you were viewing this entry.
+          {catalogIsStillLoading
+            ? "Preparing the selected entry."
+            : "The catalog refreshed while you were viewing this entry."}
         </p>
       </div>
     );
@@ -522,6 +527,12 @@ function BuilderBody({
     );
   }
   return <ProviderBuilder provider={entity} send={send} setToast={setToast} />;
+}
+
+function catalogHasEntries(catalog) {
+  return [catalog?.workflows, catalog?.tools, catalog?.providers].some(
+    (entries) => Array.isArray(entries) && entries.length > 0,
+  );
 }
 
 function WorkflowBuilder({

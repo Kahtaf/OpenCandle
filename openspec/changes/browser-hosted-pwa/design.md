@@ -530,6 +530,13 @@ mocked transport or local browser runtime:
   financials turn rendered an AAPL income-statement card sourced from London
   Strategic Edge. Neither provider key was placed in a URL, export, log, or
   relay-stored request body.
+- A clean production PWA journey replaced a configured Finnhub key, waited for
+  the resulting browser-runtime restart, and completed the very first
+  `gpt-4.1-mini` prompt afterward. A second foreground tab then took writer
+  ownership and completed its own streamed turn; the prior tab remained a
+  clearly labeled follower. The catalog deep-link loading state is also kept
+  distinct from a genuinely removed entry so a cold bootstrap does not briefly
+  report a false unavailable-provider error.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
