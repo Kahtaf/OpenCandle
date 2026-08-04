@@ -20,3 +20,6 @@ design-inspo/
 
 # PR runtime evidence stays machine-local; durable decision records go in docs/internal/ as markdown
 docs/internal/pr-evidence/
+
+# Local UI/UX reference scratch (Mobbin screenshots, not for distribution)
+tmp/
