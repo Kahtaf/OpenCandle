@@ -150,6 +150,59 @@ describe("browser runtime coordinator", () => {
     await Promise.all([first.dispose(), second.dispose()]);
   });
 
+  it("uses the durable writer hint when a new follower misses the status handshake", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const locks = new FakeLockManager();
+    const storage = createStorage();
+    const options = {
+      createHost: () => ({
+        request: vi.fn(async () => ({ sessionId: "session-1", sessions: [], snapshot: {} })),
+        handleCommand: vi.fn(),
+        dispose: vi.fn(),
+      }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    };
+    const writer = createBrowserRuntimeCoordinator(options);
+    await writer.ready();
+
+    const follower = createBrowserRuntimeCoordinator({
+      ...options,
+      channelFactory: (name: string) => {
+        const channel = new FakeBroadcastChannel(name);
+        let listener: ((event: { data: unknown }) => void) | null = null;
+        Object.defineProperty(channel, "onmessage", {
+          configurable: true,
+          get: () => listener,
+          set: (next) => {
+            listener = (event) => {
+              if (
+                event.data &&
+                typeof event.data === "object" &&
+                "type" in event.data &&
+                event.data.type === "writer-status"
+              ) {
+                return;
+              }
+              next?.(event);
+            };
+          },
+        });
+        return channel;
+      },
+    });
+    await follower.ready();
+
+    await expect(follower.request("gui", { action: "bootstrap" })).resolves.toMatchObject({
+      sessionId: "session-1",
+    });
+    expect(follower.getRole()).toBe("follower");
+
+    await Promise.all([writer.dispose(), follower.dispose()]);
+  });
+
   it("promotes the follower with a newer epoch and ignores stale responses", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();

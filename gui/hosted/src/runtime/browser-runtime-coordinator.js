@@ -3,6 +3,7 @@ import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol
 const CHANNEL_NAME = "opencandle-hosted-coordination-v1";
 const LOCK_NAME = "opencandle-hosted-writer-v1";
 const EPOCH_KEY = "opencandle.hosted.runtime-epoch.v1";
+const WRITER_HINT_KEY = "opencandle.hosted.runtime-writer.v1";
 const CREDENTIAL_KEY = "opencandle.hosted.credentials.v1";
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 const FORWARDED_READ_RETRY_MS = 1_500;
@@ -53,6 +54,7 @@ class BrowserRuntimeCoordinator {
     this.eventTarget.addEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.addEventListener?.("offline", this.handleNetworkChange);
     this.writerLockPromise = null;
+    this.restoreWriterHint();
     this.queueWriterLock();
     this.post({ type: "hello" });
   }
@@ -225,6 +227,7 @@ class BrowserRuntimeCoordinator {
     this.epoch = nextEpoch;
     this.storage.setItem(EPOCH_KEY, String(this.epoch));
     this.writerId = this.tabId;
+    this.storage.setItem(WRITER_HINT_KEY, JSON.stringify({ epoch: this.epoch, writerId: this.tabId }));
     this.role = "writer";
     const host = this.createHost({ sessionCredential: this.sessionCredential });
     this.host = host;
@@ -372,6 +375,7 @@ class BrowserRuntimeCoordinator {
     this.writerBootstrap = null;
     this.writerReadyPromise = null;
     this.releaseWriter = null;
+    this.clearWriterHintIfOwned();
     if (host) await host.dispose?.();
     if (!this.disposed) {
       this.role = "follower";
@@ -742,6 +746,23 @@ class BrowserRuntimeCoordinator {
     });
   }
 
+  restoreWriterHint() {
+    const hint = readWriterHint(this.storage);
+    if (!hint) return;
+    this.epoch = hint.epoch;
+    this.writerId = hint.writerId;
+    this.role = "follower";
+    this.resolveReady();
+    this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
+  }
+
+  clearWriterHintIfOwned() {
+    const hint = readWriterHint(this.storage);
+    if (hint?.epoch === this.epoch && hint.writerId === this.tabId) {
+      this.storage.removeItem(WRITER_HINT_KEY);
+    }
+  }
+
   rejectPendingForWriterChange() {
     const error = writerChangedError();
     for (const [requestId, pending] of this.pending) {
@@ -933,6 +954,19 @@ function readSessionCredential(storage) {
   try {
     const serialized = storage?.getItem(CREDENTIAL_KEY);
     return serialized ? normalizeSessionCredential(JSON.parse(serialized)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readWriterHint(storage) {
+  try {
+    const serialized = storage?.getItem(WRITER_HINT_KEY);
+    if (!serialized) return null;
+    const value = JSON.parse(serialized);
+    const epoch = value?.epoch;
+    const writerId = typeof value?.writerId === "string" ? value.writerId.trim() : "";
+    return isEpoch(epoch) && writerId ? { epoch, writerId } : null;
   } catch {
     return null;
   }
