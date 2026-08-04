@@ -745,10 +745,18 @@ export class SessionCoordinator {
           this.activeWorkflowRunRef === runRef &&
           (completedRun.status === "completed" || completedRun.status === "failed")
         ) {
-          pi.appendEntry("opencandle-workflow-complete", {
-            workflow: completedRun.workflowType,
-            status: completedRun.status,
-          });
+          // A long workflow can finish after Pi replaces the session context
+          // (for example, when the GUI opens a new session). The terminal
+          // marker belongs to the old session, so do not let a stale-context
+          // assertion tear down the whole local runtime while cleaning up.
+          try {
+            pi.appendEntry("opencandle-workflow-complete", {
+              workflow: completedRun.workflowType,
+              status: completedRun.status,
+            });
+          } catch (error) {
+            if (!isStaleExtensionContextError(error)) throw error;
+          }
         }
       })
       .finally(() => {
@@ -900,6 +908,10 @@ export class SessionCoordinator {
       ...payload,
     });
   }
+}
+
+function isStaleExtensionContextError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("extension ctx is stale");
 }
 
 function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {

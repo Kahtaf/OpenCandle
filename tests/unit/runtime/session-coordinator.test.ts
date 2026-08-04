@@ -464,6 +464,34 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     await completion;
   });
 
+  it("does not crash the runtime when a completed workflow has a stale Pi context", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry("workflow response")), 10);
+      }),
+      appendEntry: vi.fn(() => {
+        throw new Error("This extension ctx is stale after session replacement or reload.");
+      }),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("stale-context"),
+      fakeQueueContext(() => false, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(coord.waitForActiveWorkflow()).resolves.toBeUndefined();
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "stale-context",
+      status: "completed",
+    });
+  });
+
   it("fails a workflow instead of advancing after an aborted assistant response", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();

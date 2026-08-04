@@ -138,6 +138,7 @@ interface HostedStateCheckpoint {
 export interface BrowserHostedBootstrap {
   role: "writer";
   sessionId: string;
+  sessionPersisted: boolean;
   supportsSessionActions: true;
   coordination: {
     sessionId: string;
@@ -969,6 +970,7 @@ export class BrowserHostedGuiRuntime {
     const bootstrap: BrowserHostedBootstrap = {
       role: "writer",
       sessionId,
+      sessionPersisted: true,
       supportsSessionActions: true,
       coordination: {
         sessionId,

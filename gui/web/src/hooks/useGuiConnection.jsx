@@ -211,6 +211,7 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
+  const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
@@ -244,6 +245,9 @@ export function useGuiConnection() {
         options.updateCurrentSessionId !== false,
       ),
     );
+    if (options.updateCurrentSessionId !== false) {
+      setCurrentSessionPersisted(data.sessionPersisted === true);
+    }
     setAskUserPrompts(data.askUserPrompts || []);
     if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
     if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
@@ -307,6 +311,7 @@ export function useGuiConnection() {
               setRole(message.role);
               setCoordination(message.coordination || null);
               setCurrentSessionId(message.sessionId);
+              setCurrentSessionPersisted(message.sessionPersisted === true);
               setAskUserPrompts(message.askUserPrompts || []);
               startTransition(() => {
                 setCatalog(message.catalog);
@@ -363,6 +368,7 @@ export function useGuiConnection() {
               // always repeat the selected session id, and must not erase the
               // valid id received in the preceding boot payload.
               setCurrentSessionId((currentSessionId) => message.sessionId || currentSessionId);
+              if (message.sessionId) setCurrentSessionPersisted(message.sessionPersisted === true);
               setCoordination((current) =>
                 resolveSnapshotCoordination(current, message.coordination),
               );
@@ -634,6 +640,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      currentSessionPersisted,
       coordination,
       modelSetup,
       supportsSessionActions,
@@ -655,6 +662,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      currentSessionPersisted,
       modelSetup,
       supportsSessionActions,
       setToast,

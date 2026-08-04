@@ -970,6 +970,7 @@ export async function buildSessionBootstrapPayload(
   return {
     role: roleForSessionBootstrap(options, sessionManager),
     sessionId,
+    sessionPersisted: isSessionPersisted(sessionManager),
     coordination: {
       sessionId,
       status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
@@ -989,6 +990,11 @@ export async function buildSessionBootstrapPayload(
       }),
     },
   };
+}
+
+function isSessionPersisted(sessionManager: SessionManager): boolean {
+  const sessionFile = sessionManager.getSessionFile();
+  return Boolean(sessionFile && existsSync(sessionFile));
 }
 
 function ownerKindForSessionBootstrap(

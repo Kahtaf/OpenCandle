@@ -131,7 +131,7 @@ export function AppShell() {
     currentSessionId: gui.currentSessionId,
     entryCount: hasGuiSessionContent ? visibleEvents.length : 0,
     lastResetSessionId: homeResetSessionRef.current,
-    canStartFreshHomeSession: canPrepareFreshHomeSession,
+    canStartFreshHomeSession: canPrepareFreshHomeSession && gui.currentSessionPersisted,
   });
   const sessionView = routeSessionView({
     pathname,

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { AgentSession, SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -231,6 +232,7 @@ export function createWsHub({
       role,
       lock: publicWriterLock(lock),
       sessionId: sessionManager.getSessionId(),
+      sessionPersisted: isSessionPersisted(sessionManager),
       coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
@@ -250,6 +252,7 @@ export function createWsHub({
     return {
       role,
       sessionId: sessionManager.getSessionId(),
+      sessionPersisted: isSessionPersisted(sessionManager),
       coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
@@ -286,6 +289,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
         sessionId,
@@ -304,6 +308,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
         sessionId,
@@ -401,4 +406,9 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function isSessionPersisted(sessionManager: SessionManager): boolean {
+  const sessionFile = sessionManager.getSessionFile?.();
+  return Boolean(sessionFile && existsSync(sessionFile));
 }

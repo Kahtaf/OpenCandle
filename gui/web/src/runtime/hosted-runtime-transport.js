@@ -197,6 +197,7 @@ export function createHostedRuntimeTransport({ host }) {
             type: "boot",
             role: bootstrap.role,
             sessionId: appliesToSelection ? bootstrap.sessionId : selectedSessionId,
+            sessionPersisted: bootstrap.sessionPersisted,
             coordination: bootstrap.coordination,
             supportsSessionActions: bootstrap.supportsSessionActions,
             catalog: bootstrap.catalog,
@@ -211,6 +212,7 @@ export function createHostedRuntimeTransport({ host }) {
             publish({
               type: "state.snapshot",
               sessionId: bootstrap.sessionId,
+              sessionPersisted: bootstrap.sessionPersisted,
               coordination: bootstrap.coordination,
               snapshot: bootstrap.snapshot,
             });

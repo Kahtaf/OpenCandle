@@ -29,7 +29,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
-    await expectVisible(page.getByRole("button", { name: "What the agent sees" }).first());
+    await expectVisible(
+      page.getByRole("button", { name: /Browse workflows, tools, and providers/ }).first(),
+    );
   });
 
   it("renders a stock quote prompt and updates context", async () => {
@@ -41,9 +43,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("Stock Quote").first(), 45_000);
     await expectVisible(page.getByText("NVDA").first());
-    await page.getByRole("button", { name: "What the agent sees" }).click();
-    await expectVisible(page.getByRole("dialog", { name: "What the agent sees" }));
-    await expectVisible(page.getByText("Recent quotes"));
+    await expectVisible(page.getByRole("button", { name: "Attach context" }));
   }, 60_000);
 
   it("renders options, filings, macro, and news tool cards", async () => {
@@ -164,7 +164,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("menuitemradio", { name: /gpt-4\.1-mini/ }).click();
     await expectVisible(mocked.getByRole("button", { name: "gpt-4.1-mini" }));
 
-    await modelSelector.click();
+    await mocked.getByRole("button", { name: "gpt-4.1-mini" }).click();
     await expectVisible(manageModelKeys);
     await manageModelKeys.click();
     await expectVisible(mocked.getByRole("dialog", { name: "Connect a model" }));
@@ -231,7 +231,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
-  it("sends portfolio attachments and renders last-turn context receipts", async () => {
+  it("sends portfolio attachments through the shared chat request", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       dashboard: {
@@ -250,6 +250,10 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
           validation: { passed: false, mismatchCount: 2 },
         },
       },
+    });
+    await installMockMarketState(mocked, {
+      portfolios: [{ id: 1, name: "Portfolio" }],
+      watchlists: [{ id: 1, name: "Default", isDefault: true }],
     });
     await mocked.addInitScript(() => {
       const originalFetch = window.fetch.bind(window);
@@ -300,7 +304,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByLabel("Message OpenCandle").fill("am I too concentrated?");
     await mocked.getByRole("button", { name: "Send" }).click();
 
-    await expectVisible(mocked.getByText("am I too concentrated?"));
+    await expectVisible(mocked.getByText("am I too concentrated?").first());
     await expectVisible(mocked.getByText("Portfolio").first());
     await mocked.waitForFunction(() => window.__chatRunRequests?.length === 1);
     const requestBody = await mocked.evaluate(() => window.__chatRunRequests[0]);
@@ -310,13 +314,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       attachments: [{ kind: "portfolio" }],
     });
 
-    await mocked.getByRole("button", { name: "What the agent sees" }).click();
-    await expectVisible(mocked.getByRole("dialog", { name: "What the agent sees" }));
-    await expectVisible(mocked.getByText("Last turn"));
-    await expectVisible(mocked.getByText("Portfolio builder"));
-    await expectVisible(mocked.getByText("AAPL, MSFT"));
-    await expectVisible(mocked.getByText("user 1, default 1"));
-    await expectVisible(mocked.getByText("2 mismatches"));
     await mocked.close();
   }, 30_000);
 
@@ -432,10 +429,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       mocked.getByText("Market State", { exact: true }).evaluate(hasScrollableAncestor),
     ).resolves.toBe(true);
 
-    const addTickerAction = mocked
-      .locator("header")
-      .filter({ hasText: "Watchlists" })
-      .getByRole("button", { name: "Add ticker" });
+    const addTickerAction = mocked.getByRole("button", { name: "Add ticker" }).first();
     await addTickerAction.click();
     await expectVisible(mocked.getByRole("heading", { name: "Add Ticker", exact: true }).first());
     await mocked.getByRole("button", { name: "Close panel" }).click();
@@ -500,24 +494,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Saved-state changes are unavailable"));
     await expectVisible(mocked.getByRole("heading", { name: "Active rules" }));
     await expect(
-      mocked
-        .locator("header")
-        .filter({ hasText: "Alerts" })
-        .getByRole("button", { name: "Create alert" })
-        .isDisabled(),
+      mocked.getByRole("button", { name: "Create alert" }).first().isDisabled(),
     ).resolves.toBe(true);
-    await expect(mocked.getByRole("button", { name: "Check now" }).isDisabled()).resolves.toBe(
-      true,
-    );
+    await expectVisible(mocked.getByText("Manual checks only"));
 
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
     await expect(
-      mocked
-        .locator("header")
-        .filter({ hasText: "Watchlists" })
-        .getByRole("button", { name: "Add ticker" })
-        .isDisabled(),
+      mocked.getByRole("button", { name: "Add ticker" }).first().isDisabled(),
     ).resolves.toBe(true);
     await mocked.close();
   });
@@ -711,7 +695,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     await mocked.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
     await mocked.getByRole("button", { name: /Providers/ }).click();
-    await mocked.getByRole("button", { name: /FRED/ }).click();
+    await mocked.getByRole("option", { name: /FRED/ }).click();
 
     // The saved secret never reaches the DOM: the input starts empty and the
     // configured state is communicated with a masked hint instead.
