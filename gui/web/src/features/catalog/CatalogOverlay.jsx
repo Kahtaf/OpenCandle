@@ -63,7 +63,7 @@ export function CatalogOverlay({
   const [lastOpenStateKey, setLastOpenStateKey] = useState(openStateKey);
   const [tab, setTab] = useState(activeInitialTab);
   const [query, setQuery] = useState("");
-  const [selection, setSelection] = useState(null); // { kind: 'tool'|'workflow'|'provider', id }
+  const [selection, setSelection] = useState(initialSelection); // { kind: 'tool'|'workflow'|'provider', id }
   // Body container ref so we can rewind scrollTop when the user pushes/pops
   // between list and builder views — otherwise a list scroll position carries
   // over and hides the builder header on mobile.
