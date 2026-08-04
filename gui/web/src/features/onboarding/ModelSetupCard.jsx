@@ -66,7 +66,7 @@ function ModelSetupHeader({ variant, hasReady, role, requirement, hosted }) {
             : requirement === "select_model"
               ? "OpenCandle found model credentials. Choose one model below and chat will be ready."
               : hosted
-                ? "Add an OpenAI, Anthropic, or Google key to run Pi models directly in this browser. OpenCandle never sends it to an OpenCandle server."
+                ? "Add an OpenAI, Anthropic, or Google key to run Pi in this browser. Provider requests pass through OpenCandle's audited relay, which processes keys in memory without storing them."
                 : "OpenCandle needs one model before chat can run. Paste a key below or use terminal sign-in, then start chatting from the same window."}
         </p>
       </div>
@@ -196,7 +196,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
               <h3 className="m-0 mb-1 text-sm font-semibold text-foreground">{provider.label}</h3>
               <p className="m-0 text-xs leading-5 text-muted-foreground">
                 {hosted ? (
-                  "Runs directly from this browser."
+                  "Pi runs in this browser; provider requests use the audited relay."
                 ) : (
                   <>
                     <span>Uses </span>

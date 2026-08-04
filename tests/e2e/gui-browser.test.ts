@@ -465,6 +465,12 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const addTickerAction = mocked.getByRole("button", { name: "Add ticker" }).first();
     await addTickerAction.click();
     await expectVisible(mocked.getByRole("heading", { name: "Add Ticker", exact: true }).first());
+    await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
+    const watchlistAlcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
+    await expectVisible(watchlistAlcoaOption);
+    await expect(watchlistAlcoaOption.evaluate(isPointerTarget)).resolves.toBe(true);
+    await watchlistAlcoaOption.click();
+    await expectVisible(mocked.getByText("Selected AA"));
     await mocked.getByRole("button", { name: "Close panel" }).click();
 
     await mocked.getByRole("link", { name: "Portfolios" }).click();

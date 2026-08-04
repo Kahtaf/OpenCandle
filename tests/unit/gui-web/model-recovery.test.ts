@@ -71,7 +71,11 @@ describe("model recovery controls", () => {
 
     expect(html).toContain("Only for this browser session");
     expect(html).toContain("Keep on this device");
+    expect(html).toContain("Provider requests pass through OpenCandle&#x27;s audited relay");
+    expect(html).toContain("provider requests use the audited relay");
     expect(html).toContain("browser extensions");
+    expect(html).not.toContain("Runs directly from this browser");
+    expect(html).not.toContain("never sends it to an OpenCandle server");
     expect(html).not.toContain("terminal sign-in");
     expect(html).not.toContain("setup changes are unavailable");
   });

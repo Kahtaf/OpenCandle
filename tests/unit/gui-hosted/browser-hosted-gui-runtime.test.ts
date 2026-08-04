@@ -793,6 +793,32 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     database.close();
   });
 
+  it("does not record market-state mutations when the shared UI opts out", async () => {
+    const database = await createSqlJsStateDatabase();
+    const runtime = createRuntime({}, database);
+    const appendMessage = vi.fn();
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-no-transcript-"));
+    (runtime as any).resolveManager = vi.fn(async () => ({
+      getSessionId: () => "session-1",
+      getSessionFile: () => join(sessionDir, "session-1.jsonl"),
+      getSessionDir: () => sessionDir,
+      getEntries: () => [],
+      appendMessage,
+    }));
+
+    await runtime.invokeTool(
+      "session-1",
+      "action-no-transcript",
+      "manage_watchlist",
+      { action: "add", symbol: "AAPL" },
+      false,
+    );
+
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(runtime.marketState().watchlist).toHaveLength(1);
+    database.close();
+  });
+
   it("includes durable market state in persisted bootstraps", async () => {
     const database = await createSqlJsStateDatabase();
     const runtime = createRuntime({}, database);
