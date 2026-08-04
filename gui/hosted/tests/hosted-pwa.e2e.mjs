@@ -306,6 +306,18 @@ try {
   // when no relay authorization is available.
   {
     stage = "watchlist state";
+    // First run opens the onboarding dialog over the app, and it is modal. A
+    // real user dismisses it before navigating, so do the same here. The
+    // model-setup block above only runs when a key is available, so without
+    // this the dialog is still open and intercepts the sidebar.
+    if ((await page.locator('[role="dialog"][data-state="open"]').count()) > 0) {
+      await page.keyboard.press("Escape");
+      await waitFor(
+        async () => (await page.locator('[role="dialog"][data-state="open"]').count()) === 0,
+        30_000,
+        "onboarding dialog dismiss",
+      );
+    }
     await page.getByRole("link", { name: "Watchlists" }).click();
     await waitForText(page, "Watchlists", 30_000);
     await page.getByRole("button", { name: "Add ticker" }).last().click();
