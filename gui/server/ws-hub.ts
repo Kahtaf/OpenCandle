@@ -205,8 +205,13 @@ export function createWsHub({
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // Echo the request's actionId so the browser can attribute this failure
+      // to the request that caused it. Without it, an untagged catch-all error
+      // is indistinguishable from any other in-flight request's failure.
+      const actionId = typeof data.actionId === "string" ? data.actionId : "";
       client.send({
         type: "error",
+        ...(actionId ? { actionId } : {}),
         message:
           errorMessage === "Read-only follower mode"
             ? "OpenCandle is reconnecting to this session."

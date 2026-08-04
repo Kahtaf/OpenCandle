@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/unit/**/*.test.ts"],
+    setupFiles: ["tests/setup/browser-shims.ts"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

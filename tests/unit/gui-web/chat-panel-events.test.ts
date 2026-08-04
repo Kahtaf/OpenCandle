@@ -362,7 +362,7 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain('data-slot="home-dashboard"');
   });
 
-  it("keeps setup first and blocks a prefilled draft before any chat run", () => {
+  it("keeps the home surface and a draftable composer behind first-run setup", () => {
     const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
     const html = renderChatPanelHtml({
       draft: "Can I buy AAPL today?",
@@ -377,9 +377,13 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).toContain('id="chat-composer"');
     expect(html).toContain("disabled");
     expect(html).toContain('aria-label="Send message"');
-    expect(html).toContain("Connect an AI model");
-    expect(html).not.toContain('data-slot="home-dashboard"');
-    expect(html.indexOf("Connect an AI model")).toBeLessThan(html.indexOf('id="chat-composer"'));
+    // First-run setup is a modal dialog now (portalled, so absent from
+    // static markup). The home surface renders behind it and the composer is
+    // never disabled by setup — see first-run-setup-dialog.test.ts for the
+    // dialog's own open/dismiss/focus behavior.
+    expect(html).toContain('data-slot="home-dashboard"');
+    expect(html).not.toContain('data-slot="carousel"');
+    expect(source).toContain('variant="first-run"');
     expect(source).toContain("Connect or select an AI model before sending this message.");
     expect(source.indexOf("if (needsSetup)")).toBeLessThan(
       source.indexOf("void startChatRun(prompt"),

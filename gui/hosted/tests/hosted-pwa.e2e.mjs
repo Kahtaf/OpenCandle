@@ -82,7 +82,7 @@ try {
     "credential-holding shell CSP",
   );
   assert(await page.evaluate(() => globalThis.crossOriginIsolated), "cross-origin isolation");
-  await waitForText(page, "Connect an AI model", 120_000);
+  await waitForText(page, "Market research, on your machine", 120_000);
   // Let the first WebContainer boot settle before checking PWA registration.
   // A newly opened page below proves service-worker control without replacing
   // the tab that owns the active WebContainer runtime.
@@ -95,7 +95,7 @@ try {
     await waitForText(page, "Audited provider relay", 30_000);
     await waitForText(page, "Policy v1", 30_000);
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await waitForText(page, "Connect an AI model", 30_000);
+    await waitForText(page, "Market research, on your machine", 30_000);
   }
 
   stage = "direct browser provider proof";
@@ -156,13 +156,14 @@ try {
   let completedLiveTurn = false;
   if (apiKey) {
     stage = "model setup";
+    await page.getByRole("button", { name: "Skip" }).click();
+    await page.getByRole("button", { name: /^OpenAI/ }).click();
     await page
       .getByRole("radio", { name: /Keep on this device/ })
       .evaluate((control) => control.click());
     await page.getByRole("textbox", { name: "OpenAI API key" }).fill(apiKey);
     await page
-      .getByRole("textbox", { name: "OpenAI API key" })
-      .locator("xpath=ancestor::div[contains(@class, 'content-start')]")
+      .locator('[data-slot="provider-key-form"]')
       .getByRole("button", { name: "Save key" })
       .click();
     await waitFor(
@@ -244,10 +245,11 @@ try {
       stage = "Pi model provider switch";
       await page.getByRole("button", { name: new RegExp(openAiModel.replaceAll(".", "\\.")) }).click();
       await page.getByRole("menuitem", { name: /Manage model keys/ }).click();
+      await page.getByRole("dialog").getByRole("button", { name: /^Google Gemini/ }).click();
       const googleKeyInput = page.getByRole("textbox", { name: "Google Gemini API key" });
       await googleKeyInput.fill(googleApiKey);
-      await googleKeyInput
-        .locator("xpath=ancestor::div[contains(@class, 'content-start')]")
+      await page
+        .locator('[data-slot="provider-key-form"]')
         .getByRole("button", { name: "Save key" })
         .click();
       await waitFor(
@@ -399,7 +401,7 @@ try {
     await follower.getByRole("button", { name: "New chat", exact: true }).click();
     await waitForText(
       follower,
-      completedLiveTurn ? "What are we watching?" : "Connect an AI model",
+      completedLiveTurn ? "What are we watching?" : "Market research, on your machine",
       30_000,
     );
 

@@ -39,6 +39,24 @@ export function buildGuiToastPayload(message, options = {}) {
   };
 }
 
+// Attribute a socket `error` frame to model setup.
+//
+// The server's error frame echoes the failing request's `actionId`, so an
+// exact match against the in-flight key save is what marks a failure as a
+// model-setup failure. Everything else — an untagged frame, or a frame from a
+// different request that happened to fail while a save was in flight — falls
+// back to the literal rejection prefix, which is unambiguous on its own. This
+// is what stops an unrelated failure from being painted as a key rejection
+// while the real save failure degrades to toast-only.
+export function resolveModelSetupErrorFromSocketError(message, options = {}) {
+  const text = String(message || "").trim();
+  if (!text) return "";
+  const actionId = String(options.actionId || "");
+  const pendingActionId = String(options.pendingModelKeySaveActionId || "");
+  if (actionId && pendingActionId && actionId === pendingActionId) return text;
+  return text.startsWith("Key was rejected by ") ? text : "";
+}
+
 export function buildHttpFallbackMessageRequest(type, payload = {}) {
   switch (type) {
     case "model.setup.refresh":
@@ -202,6 +220,8 @@ export function useGuiConnection() {
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
   const pendingToolInvokesRef = useRef(new Map());
+  // actionId of the key save currently in flight over the socket, or "".
+  const pendingModelKeySaveRef = useRef("");
   const [role, setRole] = useState("connecting");
   const [catalog, setCatalog] = useState({ tools: [], workflows: [], providers: [] });
   const [sessions, setSessions] = useState([]);
@@ -398,15 +418,25 @@ export function useGuiConnection() {
                 );
               }
             } else if (message.type === "error") {
-              if (String(message.message || "").startsWith("Key was rejected by ")) {
-                setModelSetupError(message.message);
+              const inlineSetupError = resolveModelSetupErrorFromSocketError(message.message, {
+                actionId: message.actionId,
+                pendingModelKeySaveActionId: pendingModelKeySaveRef.current,
+              });
+              if (message.actionId && message.actionId === pendingModelKeySaveRef.current) {
+                pendingModelKeySaveRef.current = "";
               }
-              setToast(message.message, { destructive: true });
+              // An error rendered inline in model setup is not also toasted:
+              // it would duplicate the message the user is already looking at,
+              // and a Radix Toast mounts its own dismissable layer above the
+              // setup dialog, which would then swallow the first Escape.
+              if (inlineSetupError) setModelSetupError(inlineSetupError);
+              else setToast(message.message, { destructive: true });
             }
           },
           onClose: () => {
             window.clearTimeout(bootTimeout);
             if (wsRef.current !== ws) return;
+            pendingModelKeySaveRef.current = "";
             for (const [requestId, pending] of pendingToolInvokesRef.current) {
               window.clearTimeout(pending.timeout);
               pending.reject(new Error("GUI connection closed before the tool finished."));
@@ -487,8 +517,9 @@ export function useGuiConnection() {
         applyBootstrap(data);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        // Same rule as the socket path: inline in setup, or a toast, not both.
         if (request.type === "model.setup.save_api_key") setModelSetupError(message);
-        setToast(message, { destructive: true });
+        else setToast(message, { destructive: true });
       }
     },
     [applyBootstrap, setModelSetupError, setToast, transport],
@@ -507,15 +538,18 @@ export function useGuiConnection() {
         return true;
       }
       try {
-        socket.send(
-          JSON.stringify(
-            type === "tool.invoke"
-              ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
-              : buildSessionActionSocketMessage(type, payload, currentSessionId),
-          ),
-        );
+        const socketMessage =
+          type === "tool.invoke"
+            ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
+            : buildSessionActionSocketMessage(type, payload, currentSessionId);
+        if (type === "model.setup.save_api_key") {
+          pendingModelKeySaveRef.current = String(socketMessage.actionId || "");
+        }
+        socket.send(JSON.stringify(socketMessage));
         return true;
       } catch (error) {
+        // The request never left the browser, so nothing can answer it.
+        if (type === "model.setup.save_api_key") pendingModelKeySaveRef.current = "";
         setToast(error instanceof Error ? error.message : String(error), { destructive: true });
         return false;
       }

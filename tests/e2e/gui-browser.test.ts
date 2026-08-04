@@ -112,14 +112,34 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
-    await expectVisible(mocked.getByText("Connect an AI model"));
+    // First run auto-opens the onboarding carousel as a modal dialog; the key
+    // form is its last step, and the provider is chosen before its key.
+    const setupDialog = mocked.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+    await expectVisible(mocked.getByText("Market research, on your machine"));
+
+    await setupDialog.getByRole("button", { name: "Skip" }).click();
+    await expectVisible(setupDialog.getByRole("heading", { name: "Connect an AI model" }));
+    await setupDialog.getByRole("button", { name: /Google Gemini/ }).click();
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
-    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+
+    // Setup must not strand the user: Escape dismisses, and drafting is then
+    // fully available with sending still blocked until a model is connected.
+    await mocked.keyboard.press("Escape");
+    await setupDialog.waitFor({ state: "hidden" });
+    const composer = mocked.getByLabel("Message OpenCandle");
+    await expect(composer.isEnabled()).resolves.toBe(true);
+    await composer.click();
+    await mocked.keyboard.type("Draft while I find my key");
+    await expect(composer.inputValue()).resolves.toBe("Draft while I find my key");
     await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );
+
+    // Re-entry stays discoverable from the composer's model control.
+    await mocked.getByRole("button", { name: "No model connected" }).click();
+    await expectVisible(mocked.getByRole("menuitem", { name: "Manage model keys…" }));
     await mocked.close();
   });
 
@@ -192,9 +212,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
+    await mocked.getByRole("button", { name: "Skip" }).click();
     await expectVisible(mocked.getByText("Model setup changes are unavailable"));
     await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
+    // A local follower cannot even choose a provider, so the whole key path
+    // stays unreachable rather than only the Save action.
+    await expect(mocked.getByRole("button", { name: /Google Gemini/ }).isDisabled()).resolves.toBe(
+      true,
+    );
     await mocked.close();
   });
 

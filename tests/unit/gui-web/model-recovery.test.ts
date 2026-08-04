@@ -3,8 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { CustomMessage } from "../../../gui/web/src/components/chat/custom-message.jsx";
 import { ModelSelector } from "../../../gui/web/src/features/chat/model-selector.jsx";
-import { ModelSetupCard } from "../../../gui/web/src/features/onboarding/ModelSetupCard.jsx";
-import { buildHttpFallbackMessageRequest } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
+import { ConnectModelPanel } from "../../../gui/web/src/features/onboarding/ConnectModelPanel.jsx";
+import { ProviderKeyForm } from "../../../gui/web/src/features/onboarding/ProviderKeyFlow.jsx";
+import {
+  buildHttpFallbackMessageRequest,
+  resolveModelSetupErrorFromSocketError,
+} from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("model recovery controls", () => {
   it("labels the composer selector when no model is connected", () => {
@@ -34,7 +38,7 @@ describe("model recovery controls", () => {
 
   it("renders model-key validation errors inline in setup", () => {
     const html = renderToStaticMarkup(
-      React.createElement(ModelSetupCard, {
+      React.createElement(ConnectModelPanel, {
         modelSetup: {
           requirement: "connect_auth",
           availableModels: [],
@@ -49,7 +53,7 @@ describe("model recovery controls", () => {
 
   it("explains hosted key storage and offers persistent and session-only choices", () => {
     const html = renderToStaticMarkup(
-      React.createElement(ModelSetupCard, {
+      React.createElement(ConnectModelPanel, {
         role: "follower",
         modelSetup: {
           hosted: true,
@@ -69,15 +73,40 @@ describe("model recovery controls", () => {
       }),
     );
 
-    expect(html).toContain("Only for this browser session");
-    expect(html).toContain("Keep on this device");
     expect(html).toContain("Provider requests pass through OpenCandle&#x27;s audited relay");
-    expect(html).toContain("provider requests use the audited relay");
+    // The row now names the default model in the same sentence
+    // ("Runs gpt-4.1-mini through the audited relay"); the invariant is that
+    // the hosted row still discloses the relay.
+    expect(html).toContain("through the audited relay");
     expect(html).toContain("browser extensions");
     expect(html).not.toContain("Runs directly from this browser");
     expect(html).not.toContain("never sends it to an OpenCandle server");
     expect(html).not.toContain("terminal sign-in");
     expect(html).not.toContain("setup changes are unavailable");
+
+    // The storage choice and the relay wording live on the key step, which is
+    // the second step of the provider flow.
+    const keyStep = renderToStaticMarkup(
+      React.createElement(ProviderKeyForm, {
+        hosted: true,
+        defaultStorageMode: "session",
+        provider: {
+          id: "openai",
+          label: "OpenAI",
+          envVar: "OPENAI_API_KEY",
+          defaultModel: "gpt-4.1-mini",
+          signupUrl: "https://platform.openai.com/api-keys",
+        },
+      }),
+    );
+
+    expect(keyStep).toContain("Only for this browser session");
+    expect(keyStep).toContain("Keep on this device");
+    // Same disclosure, now in one sentence with the default model:
+    // "Runs gpt-4.1-mini through the audited relay. Pi itself runs in this browser."
+    expect(keyStep).toContain("the audited relay");
+    expect(keyStep).not.toContain("Runs directly from this browser");
+    expect(keyStep).not.toContain("never sends it to an OpenCandle server");
   });
 
   it("passes hosted credential storage mode through the shared command contract", () => {
@@ -91,6 +120,52 @@ describe("model recovery controls", () => {
       path: "/api/model-setup/api-key",
       body: { provider: "openai", apiKey: "sentinel", storageMode: "session" },
     });
+  });
+
+  it("attributes socket key-save failures by request id, not by timing", () => {
+    const pending = "model-setup-save-api-key-abc";
+
+    // A rejected key already rendered inline over the socket, even untagged.
+    expect(
+      resolveModelSetupErrorFromSocketError(
+        "Key was rejected by OpenAI. The existing configuration was not changed.",
+        {},
+      ),
+    ).toBe("Key was rejected by OpenAI. The existing configuration was not changed.");
+
+    // An unverifiable key is a different outcome and must still reach the
+    // inline setup region, matching the HTTP fallback and hosted paths.
+    expect(
+      resolveModelSetupErrorFromSocketError(
+        "Couldn't verify the OpenAI key right now. It was saved with a network notice.",
+        { actionId: pending, pendingModelKeySaveActionId: pending },
+      ),
+    ).toBe("Couldn't verify the OpenAI key right now. It was saved with a network notice.");
+
+    // An unrelated request that fails while a save is in flight must not be
+    // painted as a key failure — the catch-all server handler emits errors for
+    // every request type on the same socket.
+    expect(
+      resolveModelSetupErrorFromSocketError("Session is owned by another window.", {
+        actionId: "model-setup-refresh-xyz",
+        pendingModelKeySaveActionId: pending,
+      }),
+    ).toBe("");
+    // Untagged frames never match a pending save.
+    expect(
+      resolveModelSetupErrorFromSocketError("Session is owned by another window.", {
+        pendingModelKeySaveActionId: pending,
+      }),
+    ).toBe("");
+    expect(resolveModelSetupErrorFromSocketError("Session is owned by another window.", {})).toBe(
+      "",
+    );
+    expect(
+      resolveModelSetupErrorFromSocketError("", {
+        actionId: pending,
+        pendingModelKeySaveActionId: pending,
+      }),
+    ).toBe("");
   });
 
   it("maps thinking changes through the same GUI fallback contract", () => {

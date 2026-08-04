@@ -10,6 +10,7 @@ const DialogOverlay = forwardRef(function DialogOverlay({ className, ...props },
   return (
     <DialogPrimitive.Overlay
       ref={ref}
+      data-slot="dialog-overlay"
       className={cn(
         "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
         className,
@@ -28,6 +29,7 @@ export const DialogContent = forwardRef(function DialogContent(
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        data-slot="dialog-content"
         className={cn(
           "fixed left-1/2 top-[46%] z-50 grid w-[calc(100vw-32px)] max-w-3xl -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",
           className,

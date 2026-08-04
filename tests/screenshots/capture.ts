@@ -697,6 +697,35 @@ interface Capture {
   fullPage?: boolean;
 }
 
+// First-run model setup: the only state that renders the onboarding carousel.
+const FIRST_RUN_MODEL_SETUP = {
+  requirement: "connect_auth",
+  providers: [
+    {
+      id: "openai",
+      label: "OpenAI",
+      envVar: "OPENAI_API_KEY",
+      defaultModel: "gpt-5-mini",
+      signupUrl: "https://platform.openai.com/api-keys",
+    },
+    {
+      id: "google",
+      label: "Google Gemini",
+      envVar: "GEMINI_API_KEY",
+      defaultModel: "gemini-2.5-flash",
+      signupUrl: "https://aistudio.google.com/app/apikey",
+    },
+    {
+      id: "anthropic",
+      label: "Anthropic",
+      envVar: "ANTHROPIC_API_KEY",
+      defaultModel: "claude-sonnet-4-5",
+      signupUrl: "https://console.anthropic.com/settings/keys",
+    },
+  ],
+  availableModels: [],
+};
+
 const CAPTURES: Capture[] = [
   {
     name: "01-empty-thread",
@@ -900,6 +929,45 @@ const CAPTURES: Capture[] = [
     overrides: { entries: TOOL_PAIRS.multistep },
     setup: async (page) => {
       await openStepsDrawer(page);
+    },
+  },
+  {
+    name: "25-onboarding-welcome",
+    overrides: { modelSetup: FIRST_RUN_MODEL_SETUP },
+    setup: async (page) => {
+      // The dialog auto-opens on the brand slide.
+      await page.getByRole("dialog", { name: "Welcome to OpenCandle" }).waitFor();
+      await page.getByText("Market research, on your machine").waitFor();
+    },
+  },
+  {
+    // No `.catch(() => {})` from here down: a missing control must fail the
+    // capture rather than quietly produce a screenshot of the wrong screen.
+    name: "26-onboarding-explainer",
+    overrides: { modelSetup: FIRST_RUN_MODEL_SETUP },
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Go to step 2 of 5" }).click();
+      await page.getByText("Answers you can check").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    name: "27-onboarding-connect-providers",
+    overrides: { modelSetup: FIRST_RUN_MODEL_SETUP },
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Skip" }).click();
+      await page.getByRole("heading", { name: "Connect an AI model" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    name: "28-onboarding-connect-key",
+    overrides: { modelSetup: FIRST_RUN_MODEL_SETUP },
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Skip" }).click();
+      await page.getByRole("button", { name: /^OpenAI/ }).click();
+      await page.locator('[data-slot="provider-key-form"]').waitFor();
+      await page.waitForTimeout(400);
     },
   },
 ];

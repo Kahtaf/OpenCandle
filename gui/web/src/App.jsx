@@ -570,7 +570,6 @@ export function AppShell() {
         modelSetup={gui.modelSetup}
         role={gui.role}
         send={gui.send}
-        setToast={gui.setToast}
       />
       <Toaster />
     </ToolDrawerProvider>

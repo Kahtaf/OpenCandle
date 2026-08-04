@@ -106,6 +106,30 @@ describe("GUI WS hub", () => {
     );
   });
 
+  it("echoes the failing request's actionId so the browser can attribute the error", async () => {
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "follower",
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    client.messageHandlers[0]?.({
+      type: "tool.enabled",
+      toolName: "get_stock_quote",
+      actionId: "model-setup-save-api-key-123",
+    });
+
+    await vi.waitFor(() =>
+      expect(client.messages).toContainEqual({
+        type: "error",
+        actionId: "model-setup-save-api-key-123",
+        message: "OpenCandle is reconnecting to this session.",
+      }),
+    );
+  });
+
   it("includes public owner kind in boot and bootstrap coordination state", async () => {
     const client = createFakeClient();
     const hub = createWsHub({

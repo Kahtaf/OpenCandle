@@ -17,7 +17,7 @@ import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
 import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
-import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
+import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
@@ -71,6 +71,7 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -192,8 +193,19 @@ export function ChatPanel({
   // state already disables actions and shows its reconnecting status.
   const needsSetup =
     role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
-  // Drafting stays available during first-run setup (shipped 0.11.0
-  // behavior); needsSetup blocks only sending, via chatDisabled and submit.
+  // Auto-open rule: the first-run setup dialog opens whenever setup is
+  // required and the user has not dismissed it. Dismissal is remembered for
+  // as long as setup stays required, so later modelSetup broadcasts and
+  // re-renders never reopen it. The dismissal is forgotten only when setup
+  // genuinely becomes satisfied, so a later regression back to "needs setup"
+  // opens it once more. Reaching setup again after dismissing is done through
+  // the composer's model control.
+  if (!needsSetup && setupDismissed) setSetupDismissed(false);
+  const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
+  // The composer is never disabled by setup: needsSetup blocks only sending,
+  // via chatDisabled and submit. The first-run dialog is modal, so drafting
+  // resumes as soon as it is dismissed (Escape, the close control, or a click
+  // outside) rather than being blocked until a model is connected.
   const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
@@ -258,8 +270,10 @@ export function ChatPanel({
   const placeholder = needsSetup
     ? "Draft a question, then connect a model to send"
     : "Ask anything";
+  // First-run setup is a dialog now, so the home surface keeps its normal
+  // empty state behind it instead of being replaced by a setup card.
   const isEmptyThread =
-    !needsSetup && !sessionLoading && visibleRows.length === 0 && !activity && !hasAskUserPrompts;
+    !sessionLoading && visibleRows.length === 0 && !activity && !hasAskUserPrompts;
   const homePrompts = homePromptsForMarketState({
     watchlists: marketState.state?.watchlists,
     watchlistItems: marketState.state?.watchlist,
@@ -313,9 +327,7 @@ export function ChatPanel({
           onKeyDown={transcript.onReaderIntent}
           onClick={onTranscriptClick}
         >
-          {needsSetup ? (
-            <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
-          ) : sessionLoading ? (
+          {sessionLoading ? (
             <SessionLoadingState />
           ) : isEmptyThread ? (
             <HomeDashboard
@@ -396,6 +408,16 @@ export function ChatPanel({
         navigate={navigate}
       />
       {!isEmptyThread ? composer : null}
+      <ModelSetupDialog
+        open={setupDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) setSetupDismissed(true);
+        }}
+        variant="first-run"
+        modelSetup={modelSetup}
+        role={role}
+        send={send}
+      />
     </section>
   );
 }

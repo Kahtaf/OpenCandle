@@ -134,7 +134,6 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
         modelSetup={modelSetup}
         role={role}
         send={send}
-        setToast={setToast}
       />
     </div>
   );
