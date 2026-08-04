@@ -523,6 +523,13 @@ mocked transport or local browser runtime:
   unknown active tab. In Chromium production, the foreground tab took writer
   ownership, configured the model, created a fresh chat, and completed an
   AAPL quote with the shared result card while the older tab followed it.
+- Relay deployment `a0abad55-0f24-4974-a6f9-482219e8bc6c` and the current
+  PWA production journey prove browser-local Finnhub and London Strategic Edge
+  credential validation against the bounded relay. A `gpt-4.1-mini` sentiment
+  turn rendered Finnhub-sourced company news in the shared result card, and a
+  financials turn rendered an AAPL income-statement card sourced from London
+  Strategic Edge. Neither provider key was placed in a URL, export, log, or
+  relay-stored request body.
 
 This evidence does **not** yet make the release gate complete. FRED and Brave
 are exposed only after their browser-local credentials have been verified, and
