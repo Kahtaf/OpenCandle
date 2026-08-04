@@ -348,6 +348,39 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
         portfolioSummary: null,
       },
     });
+    await mocked.addInitScript(() => {
+      const fetchImpl = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url, window.location.origin);
+        if (!url.pathname.endsWith("/api/sessions/mock-session/runs")) {
+          return fetchImpl(input, init);
+        }
+        const prompt = JSON.parse(String(init?.body ?? "{}")).prompt;
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            for (const event of [
+              { type: "run.started", sessionId: "mock-session", runId: "cashtag-run", seq: 1 },
+              {
+                type: "message.completed",
+                sessionId: "mock-session",
+                messageId: "cashtag-user",
+                role: "user",
+                content: [{ type: "text", text: prompt }],
+                seq: 2,
+              },
+              { type: "run.completed", sessionId: "mock-session", runId: "cashtag-run", seq: 3 },
+            ]) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\\n\\n`));
+            }
+            controller.close();
+          },
+        });
+        return Promise.resolve(
+          new Response(stream, { headers: { "content-type": "text/event-stream" } }),
+        );
+      };
+    });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     const composer = mocked.getByLabel("Message OpenCandle");
@@ -1723,6 +1756,7 @@ async function installMockSocket(
           this.emit({
             type: "boot",
             role: mockOverrides.role ?? "writer",
+            supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
             sessionId: bootSessionId,
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
