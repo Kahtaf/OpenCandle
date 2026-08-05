@@ -9,6 +9,7 @@ import {
   tickerLineResponseFailure,
 } from "../../../shared/ticker-line.ts";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
+import { Skeleton } from "./ui/skeleton.jsx";
 
 const SPARKLINE_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
@@ -110,10 +111,10 @@ function TickerLineSparkline({
         : `${versionedImageUrl}${metadata.imageUrl ? "#" : "&"}retry=${failureCount}`;
     const asOf = formatSparklineAsOf(metadata.dataAsOf);
     content = (
-      <figure data-slot="market-sparkline" data-source="Ticker Line" className="w-full">
+      <div data-slot="market-sparkline" data-state="ready" className="w-full">
         <img
           src={imageUrl}
-          alt={`${symbol} 1-day price sparkline from Ticker Line, data as of ${asOf}`}
+          alt={`${symbol} 1-day price chart, data as of ${asOf}`}
           width="120"
           height="30"
           crossOrigin="anonymous"
@@ -122,10 +123,7 @@ function TickerLineSparkline({
           onError={() => setFailureCount((count) => count + 1)}
           className="block h-[29px] w-24 object-contain sm:h-9 sm:w-[120px]"
         />
-        <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-          Ticker Line · {asOf}
-        </figcaption>
-      </figure>
+      </div>
     );
   }
   return (
@@ -141,42 +139,35 @@ function TickerLineSparkline({
 
 function PendingSparkline({ className = "", contained = false }) {
   return (
-    <figure
+    <div
       data-slot="market-sparkline"
-      data-source="Ticker Line"
+      data-state="loading"
       className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
-      title="Loading Ticker Line sparkline"
+      role="status"
+      aria-label="Loading price chart"
     >
-      <div className="flex h-[29px] items-center text-[10px] text-muted-foreground sm:h-9">
-        Loading…
-      </div>
-      <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-        Ticker Line · loading
-      </figcaption>
-    </figure>
+      <Skeleton className="h-[29px] w-24 sm:h-9 sm:w-[120px]" />
+    </div>
   );
 }
 
 function UnavailableSparkline({ className = "", contained = false, kind }) {
   const providerFailure = kind === "provider";
   return (
-    <figure
+    <div
       data-slot="market-sparkline"
-      data-source="Ticker Line"
+      data-state="unavailable"
       className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
       title={
         providerFailure
-          ? "Ticker Line is temporarily unavailable"
-          : "Ticker Line does not support this instrument"
+          ? "Price chart is temporarily unavailable"
+          : "Price chart is not available for this instrument"
       }
     >
       <div className="flex h-[29px] items-center text-[10px] text-muted-foreground sm:h-9">
         Unavailable
       </div>
-      <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-        Ticker Line · {providerFailure ? "provider unavailable" : "unavailable"}
-      </figcaption>
-    </figure>
+    </div>
   );
 }
 

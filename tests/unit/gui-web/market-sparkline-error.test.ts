@@ -91,7 +91,8 @@ describe("MarketSparkline failures", () => {
     });
 
     expect(container.querySelector("img")).toBeNull();
-    expect(container.textContent).toContain("Ticker Line · provider unavailable");
+    expect(container.textContent).toContain("Unavailable");
+    expect(container.innerHTML).not.toMatch(/ticker\s*line/i);
     await act(async () => root.unmount());
   });
 
@@ -121,7 +122,8 @@ describe("MarketSparkline failures", () => {
     });
 
     expect(cancelStream).toHaveBeenCalled();
-    expect(container.textContent).toContain("Ticker Line · provider unavailable");
+    expect(container.textContent).toContain("Unavailable");
+    expect(container.innerHTML).not.toMatch(/ticker\s*line/i);
     await act(async () => root.unmount());
   });
 
@@ -152,7 +154,8 @@ describe("MarketSparkline failures", () => {
     });
     await act(async () => vi.advanceTimersByTimeAsync(20_001));
 
-    expect(container.textContent).toContain("Ticker Line · provider unavailable");
+    expect(container.textContent).toContain("Unavailable");
+    expect(container.innerHTML).not.toMatch(/ticker\s*line/i);
     await act(async () => root.unmount());
   });
 
@@ -189,8 +192,11 @@ describe("MarketSparkline failures", () => {
     await act(async () => retryImage?.dispatchEvent(new Event("error")));
 
     expect(container.querySelector("img")).toBeNull();
-    expect(container.textContent).toContain("Ticker Line · provider unavailable");
-    expect(container.querySelector("figure")?.title).toBe("Ticker Line is temporarily unavailable");
+    expect(container.textContent).toContain("Unavailable");
+    expect(container.innerHTML).not.toMatch(/ticker\s*line/i);
+    expect(container.querySelector('[data-slot="market-sparkline"]')?.getAttribute("title")).toBe(
+      "Price chart is temporarily unavailable",
+    );
 
     await act(async () => vi.advanceTimersByTimeAsync(5 * 60_000));
 
@@ -198,7 +204,7 @@ describe("MarketSparkline failures", () => {
     await act(async () => root.unmount());
   });
 
-  it("shows the provider as-of date in visible and accessible chart context", async () => {
+  it("keeps the as-of date in accessible chart context without naming the provider", async () => {
     const metadataFetch = vi
       .fn()
       .mockResolvedValue(
@@ -221,8 +227,11 @@ describe("MarketSparkline failures", () => {
       "/api/market-state/sparkline?symbol=AAPL&assetType=equity&metadata=1",
       expect.objectContaining({ headers: { accept: "application/json" } }),
     );
-    expect(container.textContent).toContain("Ticker Line · Jul 31, 2026");
-    expect(container.querySelector("img")?.alt).toContain("data as of Jul 31, 2026");
+    expect(container.textContent).not.toMatch(/ticker\s*line/i);
+    expect(container.textContent?.trim()).toBe("");
+    expect(container.querySelector("img")?.alt).toBe(
+      "AAPL 1-day price chart, data as of Jul 31, 2026",
+    );
     expect(container.querySelector("img")?.getAttribute("src")).toContain(
       "asOf=2026-07-31T19%3A45%3A00.000Z",
     );

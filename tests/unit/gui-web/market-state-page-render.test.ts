@@ -173,8 +173,9 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("24 hr sparkline");
     expect(html).toContain('data-slot="market-sparkline"');
     expect(html).not.toContain("<img");
-    expect(html).toContain('data-source="Ticker Line"');
-    expect(html).toContain("Ticker Line · loading");
+    expect(html).not.toMatch(/ticker\s*line/i);
+    expect(html).toContain('data-state="loading"');
+    expect(html).toContain("animate-pulse");
     expect(html).toContain('data-slot="mobile-watchlist-row"');
     expect(html).toContain('data-slot="watchlist-inspector-sheet"');
     expect(html).not.toContain("ticker-line.com");
@@ -273,6 +274,40 @@ describe("MarketStatePage rendering", () => {
     expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain('aria-label="Expand ^GSPC lots"');
+  });
+
+  it("renders skeleton stats, not prose, while portfolio totals are still loading", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "AAPL",
+              assetType: "equity",
+              name: "Apple Inc.",
+              quantity: 2,
+              avgCost: 100,
+              currency: "USD",
+            },
+          ],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('data-slot="portfolio-summary-loading"');
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("Totals appear once quotes load.");
   });
 
   it("renders portfolio allocation with the shared donut", () => {
@@ -385,7 +420,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("min-h-10 min-w-10");
     expect(html).not.toContain("font-mono");
     expect(html).not.toContain("<img");
-    expect(html).toContain("Ticker Line · loading");
+    expect(html).not.toMatch(/ticker\s*line/i);
+    expect(html).toContain('data-state="loading"');
     expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain('data-slot="avg-cost-basis"');
     expect(html).toContain('data-slot="mobile-portfolio-holding"');

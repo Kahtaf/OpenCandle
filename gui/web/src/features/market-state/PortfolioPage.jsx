@@ -2,6 +2,7 @@ import { BriefcaseBusiness, ChevronRight, Pencil, Plus, Trash2 } from "lucide-re
 import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { formatPercent, formatQuantity } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
 import { symbolPageHref } from "../../route-resolution.js";
@@ -620,9 +621,13 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
       meta={quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
     >
       <div className="p-4 sm:p-5">
-        <div className="text-[32px] font-semibold leading-tight tabular-nums text-foreground">
-          {summary ? money(summary.totalValue, summary.baseCurrency) : "—"}
-        </div>
+        {summary ? (
+          <div className="text-[32px] font-semibold leading-tight tabular-nums text-foreground">
+            {money(summary.totalValue, summary.baseCurrency)}
+          </div>
+        ) : (
+          <Skeleton className="h-10 w-44" />
+        )}
         <dl
           data-slot="portfolio-summary-deltas"
           className="mt-2 grid gap-2 text-[13px] sm:grid-cols-2"
@@ -655,7 +660,15 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
               </dd>
             </div>
           ) : (
-            <div className="text-muted-foreground">Totals appear once quotes load.</div>
+            <div
+              data-slot="portfolio-summary-loading"
+              role="status"
+              aria-label="Loading portfolio totals"
+              className="grid gap-2 sm:col-span-2 sm:grid-cols-2"
+            >
+              <Skeleton className="h-[38px] w-full rounded-lg" />
+              <Skeleton className="h-[38px] w-full rounded-lg" />
+            </div>
           )}
         </dl>
         {segments.length > 0 ? (

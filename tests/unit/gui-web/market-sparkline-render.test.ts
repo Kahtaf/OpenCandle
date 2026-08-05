@@ -8,7 +8,7 @@ import {
 import { MarketSparkline } from "../../../gui/web/src/components/market-sparkline.jsx";
 
 describe("MarketSparkline provenance", () => {
-  it("renders an honest pending state until Ticker Line provides as-of metadata", () => {
+  it("renders a shaped skeleton, not text, while the chart loads", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketSparkline, {
         symbol: "AAPL",
@@ -16,15 +16,23 @@ describe("MarketSparkline provenance", () => {
       }),
     );
 
-    expect(html).toContain("<figure");
-    expect(html.match(/<figcaption/g)).toHaveLength(1);
-    expect(html).toContain("text-[10px]");
-    expect(html).toContain("text-muted-foreground");
-    expect(html).toContain("tabular-nums");
+    expect(html).toContain('data-slot="market-sparkline"');
+    expect(html).toContain('data-state="loading"');
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("<figcaption");
+    expect(html).not.toContain("Loading…");
     expect(html).not.toContain("<img");
     expect(html).not.toContain("ticker-line.dev");
-    expect(html).toContain("Ticker Line · loading");
     expect(html).not.toContain("Yahoo");
+  });
+
+  it("never names the sparkline data provider in any rendered state", () => {
+    for (const symbol of ["AAPL", "AAPL260117C00200000"]) {
+      const html = renderToStaticMarkup(
+        React.createElement(MarketSparkline, { symbol, assetType: "equity" }),
+      );
+      expect(html).not.toMatch(/ticker\s*line/i);
+    }
   });
 
   it.each([
@@ -51,7 +59,8 @@ describe("MarketSparkline provenance", () => {
         assetType: "option",
       }),
     );
-    expect(html).toContain("Ticker Line · unavailable");
+    expect(html).toContain("Unavailable");
+    expect(html).not.toMatch(/ticker\s*line/i);
     expect(html).not.toContain("<img");
   });
 });
