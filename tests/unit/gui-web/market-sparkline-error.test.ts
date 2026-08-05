@@ -53,6 +53,13 @@ describe("MarketSparkline failures", () => {
 
     await act(async () => image?.dispatchEvent(new Event("error")));
 
+    // The provider name is gone, but the as-of is not alt-text only: a pointer
+    // reader can reach it on the chart without the caption coming back.
+    const chart = container.querySelector('[data-slot="market-sparkline"]');
+    expect(chart?.getAttribute("data-state")).toBe("ready");
+    expect(chart?.getAttribute("title")).toMatch(/^Price chart as of /);
+    expect(chart?.getAttribute("title")).not.toMatch(/ticker\s*line/i);
+
     const retriedSource = container.querySelector("img")?.getAttribute("src") ?? "";
     expect(retriedSource).toMatch(/#retry=1$/);
     expect(decodeURIComponent(retriedSource.split(",")[1].split("#")[0])).toMatch(/<\/svg>$/);

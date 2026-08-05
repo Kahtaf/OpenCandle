@@ -111,7 +111,16 @@ function TickerLineSparkline({
         : `${versionedImageUrl}${metadata.imageUrl ? "#" : "&"}retry=${failureCount}`;
     const asOf = formatSparklineAsOf(metadata.dataAsOf);
     content = (
-      <div data-slot="market-sparkline" data-state="ready" className="w-full">
+      // The per-row caption is deliberately gone; freshness for a saved list is
+      // stated once by its quote badge. The as-of stays reachable on the chart
+      // itself, by hover as well as by assistive technology, so it is not
+      // available only to one of them.
+      <div
+        data-slot="market-sparkline"
+        data-state="ready"
+        className="w-full"
+        title={`Price chart as of ${asOf}`}
+      >
         <img
           src={imageUrl}
           alt={`${symbol} 1-day price chart, data as of ${asOf}`}
