@@ -215,6 +215,39 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("border-destructive/40 bg-destructive/10 text-foreground");
   });
 
+  it("marks no watchlist row as selected while the detail rail is not on screen", () => {
+    // The desktop table renders from sm, but the rail only appears at xl. Below
+    // that breakpoint nothing is showing the fallback row, so claiming it as the
+    // current selection would announce a selection the reader never made.
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistPage, {
+        loading: false,
+        state: {
+          watchlists: [{ id: 1, name: "Default", isDefault: true }],
+          watchlist: [
+            { id: 10, watchlistId: 1, instrumentId: 4, symbol: "AAPL", name: "Apple Inc." },
+            { id: 11, watchlistId: 1, instrumentId: 5, symbol: "MSFT", name: "Microsoft" },
+          ],
+          alerts: [],
+          alertEvents: [],
+          instruments: [],
+          portfolio: [],
+          quoteSnapshot: { watchlistQuotes: [], portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('aria-selected="false"');
+    expect(html).not.toContain('aria-selected="true"');
+  });
+
   it("keeps the quote-board skeleton visible while watchlist data loads", () => {
     const html = renderToStaticMarkup(
       React.createElement(WatchlistPage, {

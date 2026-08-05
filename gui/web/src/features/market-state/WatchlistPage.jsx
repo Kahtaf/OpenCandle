@@ -167,6 +167,11 @@ export function WatchlistPage({
         />,
       )}
       <DetailRailLayout
+        // React Doctor's `jsx-no-jsx-as-prop` fires on this slot. It is accepted
+        // here: `DetailRailLayout` is a plain component, not memoized, so a fresh
+        // element costs it nothing, and every value the rail reads changes on the
+        // same quote poll that re-renders this page, so a `useMemo` would rebuild
+        // it anyway while hiding that the rail is a layout slot.
         rail={
           desktopSelected ? (
             <SymbolInspector
@@ -227,7 +232,10 @@ export function WatchlistPage({
             <QuoteBoard
               rows={rows}
               selected={selected}
-              railSelected={desktopSelected}
+              // Only the rail's fallback row counts as a selection, and only
+              // while the rail is actually on screen. The table starts at sm
+              // and the rail at xl, so between them nothing is showing that row.
+              railSelected={wideInspector ? desktopSelected : null}
               quotesByItem={quotesByItem}
               alertsByInstrument={alertsByInstrument}
               quoteFlashes={quoteFlashes}
