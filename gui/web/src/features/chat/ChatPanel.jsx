@@ -18,6 +18,10 @@ import { cn } from "../../lib/utils.js";
 import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
+import {
+  readFirstRunSetupDismissed,
+  writeFirstRunSetupDismissed,
+} from "../onboarding/setup-dismissal.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
@@ -71,7 +75,7 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
-  const [setupDismissed, setSetupDismissed] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(readFirstRunSetupDismissed);
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -194,14 +198,20 @@ export function ChatPanel({
   const needsSetup =
     role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
   // Auto-open rule: the first-run setup dialog opens whenever setup is
-  // required and the user has not dismissed it. Dismissal is remembered for
-  // as long as setup stays required, so later modelSetup broadcasts and
-  // re-renders never reopen it. The dismissal is forgotten only when setup
-  // genuinely becomes satisfied, so a later regression back to "needs setup"
-  // opens it once more. Reaching setup again after dismissing is done through
-  // the composer's model control.
-  if (!needsSetup && setupDismissed) setSetupDismissed(false);
+  // required and the user has not dismissed it. Dismissal is remembered for as
+  // long as setup stays required, so later modelSetup broadcasts, re-renders,
+  // new chats, route changes, reloads, and new tabs never reopen it. The
+  // dismissal is forgotten only on positive proof that setup is satisfied, so a
+  // later regression back to "needs setup" opens it once more. A reconnecting
+  // or not-yet-broadcast setup state proves nothing and must not re-arm it.
+  // Reaching setup again after dismissing is done through the composer's model
+  // control.
+  const setupSatisfied = role !== "connecting" && modelSetup?.requirement === "ready";
+  if (setupSatisfied && setupDismissed) setSetupDismissed(false);
   const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
+  useEffect(() => {
+    writeFirstRunSetupDismissed(setupDismissed);
+  }, [setupDismissed]);
   // The composer is never disabled by setup: needsSetup blocks only sending,
   // via chatDisabled and submit. The first-run dialog is modal, so drafting
   // resumes as soon as it is dismissed (Escape, the close control, or a click

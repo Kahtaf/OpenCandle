@@ -21,6 +21,7 @@ beforeEach(() => {
         new Response(JSON.stringify({}), { headers: { "content-type": "application/json" } }),
       ),
   );
+  localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -75,6 +76,19 @@ function renderPanel(props: Record<string, unknown> = {}) {
       ),
     );
   });
+}
+
+// A new chat, a route change, a reload, and a second tab all give the panel a
+// fresh mount. Remounting is the only way to tell a remembered dismissal apart
+// from state that merely survived a re-render.
+function remountPanel(props: Record<string, unknown> = {}) {
+  act(() => root.unmount());
+  container.remove();
+  document.body.replaceChildren();
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  renderPanel(props);
 }
 
 function dialog() {
@@ -149,6 +163,45 @@ describe("first-run model setup dialog in ChatPanel", () => {
 
     renderPanel({ modelSetup: { ...NEEDS_SETUP } });
     expect(dialog()).toBeTruthy();
+  });
+
+  it("stays dismissed across a fresh mount while setup stays required", () => {
+    renderPanel();
+    closeDialog();
+    expect(dialog()).toBe(null);
+
+    // Starting a new chat, changing route, reloading, or opening a second tab.
+    remountPanel();
+    expect(dialog()).toBe(null);
+    remountPanel({ modelSetup: { ...NEEDS_SETUP, requirement: "api_key" } });
+    expect(dialog()).toBe(null);
+  });
+
+  it("auto-opens on a fresh mount after setup was satisfied and became required again", () => {
+    renderPanel();
+    closeDialog();
+    remountPanel();
+    expect(dialog()).toBe(null);
+
+    // A saved key satisfies setup, so the remembered dismissal is forgotten.
+    renderPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
+    expect(dialog()).toBe(null);
+
+    // Keys cleared later: onboarding is owed one more automatic opening.
+    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
+    expect(dialog()).toBeTruthy();
+  });
+
+  it("keeps a remembered dismissal while the connection is still being established", () => {
+    renderPanel();
+    closeDialog();
+
+    // A reconnecting mount reports no requirement yet. That is not proof that
+    // setup was satisfied, so it must not re-arm the automatic opening.
+    remountPanel({ role: "connecting", modelSetup: undefined });
+    expect(dialog()).toBe(null);
+    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
+    expect(dialog()).toBe(null);
   });
 
   it("moves focus to the composer when the first-run dialog closes", async () => {

@@ -7,6 +7,7 @@ import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generat
 import { resolveFirstClassModelEntry } from "../../../../src/pi/model-catalog-lookup.js";
 import { listApiKeyProviders } from "../../../../src/onboarding/providers.js";
 import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
+import { FIRST_RUN_SETUP_DISMISSED_KEY } from "../../../web/src/features/onboarding/setup-dismissal.js";
 import { fetchHostedRuntimeAuthorization } from "../../runtime/provider-relay-fetch.ts";
 import {
   MODEL_RELAY_HEADERS,
@@ -1173,6 +1174,9 @@ class BrowserRuntimeHost {
     this.clearSecrets();
     this.storage.removeItem(CURRENT_SESSION_KEY);
     this.storage.removeItem(RELAY_CLIENT_KEY);
+    // Clearing everything leaves a fresh install behind, so onboarding is owed
+    // its automatic first opening again.
+    this.storage.removeItem(FIRST_RUN_SETUP_DISMISSED_KEY);
     if (globalThis.caches) {
       await Promise.all((await caches.keys()).map((name) => caches.delete(name)));
       await repopulateServiceWorkerShell();
