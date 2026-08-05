@@ -195,7 +195,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("−$0.53");
     expect(html).toContain('data-slot="extended-session-dot"');
     const extendedHoursQuoteClasses = html.match(
-      /data-slot="extended-hours-quote" class="([^"]+)"/,
+      /data-slot="extended-hours-quote"[^>]*? class="([^"]+)"/,
     )?.[1];
     expect(extendedHoursQuoteClasses?.split(" ")).not.toContain("hidden");
     expect(html).toContain("Day range");
@@ -503,16 +503,15 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('tabindex="-1"');
     expect(html).toContain('aria-label="Rename watchlist MAG7"');
-    expect(html).toContain("size-10");
+    expect(html).toContain("size-10 min-h-10 min-w-10");
   });
 
-  it("keeps a single watchlist tab and its rename action together without a count badge", () => {
+  it("keeps a single watchlist tab with its count and hover-revealed rename", () => {
     const html = renderToStaticMarkup(
       React.createElement(StateTabs, {
         items: [{ id: 1, name: "Default" }],
         activeItem: { id: 1, name: "Default" },
         counts: new Map([[1, 1]]),
-        compactSingle: true,
         readOnly: false,
         renameLabel: "Rename watchlist",
         onSelect: () => undefined,
@@ -520,9 +519,10 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain('data-slot="single-state-tab"');
-    expect(html).toContain("flex-none");
-    expect(html).not.toContain(">1</span>");
+    expect(html).toContain('data-slot="list-tabs"');
+    expect(html).toContain(">Default</span>");
+    expect(html).toContain(">1</span>");
+    expect(html).toContain('data-slot="list-tab-rename"');
     expect(html).toContain('aria-label="Rename watchlist Default"');
   });
 

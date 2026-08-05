@@ -1,9 +1,12 @@
 import { forwardRef } from "react";
 import { cn } from "../../lib/utils.js";
 
-export const Table = forwardRef(function Table({ className, ...props }, ref) {
+export const Table = forwardRef(function Table({ className, containerClassName, ...props }, ref) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-auto">
+    <div
+      data-slot="table-container"
+      className={cn("relative w-full overflow-auto", containerClassName)}
+    >
       <table
         ref={ref}
         data-slot="table"

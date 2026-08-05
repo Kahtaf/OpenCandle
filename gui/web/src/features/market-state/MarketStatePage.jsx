@@ -14,10 +14,12 @@ import {
 } from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { ListHeader } from "../../components/ui/list-header.jsx";
 import { Select } from "../../components/ui/select.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
+import { cn } from "../../lib/utils.js";
 import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
@@ -62,6 +64,8 @@ const PAGE_META = {
     primaryPanel: "report-configure",
   },
 };
+
+const FILL_HEIGHT_DOMAINS = new Set(["watchlists"]);
 
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
@@ -140,6 +144,9 @@ export function MarketStatePage({
   const readOnly = role !== "writer";
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
+  // Pages whose primary table plus detail rail should fill the desktop canvas
+  // instead of floating as short cards over dead white space.
+  const fillsHeight = FILL_HEIGHT_DOMAINS.has(activeId);
   const [filter, setFilter] = useState("");
   const [panel, setPanel] = useState(() =>
     domain === "alerts" && alertSymbol
@@ -192,8 +199,18 @@ export function MarketStatePage({
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
+      <main
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6",
+          fillsHeight && "xl:overflow-hidden",
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-[1240px] flex-col gap-3",
+            fillsHeight && "xl:h-full xl:min-h-0",
+          )}
+        >
           {activeId !== "watchlists" && activeId !== "portfolios" ? (
             <PageHeader
               meta={active}
@@ -211,7 +228,7 @@ export function MarketStatePage({
             </StatusBand>
           ) : null}
           {readOnly ? <StatusBand>{readOnlyMessage(role)}</StatusBand> : null}
-          <div className="flex min-w-0 flex-col gap-3">
+          <div className={cn("flex min-w-0 flex-col gap-3", fillsHeight && "xl:min-h-0 xl:flex-1")}>
             {activeId === "watchlists" ? (
               <WatchlistPage
                 state={state}
@@ -294,10 +311,12 @@ function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
   const PrimaryIcon = meta.primaryIcon ?? Plus;
   const SecondaryIcon = meta.secondaryIcon;
   return (
-    <header className="flex flex-col gap-2 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
-        <div className="flex items-center gap-2">
+    <ListHeader
+      className="shrink-0"
+      title={meta.title}
+      tabs={tabs}
+      actions={
+        <>
           {meta.secondaryLabel && SecondaryIcon ? (
             <Button
               type="button"
@@ -322,10 +341,9 @@ function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
           >
             {meta.primaryLabel}
           </Button>
-        </div>
-      </div>
-      {tabs ? <div className="border-t border-border">{tabs}</div> : null}
-    </header>
+        </>
+      }
+    />
   );
 }
 

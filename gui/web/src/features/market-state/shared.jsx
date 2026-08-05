@@ -1,8 +1,9 @@
-import { Pencil, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { ListTabs, nextListTabIndex } from "../../components/ui/list-header.jsx";
 import {
   formatNumber as formatFinancialNumber,
   formatMoney,
@@ -61,6 +62,7 @@ export function Panel({
   meta,
   actions,
   children,
+  fill = false,
   headingLevel = "h2",
   headingId,
   headingClassName,
@@ -70,12 +72,21 @@ export function Panel({
   const Heading = headingLevel;
 
   return (
-    <section>
-      <Card data-slot="panel-card" className="overflow-hidden rounded-xl shadow-subtle-xs">
+    <section className={cn(fill && "flex min-w-0 flex-col xl:min-h-0 xl:flex-1")}>
+      <Card
+        data-slot="panel-card"
+        className={cn(
+          "overflow-hidden rounded-xl shadow-subtle-xs",
+          fill && "flex min-w-0 flex-col xl:min-h-0 xl:flex-1",
+        )}
+      >
         {hasHeader ? (
           <div
             data-slot="panel-header"
-            className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5",
+              fill && "shrink-0",
+            )}
           >
             {hasDetails ? (
               <div className="flex min-w-0 items-center gap-2">
@@ -98,10 +109,16 @@ export function Panel({
                 {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
               </div>
             ) : null}
-            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+            {actions ? (
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-2">{actions}</div>
+            ) : null}
           </div>
         ) : null}
-        {children}
+        {fill ? (
+          <div className="flex min-w-0 flex-col xl:min-h-0 xl:flex-1">{children}</div>
+        ) : (
+          children
+        )}
       </Card>
     </section>
   );
@@ -203,7 +220,7 @@ export function SignedPercent({ value, decimals = 2 }) {
   );
 }
 
-export function SignedMoney({ value, percent, currency = "USD" }) {
+export function SignedMoney({ value, percent, currency = "USD", percentDecimals = 1, className }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -212,17 +229,24 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
       className={cn(
         "tabular-nums font-medium",
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
+        className,
       )}
     >
       {formatSignedMoney(value, currency)}
       {typeof percent === "number" && Number.isFinite(percent)
-        ? ` (${formatPercent(percent, { decimals: 1, signed: true })})`
+        ? ` (${formatPercent(percent, { decimals: percentDecimals, signed: true })})`
         : ""}
     </span>
   );
 }
 
-export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
+export function ExtendedHoursQuote({
+  quote,
+  currency = "USD",
+  chip = false,
+  showChange = true,
+  className,
+}) {
   if (
     !quote ||
     (quote.marketState !== "PRE" && quote.marketState !== "POST") ||
@@ -233,12 +257,20 @@ export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
   }
   const isPreMarket = quote.marketState === "PRE";
   const hasChange =
-    Number.isFinite(quote.extendedChangePercent) || Number.isFinite(quote.extendedChange);
+    showChange &&
+    (Number.isFinite(quote.extendedChangePercent) || Number.isFinite(quote.extendedChange));
   return (
     <div
       data-slot="extended-hours-quote"
+      data-session={isPreMarket ? "pre" : "post"}
       className={cn(
-        "mt-1 flex max-w-full items-center justify-end gap-1 whitespace-nowrap text-[11px] leading-4",
+        "mt-1 flex max-w-full items-center gap-1 whitespace-nowrap text-[11px] leading-4",
+        chip
+          ? cn(
+              "ml-auto h-5 w-fit rounded px-1.5 text-[10.5px]",
+              isPreMarket ? "bg-warning/10" : "bg-info/10",
+            )
+          : "justify-end",
         className,
       )}
     >
@@ -247,7 +279,12 @@ export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
         className={cn("size-1.5 shrink-0 rounded-full", isPreMarket ? "bg-warning" : "bg-info")}
         aria-hidden="true"
       />
-      <span className="truncate text-muted-foreground">
+      <span
+        className={cn(
+          "truncate",
+          chip ? (isPreMarket ? "text-warning" : "text-info") : "text-muted-foreground",
+        )}
+      >
         {isPreMarket ? "Pre-market" : "After hours"} {money(quote.extendedPrice, currency)}
       </span>
       {hasChange ? (
@@ -347,6 +384,8 @@ export function quoteFlashClass(direction) {
   );
 }
 
+// Saved-collection tab strip. The shared list-header primitive owns the
+// anatomy so watchlists, portfolios, and later collection pages stay identical.
 export function StateTabs({
   items,
   activeItem,
@@ -355,83 +394,21 @@ export function StateTabs({
   renameLabel,
   onSelect,
   onRename,
-  compactSingle = false,
 }) {
-  const tabRefs = useRef(new Map());
-  const singleItem = compactSingle && items.length === 1;
-
-  const onTabKeyDown = (event, index) => {
-    const nextIndex = nextStateTabIndex(index, items.length, event.key);
-    if (nextIndex === index) return;
-    event.preventDefault();
-    const nextItem = items[nextIndex];
-    onSelect(nextItem.id);
-    tabRefs.current.get(nextItem.id)?.focus();
-  };
-
   return (
-    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-      <div
-        data-slot={singleItem ? "single-state-tab" : "state-tabs"}
-        className={cn("flex min-w-0 gap-1 overflow-x-auto", singleItem ? "flex-none" : "flex-1")}
-        role="tablist"
-        aria-orientation="horizontal"
-      >
-        {items.map((item, index) => {
-          const active = item.id === activeItem?.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              tabIndex={active ? 0 : -1}
-              ref={(node) => {
-                if (node) tabRefs.current.set(item.id, node);
-                else tabRefs.current.delete(item.id);
-              }}
-              className={cn(
-                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
-              )}
-              onClick={() => onSelect(item.id)}
-              onKeyDown={(event) => onTabKeyDown(event, index)}
-            >
-              <span>{item.name}</span>
-              {!singleItem ? (
-                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                  {counts.get(item.id) ?? 0}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-      {activeItem ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          icon={Pencil}
-          title={`${renameLabel} ${activeItem.name}`}
-          aria-label={`${renameLabel} ${activeItem.name}`}
-          disabled={readOnly}
-          className="size-10 md:size-8"
-          onClick={() => onRename(activeItem)}
-        />
-      ) : null}
-    </div>
+    <ListTabs
+      items={items}
+      activeItem={activeItem}
+      counts={counts}
+      readOnly={readOnly}
+      renameLabel={renameLabel}
+      onSelect={onSelect}
+      onRename={onRename}
+    />
   );
 }
 
-export function nextStateTabIndex(currentIndex, itemCount, key) {
-  if (itemCount < 1) return -1;
-  if (key === "ArrowRight") return (currentIndex + 1) % itemCount;
-  if (key === "ArrowLeft") return (currentIndex - 1 + itemCount) % itemCount;
-  if (key === "Home") return 0;
-  if (key === "End") return itemCount - 1;
-  return currentIndex;
-}
+export const nextStateTabIndex = nextListTabIndex;
 
 export function RowActions({ actions, disabled }) {
   return (
