@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildHoldingRows,
   derivePortfolioDayMove,
+  topAllocationSegments,
 } from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
 
 const LOTS = [
@@ -97,6 +98,24 @@ describe("buildHoldingRows", () => {
     expect(aapl.lots[0].id).toBe(1);
   });
 
+  it("carries a per-row day move so the holdings table can show today in currency", () => {
+    const quotes = QUOTES.map((quote) => ({
+      ...quote,
+      changePercent: quote.symbol === "AAPL" ? 2 : -1.5,
+    }));
+    const rows = buildHoldingRows(LOTS, quotes);
+
+    const aapl = rows.find((row) => row.symbol === "AAPL");
+    expect(aapl.dayMove).toBeCloseTo(21859.5 - 21859.5 / 1.02, 2);
+    const nvda = rows.find((row) => row.symbol === "NVDA");
+    expect(nvda.dayMove).toBeCloseTo(16340 - 16340 / 0.985, 2);
+  });
+
+  it("leaves the day move null when the row has no usable change percent", () => {
+    const rows = buildHoldingRows(LOTS, []);
+    expect(rows.every((row) => row.dayMove === null)).toBe(true);
+  });
+
   it("sorts rows by market value descending", () => {
     const rows = buildHoldingRows(LOTS, QUOTES);
     expect(rows.map((row) => row.symbol)).toEqual(["AAPL", "NVDA"]);
@@ -129,6 +148,51 @@ describe("buildHoldingRows", () => {
     expect(aapl.marketValue).toBeCloseTo(14573, 2);
     expect(aapl.excludedLotCount).toBe(1);
     expect(aapl.lots).toHaveLength(2);
+  });
+});
+
+describe("topAllocationSegments", () => {
+  const rows = [
+    { symbol: "AAPL", allocationPercent: 30, marketValue: 3000 },
+    { symbol: "NVDA", allocationPercent: 25, marketValue: 2500 },
+    { symbol: "MSFT", allocationPercent: 15, marketValue: 1500 },
+    { symbol: "COST", allocationPercent: 10, marketValue: 1000 },
+    { symbol: "ASTS", allocationPercent: 8, marketValue: 800 },
+    { symbol: "AMD", allocationPercent: 7, marketValue: 700 },
+    { symbol: "SHOP", allocationPercent: 5, marketValue: 500 },
+  ];
+
+  it("keeps every segment when the holding count fits the colour palette", () => {
+    expect(topAllocationSegments(rows.slice(0, 4))).toEqual([
+      { symbol: "AAPL", percent: 30, value: 3000 },
+      { symbol: "NVDA", percent: 25, value: 2500 },
+      { symbol: "MSFT", percent: 15, value: 1500 },
+      { symbol: "COST", percent: 10, value: 1000 },
+    ]);
+  });
+
+  it("rolls the smallest holdings into one exact remainder segment", () => {
+    const segments = topAllocationSegments(rows);
+
+    expect(segments).toHaveLength(6);
+    expect(segments.slice(0, 5).map((segment) => segment.symbol)).toEqual([
+      "AAPL",
+      "NVDA",
+      "MSFT",
+      "COST",
+      "ASTS",
+    ]);
+    expect(segments[5]).toEqual({ symbol: "Other", percent: 12, value: 1200 });
+  });
+
+  it("drops holdings with no usable allocation", () => {
+    expect(
+      topAllocationSegments([
+        { symbol: "AAPL", allocationPercent: 100, marketValue: 100 },
+        { symbol: "SHOP.TO", allocationPercent: null, marketValue: null },
+        { symbol: "CASH", allocationPercent: 0, marketValue: 0 },
+      ]),
+    ).toEqual([{ symbol: "AAPL", percent: 100, value: 100 }]);
   });
 });
 

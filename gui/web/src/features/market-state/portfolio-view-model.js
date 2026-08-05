@@ -1,3 +1,30 @@
+// The allocation donut cycles a six-colour palette, so anything past the fifth
+// holding would repeat a colour and stretch the legend past the stat header it
+// sits beside. The tail collapses into one exact remainder segment instead.
+const ALLOCATION_SEGMENT_LIMIT = 6;
+
+export function topAllocationSegments(rows = []) {
+  const segments = rows
+    .filter((row) => Number.isFinite(row?.allocationPercent) && row.allocationPercent > 0)
+    .map((row) => ({
+      symbol: row.symbol,
+      percent: row.allocationPercent,
+      value: Number.isFinite(row.marketValue) ? row.marketValue : null,
+    }))
+    .sort((a, b) => b.percent - a.percent);
+
+  if (segments.length <= ALLOCATION_SEGMENT_LIMIT) return segments;
+
+  const kept = segments.slice(0, ALLOCATION_SEGMENT_LIMIT - 1);
+  const tail = segments.slice(ALLOCATION_SEGMENT_LIMIT - 1);
+  const percent = tail.reduce((sum, segment) => sum + segment.percent, 0);
+  const values = tail.map((segment) => segment.value);
+  const value = values.every((entry) => Number.isFinite(entry))
+    ? values.reduce((sum, entry) => sum + entry, 0)
+    : null;
+  return [...kept, { symbol: "Other", percent, value }];
+}
+
 export function derivePortfolioDayMove(lots = []) {
   let total = 0;
   let qualifyingLots = 0;
@@ -80,6 +107,9 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
       row.pnl != null && row.marketValue != null && row.marketValue - row.pnl > 0
         ? (row.pnl / (row.marketValue - row.pnl)) * 100
         : null,
+    // Today's move in currency, so the holdings table can pair the day percent
+    // with the dollars it actually moved.
+    dayMove: derivePortfolioDayMove([row]),
   }));
 
   return rows.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
