@@ -417,11 +417,13 @@ try {
     await waitForTextExact(follower, "NVDA", 30_000);
     await waitForTextExact(page, "NVDA", 30_000);
     await follower.getByRole("button", { name: "New chat", exact: true }).click();
-    await waitForText(
-      follower,
-      completedLiveTurn ? "What are we watching?" : "Market research, on your machine",
-      30_000,
-    );
+    // What this stage is really about: New chat in a follower tab lands on the
+    // fresh home surface. Assert that surface directly. It used to wait for the
+    // onboarding dialog's copy whenever no model was connected, which only ever
+    // worked because a new chat re-opened a dialog the user had already
+    // dismissed at the watchlist stage. The home surface renders behind the
+    // dialog either way, so this holds with or without a model key.
+    await waitForText(follower, "What are we watching?", 30_000);
 
     const mobile = await context.newPage();
     stage = "mobile layout";
