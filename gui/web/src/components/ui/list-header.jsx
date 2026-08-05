@@ -5,7 +5,7 @@ import { Button } from "./button.jsx";
 
 // One header anatomy for every saved-collection page: the page title with its
 // primary action on the same line, then the collection tabs. The rename control
-// belongs to the active tab and stays hidden until the strip is hovered or
+// belongs to the active tab and stays hidden until that tab is hovered or
 // something inside it takes focus, so the resting state is just names.
 export function ListHeader({ title, actions, tabs, className }) {
   return (
@@ -45,7 +45,11 @@ export function ListTabs({
       data-slot="list-tabs"
       className={cn("flex min-w-0 items-center border-b border-border px-1", className)}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist">
+      <div
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+        role="tablist"
+        aria-orientation="horizontal"
+      >
         {items.map((item, index) => {
           const active = item.id === activeItem?.id;
           return (
