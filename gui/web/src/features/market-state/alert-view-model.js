@@ -308,8 +308,8 @@ function pluralWindow(count, unit) {
   return `once every ${count} ${unit}s`;
 }
 
-// Bloom's threshold sheet keeps the live price beside the level being typed so
-// the number never has to be judged in isolation.
+// The threshold sheet keeps the live price beside the level being typed so the
+// number never has to be judged in isolation.
 export function thresholdDistanceHint(currentPrice, threshold, currency = "USD") {
   if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice) || currentPrice <= 0) {
     return null;
