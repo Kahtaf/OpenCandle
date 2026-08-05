@@ -19,6 +19,7 @@ import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
 import {
+  isFirstRunSetupSatisfied,
   readFirstRunSetupDismissed,
   writeFirstRunSetupDismissed,
 } from "../onboarding/setup-dismissal.js";
@@ -204,9 +205,14 @@ export function ChatPanel({
   // dismissal is forgotten only on positive proof that setup is satisfied, so a
   // later regression back to "needs setup" opens it once more. A reconnecting
   // or not-yet-broadcast setup state proves nothing and must not re-arm it.
-  // Reaching setup again after dismissing is done through the composer's model
-  // control.
-  const setupSatisfied = role !== "connecting" && modelSetup?.requirement === "ready";
+  // App.jsx forgets the persisted record on every route, including the ones
+  // that replace this panel; this clears the panel's own state while it stays
+  // mounted. Reaching setup again after dismissing is done through the
+  // composer's model control.
+  const setupSatisfied = isFirstRunSetupSatisfied({
+    role,
+    requirement: modelSetup?.requirement,
+  });
   if (setupSatisfied && setupDismissed) setSetupDismissed(false);
   const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
   useEffect(() => {

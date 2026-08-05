@@ -8,6 +8,7 @@ import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
+import { useForgetFirstRunSetupDismissalWhenSatisfied } from "./features/onboarding/setup-dismissal.js";
 import {
   chatRunSessionTarget,
   hasSessionContent,
@@ -107,6 +108,15 @@ export function AppShell() {
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
+  // The remembered first-run onboarding dismissal is forgotten wherever setup
+  // becomes satisfied, not only on the chat route: the dialog above is opened
+  // from Diagnostics and the dashboard too, and the chat panel is unmounted
+  // there. Without this, a key saved off the chat route would leave the record
+  // behind and suppress the automatic opening after keys are cleared again.
+  useForgetFirstRunSetupDismissalWhenSatisfied({
+    role: gui.role,
+    requirement: gui.modelSetup?.requirement,
+  });
   const homeResetSessionRef = useRef("");
   const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);

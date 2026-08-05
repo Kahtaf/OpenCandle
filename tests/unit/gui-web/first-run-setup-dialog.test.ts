@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../gui/web/src/components/ui/tooltip.jsx";
 import { ChatPanel } from "../../../gui/web/src/features/chat/ChatPanel.jsx";
 import { ToolDrawerProvider } from "../../../gui/web/src/features/chat/tool-drawer-context.jsx";
+import { useForgetFirstRunSetupDismissalWhenSatisfied } from "../../../gui/web/src/features/onboarding/setup-dismissal.js";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -89,6 +90,27 @@ function remountPanel(props: Record<string, unknown> = {}) {
   document.body.append(container);
   root = createRoot(container);
   renderPanel(props);
+}
+
+// Diagnostics, the dashboard, and the symbol and market-state pages replace the
+// chat panel and can all open the app-level model setup dialog. Standing in for
+// those routes means unmounting the panel and leaving only the app-level
+// observer that App.jsx mounts on every route.
+function renderOffChatRoute(setup: { role?: string; requirement?: string }) {
+  act(() => root.unmount());
+  container.remove();
+  document.body.replaceChildren();
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      React.createElement(function AppLevelSetupObserver() {
+        useForgetFirstRunSetupDismissalWhenSatisfied(setup);
+        return null;
+      }),
+    );
+  });
 }
 
 function dialog() {
@@ -200,6 +222,33 @@ describe("first-run model setup dialog in ChatPanel", () => {
     // setup was satisfied, so it must not re-arm the automatic opening.
     remountPanel({ role: "connecting", modelSetup: undefined });
     expect(dialog()).toBe(null);
+    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
+    expect(dialog()).toBe(null);
+  });
+
+  it("forgets a remembered dismissal when setup is satisfied away from the chat route", () => {
+    renderPanel();
+    closeDialog();
+
+    // A key saved from the app-level dialog on Diagnostics: no chat panel is
+    // mounted to see the ready state, so only the app-level observer can forget
+    // the dismissal.
+    renderOffChatRoute({ role: "writer", requirement: "ready" });
+
+    // Keys cleared later: onboarding is owed one more automatic opening.
+    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
+    expect(dialog()).toBeTruthy();
+  });
+
+  it("keeps a remembered dismissal on a route that never sees a ready setup", () => {
+    renderPanel();
+    closeDialog();
+
+    renderOffChatRoute({ role: "connecting", requirement: "ready" });
+    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
+    expect(dialog()).toBe(null);
+
+    renderOffChatRoute({ role: "writer", requirement: "connect_auth" });
     remountPanel({ modelSetup: { ...NEEDS_SETUP } });
     expect(dialog()).toBe(null);
   });
