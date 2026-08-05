@@ -7,7 +7,9 @@ export function buildAlertSentenceRows(
   instruments = [],
   nowMs = Date.now(),
 ) {
-  const symbolsById = new Map(instruments.map((instrument) => [instrument.id, instrument.symbol]));
+  // The instrument, not just its symbol: a price rule is stated in the currency
+  // its listing trades in, and the rule itself does not record one.
+  const instrumentsById = new Map(instruments.map((instrument) => [instrument.id, instrument]));
   const latestEvents = new Map();
   for (const event of alertEvents) {
     const current = latestEvents.get(event.alertRuleId);
@@ -20,18 +22,18 @@ export function buildAlertSentenceRows(
     const enabled = rule.enabled !== false;
     const event = latestEvents.get(rule.id);
     const tone = rowTone(rule, enabled, event);
+    const instrument = rule.instrumentId ? instrumentsById.get(rule.instrumentId) : null;
+    const currency = instrument?.currency ?? null;
     return {
       id: rule.id,
-      symbol: rule.instrumentId
-        ? (symbolsById.get(rule.instrumentId) ?? "Unknown")
-        : scopeLabel(rule),
-      sentence: conditionSentence(rule.conditionType, rule.conditionJson),
-      detail: detailLine(rule, enabled, nowMs),
+      symbol: rule.instrumentId ? (instrument?.symbol ?? "Unknown") : scopeLabel(rule),
+      sentence: conditionSentence(rule.conditionType, rule.conditionJson, false, currency),
+      detail: detailLine(rule, enabled, nowMs, currency),
       // The row shows the short status; the chain of observed values moves
       // behind the row's disclosure so an armed rule that has not fired can
       // still explain itself.
       status: rowStatusLabel(tone, rule, nowMs),
-      explanation: explanationLine(rule, enabled, tone, nowMs),
+      explanation: explanationLine(rule, enabled, tone, nowMs, currency),
       tone,
       retriggerMode: rule.retriggerMode ?? "recurring",
       cadence: rule.retriggerMode === "once" ? "Once" : "Repeats",
@@ -43,14 +45,9 @@ export function buildAlertSentenceRows(
 
 function conditionSentence(conditionType, condition = {}, placeholders = false, currency = null) {
   const c = condition && typeof condition === "object" ? condition : {};
-  // Saved rules carry no currency, so they keep the plain label. The create
-  // sheet knows the quote's currency and passes it, so a level prefilled from a
-  // non-USD listing is not previewed as dollars.
   const price = (value) =>
     typeof value === "number"
-      ? currency
-        ? formatMoney(value, currency)
-        : moneyLabel(value)
+      ? moneyLabel(value, currency)
       : placeholders
         ? "a price you set"
         : "N/A";
@@ -81,13 +78,14 @@ function conditionSentence(conditionType, condition = {}, placeholders = false, 
   }
 }
 
-function detailLine(rule, enabled, nowMs) {
+function detailLine(rule, enabled, nowMs, currency = null) {
   if (!enabled) return "Paused";
   if (!rule.lastCheckedAt) return "Armed · not checked yet";
   const observedValue = formatAlertObservedValue(
     rule.conditionType,
     rule.conditionJson,
     rule.lastObservedJson,
+    currency,
   );
   return `Armed · last checked ${relativeTime(rule.lastCheckedAt, nowMs)}${
     observedValue ? ` · ${observedValue}` : ""
@@ -101,7 +99,7 @@ function rowStatusLabel(tone, rule, nowMs) {
   return `Armed · checked ${relativeTime(rule.lastCheckedAt, nowMs)}`;
 }
 
-function explanationLine(rule, enabled, tone, nowMs) {
+function explanationLine(rule, enabled, tone, nowMs, currency = null) {
   const parts = [];
   if (rule.lastCheckedAt) parts.push(`Last checked ${relativeTime(rule.lastCheckedAt, nowMs)}`);
   if (tone === "degraded") parts.push("the last check could not read this market");
@@ -109,6 +107,7 @@ function explanationLine(rule, enabled, tone, nowMs) {
     rule.conditionType,
     rule.conditionJson,
     rule.lastObservedJson,
+    currency,
   );
   if (observedValue) parts.push(observedValue);
   if (!enabled) parts.push("paused rules are not checked");
@@ -130,12 +129,15 @@ function scopeLabel(rule) {
       : "Unknown";
 }
 
-function moneyLabel(value) {
+// A price is stated in the currency its listing trades in when the caller knows
+// it. Rules that were saved without a resolvable instrument keep the plain
+// dollar label rather than guessing a currency.
+function moneyLabel(value, currency = null) {
   if (typeof value !== "number") return "N/A";
-  return `$${value.toFixed(2)}`;
+  return currency ? formatMoney(value, currency) : `$${value.toFixed(2)}`;
 }
 
-export function formatAlertObservedValue(conditionType, condition, observed) {
+export function formatAlertObservedValue(conditionType, condition, observed, currency = null) {
   const c = record(condition);
   const observation = record(observed);
   const value = numberValue(observation.value);
@@ -149,10 +151,10 @@ export function formatAlertObservedValue(conditionType, condition, observed) {
       if (isAboveTriggerSide || isBelowTriggerSide) {
         const relation = isAboveTriggerSide ? "above" : "below";
         const direction = isAboveTriggerSide ? "upward" : "downward";
-        return `price ${moneyLabel(value)} · ${relation} ${moneyLabel(threshold)}, waiting for next ${direction} cross`;
+        return `price ${moneyLabel(value, currency)} · ${relation} ${moneyLabel(threshold, currency)}, waiting for next ${direction} cross`;
       }
     }
-    return `price ${moneyLabel(value)} vs threshold ${moneyLabel(threshold)}`;
+    return `price ${moneyLabel(value, currency)} vs threshold ${moneyLabel(threshold, currency)}`;
   }
 
   if (conditionType === "price_crosses_sma") {
@@ -162,7 +164,7 @@ export function formatAlertObservedValue(conditionType, condition, observed) {
     if (price == null || sma == null || sma === 0) {
       return `price is ${value < 0 ? "below" : "above"} the ${period}-day SMA (exact values unavailable)`;
     }
-    return `price ${moneyLabel(price)} is ${formatPercent(Math.abs((price / sma - 1) * 100))} ${
+    return `price ${moneyLabel(price, currency)} is ${formatPercent(Math.abs((price / sma - 1) * 100))} ${
       price < sma ? "below" : "above"
     } the ${period}-day SMA`;
   }
@@ -184,9 +186,9 @@ export function formatAlertObservedValue(conditionType, condition, observed) {
     if (fastSma == null || slowSma == null || slowSma === 0) {
       return `${fastPeriod}-day SMA is ${relation} ${slowPeriod}-day SMA (exact values unavailable)`;
     }
-    return `${fastPeriod}-day SMA ${moneyLabel(fastSma)} is ${formatPercent(
+    return `${fastPeriod}-day SMA ${moneyLabel(fastSma, currency)} is ${formatPercent(
       Math.abs((fastSma / slowSma - 1) * 100),
-    )} ${fastSma < slowSma ? "below" : "above"} ${slowPeriod}-day SMA ${moneyLabel(slowSma)}`;
+    )} ${fastSma < slowSma ? "below" : "above"} ${slowPeriod}-day SMA ${moneyLabel(slowSma, currency)}`;
   }
 
   return null;
