@@ -249,6 +249,12 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain('data-slot="portfolio-skeleton"');
     expect(html).not.toContain("No holdings yet");
+    // One loading vocabulary: shaped skeletons for the stats, the allocation and
+    // the table, never a data cell filled with prose or an em dash.
+    expect(html).toContain('data-slot="portfolio-summary-loading"');
+    expect(html).toContain('data-slot="allocation-donut-loading"');
+    expect(html).toContain('aria-label="Loading holdings"');
+    expect(html).not.toContain("—");
   });
 
   it("links desktop and mobile portfolio symbols to encoded symbol pages", () => {
@@ -319,7 +325,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("Totals appear once quotes load.");
   });
 
-  it("renders portfolio allocation with the shared donut", () => {
+  it("opens the portfolio on a stat header with allocation beside it and a diet holdings table", () => {
     const html = renderToStaticMarkup(
       React.createElement(PortfolioPage, {
         loading: false,
@@ -387,6 +393,7 @@ describe("MarketStatePage rendering", () => {
               totalPnl: 200,
               totalPnlPercent: 66.67,
               baseCurrency: "USD",
+              excludedFromTotals: [{ symbol: "SHOP.TO", currency: "CAD", reason: "CAD" }],
             },
           },
         },
@@ -399,34 +406,53 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
+    // The page opens on the three figures a holder checks first, in that order,
+    // before any table row.
+    expect(html.indexOf("Market value")).toBeLessThan(html.indexOf("Today&#x27;s change"));
+    expect(html.indexOf("Today&#x27;s change")).toBeLessThan(html.indexOf("Total gain"));
+    expect(html.indexOf("Market value")).toBeLessThan(html.indexOf("Holdings"));
+    expect(html).toContain('data-slot="portfolio-summary"');
+    expect(html).toContain('data-slot="portfolio-summary-stats"');
+    expect(html).not.toContain("Portfolio value");
+    expect(html).not.toContain("All time");
+    // Today's change is stated in currency, not as a bare percent.
+    expect(html).toContain("+$0.95");
+    expect(html).toContain("+0.2%");
+    expect(html).not.toContain("today ·");
+    // Allocation sits beside the totals it explains, not buried under the table.
     expect(html).toContain('data-slot="allocation-donut-loading"');
-    expect(html).toContain(">Portfolio value</h2>");
-    expect(html.indexOf("Portfolio value")).toBeLessThan(
-      html.indexOf('data-slot="portfolio-summary-deltas"'),
+    expect(html.indexOf('data-slot="allocation-donut-loading"')).toBeLessThan(
+      html.indexOf("Holdings"),
     );
     expect(html).toContain("NVDA");
-    expect(html).toContain("40.0%");
     expect(html.indexOf("Holdings")).toBeLessThan(html.indexOf("Add holding"));
-    expect(html).toContain('data-slot="portfolio-summary-deltas"');
-    expect(html).toContain("Today");
-    expect(html).toContain("All time");
-    expect(html).toContain("+$0.95 (+0.2%)");
-    expect(html).not.toContain("today ·");
-    expect(html).toContain("Price");
-    expect(html).toContain("Value");
-    expect(html).toContain("24 hr sparkline");
-    expect(html).toContain("Change");
-    expect(html).toContain("Total Gain/Loss");
-    expect(html).toContain("% of Portfolio");
-    expect(html).toContain("Quantity");
-    expect(html).toContain("Avg. Cost Basis");
-    expect(html).toContain("Actions");
-    expect(html).toContain("min-w-[920px]");
-    expect(html).not.toContain("min-w-[1180px]");
+    // Partial totals stay explicit and stay next to the total they qualify.
+    expect(html).toContain('data-slot="portfolio-excluded-note"');
+    expect(html).toContain("Kept out of the USD total: SHOP.TO (CAD)");
+    expect(html.indexOf('data-slot="portfolio-excluded-note"')).toBeLessThan(
+      html.indexOf("Holdings"),
+    );
+    // Column diet: gain dollars and percent share one cell, the sparkline has no
+    // header label, and no column exists purely to hold row actions.
+    expect(html).toContain(">Price</th>");
+    expect(html).toContain(">Today</th>");
+    expect(html).toContain(">Value</th>");
+    expect(html).toContain(">Total gain</th>");
+    // Allocation rides with the value it comes from instead of taking a column.
+    expect(html).not.toContain(">Allocation</th>");
+    expect(html).toContain("60.0% of portfolio");
+    expect(html).toContain(">Quantity</th>");
+    expect(html).toContain(">Avg cost</th>");
+    expect(html).not.toContain("24 hr sparkline");
+    expect(html).not.toContain("Total Gain/Loss");
+    expect(html).not.toContain("% of Portfolio");
+    expect(html).not.toContain("Avg. Cost Basis");
+    expect(html).not.toContain(">Actions</th>");
+    expect(html).toContain("+$100.00 (+50.0%)");
+    expect(html).toContain("min-w-[900px]");
+    expect(html).not.toContain("min-w-[920px]");
     expect(html).toContain('data-slot="portfolio-lot-row"');
-    expect(html).toContain('aria-label="Edit AAPL lot"');
-    expect(html).toContain('aria-label="Remove AAPL lot"');
-    expect(html).toContain("min-h-10 min-w-10");
+    expect(html).toContain('aria-label="Actions for the AAPL lot"');
     expect(html).not.toContain("font-mono");
     expect(html).not.toContain("<img");
     expect(html).not.toMatch(/ticker\s*line/i);

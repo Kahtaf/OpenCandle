@@ -64,11 +64,11 @@ export default function AllocationDonut({ segments, totalValue, currency = "USD"
   return (
     <div
       data-slot="allocation-donut"
-      className={`grid gap-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center ${className ?? ""}`}
+      className={`grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3 ${className ?? ""}`}
     >
       <ChartContainer
         config={config}
-        className="relative mx-auto h-44 w-44 shrink-0 aspect-square"
+        className="relative mx-auto h-28 w-28 shrink-0 aspect-square"
         aria-label="Portfolio allocation"
       >
         <PieChart>
@@ -118,17 +118,9 @@ export default function AllocationDonut({ segments, totalValue, currency = "USD"
             ))}
           </Pie>
         </PieChart>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Total value
-          </span>
-          <span className="mt-0.5 max-w-28 truncate text-sm font-semibold tabular-nums text-foreground">
-            {formatMoney(totalValue, currency)}
-          </span>
-        </div>
       </ChartContainer>
 
-      <ul className="grid min-w-0 gap-2 text-xs">
+      <ul className="grid min-w-0 gap-1.5 text-xs">
         {data.map((segment) => (
           <li key={segment.symbol} className="flex min-w-0 items-center gap-2">
             <span

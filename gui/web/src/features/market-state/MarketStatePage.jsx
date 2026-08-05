@@ -65,7 +65,7 @@ const PAGE_META = {
   },
 };
 
-const FILL_HEIGHT_DOMAINS = new Set(["watchlists"]);
+const FILL_HEIGHT_DOMAINS = new Set(["watchlists", "portfolios"]);
 
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";

@@ -62,6 +62,7 @@ export function Panel({
   meta,
   actions,
   children,
+  className,
   fill = false,
   headingLevel = "h2",
   headingId,
@@ -72,7 +73,7 @@ export function Panel({
   const Heading = headingLevel;
 
   return (
-    <section className={cn(fill && "flex min-w-0 flex-col xl:min-h-0 xl:flex-1")}>
+    <section className={cn(fill && "flex min-w-0 flex-col xl:min-h-0 xl:flex-1", className)}>
       <Card
         data-slot="panel-card"
         className={cn(
@@ -110,7 +111,11 @@ export function Panel({
               </div>
             ) : null}
             {actions ? (
-              <div className="flex min-w-0 flex-1 items-center justify-end gap-2">{actions}</div>
+              // Controls share the header line once there is room for them, and
+              // take their own full-width line below the title before that.
+              <div className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto sm:flex-1">
+                {actions}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -135,10 +140,10 @@ export function InspectorSection({ title, children }) {
   );
 }
 
-export function PanelSearch({ label, filter, setFilter }) {
+export function PanelSearch({ label, filter, setFilter, className }) {
   const inputId = useId();
   return (
-    <label htmlFor={inputId} className="relative">
+    <label htmlFor={inputId} className={cn("relative block", className ?? "w-44")}>
       <span className="sr-only">{label}</span>
       <Search
         className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-muted-foreground"
@@ -146,7 +151,7 @@ export function PanelSearch({ label, filter, setFilter }) {
       />
       <Input
         id={inputId}
-        className="h-8 w-44 pl-8 text-xs"
+        className="h-8 w-full pl-8 text-xs"
         placeholder={label}
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
@@ -204,7 +209,7 @@ export function Sym({ symbol, name }) {
   );
 }
 
-export function SignedPercent({ value, decimals = 2 }) {
+export function SignedPercent({ value, decimals = 2, className }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -213,6 +218,7 @@ export function SignedPercent({ value, decimals = 2 }) {
       className={cn(
         "tabular-nums font-medium",
         value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
+        className,
       )}
     >
       {formatPercent(value, { decimals, signed: true })}
