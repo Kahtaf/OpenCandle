@@ -228,6 +228,47 @@ describe("create alert sheet", () => {
     );
   });
 
+  it("drops an auto-filled level when the symbol it came from is replaced", async () => {
+    const transport = {
+      kind: "loopback",
+      getInstrumentQuote: async () => ({ status: "ok", price: 204.25, currency: "USD" }),
+      searchInstruments: async () => ({ candidates: [] }),
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(AlertCreateForm, {
+            disabled: false,
+            invokeTool: () => true,
+            symbol: "NVDA",
+          }),
+        ),
+      );
+    });
+
+    const threshold = container.querySelector<HTMLInputElement>('input[type="number"]');
+    expect(threshold?.value).toBe("204.25");
+
+    const search = container.querySelector<HTMLInputElement>('input[role="combobox"]');
+    if (!search) throw new Error("symbol search input not rendered");
+    const setValue = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    await act(async () => {
+      setValue?.call(search, "MS");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // NVDA's price must not stay in the field once NVDA is no longer the symbol,
+    // or a level nobody chose can be saved against whatever is picked next.
+    expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("");
+    expect(container.querySelector('[data-slot="threshold-hint"]')).toBeNull();
+  });
+
   it("does not carry a price level into a condition that measures something else", () => {
     expect(nextAlertThreshold("create_price_above", "create_price_below", "204.25")).toBe("204.25");
     expect(nextAlertThreshold("create_price_above", "create_rsi_below", "204.25")).toBe("");

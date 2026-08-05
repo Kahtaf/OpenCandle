@@ -1367,16 +1367,27 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   });
 
   useEffect(() => {
-    if (!resolvedSymbol) {
-      setQuote(null);
-      return undefined;
-    }
+    // The quote and any level auto-filled from it belong to the symbol they
+    // came from, so both leave with it. Keeping either would let a level nobody
+    // chose be saved against the next symbol if its quote is slow or never
+    // arrives. A level typed by hand is not a prefill and is left alone.
+    setQuote(null);
+    // Read before the reset: the state updater runs on the next render, so it
+    // would otherwise compare against the value this effect just cleared.
+    const prefilled = prefilledThresholdRef.current;
+    prefilledThresholdRef.current = "";
+    setDraft((current) =>
+      current.threshold === prefilled ? { ...current, threshold: "" } : current,
+    );
+    if (!resolvedSymbol) return undefined;
     let disposed = false;
     getInstrumentQuote(resolvedSymbol, transport)
       .then((next) => {
         if (!disposed) setQuote(next ?? null);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!disposed) setQuote(null);
+      });
     return () => {
       disposed = true;
     };
@@ -1388,12 +1399,15 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
     if (isEditing || !PRICE_THRESHOLD_CONDITIONS.has(condition)) return;
     if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice)) return;
     const prefill = currentPrice.toFixed(2);
+    // Same ordering rule as above: compare against the level this effect filled
+    // in last, not the one it is about to record.
+    const previous = prefilledThresholdRef.current;
+    prefilledThresholdRef.current = prefill;
     setDraft((current) =>
-      current.threshold === "" || current.threshold === prefilledThresholdRef.current
+      current.threshold === "" || current.threshold === previous
         ? { ...current, threshold: prefill }
         : current,
     );
-    prefilledThresholdRef.current = prefill;
   }, [condition, currentPrice, isEditing]);
 
   return (
