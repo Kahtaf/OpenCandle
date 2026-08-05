@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import { ListTabs, nextListTabIndex } from "../../components/ui/list-header.jsx";
+import { ListTabs } from "../../components/ui/list-header.jsx";
+import { nextListTabIndex } from "../../components/ui/list-header-navigation.js";
 import {
   formatNumber as formatFinancialNumber,
   formatMoney,

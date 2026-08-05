@@ -2,6 +2,7 @@ import { Pencil } from "lucide-react";
 import { useRef } from "react";
 import { cn } from "../../lib/utils.js";
 import { Button } from "./button.jsx";
+import { nextListTabIndex } from "./list-header-navigation.js";
 
 // One header anatomy for every saved-collection page: the page title with its
 // primary action on the same line, then the collection tabs. The rename control
@@ -29,7 +30,9 @@ export function ListTabs({
   onRename,
   className,
 }) {
-  const tabRefs = useRef(new Map());
+  // Lazily built so a re-render does not allocate a Map only to throw it away.
+  const tabRefs = useRef(null);
+  if (tabRefs.current === null) tabRefs.current = new Map();
 
   const onTabKeyDown = (event, index) => {
     const nextIndex = nextListTabIndex(index, items.length, event.key);
@@ -106,13 +109,4 @@ export function ListTabs({
       </div>
     </div>
   );
-}
-
-export function nextListTabIndex(currentIndex, itemCount, key) {
-  if (itemCount < 1) return -1;
-  if (key === "ArrowRight") return (currentIndex + 1) % itemCount;
-  if (key === "ArrowLeft") return (currentIndex - 1 + itemCount) % itemCount;
-  if (key === "Home") return 0;
-  if (key === "End") return itemCount - 1;
-  return currentIndex;
 }

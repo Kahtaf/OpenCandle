@@ -1,11 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  ListHeader,
-  ListTabs,
-  nextListTabIndex,
-} from "../../../gui/web/src/components/ui/list-header.jsx";
+import { ListHeader, ListTabs } from "../../../gui/web/src/components/ui/list-header.jsx";
+import { nextListTabIndex } from "../../../gui/web/src/components/ui/list-header-navigation.js";
 
 function tabsProps(overrides: Record<string, unknown> = {}) {
   return {
