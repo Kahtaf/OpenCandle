@@ -5,6 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
+import {
+  ALERT_CONDITION_OPTIONS,
+  AlertCreateForm,
+  nextAlertThreshold,
+} from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
+import { RuntimeTransportContext } from "../../../gui/web/src/runtime/runtime-transport-context.js";
 
 const ARMED_RULE = {
   id: 1,
@@ -136,5 +142,96 @@ describe("AlertsPage rule row disclosure", () => {
     const detail = container.querySelector('[data-slot="alert-status-detail"]');
     expect(detail?.textContent).toContain("above $55.00, waiting for next upward cross");
     expect(disclosure?.getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("create alert sheet", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("describes every condition in one line", () => {
+    expect(ALERT_CONDITION_OPTIONS.map((option) => option.value)).toContain("create_price_above");
+    for (const option of ALERT_CONDITION_OPTIONS) {
+      expect(option.description).toBeTruthy();
+      expect(option.description).not.toContain("—");
+      expect(option.description.split(" ").length).toBeLessThanOrEqual(12);
+    }
+    expect(
+      ALERT_CONDITION_OPTIONS.find((option) => option.value === "create_price_above")?.description,
+    ).toBe("The first time price crosses your level going up.");
+    expect(
+      ALERT_CONDITION_OPTIONS.find((option) => option.value === "create_volume_spike")?.description,
+    ).toBe("Volume runs above its recent average by your multiple.");
+  });
+
+  it("leads with the rule sentence and its repeat window", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertCreateForm, {
+        disabled: false,
+        invokeTool: () => true,
+        symbol: "NVDA",
+      }),
+    );
+
+    expect(html).toContain('data-slot="alert-preview"');
+    expect(html).toContain("Price crosses above a price you set");
+    expect(html).toContain("Repeats at most once an hour while OpenCandle is open");
+  });
+
+  it("asks for a symbol before it can preview a rule", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertCreateForm, { disabled: false, invokeTool: () => true }),
+    );
+
+    expect(html).toContain("Search for a symbol to preview this rule.");
+  });
+
+  it("prefills the threshold from the current quote and states the distance", async () => {
+    const transport = {
+      kind: "loopback",
+      getInstrumentQuote: async () => ({ status: "ok", price: 204.25, currency: "USD" }),
+      searchInstruments: async () => ({ candidates: [] }),
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(AlertCreateForm, {
+            disabled: false,
+            invokeTool: () => true,
+            symbol: "NVDA",
+          }),
+        ),
+      );
+    });
+
+    const threshold = container.querySelector<HTMLInputElement>('input[type="number"]');
+    expect(threshold?.value).toBe("204.25");
+    expect(container.querySelector('[data-slot="threshold-hint"]')?.textContent).toBe(
+      "Current $204.25 · at the current price",
+    );
+    expect(container.querySelector('[data-slot="alert-preview"]')?.textContent).toContain(
+      "Price crosses above $204.25",
+    );
+  });
+
+  it("does not carry a price level into a condition that measures something else", () => {
+    expect(nextAlertThreshold("create_price_above", "create_price_below", "204.25")).toBe("204.25");
+    expect(nextAlertThreshold("create_price_above", "create_rsi_below", "204.25")).toBe("");
+    expect(nextAlertThreshold("create_price_above", "create_volume_spike", "204.25")).toBe("2");
+    expect(nextAlertThreshold("create_rsi_above", "create_rsi_below", "70")).toBe("70");
   });
 });

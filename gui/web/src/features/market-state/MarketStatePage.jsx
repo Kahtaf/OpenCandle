@@ -16,6 +16,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { ListHeader } from "../../components/ui/list-header.jsx";
 import { Select } from "../../components/ui/select.jsx";
+import { SelectField } from "../../components/ui/select-field.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
@@ -31,6 +32,11 @@ import {
 import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
+import {
+  alertCadenceSentence,
+  alertPreviewSentence,
+  thresholdDistanceHint,
+} from "./alert-view-model.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
 import { StatusBand } from "./shared.jsx";
@@ -1164,6 +1170,79 @@ const ALERT_COOLDOWN_OPTIONS = [
   { value: 86_400, label: "1 day" },
 ];
 
+// Each condition carries one line saying what it watches, so the choice can be
+// made without knowing the vocabulary first.
+export const ALERT_CONDITION_OPTIONS = [
+  {
+    value: "create_price_above",
+    label: "Price above",
+    description: "The first time price crosses your level going up.",
+  },
+  {
+    value: "create_price_below",
+    label: "Price below",
+    description: "The first time price crosses your level going down.",
+  },
+  {
+    value: "create_price_above_sma",
+    label: "Price above its average",
+    description: "Price closes above its own moving average.",
+  },
+  {
+    value: "create_price_below_sma",
+    label: "Price below its average",
+    description: "Price closes below its own moving average.",
+  },
+  {
+    value: "create_rsi_above",
+    label: "RSI above",
+    description: "The RSI momentum reading rises above your level.",
+  },
+  {
+    value: "create_rsi_below",
+    label: "RSI below",
+    description: "The RSI momentum reading falls below your level.",
+  },
+  {
+    value: "create_volume_spike",
+    label: "Volume spike",
+    description: "Volume runs above its recent average by your multiple.",
+  },
+  {
+    value: "create_percent_move_up",
+    label: "Percent move up",
+    description: "Gains more than your percentage in one day.",
+  },
+  {
+    value: "create_percent_move_down",
+    label: "Percent move down",
+    description: "Falls more than your percentage in one day.",
+  },
+  {
+    value: "create_sma_cross_above",
+    label: "Fast average crosses above slow",
+    description: "The shorter average crosses above the longer one.",
+  },
+  {
+    value: "create_sma_cross_below",
+    label: "Fast average crosses below slow",
+    description: "The shorter average crosses below the longer one.",
+  },
+];
+
+const PRICE_THRESHOLD_CONDITIONS = new Set(["create_price_above", "create_price_below"]);
+
+// A threshold only means something inside its own condition. Switching to a
+// condition that measures something else clears the level instead of carrying a
+// price into an RSI field.
+export function nextAlertThreshold(previousCondition, nextCondition, threshold) {
+  if (previousCondition === nextCondition) return threshold;
+  const previous = alertConditionFormFields(previousCondition);
+  const next = alertConditionFormFields(nextCondition);
+  if (previous.thresholdLabel === next.thresholdLabel) return threshold;
+  return nextCondition === "create_volume_spike" ? "2" : "";
+}
+
 export function alertConditionFormFields(condition) {
   if (condition === "create_price_above" || condition === "create_price_below") {
     return {
@@ -1257,6 +1336,7 @@ export function isAlertDraftValid(draft, fields) {
 }
 
 export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, navigate }) {
+  const transport = useRuntimeTransport();
   const conditionId = useId();
   const thresholdId = useId();
   const periodId = useId();
@@ -1265,21 +1345,56 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   const cooldownId = useId();
   const isEditing = Boolean(alert);
   const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
+  const [quote, setQuote] = useState(null);
+  const [pending, setPending] = useState(false);
   const unverifiedExactRef = useRef(false);
+  const prefilledThresholdRef = useRef("");
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
     draft;
   const fields = alertConditionFormFields(condition);
   const resolvedSymbol = selected;
-  const summary = resolvedSymbol
-    ? `Notify once when ${resolvedSymbol} ${conditionSummary(
-        condition,
-        threshold,
-        period,
-        fast_period,
-        slow_period,
-      )} during a manual or local-runner check.`
-    : "Select an instrument to preview the alert rule.";
+  const currentPrice = quote?.status === "ok" ? quote.price : null;
+  const priceHint = PRICE_THRESHOLD_CONDITIONS.has(condition)
+    ? thresholdDistanceHint(currentPrice, threshold, quote?.currency)
+    : null;
+  const previewSentence = alertPreviewSentence({
+    condition,
+    threshold,
+    period,
+    fastPeriod: fast_period,
+    slowPeriod: slow_period,
+  });
+
+  useEffect(() => {
+    if (!resolvedSymbol) {
+      setQuote(null);
+      return undefined;
+    }
+    let disposed = false;
+    getInstrumentQuote(resolvedSymbol, transport)
+      .then((next) => {
+        if (!disposed) setQuote(next ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [resolvedSymbol, transport]);
+
+  // A price level is easiest to judge from the price it is being compared with,
+  // so the field opens on the current quote until the level is typed over.
+  useEffect(() => {
+    if (isEditing || !PRICE_THRESHOLD_CONDITIONS.has(condition)) return;
+    if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice)) return;
+    const prefill = currentPrice.toFixed(2);
+    setDraft((current) =>
+      current.threshold === "" || current.threshold === prefilledThresholdRef.current
+        ? { ...current, threshold: prefill }
+        : current,
+    );
+    prefilledThresholdRef.current = prefill;
+  }, [condition, currentPrice, isEditing]);
 
   return (
     <form
@@ -1287,17 +1402,23 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
       onSubmit={async (event) => {
         event.preventDefault();
         if (!resolvedSymbol || !isAlertDraftValid(draft, fields)) return;
-        const saved = await invokeTool("manage_alerts", {
-          action: isEditing ? "update" : condition,
-          id: alert?.id,
-          condition_action: isEditing ? condition : undefined,
-          ...alertInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
-          threshold: fields.threshold && threshold ? Number(threshold) : undefined,
-          period: fields.period ? numberOrUndefined(period) : undefined,
-          fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
-          slow_period: fields.slowPeriod ? numberOrUndefined(slow_period) : undefined,
-          cooldown_seconds: numberOrUndefined(cooldown),
-        });
+        setPending(true);
+        let saved = false;
+        try {
+          saved = await invokeTool("manage_alerts", {
+            action: isEditing ? "update" : condition,
+            id: alert?.id,
+            condition_action: isEditing ? condition : undefined,
+            ...alertInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
+            threshold: fields.threshold && threshold ? Number(threshold) : undefined,
+            period: fields.period ? numberOrUndefined(period) : undefined,
+            fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
+            slow_period: fields.slowPeriod ? numberOrUndefined(slow_period) : undefined,
+            cooldown_seconds: numberOrUndefined(cooldown),
+          });
+        } finally {
+          setPending(false);
+        }
         if (saved) {
           if (!isEditing) {
             setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
@@ -1306,9 +1427,6 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
         }
       }}
     >
-      <p className="text-xs text-muted-foreground">
-        Pick a symbol and condition. Rules are checked while OpenCandle is open.
-      </p>
       <SymbolSearchInput
         query={query}
         selected={selected}
@@ -1320,27 +1438,37 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
         }}
         navigate={navigate}
       />
+      <div data-slot="alert-preview" className="rounded-md bg-secondary px-3 py-3">
+        {resolvedSymbol ? (
+          <>
+            <div className="text-[13px] font-semibold text-foreground">{resolvedSymbol}</div>
+            <p className="mt-0.5 text-[15px] font-medium leading-snug text-foreground">
+              {previewSentence}
+            </p>
+          </>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">
+            Search for a symbol to preview this rule.
+          </p>
+        )}
+        <p className="mt-1.5 text-xs text-muted-foreground">{alertCadenceSentence(cooldown)}</p>
+      </div>
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
-        <Select
+        <SelectField
           id={conditionId}
-          className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
+          aria-label="Alert condition"
           value={condition}
+          options={ALERT_CONDITION_OPTIONS}
           disabled={disabled}
-          onChange={(event) => setDraftField("condition", event.target.value)}
-        >
-          <option value="create_price_above">Price above</option>
-          <option value="create_price_below">Price below</option>
-          <option value="create_price_above_sma">Price above SMA</option>
-          <option value="create_price_below_sma">Price below SMA</option>
-          <option value="create_rsi_above">RSI above</option>
-          <option value="create_rsi_below">RSI below</option>
-          <option value="create_volume_spike">Volume spike</option>
-          <option value="create_percent_move_up">Percent move up</option>
-          <option value="create_percent_move_down">Percent move down</option>
-          <option value="create_sma_cross_above">Fast SMA crosses above slow SMA</option>
-          <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
-        </Select>
+          onValueChange={(value) =>
+            setDraft((current) => ({
+              ...current,
+              condition: value,
+              threshold: nextAlertThreshold(current.condition, value, current.threshold),
+            }))
+          }
+        />
       </label>
       {fields.threshold ? (
         <label
@@ -1359,6 +1487,11 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
             disabled={disabled}
             onChange={(event) => setDraftField("threshold", event.target.value)}
           />
+          {priceHint ? (
+            <span data-slot="threshold-hint" className="tabular-nums font-normal">
+              {priceHint}
+            </span>
+          ) : null}
         </label>
       ) : null}
       {fields.period ? (
@@ -1427,16 +1560,12 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
           ))}
         </Select>
       </label>
-      <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
-        {summary}
-      </div>
-      <Button
-        type="submit"
-        variant="brand"
+      <PendingSubmitButton
+        pending={pending}
         disabled={disabled || !resolvedSymbol || !isAlertDraftValid(draft, fields)}
       >
         {isEditing ? "Save alert" : "Create alert"}
-      </Button>
+      </PendingSubmitButton>
     </form>
   );
 }
@@ -1537,20 +1666,6 @@ function alertPeriodValue(condition, conditionJson) {
 
 function stringifyDraftValue(value) {
   return value == null ? "" : String(value);
-}
-
-function conditionSummary(condition, threshold, period, fastPeriod, slowPeriod) {
-  const label = condition.replace("create_", "").replaceAll("_", " ");
-  if (condition.includes("sma_cross")) {
-    return `${label} using ${fastPeriod || "fast"} and ${slowPeriod || "slow"} periods`;
-  }
-  if (condition.includes("percent_move")) return `${label} ${threshold || "the threshold"}%`;
-  if (condition.includes("_sma")) return `${label} over ${period || "the selected"} periods`;
-  if (condition.includes("_rsi_"))
-    return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
-  if (condition === "create_volume_spike")
-    return `has a volume spike above ${threshold || "2"}x the ${period || "selected"}-period average`;
-  return `${label} $${threshold || "the threshold"}`;
 }
 
 function numberOrUndefined(value) {
