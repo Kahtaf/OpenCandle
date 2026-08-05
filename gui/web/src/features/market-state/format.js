@@ -1,5 +1,6 @@
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const QUOTE_STALE_MS = 15 * 60_000;
+const HOUR_MS = 60 * 60_000;
 const humanDateTimeFormatters = new Map();
 
 export function relativeTime(iso, nowMs = Date.now()) {
@@ -67,18 +68,30 @@ export function degradedQuoteBadge(quotes = [], nowMs = Date.now()) {
 
   const fetchedAtMs = parsedQuoteTimes(quotes, "fetchedAt");
   if (fetchedAtMs.length > 0) {
-    const ageMs = nowMs - Math.min(...fetchedAtMs);
-    if (ageMs > QUOTE_STALE_MS) return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
+    const oldestFetchedAtMs = Math.min(...fetchedAtMs);
+    const ageMs = nowMs - oldestFetchedAtMs;
+    if (ageMs > QUOTE_STALE_MS) {
+      // Minutes stay readable only for the first hour. Past that, name the day
+      // the data is from instead of printing a raw minute count.
+      if (ageMs < HOUR_MS) return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
+      const priorDayLabel = priorCalendarDayLabel(
+        Math.min(...parsedQuoteTimes(quotes, "dataAsOf"), oldestFetchedAtMs),
+        nowMs,
+      );
+      return priorDayLabel ?? `Quotes ${Math.floor(ageMs / HOUR_MS)}h old`;
+    }
   }
 
   if (quotes.some((quote) => hasExtendedQuote(quote))) return null;
   const dataAsOfMs = parsedQuoteTimes(quotes, "dataAsOf");
   if (dataAsOfMs.length === 0) return null;
+  return priorCalendarDayLabel(Math.min(...dataAsOfMs), nowMs);
+}
 
-  const oldestMs = Math.min(...dataAsOfMs);
-  if (!isPriorCalendarDay(oldestMs, nowMs)) return null;
-  const dataAsOf = new Date(oldestMs);
-  return `As of ${MONTHS[dataAsOf.getUTCMonth()]} ${dataAsOf.getUTCDate()}`;
+function priorCalendarDayLabel(timestampMs, nowMs) {
+  if (!Number.isFinite(timestampMs) || !isPriorCalendarDay(timestampMs, nowMs)) return null;
+  const date = new Date(timestampMs);
+  return `As of ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
 }
 
 function parsedQuoteTimes(quotes, key) {
