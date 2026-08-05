@@ -96,7 +96,11 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain('aria-label="^GSPC details"');
     expect(html).toContain("Create alert");
-    expect(html).toContain("Open full page");
+    // The rail navigates from the ticker itself, so the big action stays a real
+    // action instead of a second link to the same page.
+    expect(html).not.toContain("Open full page");
+    expect(html).toContain('data-slot="inspector-symbol-link"');
+    expect(html).toContain("Open symbol page");
     expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
   });
 
@@ -170,7 +174,9 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Apple Inc. quote name");
-    expect(html).toContain("24 hr sparkline");
+    // Chart-first trend cell: no column label, no caption, just the chart.
+    expect(html).not.toContain("24 hr sparkline");
+    expect(html).toContain(">Trend</span>");
     expect(html).toContain('data-slot="market-sparkline"');
     expect(html).not.toContain("<img");
     expect(html).not.toMatch(/ticker\s*line/i);
@@ -187,8 +193,8 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("No alerts");
     expect(html).toContain('data-slot="watchlist-alert-chip"');
     expect(html).toContain('aria-label="1 active alert for AAPL"');
-    expect(html).toContain("1.25");
-    expect(html).toContain("+0.66%");
+    // One line, one colour: signed money carries the percent inline.
+    expect(html).toContain("+$1.25 (+0.66%)");
     expect(html).toContain("After hours");
     expect(html).toContain("$83.02");
     expect(html).toContain("−0.64%");
@@ -203,7 +209,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Create alert");
     expect(html).toContain('aria-label="Actions for AAPL"');
     expect(html).toContain("bg-brand text-brand-foreground");
-    expect(html).toContain("border-destructive/40 bg-destructive/10 text-foreground");
+    // Removal is a quiet secondary that opens the existing confirm dialog.
+    expect(html).toContain('data-slot="inspector-remove"');
+    expect(html).toContain("Remove from watchlist");
+    expect(html).not.toContain("border-destructive/40 bg-destructive/10 text-foreground");
   });
 
   it("keeps the quote-board skeleton visible while watchlist data loads", () => {

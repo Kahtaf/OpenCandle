@@ -1,4 +1,4 @@
-import { Bell, ExternalLink, ListPlus, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ArrowUpRight, Bell, BellPlus, ListPlus, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import {
@@ -13,6 +13,7 @@ import {
 } from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
+import { DetailRailLayout } from "../../components/ui/detail-rail-layout.jsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,10 @@ import {
 } from "./shared.jsx";
 
 const WIDE_INSPECTOR_QUERY = "(min-width: 1280px)";
+
+// Volume is the first column to give way: it is dropped in the band where the
+// detail rail already claims the width it would need, and returns above it.
+const VOLUME_COLUMN_CLASS = "hidden lg:table-cell xl:hidden min-[1400px]:table-cell";
 
 function useWideInspector() {
   const [wide, setWide] = useState(() => {
@@ -149,40 +154,53 @@ export function WatchlistPage({
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3 xl:min-h-0 xl:flex-1">
       {renderPageHeader?.(
         <StateTabs
           items={watchlists}
           activeItem={activeWatchlist}
           counts={countItemsByWatchlist(state.watchlist ?? [])}
-          compactSingle
           readOnly={readOnly}
           renameLabel="Rename watchlist"
           onSelect={selectWatchlist}
           onRename={(watchlist) => openPanel("watchlist-rename", { watchlist })}
         />,
       )}
-      <div
-        className={cn(
-          "grid min-w-0 grid-cols-1 items-start gap-3",
-          desktopSelected && "xl:grid-cols-[minmax(0,1fr)_350px]",
-        )}
+      <DetailRailLayout
+        rail={
+          desktopSelected ? (
+            <SymbolInspector
+              key={desktopSelected.id}
+              className="xl:min-h-0 xl:flex-1"
+              item={desktopSelected}
+              quote={quotesByItem.get(desktopSelected.id)}
+              state={state}
+              readOnly={readOnly}
+              onRemove={() => setPendingRemoval(desktopSelected)}
+              onCreateAlert={() => openPanel("alert-create", { symbol: desktopSelected.symbol })}
+              navigate={navigate}
+            />
+          ) : null
+        }
       >
         <Panel
+          fill
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              {quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <PanelSearch label="Search symbols" filter={filter} setFilter={setFilter} />
-              <Button
-                type="button"
-                variant="bordered"
-                size="sm"
-                prefixIcon={Plus}
-                disabled={readOnly || !activeWatchlist}
-                onClick={() => openPanel("watchlist-add", { watchlist: activeWatchlist })}
-              >
-                Add ticker
-              </Button>
+              <div className="flex items-center gap-2">
+                {quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
+                <Button
+                  type="button"
+                  variant="bordered"
+                  size="sm"
+                  prefixIcon={Plus}
+                  disabled={readOnly || !activeWatchlist}
+                  onClick={() => openPanel("watchlist-add", { watchlist: activeWatchlist })}
+                >
+                  Add ticker
+                </Button>
+              </div>
             </div>
           }
         >
@@ -209,6 +227,7 @@ export function WatchlistPage({
             <QuoteBoard
               rows={rows}
               selected={selected}
+              railSelected={desktopSelected}
               quotesByItem={quotesByItem}
               alertsByInstrument={alertsByInstrument}
               quoteFlashes={quoteFlashes}
@@ -220,21 +239,7 @@ export function WatchlistPage({
             />
           )}
         </Panel>
-
-        {desktopSelected ? (
-          <SymbolInspector
-            key={desktopSelected.id}
-            className="hidden xl:sticky xl:top-4 xl:block"
-            item={desktopSelected}
-            quote={quotesByItem.get(desktopSelected.id)}
-            state={state}
-            readOnly={readOnly}
-            onRemove={() => setPendingRemoval(desktopSelected)}
-            onCreateAlert={() => openPanel("alert-create", { symbol: desktopSelected.symbol })}
-            navigate={navigate}
-          />
-        ) : null}
-      </div>
+      </DetailRailLayout>
 
       <Sheet
         open={Boolean(selected) && !wideInspector}
@@ -290,6 +295,7 @@ export function WatchlistPage({
 function QuoteBoard({
   rows,
   selected,
+  railSelected,
   quotesByItem,
   alertsByInstrument,
   quoteFlashes,
@@ -301,7 +307,6 @@ function QuoteBoard({
 }) {
   const props = {
     rows,
-    selected,
     quotesByItem,
     alertsByInstrument,
     quoteFlashes,
@@ -313,9 +318,11 @@ function QuoteBoard({
   };
   return (
     <>
-      <MobileQuoteList {...props} />
-      <div className="hidden sm:block">
-        <DesktopQuoteTable {...props} />
+      <MobileQuoteList {...props} selected={selected} />
+      <div className="hidden min-w-0 sm:flex sm:flex-col xl:min-h-0 xl:flex-1">
+        {/* The rail always shows one row, so the table marks that row as the
+            current selection instead of leaving the two panes disconnected. */}
+        <DesktopQuoteTable {...props} selected={railSelected ?? selected} />
       </div>
     </>
   );
@@ -343,7 +350,7 @@ function MobileQuoteList({
               aria-label={`View ${item.symbol} details`}
               aria-pressed={selected?.id === item.id}
               className={cn(
-                "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_5rem_8rem] items-center gap-2 px-3 py-2 text-left transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_4.5rem_6.5rem] items-center gap-2 px-3 py-2 text-left transition-[background-color,transform,scale] duration-150 ease-out hover:bg-secondary active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 quoteFlashClass(quoteFlashes.get(item.symbol)),
                 selected?.id === item.id && "bg-secondary",
               )}
@@ -368,14 +375,15 @@ function MobileQuoteList({
                 <span className="mt-0.5">
                   <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />
                 </span>
-                {quote?.status === "ok" ? (
-                  <ExtendedHoursQuote
-                    quote={quote}
-                    currency={currency}
-                    className="overflow-hidden"
-                  />
-                ) : null}
               </span>
+              {quote?.status === "ok" ? (
+                <ExtendedHoursQuote
+                  chip
+                  quote={quote}
+                  currency={currency}
+                  className="col-span-3 mt-0"
+                />
+              ) : null}
             </button>
           </li>
         );
@@ -397,17 +405,17 @@ function DesktopQuoteTable({
   navigate,
 }) {
   return (
-    <Table className="min-w-[680px]">
-      <TableHeader>
+    <Table className="min-w-[600px] table-fixed" containerClassName="xl:min-h-0 xl:flex-1">
+      <TableHeader className="sticky top-0 z-10 bg-card">
         <TableRow className="hover:bg-transparent">
           <TableHead>Symbol</TableHead>
-          <TableHead className="px-1 sm:px-3">
-            <span className="sr-only sm:not-sr-only">24 hr sparkline</span>
+          <TableHead className="w-[136px] px-1 sm:px-2">
+            <span className="sr-only">Trend</span>
           </TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
-          <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
-          <TableHead className="w-10">
+          <TableHead className="w-[164px] text-right">Price</TableHead>
+          <TableHead className="hidden w-[156px] text-right sm:table-cell">Change</TableHead>
+          <TableHead className={cn("w-[88px] text-right", VOLUME_COLUMN_CLASS)}>Volume</TableHead>
+          <TableHead className="w-11">
             <span className="sr-only">Actions</span>
           </TableHead>
         </TableRow>
@@ -454,35 +462,48 @@ function DesktopQuoteTable({
                   />
                 </div>
               </TableCell>
-              <TableCell className="px-1 py-1.5 sm:px-3">
+              <TableCell className="px-1 py-1.5 sm:px-2">
                 <MarketSparkline
+                  className="ml-auto"
                   symbol={item.symbol}
                   assetType={item.assetType ?? quote?.assetType}
                 />
               </TableCell>
-              <TableCell className="w-[82px] px-2 py-2.5 text-right tabular-nums sm:w-auto sm:px-3">
+              <TableCell className="whitespace-nowrap px-2 py-2.5 text-right align-top tabular-nums sm:px-3">
                 {quote?.status === "ok" ? (
                   <div className="flex flex-col items-end">
                     <span>{money(quote.price, quote.currency ?? item.currency)}</span>
-                    <ExtendedHoursQuote quote={quote} currency={quote.currency ?? item.currency} />
+                    <ExtendedHoursQuote
+                      chip
+                      showChange={false}
+                      quote={quote}
+                      currency={quote.currency ?? item.currency}
+                    />
                   </div>
                 ) : (
                   "—"
                 )}
               </TableCell>
-              <TableCell className="hidden py-2.5 text-right sm:table-cell">
-                <div className="flex flex-col items-end gap-0.5">
-                  <SignedMoney
-                    value={quote?.status === "ok" ? quote.change : null}
-                    currency={quote?.currency ?? item.currency ?? "USD"}
-                  />
-                  <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />
-                </div>
+              <TableCell className="hidden whitespace-nowrap py-2.5 text-right align-top sm:table-cell">
+                <SignedMoney
+                  value={quote?.status === "ok" ? quote.change : null}
+                  percent={quote?.status === "ok" ? quote.changePercent : undefined}
+                  percentDecimals={2}
+                  currency={quote?.currency ?? item.currency ?? "USD"}
+                />
               </TableCell>
-              <TableCell className="hidden py-2.5 text-right tabular-nums lg:table-cell">
+              <TableCell
+                className={cn(
+                  "py-2.5 text-right align-top tabular-nums text-muted-foreground",
+                  VOLUME_COLUMN_CLASS,
+                )}
+              >
                 {quote?.status === "ok" ? formatCompactNumber(quote.volume) : "—"}
               </TableCell>
-              <TableCell className="py-2.5 text-right" onClick={(event) => event.stopPropagation()}>
+              <TableCell
+                className="px-1 py-2.5 text-right"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <RowActions
                   item={item}
                   disabled={readOnly}
@@ -500,17 +521,21 @@ function DesktopQuoteTable({
 
 function QuoteBoardSkeleton() {
   return (
-    <Table data-slot="watchlist-skeleton" className="sm:min-w-[760px]" aria-label="Loading quotes">
+    <Table
+      data-slot="watchlist-skeleton"
+      className="table-fixed sm:min-w-[760px]"
+      aria-label="Loading quotes"
+    >
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Symbol</TableHead>
-          <TableHead className="px-1 sm:px-3">
-            <span className="sr-only sm:not-sr-only">24 hr sparkline</span>
+          <TableHead className="w-[136px] px-1 sm:px-2">
+            <span className="sr-only">Trend</span>
           </TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="hidden text-right sm:table-cell">Change</TableHead>
-          <TableHead className="hidden text-right lg:table-cell">Volume</TableHead>
-          <TableHead className="w-10" />
+          <TableHead className="w-[164px] text-right">Price</TableHead>
+          <TableHead className="hidden w-[156px] text-right sm:table-cell">Change</TableHead>
+          <TableHead className={cn("w-[88px] text-right", VOLUME_COLUMN_CLASS)}>Volume</TableHead>
+          <TableHead className="w-11" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -519,19 +544,19 @@ function QuoteBoardSkeleton() {
             <TableCell className="w-[88px] max-w-[88px] px-2 py-2.5 sm:w-auto sm:max-w-none sm:px-3">
               <Skeleton className="h-8 w-28" />
             </TableCell>
-            <TableCell className="px-1 py-2.5 sm:px-3">
-              <Skeleton className="h-[29px] w-24 sm:h-9 sm:w-[120px]" />
+            <TableCell className="px-1 py-2.5 sm:px-2">
+              <Skeleton className="ml-auto h-[29px] w-24 sm:h-9 sm:w-[120px]" />
             </TableCell>
-            <TableCell className="w-[82px] px-2 py-2.5 sm:w-auto sm:px-3">
+            <TableCell className="px-2 py-2.5 sm:px-3">
               <Skeleton className="ml-auto h-4 w-14" />
             </TableCell>
             <TableCell className="hidden py-2.5 sm:table-cell">
+              <Skeleton className="ml-auto h-4 w-20" />
+            </TableCell>
+            <TableCell className={cn("py-2.5", VOLUME_COLUMN_CLASS)}>
               <Skeleton className="ml-auto h-4 w-12" />
             </TableCell>
-            <TableCell className="hidden py-2.5 lg:table-cell">
-              <Skeleton className="ml-auto h-4 w-16" />
-            </TableCell>
-            <TableCell className="py-2.5">
+            <TableCell className="px-1 py-2.5">
               <Skeleton className="ml-auto size-7" />
             </TableCell>
           </TableRow>
@@ -623,87 +648,114 @@ function SymbolInspector({
     [state.alerts, state.alertEvents, state.instruments, item.instrumentId],
   );
   const currency = quote?.currency ?? item.currency;
+  const openSymbolPage = (event) => {
+    if (!navigate) return;
+    event.preventDefault();
+    void navigate({ to: symbolPageHref(item.symbol) });
+  };
   return (
     <Card
       role="complementary"
-      className={cn("overflow-hidden shadow-subtle-xs", className)}
+      className={cn("flex min-w-0 flex-col overflow-hidden rounded-xl shadow-subtle-xs", className)}
       aria-label={`${item.symbol} details`}
     >
       <h2 className="sr-only">{item.symbol} details</h2>
-      <div className="border-b border-border p-4">
-        <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
-        <div className="mt-2 text-[28px] font-semibold leading-tight tabular-nums text-foreground">
-          {quote?.status === "ok" ? money(quote.price, currency) : "—"}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="border-b border-border p-4">
+          <a
+            data-slot="inspector-symbol-link"
+            href={symbolPageHref(item.symbol)}
+            className="group -mx-1 block min-w-0 rounded-md px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={openSymbolPage}
+          >
+            <span className="flex min-w-0 items-center gap-1 text-[15px] font-semibold text-foreground">
+              <span className="truncate underline-offset-4 group-hover:underline">
+                {item.symbol}
+              </span>
+              <ArrowUpRight
+                className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                aria-hidden="true"
+              />
+            </span>
+            {(quote?.name ?? item.name) ? (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {quote?.name ?? item.name}
+              </span>
+            ) : null}
+            <span className="sr-only">Open symbol page</span>
+          </a>
+          <div className="mt-2 text-[28px] font-semibold leading-tight tabular-nums text-foreground">
+            {quote?.status === "ok" ? money(quote.price, currency) : "—"}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+            {quote?.status === "ok" ? (
+              <SignedMoney
+                value={quote.change}
+                percent={quote.changePercent}
+                percentDecimals={2}
+                currency={currency}
+              />
+            ) : null}
+            {quote && quote.status !== "ok" ? (
+              <span>{quote.reason || "Quote unavailable"}</span>
+            ) : null}
+          </div>
+          <ExtendedHoursQuote
+            chip
+            quote={quote}
+            currency={currency}
+            className="ml-0 mt-2 text-xs"
+          />
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-          {quote?.status === "ok" ? <SignedMoney value={quote.change} currency={currency} /> : null}
-          {quote?.status === "ok" ? <SignedPercent value={quote.changePercent} /> : null}
-          {quote && quote.status !== "ok" ? (
-            <span>{quote.reason || "Quote unavailable"}</span>
-          ) : null}
-        </div>
-        <ExtendedHoursQuote quote={quote} currency={currency} className="mt-1.5 text-xs" />
+
+        {quote?.status === "ok" ? <QuoteRanges quote={quote} currency={currency} /> : null}
+
+        {positionRow ? (
+          <InspectorSection title="Position">
+            <div className="flex items-baseline justify-between text-[13px]">
+              <span className="text-muted-foreground">
+                {formatQuantity(positionRow.totalQuantity)} shares @{" "}
+                {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
+              </span>
+              <span className="tabular-nums">
+                {moneyOrDash(positionRow.marketValue, positionRow.currency)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between text-[13px]">
+              <span className="text-muted-foreground">Unrealized</span>
+              <SignedMoney
+                value={positionRow.pnl}
+                percent={positionRow.pnlPercent}
+                currency={positionRow.currency}
+              />
+            </div>
+          </InspectorSection>
+        ) : null}
+
+        <InspectorSection title="Alerts">
+          {alertRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No alerts for {item.symbol} yet.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {alertRows.map((row) => (
+                <li key={row.id} className="flex items-center justify-between gap-2 text-[13px]">
+                  <StatusDot tone={row.tone} label={row.sentence} />
+                  <span className="text-[11px] text-muted-foreground">
+                    {row.enabled ? "armed" : "paused"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </InspectorSection>
       </div>
 
-      {quote?.status === "ok" ? <QuoteRanges quote={quote} currency={currency} /> : null}
-
-      {positionRow ? (
-        <InspectorSection title="Position">
-          <div className="flex items-baseline justify-between text-[13px]">
-            <span className="text-muted-foreground">
-              {formatQuantity(positionRow.totalQuantity)} shares @{" "}
-              {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
-            </span>
-            <span className="tabular-nums">
-              {moneyOrDash(positionRow.marketValue, positionRow.currency)}
-            </span>
-          </div>
-          <div className="mt-1 flex items-baseline justify-between text-[13px]">
-            <span className="text-muted-foreground">Unrealized</span>
-            <SignedMoney
-              value={positionRow.pnl}
-              percent={positionRow.pnlPercent}
-              currency={positionRow.currency}
-            />
-          </div>
-        </InspectorSection>
-      ) : null}
-
-      <InspectorSection title="Alerts">
-        {alertRows.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No alerts for {item.symbol} yet.</p>
-        ) : (
-          <ul className="space-y-1.5">
-            {alertRows.map((row) => (
-              <li key={row.id} className="flex items-center justify-between gap-2 text-[13px]">
-                <StatusDot tone={row.tone} label={row.sentence} />
-                <span className="text-[11px] text-muted-foreground">
-                  {row.enabled ? "armed" : "paused"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </InspectorSection>
-
-      <div className="grid grid-cols-2 gap-2 p-4">
-        <Button asChild variant="brand" size="sm" className="col-span-2 min-h-10 w-full">
-          <a
-            href={symbolPageHref(item.symbol)}
-            onClick={(event) => {
-              if (!navigate) return;
-              event.preventDefault();
-              void navigate({ to: symbolPageHref(item.symbol) });
-            }}
-          >
-            <ExternalLink className="button-icon" />
-            Open full page
-          </a>
-        </Button>
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4">
         <Button
           type="button"
-          variant="bordered"
+          variant="brand"
           size="sm"
+          prefixIcon={BellPlus}
           className="min-h-10 w-full"
           disabled={readOnly}
           onClick={onCreateAlert}
@@ -712,14 +764,14 @@ function SymbolInspector({
         </Button>
         <Button
           type="button"
+          data-slot="inspector-remove"
           variant="ghost"
-          size="sm"
-          prefixIcon={Trash2}
-          className="min-h-10 w-full border border-destructive/40 bg-destructive/10 text-foreground hover:bg-destructive/15"
+          size="xs"
+          className="min-h-10 w-full text-muted-foreground hover:text-destructive"
           disabled={readOnly}
           onClick={onRemove}
         >
-          Remove
+          Remove from watchlist
         </Button>
       </div>
     </Card>
