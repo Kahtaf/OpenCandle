@@ -41,10 +41,19 @@ export function buildAlertSentenceRows(
   });
 }
 
-function conditionSentence(conditionType, condition = {}, placeholders = false) {
+function conditionSentence(conditionType, condition = {}, placeholders = false, currency = null) {
   const c = condition && typeof condition === "object" ? condition : {};
+  // Saved rules carry no currency, so they keep the plain label. The create
+  // sheet knows the quote's currency and passes it, so a level prefilled from a
+  // non-USD listing is not previewed as dollars.
   const price = (value) =>
-    typeof value === "number" ? moneyLabel(value) : placeholders ? "a price you set" : "N/A";
+    typeof value === "number"
+      ? currency
+        ? formatMoney(value, currency)
+        : moneyLabel(value)
+      : placeholders
+        ? "a price you set"
+        : "N/A";
   const level = (value) =>
     value == null || value === "" ? (placeholders ? "a level you set" : "N/A") : value;
   const percent = (value) =>
@@ -251,6 +260,7 @@ export function alertPreviewSentence({
   period,
   fastPeriod,
   slowPeriod,
+  currency = null,
 } = {}) {
   const number = (value) => {
     if (value === "" || value == null) return undefined;
@@ -286,7 +296,7 @@ export function alertPreviewSentence({
     ],
   };
   const [conditionType, conditionJson] = map[condition] ?? map.create_price_above;
-  return conditionSentence(conditionType, conditionJson, true);
+  return conditionSentence(conditionType, conditionJson, true, currency);
 }
 
 export function alertCadenceSentence(cooldownSeconds) {

@@ -143,6 +143,21 @@ describe("alertPreviewSentence", () => {
       "Price drops below the 50-day average",
     );
   });
+
+  it("prices the previewed level in the quote's own currency", () => {
+    // The level is prefilled from the instrument's quote, so a EUR listing must
+    // not be previewed as dollars beside a hint that already reads EUR.
+    expect(
+      alertPreviewSentence({
+        condition: "create_price_above",
+        threshold: "168.64",
+        currency: "EUR",
+      }),
+    ).toBe("Price crosses above EUR 168.64");
+    expect(
+      alertPreviewSentence({ condition: "create_price_below", threshold: "220", currency: "USD" }),
+    ).toBe("Price drops below $220.00");
+  });
 });
 
 describe("alertCadenceSentence", () => {

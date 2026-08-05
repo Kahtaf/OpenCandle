@@ -1364,6 +1364,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
     period,
     fastPeriod: fast_period,
     slowPeriod: slow_period,
+    currency: quote?.currency ?? null,
   });
 
   useEffect(() => {
