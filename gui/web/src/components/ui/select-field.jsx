@@ -2,6 +2,10 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
+// One shared empty list, so an omitted `options` prop is the same value on
+// every render instead of a fresh array that redraws memoized children.
+const NO_OPTIONS = [];
+
 // A form select whose options can carry a one-line description. The native
 // `Select` primitive stays the right control for plain option lists; this one
 // exists because an option that needs explaining cannot be written as one.
@@ -11,7 +15,7 @@ export function SelectField({
   id,
   value,
   onValueChange,
-  options = [],
+  options = NO_OPTIONS,
   disabled,
   placeholder = "Select an option",
   className,
