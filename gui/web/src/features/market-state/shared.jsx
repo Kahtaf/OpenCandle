@@ -147,7 +147,7 @@ export function PanelSearch({ label, filter, setFilter, className }) {
     <label htmlFor={inputId} className={cn("relative block", className ?? "w-44")}>
       <span className="sr-only">{label}</span>
       <Search
-        className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-muted-foreground"
+        className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
         aria-hidden="true"
       />
       <Input
