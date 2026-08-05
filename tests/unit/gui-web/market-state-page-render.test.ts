@@ -257,6 +257,33 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("—");
   });
 
+  it("offers the primary action from the empty portfolio and hides the stat header", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain("No holdings yet");
+    expect(html).toContain(
+      "Add a holding when you are ready, or keep using watchlists without a portfolio.",
+    );
+    expect(html).not.toContain('data-slot="portfolio-summary"');
+    expect(html).not.toContain("Market value");
+    expect(html).not.toContain("Search holdings");
+  });
+
   it("links desktop and mobile portfolio symbols to encoded symbol pages", () => {
     const html = renderToStaticMarkup(
       React.createElement(PortfolioPage, {
