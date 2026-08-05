@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createLatestRequestGate,
+  EMPTY_MARKET_STATE,
   MARKET_STATE_POLL_MS,
   mergeMarketStateSnapshot,
   mergeQuoteRefreshSnapshot,
@@ -100,6 +101,7 @@ describe("mergeMarketStateSnapshot", () => {
 
   it("invalidates portfolio quote-derived values when saved lot fields change", () => {
     const current = {
+      loaded: true,
       watchlist: [],
       portfolio: [
         { id: 2, instrumentId: 20, symbol: "VTI", quantity: 2, avgCost: 250, currency: "USD" },
@@ -121,6 +123,85 @@ describe("mergeMarketStateSnapshot", () => {
     });
 
     expect(next.quoteSnapshot.watchlistQuotes).toBe(current.quoteSnapshot.watchlistQuotes);
+    expect(next.quoteSnapshot.portfolioQuotes).toEqual([]);
+    expect(next.quoteSnapshot.portfolioSummary).toBeNull();
+    expect(next.quoteSnapshot.portfolioSummaries).toEqual([]);
+  });
+
+  it("keeps portfolio quotes that arrived before the first market-state response", () => {
+    // On mount both polls start together. A warm server-side snapshot lets the
+    // quote response win the race, so the quote snapshot lands while the saved
+    // portfolio list is still the empty default. That is "not loaded yet", not
+    // "the portfolio changed", so the quote rows must survive.
+    const quoteSnapshot = {
+      watchlistQuotes: [{ itemId: 1, symbol: "ASTS", price: 70.31 }],
+      portfolioQuotes: [
+        {
+          lotId: 2,
+          portfolioId: 1,
+          instrumentId: 20,
+          symbol: "ASTS",
+          status: "ok",
+          currentPrice: 70.31,
+          marketValue: 703.1,
+          totalCost: 500,
+          currency: "USD",
+          includedInTotals: true,
+        },
+      ],
+      portfolioSummary: { portfolioId: 1, totalValue: 703.1, baseCurrency: "USD", status: "ok" },
+      portfolioSummaries: [
+        { portfolioId: 1, totalValue: 703.1, baseCurrency: "USD", status: "ok" },
+      ],
+    };
+    const current = { ...EMPTY_MARKET_STATE, quoteSnapshot };
+
+    const next = mergeMarketStateSnapshot(current, {
+      watchlist: [{ id: 1, instrumentId: 20, symbol: "ASTS", assetType: "stock" }],
+      portfolio: [
+        {
+          id: 2,
+          portfolioId: 1,
+          instrumentId: 20,
+          symbol: "ASTS",
+          quantity: 10,
+          avgCost: 50,
+          currency: "USD",
+        },
+      ],
+      portfolios: [{ id: 1, isDefault: true, baseCurrency: "USD" }],
+    });
+
+    expect(next.quoteSnapshot.portfolioQuotes).toEqual(quoteSnapshot.portfolioQuotes);
+    expect(next.quoteSnapshot.portfolioSummary).toEqual(quoteSnapshot.portfolioSummary);
+    expect(next.quoteSnapshot.portfolioSummaries).toEqual(quoteSnapshot.portfolioSummaries);
+  });
+
+  it("still invalidates portfolio quotes for an edit made after the portfolio list loaded", () => {
+    const loaded = mergeMarketStateSnapshot(
+      { ...EMPTY_MARKET_STATE },
+      {
+        portfolio: [
+          { id: 2, instrumentId: 20, symbol: "VTI", quantity: 2, avgCost: 250, currency: "USD" },
+        ],
+      },
+    );
+    const withQuotes = {
+      ...loaded,
+      quoteSnapshot: {
+        watchlistQuotes: [],
+        portfolioQuotes: [{ lotId: 2, symbol: "VTI", marketValue: 600, pnl: 100 }],
+        portfolioSummary: { portfolioId: 1, totalValue: 600, baseCurrency: "USD" },
+        portfolioSummaries: [{ portfolioId: 1, totalValue: 600, baseCurrency: "USD" }],
+      },
+    };
+
+    const next = mergeMarketStateSnapshot(withQuotes, {
+      portfolio: [
+        { id: 2, instrumentId: 20, symbol: "VTI", quantity: 4, avgCost: 250, currency: "USD" },
+      ],
+    });
+
     expect(next.quoteSnapshot.portfolioQuotes).toEqual([]);
     expect(next.quoteSnapshot.portfolioSummary).toBeNull();
     expect(next.quoteSnapshot.portfolioSummaries).toEqual([]);

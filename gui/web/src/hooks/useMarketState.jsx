@@ -26,7 +26,7 @@ export function createLatestRequestGate() {
   };
 }
 
-const EMPTY_MARKET_STATE = {
+export const EMPTY_MARKET_STATE = {
   instruments: [],
   watchlists: [],
   portfolios: [],
@@ -41,6 +41,9 @@ const EMPTY_MARKET_STATE = {
   notifications: [],
   notificationDeliveryAttempts: [],
   quoteSnapshot: null,
+  // False until a market-state response has been merged. Quote refreshes can
+  // resolve first, so an empty `portfolio` before that means "not loaded yet".
+  loaded: false,
 };
 
 export function mergeMarketStateSnapshot(current, data) {
@@ -51,6 +54,7 @@ export function mergeMarketStateSnapshot(current, data) {
     ...EMPTY_MARKET_STATE,
     ...data,
     quoteSnapshot,
+    loaded: true,
   };
 }
 
@@ -213,6 +217,11 @@ function mergePreservedQuoteSnapshot(current, data) {
   const quoteSnapshot = current?.quoteSnapshot ?? null;
   if (!quoteSnapshot) return null;
   if (!Object.hasOwn(data, "portfolio")) return quoteSnapshot;
+  // Without a previously loaded portfolio there is nothing to diff against: the
+  // saved lots arriving for the first time is not a portfolio edit, so dropping
+  // freshly fetched quote rows here would blank the portfolio page until the
+  // next five-minute quote refresh.
+  if (!current?.loaded) return quoteSnapshot;
   if (portfolioSignature(current?.portfolio ?? []) === portfolioSignature(data.portfolio ?? [])) {
     return quoteSnapshot;
   }
