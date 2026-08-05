@@ -107,7 +107,7 @@ export function HostedRuntimePanel({ host }) {
       <details>
         <summary>
           <span className={`hosted-runtime-dot ${status.online ? "is-online" : ""}`} />
-          <span>{status.message}</span>
+          <span className="hosted-runtime-message">{status.message}</span>
         </summary>
         <div className="hosted-runtime-menu">
           {status.actionError ? <p role="alert">{status.actionError}</p> : null}

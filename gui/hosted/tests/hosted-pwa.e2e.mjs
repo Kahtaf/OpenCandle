@@ -386,6 +386,12 @@ try {
     await page.getByRole("link", { name: "Watchlists" }).click();
     await waitForText(page, "AAPL", 30_000);
 
+    stage = "runtime status chrome";
+    const desktopViewport = page.viewportSize();
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await assertRuntimeStatusClearsPageAction(page, "desktop watchlists at 1440");
+    if (desktopViewport) await page.setViewportSize(desktopViewport);
+
     follower = await context.newPage();
     stage = "multi-tab follower";
     await follower.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
@@ -424,6 +430,7 @@ try {
     await waitForText(mobile, "Ready through the active tab", 120_000);
     await waitForText(mobile, "AAPL", 30_000);
     await assertNoHorizontalOverflow(mobile, "mobile watchlist");
+    await assertRuntimeStatusClearsPageAction(mobile, "mobile watchlists at 390");
 
     const exportPath = join(tmpdir(), `opencandle-hosted-export-${Date.now()}.json`);
     stage = "data export";
@@ -674,6 +681,42 @@ async function openHostedPanel(page) {
   if (!(await details.evaluate((element) => element.open))) {
     await page.locator(".hosted-runtime-panel summary").click();
   }
+}
+
+// Hosted runtime status is chrome, so it may never sit on top of the app's own
+// controls. It stays readable and inside the viewport while the page action it
+// used to cover stays clickable.
+async function assertRuntimeStatusClearsPageAction(page, label) {
+  const panel = page.locator(".hosted-runtime-panel");
+  const action = page.getByRole("button", { name: "New Watchlist" }).last();
+  await panel.waitFor({ state: "visible", timeout: 30_000 });
+  await action.waitFor({ state: "visible", timeout: 30_000 });
+  const panelBox = await panel.boundingBox();
+  const actionBox = await action.boundingBox();
+  assert(panelBox && actionBox, `${label} status and action geometry`);
+  const overlaps =
+    panelBox.x < actionBox.x + actionBox.width &&
+    actionBox.x < panelBox.x + panelBox.width &&
+    panelBox.y < actionBox.y + actionBox.height &&
+    actionBox.y < panelBox.y + panelBox.height;
+  assert(!overlaps, `${label} status clear of the page action`);
+  const viewport = page.viewportSize();
+  assert(
+    panelBox.height > 0 &&
+      panelBox.width > 0 &&
+      panelBox.y >= 0 &&
+      panelBox.y + panelBox.height <= viewport.height + 1,
+    `${label} status inside the viewport`,
+  );
+  // The element under the action's centre is the action, not hosted chrome.
+  const actionOwnsItsPoint = await page.evaluate(
+    (point) => {
+      const target = document.elementFromPoint(point.x, point.y);
+      return Boolean(target) && !target.closest(".hosted-runtime-panel");
+    },
+    { x: actionBox.x + actionBox.width / 2, y: actionBox.y + actionBox.height / 2 },
+  );
+  assert(actionOwnsItsPoint, `${label} page action receives its own pointer events`);
 }
 
 async function assertNoHorizontalOverflow(page, label) {
