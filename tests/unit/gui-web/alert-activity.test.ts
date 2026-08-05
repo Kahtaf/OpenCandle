@@ -173,6 +173,21 @@ describe("alertCadenceSentence", () => {
     );
     expect(alertCadenceSentence(0)).toBe("Repeats on every check while OpenCandle is open");
   });
+
+  it("keeps a cooldown that does not divide evenly in a unit that does", () => {
+    // Rules saved outside the sheet can carry any whole-second cooldown, and
+    // rounding one into the nearest unit states a cadence the alert never uses.
+    expect(alertCadenceSentence(5400)).toBe(
+      "Repeats at most once every 90 minutes while OpenCandle is open",
+    );
+    expect(alertCadenceSentence(90)).toBe(
+      "Repeats at most once every 90 seconds while OpenCandle is open",
+    );
+    expect(alertCadenceSentence(129_600)).toBe(
+      "Repeats at most once every 36 hours while OpenCandle is open",
+    );
+    expect(alertCadenceSentence(1)).toBe("Repeats at most once a second while OpenCandle is open");
+  });
 });
 
 describe("thresholdDistanceHint", () => {

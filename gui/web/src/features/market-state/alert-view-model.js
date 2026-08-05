@@ -309,10 +309,15 @@ export function alertCadenceSentence(cooldownSeconds) {
     : "Repeats on every check while OpenCandle is open";
 }
 
+// A unit is only used when the cooldown divides evenly into it. Rounding into
+// the nearest unit would state a cadence the alert does not run at: a rule saved
+// with a 90 minute cooldown is not an hourly rule.
 function cooldownWindowLabel(seconds) {
-  if (seconds < 3600) return pluralWindow(Math.round(seconds / 60), "minute");
-  if (seconds < 86_400) return pluralWindow(Math.round(seconds / 3600), "hour");
-  return pluralWindow(Math.round(seconds / 86_400), "day");
+  const whole = Math.round(seconds);
+  if (whole % 86_400 === 0) return pluralWindow(whole / 86_400, "day");
+  if (whole % 3600 === 0) return pluralWindow(whole / 3600, "hour");
+  if (whole % 60 === 0) return pluralWindow(whole / 60, "minute");
+  return pluralWindow(whole, "second");
 }
 
 function pluralWindow(count, unit) {
