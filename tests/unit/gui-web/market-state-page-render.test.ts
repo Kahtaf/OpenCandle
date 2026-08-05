@@ -892,7 +892,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("Search Yahoo candidates before saving");
   });
 
-  it("renders the alert log as durable alert state", () => {
+  it("renders durable alert state as rules plus one activity feed", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
         domain: "alerts",
@@ -904,7 +904,10 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Active rules");
-    expect(html).toContain("Alert log");
+    // A first-run page shows one empty state, not three empty card shells.
+    expect(html).not.toContain("Activity");
+    expect(html).not.toContain("Alert log");
+    expect(html).not.toContain("Notifications");
     expect(html).not.toContain("Instrument #");
   });
 
@@ -937,16 +940,17 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain("Recurring");
+    expect(html).toContain("Repeats");
     expect(html).not.toContain(">recurring<");
     expect(html).toContain('aria-label="Pause RKLB alert"');
     expect(html).toContain('aria-label="Edit RKLB alert"');
     expect(html).toContain('aria-label="Delete RKLB alert"');
     expect(html).toContain("min-h-10");
-    expect(html).toContain("text-destructive");
+    expect(html).toContain("hover:text-destructive");
     expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
-    expect(html).toContain('data-slot="alert-row-actions"');
-    expect(html).toContain("col-span-3");
+    expect(html).toContain('data-slot="alert-rule-row"');
+    // The action cluster rests invisible on pointer surfaces.
+    expect(html).toContain("md:opacity-0");
   });
 
   it("reserves plus icons for create actions in alert and report headers", () => {
@@ -1018,7 +1022,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Jul 5, 10:05 PM");
     expect(html).toContain("Done");
     expect(html).toContain('data-slot="notification-message"');
-    expect(html).toContain('data-slot="notification-channel"');
+    // One line per notification: title, then the date on the right. The
+    // delivery channel was internal vocabulary and is gone.
+    expect(html).toContain('data-slot="activity-date"');
+    expect(html).not.toContain("in-app");
     expect(html).toContain("min-w-0");
     expect(html).toContain("shrink-0");
   });

@@ -1,3 +1,4 @@
+import { formatMoney } from "../../lib/financial-format.js";
 import { relativeTime } from "./format.js";
 
 export function buildAlertSentenceRows(
@@ -18,6 +19,7 @@ export function buildAlertSentenceRows(
   return alerts.map((rule) => {
     const enabled = rule.enabled !== false;
     const event = latestEvents.get(rule.id);
+    const tone = rowTone(rule, enabled, event);
     return {
       id: rule.id,
       symbol: rule.instrumentId
@@ -25,31 +27,46 @@ export function buildAlertSentenceRows(
         : scopeLabel(rule),
       sentence: conditionSentence(rule.conditionType, rule.conditionJson),
       detail: detailLine(rule, enabled, nowMs),
-      tone: rowTone(rule, enabled, event),
+      // The row shows the short status; the chain of observed values moves
+      // behind the row's disclosure so an armed rule that has not fired can
+      // still explain itself.
+      status: rowStatusLabel(tone, rule, nowMs),
+      explanation: explanationLine(rule, enabled, tone, nowMs),
+      tone,
       retriggerMode: rule.retriggerMode ?? "recurring",
+      cadence: rule.retriggerMode === "once" ? "Once" : "Repeats",
       enabled,
       rule,
     };
   });
 }
 
-function conditionSentence(conditionType, condition = {}) {
+function conditionSentence(conditionType, condition = {}, placeholders = false) {
   const c = condition && typeof condition === "object" ? condition : {};
+  const price = (value) =>
+    typeof value === "number" ? moneyLabel(value) : placeholders ? "a price you set" : "N/A";
+  const level = (value) =>
+    value == null || value === "" ? (placeholders ? "a level you set" : "N/A") : value;
+  const percent = (value) =>
+    value == null || value === "" ? (placeholders ? "a percentage you set" : "N/A%") : `${value}%`;
+  const days = (value) =>
+    value == null || value === "" ? (placeholders ? "chosen" : "N/A") : `${value}-day`;
+
   switch (conditionType) {
     case "price_crosses_above":
-      return `Price crosses above ${moneyLabel(c.threshold)}`;
+      return `Price crosses above ${price(c.threshold)}`;
     case "price_crosses_below":
-      return `Price drops below ${moneyLabel(c.threshold)}`;
+      return `Price drops below ${price(c.threshold)}`;
     case "rsi_threshold":
-      return `RSI (${c.period ?? 14}-day) ${c.direction === "below" ? "falls below" : "rises above"} ${c.threshold}`;
+      return `RSI (${c.period ?? 14}-day) ${c.direction === "below" ? "falls below" : "rises above"} ${level(c.threshold)}`;
     case "percent_move":
-      return `${c.direction === "down" ? "Falls" : "Rises"} more than ${c.percent}% in a day`;
+      return `${c.direction === "down" ? "Falls" : "Rises"} more than ${percent(c.percent)} in a day`;
     case "price_crosses_sma":
-      return `Price ${c.direction === "below" ? "drops below" : "crosses above"} the ${c.period}-day average`;
+      return `Price ${c.direction === "below" ? "drops below" : "crosses above"} the ${days(c.period)} average`;
     case "sma_cross":
-      return `${c.fast_period}-day average crosses ${c.direction === "below" ? "below" : "above"} the ${c.slow_period}-day average`;
+      return `${days(c.fast_period)} average crosses ${c.direction === "below" ? "below" : "above"} the ${days(c.slow_period)} average`;
     case "volume_spike":
-      return `Volume spikes to ${c.multiplier}× the ${c.lookback_period}-day average`;
+      return `Volume spikes to ${level(c.multiplier)}× the ${days(c.lookback_period)} average`;
     default:
       return conditionType.replaceAll("_", " ");
   }
@@ -66,6 +83,27 @@ function detailLine(rule, enabled, nowMs) {
   return `Armed · last checked ${relativeTime(rule.lastCheckedAt, nowMs)}${
     observedValue ? ` · ${observedValue}` : ""
   }`;
+}
+
+function rowStatusLabel(tone, rule, nowMs) {
+  if (tone === "paused") return "Paused";
+  if (tone === "degraded") return "Waiting for data";
+  if (!rule.lastCheckedAt) return "Not checked yet";
+  return `Armed · checked ${relativeTime(rule.lastCheckedAt, nowMs)}`;
+}
+
+function explanationLine(rule, enabled, tone, nowMs) {
+  const parts = [];
+  if (rule.lastCheckedAt) parts.push(`Last checked ${relativeTime(rule.lastCheckedAt, nowMs)}`);
+  if (tone === "degraded") parts.push("the last check could not read this market");
+  const observedValue = formatAlertObservedValue(
+    rule.conditionType,
+    rule.conditionJson,
+    rule.lastObservedJson,
+  );
+  if (observedValue) parts.push(observedValue);
+  if (!enabled) parts.push("paused rules are not checked");
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function rowTone(rule, enabled, event) {
@@ -143,6 +181,145 @@ export function formatAlertObservedValue(conditionType, condition, observed) {
   }
 
   return null;
+}
+
+// One activity feed. Every alert firing already writes a matching notification,
+// so the notification is folded into its alert event as read state instead of
+// being listed a second time. Notifications from other sources keep their own row.
+export function buildActivityRows(
+  { alertEvents = [], notifications = [], deliveryAttempts = [], instruments = [] } = {},
+  limit = 15,
+) {
+  const symbolsById = new Map(
+    (instruments ?? []).map((instrument) => [instrument.id, instrument.symbol]),
+  );
+  const notificationsByEvent = new Map();
+  for (const notification of notifications ?? []) {
+    if (notification?.sourceType !== "alert_event" || notification.sourceId == null) continue;
+    notificationsByEvent.set(notification.sourceId, notification);
+  }
+
+  const rows = [];
+  for (const event of alertEvents ?? []) {
+    const notification = notificationsByEvent.get(event.id) ?? null;
+    const symbol = symbolsById.get(event.instrumentId);
+    const message = event.message || event.status || "";
+    rows.push({
+      key: `alert:${event.id ?? `${event.alertRuleId}:${event.observedAt ?? event.triggeredAt}`}`,
+      title: [symbol, message].filter(Boolean).join(" "),
+      at: event.observedAt || event.triggeredAt || notification?.createdAt || null,
+      badge:
+        event.status === "unavailable"
+          ? "Data unavailable"
+          : deliveryFailed(deliveryAttempts, notification?.id)
+            ? "Delivery failed"
+            : null,
+      unread: Boolean(notification) && notification.status !== "acknowledged",
+      notificationId: notification?.id ?? null,
+    });
+  }
+
+  for (const notification of notifications ?? []) {
+    if (notification?.sourceType === "alert_event") continue;
+    rows.push({
+      key: `notification:${notification.id}`,
+      title: notification.title || notification.body || "",
+      at: notification.createdAt ?? null,
+      badge: deliveryFailed(deliveryAttempts, notification.id) ? "Delivery failed" : null,
+      unread: notification.status !== "acknowledged",
+      notificationId: notification.id,
+    });
+  }
+
+  return rows
+    .sort((a, b) => (Date.parse(b.at ?? "") || 0) - (Date.parse(a.at ?? "") || 0))
+    .slice(0, limit);
+}
+
+function deliveryFailed(attempts = [], notificationId) {
+  if (notificationId == null) return false;
+  return (attempts ?? []).some(
+    (attempt) => attempt?.notificationEventId === notificationId && attempt.status === "failed",
+  );
+}
+
+// The create-alert sheet previews a rule with the exact words the saved rule
+// row will use, so composing an alert and reading it back never disagree.
+export function alertPreviewSentence({
+  condition,
+  threshold,
+  period,
+  fastPeriod,
+  slowPeriod,
+} = {}) {
+  const number = (value) => {
+    if (value === "" || value == null) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const map = {
+    create_price_above: ["price_crosses_above", { threshold: number(threshold) }],
+    create_price_below: ["price_crosses_below", { threshold: number(threshold) }],
+    create_price_above_sma: ["price_crosses_sma", { direction: "above", period: number(period) }],
+    create_price_below_sma: ["price_crosses_sma", { direction: "below", period: number(period) }],
+    create_rsi_above: [
+      "rsi_threshold",
+      { direction: "above", threshold: number(threshold), period: number(period) },
+    ],
+    create_rsi_below: [
+      "rsi_threshold",
+      { direction: "below", threshold: number(threshold), period: number(period) },
+    ],
+    create_volume_spike: [
+      "volume_spike",
+      { multiplier: number(threshold), lookback_period: number(period) },
+    ],
+    create_percent_move_up: ["percent_move", { direction: "up", percent: number(threshold) }],
+    create_percent_move_down: ["percent_move", { direction: "down", percent: number(threshold) }],
+    create_sma_cross_above: [
+      "sma_cross",
+      { direction: "above", fast_period: number(fastPeriod), slow_period: number(slowPeriod) },
+    ],
+    create_sma_cross_below: [
+      "sma_cross",
+      { direction: "below", fast_period: number(fastPeriod), slow_period: number(slowPeriod) },
+    ],
+  };
+  const [conditionType, conditionJson] = map[condition] ?? map.create_price_above;
+  return conditionSentence(conditionType, conditionJson, true);
+}
+
+export function alertCadenceSentence(cooldownSeconds) {
+  const seconds = Number(cooldownSeconds);
+  const window = Number.isFinite(seconds) && seconds > 0 ? cooldownWindowLabel(seconds) : null;
+  return window
+    ? `Repeats at most ${window} while OpenCandle is open`
+    : "Repeats on every check while OpenCandle is open";
+}
+
+function cooldownWindowLabel(seconds) {
+  if (seconds < 3600) return pluralWindow(Math.round(seconds / 60), "minute");
+  if (seconds < 86_400) return pluralWindow(Math.round(seconds / 3600), "hour");
+  return pluralWindow(Math.round(seconds / 86_400), "day");
+}
+
+function pluralWindow(count, unit) {
+  if (count <= 1) return `once ${unit === "hour" ? "an hour" : `a ${unit}`}`;
+  return `once every ${count} ${unit}s`;
+}
+
+// Bloom's threshold sheet keeps the live price beside the level being typed so
+// the number never has to be judged in isolation.
+export function thresholdDistanceHint(currentPrice, threshold, currency = "USD") {
+  if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice) || currentPrice <= 0) {
+    return null;
+  }
+  const current = `Current ${formatMoney(currentPrice, currency)}`;
+  const parsed = threshold === "" || threshold == null ? Number.NaN : Number(threshold);
+  if (!Number.isFinite(parsed)) return current;
+  const distance = (parsed / currentPrice - 1) * 100;
+  if (Math.abs(distance) < 0.05) return `${current} · at the current price`;
+  return `${current} · ${Math.abs(distance).toFixed(1)}% ${distance > 0 ? "above" : "below"}`;
 }
 
 export function buildAlertRows(alerts = [], alertEvents = []) {
