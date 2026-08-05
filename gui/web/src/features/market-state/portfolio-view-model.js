@@ -89,6 +89,12 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
       // portfolio cannot convert it into its base currency. The price, the day
       // change and the value stay on the row in that currency; only the base
       // currency totals and the allocation share leave it out.
+      //
+      // Grouping by symbol cannot mix currencies here: the snapshot builder only
+      // reports `ok` when the quote currency equals the lot currency, so every
+      // `ok` lot of one symbol shares that currency and the same
+      // `includedInTotals` verdict. A lot in any other currency arrives as
+      // `unavailable` and takes the branch below.
       row.totalCost += quote.totalCost;
       row.currentPrice = quote.currentPrice ?? row.currentPrice;
       row.changePercent = quote.changePercent ?? row.changePercent;
