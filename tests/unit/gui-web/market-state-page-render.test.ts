@@ -866,7 +866,7 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain("Create Alert");
     expect(html).toContain('value="MSFT"');
-    expect(html).toContain("Price threshold ($)");
+    expect(html).toContain("Price threshold");
   });
 
   it("uses human cooldown choices and condition-specific alert field labels", () => {
@@ -884,7 +884,7 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain(">Price threshold ($)<input");
+    expect(html).toContain(">Price threshold<input");
     expect(html).toContain('placeholder="80.00"');
     expect(html).toContain(">Re-alert at most every<span");
     expect(html).toContain(">15 minutes<");
@@ -1405,7 +1405,7 @@ describe("MarketStatePage rendering", () => {
 
     expect(alertHtml).toContain(">Condition");
     expect(alertHtml).toContain("<select");
-    expect(alertHtml).toContain(">Price threshold ($)<input");
+    expect(alertHtml).toContain(">Price threshold<input");
     // Period only renders for SMA/RSI/volume conditions; the default price-above
     // condition hides it instead of showing a disabled field.
     expect(alertHtml).not.toContain(">Period (days)<input");

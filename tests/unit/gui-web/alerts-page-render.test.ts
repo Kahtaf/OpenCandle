@@ -8,6 +8,7 @@ import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPag
 import {
   ALERT_CONDITION_OPTIONS,
   AlertCreateForm,
+  alertThresholdPrefill,
   nextAlertThreshold,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 import { RuntimeTransportContext } from "../../../gui/web/src/runtime/runtime-transport-context.js";
@@ -267,6 +268,42 @@ describe("create alert sheet", () => {
     // or a level nobody chose can be saved against whatever is picked next.
     expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("");
     expect(container.querySelector('[data-slot="threshold-hint"]')).toBeNull();
+  });
+
+  it("keeps a sub-cent quote out of a zero threshold", () => {
+    expect(alertThresholdPrefill(204.25)).toBe("204.25");
+    expect(alertThresholdPrefill(1)).toBe("1.00");
+    // Rounding to cents would write 0.00, which saves as a level the price has
+    // already crossed instead of an alert at the quoted price.
+    expect(alertThresholdPrefill(0.0031)).toBe("0.0031");
+    expect(alertThresholdPrefill(0.000004215)).toBe("0.000004215");
+    expect(alertThresholdPrefill(0)).toBe("");
+    expect(alertThresholdPrefill(Number.NaN)).toBe("");
+  });
+
+  it("names the currency the price threshold is entered in", async () => {
+    const transport = {
+      kind: "loopback",
+      getInstrumentQuote: async () => ({ status: "ok", price: 168.64, currency: "EUR" }),
+      searchInstruments: async () => ({ candidates: [] }),
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(AlertCreateForm, {
+            disabled: false,
+            invokeTool: () => true,
+            symbol: "SAP.DE",
+          }),
+        ),
+      );
+    });
+
+    expect(container.textContent).toContain("Price threshold (EUR)");
+    expect(container.textContent).not.toContain("Price threshold ($)");
   });
 
   it("does not carry a price level into a condition that measures something else", () => {

@@ -1243,11 +1243,25 @@ export function nextAlertThreshold(previousCondition, nextCondition, threshold) 
   return nextCondition === "create_volume_spike" ? "2" : "";
 }
 
+// The quoted price, not a rounded version of it. Two decimals read best for
+// ordinary listings, but rounding a sub-cent quote would write 0.00, which
+// validates as a threshold the price has already crossed.
+export function alertThresholdPrefill(price) {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return "";
+  if (price >= 0.01) return price.toFixed(2);
+  return String(Number(price.toPrecision(6)));
+}
+
 export function alertConditionFormFields(condition) {
   if (condition === "create_price_above" || condition === "create_price_below") {
     return {
-      threshold: { min: undefined, max: undefined, step: "0.01" },
-      thresholdLabel: "Price threshold ($)",
+      // `any` so a sub-cent instrument can be alerted at its real price instead
+      // of being snapped to the nearest cent.
+      threshold: { min: undefined, max: undefined, step: "any" },
+      thresholdLabel: "Price threshold",
+      // The level is read in the listing's own currency, so the field says which
+      // one as soon as a quote names it rather than always claiming dollars.
+      thresholdInCurrency: true,
       thresholdPlaceholder: "80.00",
       thresholdRequired: true,
     };
@@ -1399,7 +1413,8 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   useEffect(() => {
     if (isEditing || !PRICE_THRESHOLD_CONDITIONS.has(condition)) return;
     if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice)) return;
-    const prefill = currentPrice.toFixed(2);
+    const prefill = alertThresholdPrefill(currentPrice);
+    if (!prefill) return;
     // Same ordering rule as above: compare against the level this effect filled
     // in last, not the one it is about to record.
     const previous = prefilledThresholdRef.current;
@@ -1490,7 +1505,9 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
           htmlFor={thresholdId}
           className="grid gap-1 text-xs font-medium text-muted-foreground"
         >
-          {fields.thresholdLabel}
+          {fields.thresholdInCurrency && quote?.currency
+            ? `${fields.thresholdLabel} (${quote.currency})`
+            : fields.thresholdLabel}
           <Input
             id={thresholdId}
             type="number"
