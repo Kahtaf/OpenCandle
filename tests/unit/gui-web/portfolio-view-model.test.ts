@@ -129,6 +129,113 @@ describe("buildHoldingRows", () => {
     expect(aapl.totalQuantity).toBe(75);
   });
 
+  it("keeps a priced foreign-currency holding readable in its own currency", () => {
+    const lots = [
+      {
+        id: 9,
+        instrumentId: 21,
+        symbol: "SAP.DE",
+        instrumentName: "SAP SE",
+        quantity: 10,
+        avgCost: 150,
+        currency: "EUR",
+        openedAt: "2025-04-02T09:00:00Z",
+      },
+    ];
+    const quotes = [
+      {
+        lotId: 9,
+        symbol: "SAP.DE",
+        status: "ok",
+        currentPrice: 168.64,
+        changePercent: 0.75,
+        marketValue: 1686.4,
+        totalCost: 1500,
+        pnl: 186.4,
+        currency: "EUR",
+        includedInTotals: false,
+        reason: "No FX conversion from EUR to USD",
+        fetchedAt: "2026-06-12T14:58:00Z",
+      },
+    ];
+
+    const [row] = buildHoldingRows(lots, quotes);
+    expect(row.currentPrice).toBeCloseTo(168.64, 2);
+    expect(row.changePercent).toBeCloseTo(0.75, 2);
+    expect(row.marketValue).toBeCloseTo(1686.4, 2);
+    expect(row.pnl).toBeCloseTo(186.4, 2);
+    expect(row.dayMove).toBeCloseTo(1686.4 - 1686.4 / 1.0075, 2);
+    expect(row.fetchedAt).toBe("2026-06-12T14:58:00Z");
+    // The value is real but it is not the portfolio's base currency, so it is
+    // flagged rather than folded into totals or allocation.
+    expect(row.excludedFromTotals).toBe(true);
+    expect(row.exclusionReason).toBe("No FX conversion from EUR to USD");
+    expect(row.allocationPercent).toBeNull();
+  });
+
+  it("keeps base-currency totals free of foreign-currency holdings", () => {
+    const lots = [
+      ...LOTS,
+      {
+        id: 9,
+        instrumentId: 21,
+        symbol: "SAP.DE",
+        quantity: 10,
+        avgCost: 150,
+        currency: "EUR",
+        openedAt: "2025-04-02T09:00:00Z",
+      },
+    ];
+    const quotes = [
+      ...QUOTES.map((quote) => ({ ...quote, changePercent: 1 })),
+      {
+        lotId: 9,
+        symbol: "SAP.DE",
+        status: "ok",
+        currentPrice: 168.64,
+        changePercent: 0.75,
+        marketValue: 1686.4,
+        totalCost: 1500,
+        pnl: 186.4,
+        currency: "EUR",
+        includedInTotals: false,
+        reason: "No FX conversion from EUR to USD",
+      },
+    ];
+
+    const rows = buildHoldingRows(lots, quotes);
+    const included = rows.filter((row) => !row.excludedFromTotals);
+    expect(included.map((row) => row.symbol).sort()).toEqual(["AAPL", "NVDA"]);
+    expect(derivePortfolioDayMove(included)).toBeCloseTo(
+      21859.5 - 21859.5 / 1.01 + (16340 - 16340 / 1.01),
+      2,
+    );
+  });
+
+  it("keeps an unknown quote currency explicit instead of borrowing a price", () => {
+    const quotes = [
+      {
+        lotId: 3,
+        symbol: "NVDA",
+        status: "unavailable",
+        currentPrice: null,
+        marketValue: null,
+        pnl: null,
+        totalCost: 9424,
+        currency: "USD",
+        includedInTotals: false,
+        reason: "Quote currency unavailable",
+      },
+    ];
+
+    const rows = buildHoldingRows(LOTS, quotes);
+    const nvda = rows.find((row) => row.symbol === "NVDA");
+    expect(nvda.currentPrice).toBeNull();
+    expect(nvda.marketValue).toBeNull();
+    expect(nvda.pnl).toBeNull();
+    expect(nvda.excludedFromTotals).toBe(false);
+  });
+
   it("excludes currency-mismatched lots from rollup math but keeps them listed", () => {
     const quotes = [
       { ...QUOTES[0] },

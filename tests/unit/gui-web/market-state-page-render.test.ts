@@ -497,6 +497,99 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("transition-[grid-template-rows] duration-150");
   });
 
+  it("prices a foreign-currency holding in its own currency without touching base totals", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "AAPL",
+              assetType: "equity",
+              name: "Apple Inc.",
+              quantity: 2,
+              avgCost: 100,
+              currency: "USD",
+            },
+            {
+              id: 2,
+              portfolioId: 1,
+              symbol: "SAP.DE",
+              assetType: "equity",
+              name: "SAP SE",
+              quantity: 10,
+              avgCost: 150,
+              currency: "EUR",
+            },
+          ],
+          quoteSnapshot: {
+            portfolioQuotes: [
+              {
+                lotId: 1,
+                status: "ok",
+                includedInTotals: true,
+                totalCost: 200,
+                marketValue: 300,
+                pnl: 100,
+                allocationPercent: 100,
+                currentPrice: 150,
+                changePercent: 1,
+                currency: "USD",
+              },
+              {
+                lotId: 2,
+                status: "ok",
+                includedInTotals: false,
+                totalCost: 1500,
+                marketValue: 1686.4,
+                pnl: 186.4,
+                currentPrice: 168.64,
+                changePercent: 0.75,
+                currency: "EUR",
+                reason: "No FX conversion from EUR to USD",
+              },
+            ],
+            portfolioSummary: {
+              portfolioId: 1,
+              totalValue: 300,
+              totalPnl: 100,
+              totalPnlPercent: 50,
+              baseCurrency: "USD",
+              excludedFromTotals: [
+                {
+                  symbol: "SAP.DE",
+                  currency: "EUR",
+                  reason: "No FX conversion from EUR to USD",
+                },
+              ],
+            },
+          },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    // The holding keeps the price, day change and value the watchlist already
+    // shows for it, stated in euros.
+    expect(html).toContain("EUR 168.64");
+    expect(html).toContain("EUR 1,686.40");
+    expect(html).toContain("+EUR 186.40");
+    // Its allocation is stated as excluded, never as a share of the USD total.
+    expect(html).toContain("Kept out of the total");
+    expect(html).toContain("Kept out of the USD total: SAP.DE (No FX conversion from EUR to USD)");
+    // Today's change stays the base-currency figure for AAPL alone.
+    expect(html).toContain("+$2.97");
+    expect(html).not.toContain("$1,686.40");
+  });
+
   it("renders market-state panels as overlay sheets without reserving page width", () => {
     const html = renderToStaticMarkup(
       React.createElement(

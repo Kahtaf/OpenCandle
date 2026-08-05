@@ -388,6 +388,10 @@ function HoldingsTable({
                       <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
                         {formatPercent(row.allocationPercent, { decimals: 1 })} of portfolio
                       </span>
+                    ) : row.excludedFromTotals ? (
+                      <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+                        Kept out of the total
+                      </span>
                     ) : null}
                   </TableCell>
                   <TableCell className="whitespace-nowrap py-2.5 text-right align-top">
@@ -572,7 +576,9 @@ function MobileHoldingRows({
                     value={
                       typeof row.allocationPercent === "number"
                         ? formatPercent(row.allocationPercent, { decimals: 1 })
-                        : "—"
+                        : row.excludedFromTotals
+                          ? "Kept out of the total"
+                          : "—"
                     }
                   />
                   <MobileMetric label="Quantity" value={formatQuantity(row.totalQuantity)} />
@@ -766,7 +772,12 @@ function LotActions({ lot, portfolio, readOnly, openPanel, onRemoveLot }) {
 // allocation that explains them. Every figure keeps its own currency and stays
 // unknown rather than guessed when the totals are partial.
 function PortfolioSummary({ loading, summary, holdings, quoteBadge }) {
-  const dayMove = useMemo(() => derivePortfolioDayMove(holdings), [holdings]);
+  // Only holdings the totals are built from can move the base-currency day
+  // figure. A holding priced in another currency states its own move on its row.
+  const dayMove = useMemo(
+    () => derivePortfolioDayMove(holdings.filter((row) => !row.excludedFromTotals)),
+    [holdings],
+  );
   const segments = useMemo(() => topAllocationSegments(holdings), [holdings]);
   const pending = loading || !summary;
   const currency = summary?.baseCurrency ?? "USD";
