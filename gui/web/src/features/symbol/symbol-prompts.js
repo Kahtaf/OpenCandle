@@ -2,7 +2,8 @@
 // does rather than repeating the ticker the page is already about. Each pair is
 // [label, prompt]; the prompt is only ever placed in the chat box, never sent.
 export function analyzePromptsForSymbol(ticker) {
-  const symbol = ticker.trim().toUpperCase();
+  // Cashtag form so the composer and router treat the token as a ticker, not a word.
+  const symbol = `$${ticker.trim().toUpperCase()}`;
   return [
     ["Deep research (takes a few minutes)", `/analyze ${symbol}`],
     ["Options chain", `Show options chain for ${symbol}`],

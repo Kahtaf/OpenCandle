@@ -726,17 +726,17 @@ describe("symbol page", () => {
 
   it("templates action chips and prefills the composer without sending", () => {
     expect(analyzePromptsForSymbol("nvda")).toEqual([
-      ["Deep research (takes a few minutes)", "/analyze NVDA"],
-      ["Options chain", "Show options chain for NVDA"],
-      ["Compare with another asset", "Compare NVDA with "],
-      ["Alert me if it drops 10% in a week", "Alert me if NVDA drops 10% in a week"],
+      ["Deep research (takes a few minutes)", "/analyze $NVDA"],
+      ["Options chain", "Show options chain for $NVDA"],
+      ["Compare with another asset", "Compare $NVDA with "],
+      ["Alert me if it drops 10% in a week", "Alert me if $NVDA drops 10% in a week"],
     ]);
     const fillComposer = vi.fn();
     const tree = AnalyzePanel({ ticker: "NVDA", role: "writer", fillComposer });
     const chip = findElementWithText(tree, "Deep research (takes a few minutes)");
 
     chip.props.onClick();
-    expect(fillComposer).toHaveBeenCalledWith("/analyze NVDA");
+    expect(fillComposer).toHaveBeenCalledWith("/analyze $NVDA");
   });
 
   it("keeps follower analysis and mutation labels visible but disabled with neutral copy", () => {
