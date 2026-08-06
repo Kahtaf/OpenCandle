@@ -8,11 +8,13 @@ import { createHostedRuntimeTransport } from "../../web/src/runtime/hosted-runti
 import { RuntimeTransportProvider } from "../../web/src/runtime/runtime-transport-provider.jsx";
 import { createBrowserRuntimeHost } from "./runtime/browser-runtime-host.js";
 import { createBrowserRuntimeCoordinator } from "./runtime/browser-runtime-coordinator.js";
+import { createHostedDataActions } from "./hosted-data-actions.js";
 import { HostedRuntimePanel } from "./HostedRuntimePanel.jsx";
 import "./styles.css";
 
 const host = createBrowserRuntimeCoordinator({ createHost: createBrowserRuntimeHost });
-const transport = createHostedRuntimeTransport({ host });
+const hostedData = createHostedDataActions(host);
+const transport = createHostedRuntimeTransport({ host, hostedData });
 addEventListener("pagehide", (event) => {
   if (!event.persisted) void host.dispose();
 });
@@ -22,7 +24,13 @@ createRoot(document.getElementById("root")).render(
     <RuntimeTransportProvider transport={transport}>
       <TooltipProvider>
         <RouterProvider router={router} />
-        <HostedRuntimePanel host={host} />
+        <HostedRuntimePanel
+          host={host}
+          actions={hostedData}
+          onManageData={() =>
+            router.navigate({ to: "/settings/$section", params: { section: "data" } })
+          }
+        />
       </TooltipProvider>
     </RuntimeTransportProvider>
   </React.StrictMode>,

@@ -109,6 +109,15 @@ function createHost() {
 }
 
 describe("hosted runtime transport", () => {
+  it("carries the hosted data actions so Settings can run them", () => {
+    const hostedData = { exportData: vi.fn() };
+
+    expect(createHostedRuntimeTransport({ host: createHost(), hostedData }).hostedData).toBe(
+      hostedData,
+    );
+    expect(createHostedRuntimeTransport({ host: createHost() }).hostedData).toBeNull();
+  });
+
   it("requires the canonical streaming runtime boundary", () => {
     const host = createHost();
     delete (host as Partial<typeof host>).streamRequest;

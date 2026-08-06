@@ -436,10 +436,10 @@ try {
 
     const exportPath = join(tmpdir(), `opencandle-hosted-export-${Date.now()}.json`);
     stage = "data export";
-    await openHostedPanel(page);
+    await openHostedDataSettings(page);
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 60_000 }),
-      page.getByRole("button", { name: "Export data" }).click(),
+      page.getByRole("button", { name: "Export", exact: true }).click(),
     ]);
     await download.saveAs(exportPath);
     const exported = await readFile(exportPath, "utf8");
@@ -474,8 +474,10 @@ try {
         }),
       );
     });
-    await openHostedPanel(page);
-    await page.getByRole("button", { name: "Install update" }).click();
+    await page
+      .locator(".hosted-runtime-panel")
+      .getByRole("button", { name: "Install update" })
+      .click();
     await waitFor(
       () =>
         page.evaluate(
@@ -489,35 +491,39 @@ try {
     );
 
     stage = "corrupt import";
-    await openHostedPanel(page);
+    await openHostedDataSettings(page);
     const corruptChooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Import data" }).click();
+    await page.getByRole("button", { name: "Import", exact: true }).click();
     await (await corruptChooser).setFiles({
       name: "corrupt-opencandle-archive.json",
       mimeType: "application/json",
       buffer: Buffer.from('{"version":999}'),
     });
     await waitForText(page, "Unsupported hosted archive version", 30_000);
+    await openWatchlists(page);
     await waitForText(page, "AAPL", 30_000);
 
     stage = "newer SQLite schema import";
     const newerSchemaArchive = await withStateSchemaVersion(exported, 999);
-    await openHostedPanel(page);
+    await openHostedDataSettings(page);
     const newerSchemaChooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Import data" }).click();
+    await page.getByRole("button", { name: "Import", exact: true }).click();
     await (await newerSchemaChooser).setFiles({
       name: "newer-opencandle-archive.json",
       mimeType: "application/json",
       buffer: Buffer.from(newerSchemaArchive),
     });
     await waitForText(page, "uses newer schema version 999", 30_000);
+    await openWatchlists(page);
     await waitForText(page, "AAPL", 30_000);
 
     stage = "clear model key";
-    await openHostedPanel(page);
-    await page.getByRole("button", { name: "Clear secrets" }).click();
+    await openHostedDataSettings(page);
+    await page.getByRole("button", { name: "Clear secrets", exact: true }).click();
+    await page.locator('[data-slot="alert-dialog-action"]').click();
     assert(await credentialsAreAbsent(page), "clear model key removes persistent and session keys");
     await page.reload({ waitUntil: "domcontentloaded" });
+    await openWatchlists(page);
     await waitForText(page, "AAPL", 120_000);
 
     await context.setOffline(true);
@@ -526,8 +532,6 @@ try {
     assert(cachedShell.includes('id="root"'), "offline cached application shell");
     await waitForText(page, "Offline: saved research is read-only", 30_000);
     await waitForText(page, "AAPL", 30_000);
-    await openHostedPanel(page);
-    assert(await page.getByRole("button", { name: "Export data" }).isEnabled(), "offline export");
     const mutationButtons = await page.getByRole("button", { name: "Add ticker" }).all();
     await waitFor(async () => {
       const visibleMutationStates = [];
@@ -536,26 +540,44 @@ try {
       }
       return visibleMutationStates.length > 0 && visibleMutationStates.every(Boolean);
     }, 30_000, "offline mutations disabled");
+    await openHostedDataSettings(page);
+    assert(
+      await page.getByRole("button", { name: "Export", exact: true }).isEnabled(),
+      "offline export",
+    );
+    assert(
+      await page.getByRole("button", { name: "Import", exact: true }).isDisabled(),
+      "offline import disabled",
+    );
     await context.setOffline(false);
 
     await follower.close();
     await mobile.close();
     stage = "clear and restore";
-    await openHostedPanel(page);
-    page.once("dialog", (dialog) => dialog.accept());
+    await openHostedDataSettings(page);
+    await page.getByRole("button", { name: "Clear all", exact: true }).click();
+    const typedConfirm = page.locator('[data-slot="typed-confirm-dialog"]');
+    await typedConfirm.waitFor({ state: "visible", timeout: 30_000 });
+    assert(
+      await typedConfirm.locator('[data-slot="typed-confirm-action"]').isDisabled(),
+      "clear all stays disabled until the confirmation word is typed",
+    );
+    await typedConfirm.locator("input").fill("DELETE");
     await Promise.all([
       page.waitForEvent("framenavigated", { timeout: 120_000 }),
-      page.getByRole("button", { name: "Clear all" }).click(),
+      typedConfirm.locator('[data-slot="typed-confirm-action"]').click(),
     ]);
+    await openWatchlists(page);
     await waitForText(page, "No tickers yet", 120_000);
     assert((await page.getByText("AAPL", { exact: true }).count()) === 0, "clear removes watchlist");
     assert(await credentialsAreAbsent(page), "clear removes persistent and session model keys");
-    await openHostedPanel(page);
+    await openHostedDataSettings(page);
     const restoreChooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Import data" }).click();
+    await page.getByRole("button", { name: "Import", exact: true }).click();
     const restoredNavigation = page.waitForEvent("framenavigated", { timeout: 120_000 });
     await (await restoreChooser).setFiles(exportPath);
     await restoredNavigation;
+    await openWatchlists(page);
     await waitForText(page, "AAPL", 120_000);
     assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
   }
@@ -678,11 +700,18 @@ function sqliteCount(database, table) {
   return Number(rows[0]?.values?.[0]?.[0] ?? 0);
 }
 
-async function openHostedPanel(page) {
-  const details = page.locator(".hosted-runtime-panel details");
-  if (!(await details.evaluate((element) => element.open))) {
-    await page.locator(".hosted-runtime-panel summary").click();
+// Data management lives in Settings now. The status strip only links to it.
+async function openHostedDataSettings(page) {
+  if (!page.url().includes("/settings/data")) {
+    await page.locator(".hosted-runtime-panel a", { hasText: "Manage data" }).click();
   }
+  await page
+    .getByRole("button", { name: "Export", exact: true })
+    .waitFor({ state: "visible", timeout: 30_000 });
+}
+
+async function openWatchlists(page) {
+  await page.getByRole("link", { name: "Watchlists" }).click();
 }
 
 // Hosted runtime status is chrome, so it may never sit on top of the app's own

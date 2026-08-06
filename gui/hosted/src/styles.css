@@ -24,8 +24,6 @@
 
 .hosted-runtime-panel {
   position: relative;
-  /* Above page content so the menu can open over it, below the modal layer so
-     a dialog still owns the screen while it is open. */
   z-index: 40;
   flex: 0 0 auto;
   border-top: 1px solid hsl(var(--tw-border));
@@ -34,31 +32,39 @@
   color: hsl(var(--tw-foreground));
 }
 
-.hosted-runtime-panel summary {
+/* One status row: dot, phase message, the line explaining where the runtime
+   lives, and the two affordances that belong with runtime state. */
+.hosted-runtime-strip {
   display: flex;
   min-height: 40px;
-  cursor: pointer;
-  list-style: none;
   align-items: center;
   gap: 8px;
   padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
   font-size: 12px;
-  font-weight: 500;
-}
-
-.hosted-runtime-panel summary:focus-visible {
-  outline: 2px solid hsl(var(--tw-ring));
-  outline-offset: -2px;
 }
 
 .hosted-runtime-message {
   overflow: hidden;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hosted-runtime-panel summary::-webkit-details-marker {
-  display: none;
+/* The explanatory line is the first thing to go when the row runs out of
+   width; the status message and the actions always stay. */
+.hosted-runtime-detail {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: hsl(var(--tw-muted-foreground));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .hosted-runtime-detail {
+    display: none;
+  }
 }
 
 .hosted-runtime-dot {
@@ -73,55 +79,44 @@
   background: hsl(var(--tw-success));
 }
 
-/* The menu is the only part that overlays the app, and only while the reader
-   opened it. It rises from the bar so it never leaves the viewport. */
-.hosted-runtime-menu {
-  position: absolute;
-  bottom: 100%;
-  left: max(12px, env(safe-area-inset-left));
-  display: grid;
-  width: min(360px, calc(100vw - 24px));
-  gap: 12px;
-  margin-bottom: 8px;
-  border: 1px solid hsl(var(--tw-border));
-  border-radius: 10px;
-  background: hsl(var(--tw-background));
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.12);
-  padding: 12px;
-}
-
-.hosted-runtime-menu p {
+.hosted-runtime-panel p[role="alert"] {
   margin: 0;
-  color: hsl(var(--tw-muted-foreground));
+  padding: 0 max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  color: hsl(var(--tw-destructive));
   font-size: 12px;
   line-height: 1.5;
 }
 
 .hosted-runtime-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  margin-left: auto;
+  align-items: center;
   gap: 8px;
 }
 
-.hosted-runtime-actions button {
-  min-height: 40px;
+.hosted-runtime-actions button,
+.hosted-runtime-actions a {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
   border: 1px solid hsl(var(--tw-border));
   border-radius: 7px;
   background: hsl(var(--tw-card));
+  padding: 0 10px;
   color: hsl(var(--tw-foreground));
   font: inherit;
   font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-.hosted-runtime-actions button:hover:not(:disabled) {
+.hosted-runtime-actions button:hover:not(:disabled),
+.hosted-runtime-actions a:hover {
   background: hsl(var(--tw-secondary));
 }
 
-.hosted-runtime-actions button:focus-visible {
+.hosted-runtime-actions button:focus-visible,
+.hosted-runtime-actions a:focus-visible {
   outline: 2px solid hsl(var(--tw-ring));
   outline-offset: 2px;
-}
-
-.hosted-runtime-actions button.is-destructive {
-  color: hsl(var(--tw-destructive));
 }

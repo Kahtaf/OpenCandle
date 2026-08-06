@@ -88,6 +88,8 @@ export interface DoctorReport {
     readonly agentDir?: string;
     readonly opencandleHome: string;
     readonly opencandleHomeSource: "default" | "env";
+    /** Whether notification webhook delivery has a target. The URL itself is never included. */
+    readonly notificationWebhookConfigured: boolean;
   };
 }
 
@@ -137,6 +139,9 @@ export async function buildDoctorReport(
       agentDir: options.agentDir,
       opencandleHome: home,
       opencandleHomeSource: process.env.OPENCANDLE_HOME ? "env" : "default",
+      notificationWebhookConfigured: Boolean(
+        process.env.OPENCANDLE_NOTIFICATION_WEBHOOK_URL?.trim(),
+      ),
     },
   };
 }
