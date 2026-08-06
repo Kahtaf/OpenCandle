@@ -182,7 +182,7 @@ export interface BrowserHostedBootstrap {
       fallbackDescription: string | null;
       instructionsHint: string;
       status: "file" | "absent" | "reachable";
-      browserTransport: "direct" | "relayed";
+      browserTransport: "direct" | "relayed" | "blocked";
       hosted: true;
       configured?: boolean;
       source?: "file" | "absent";
@@ -1028,7 +1028,10 @@ export class BrowserHostedGuiRuntime {
           defaults: {},
         })),
         workflows: OPENCANDLE_WORKFLOWS,
-        providers: providerReport.available.map(serializeHostedProvider),
+        providers: [
+          ...providerReport.available.map(serializeHostedProvider),
+          ...providerReport.unavailable.map(serializeHostedBlockedProvider),
+        ],
       },
       askUserPrompts: this.askUserBridge.getPrompts(),
       thinking,
@@ -1149,6 +1152,20 @@ function serializeHostedProvider(
     ...shared,
     status: isApiKeyProvider(provider) ? (credential ? "file" : "absent") : "reachable",
     browserTransport: provider.browserTransport.mode === "direct" ? "direct" : "relayed",
+    hosted: true,
+  };
+}
+
+// A provider with no hosted transport still gets a catalog row so the
+// settings page can say it is available only in the local app, instead of
+// silently omitting it.
+export function serializeHostedBlockedProvider(
+  provider: ProviderDescriptor,
+): BrowserHostedBootstrap["catalog"]["providers"][number] {
+  return {
+    ...providerCatalogBase(provider),
+    status: "absent",
+    browserTransport: "blocked",
     hosted: true,
   };
 }

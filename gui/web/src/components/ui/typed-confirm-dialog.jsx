@@ -15,6 +15,8 @@ import { Input } from "./input.jsx";
 // everyone and cannot be satisfied by a translated phrase.
 export const TYPED_CONFIRM_WORD = "DELETE";
 
+const NO_ITEMS = Object.freeze([]);
+
 function TypedConfirmBody({
   title,
   description,
@@ -72,7 +74,7 @@ export function TypedConfirmDialog({
   onOpenChange,
   title,
   description,
-  items = [],
+  items = NO_ITEMS,
   confirmLabel,
   confirmWord = TYPED_CONFIRM_WORD,
   cancelLabel = "Cancel",

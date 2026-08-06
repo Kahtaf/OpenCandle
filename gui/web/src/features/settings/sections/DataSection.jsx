@@ -31,7 +31,10 @@ function HostedData({ actions, role, setToast }) {
   const [waitingWorker, setWaitingWorker] = useState(null);
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState("");
-  const readOnly = role !== "writer" || !actions;
+  // A hosted follower forwards data commands to the elected writer through
+  // the coordinator, so only an offline tab (or a missing runtime handle)
+  // is read-only here.
+  const readOnly = role === "offline" || !actions;
   const disabled = readOnly || Boolean(busy);
   // Export only reads what this browser already holds, so it stays available
   // offline and in a follower tab. Everything that writes does not.
@@ -117,6 +120,7 @@ function HostedData({ actions, role, setToast }) {
                 ref={importRef}
                 type="file"
                 accept="application/json,.json"
+                aria-label="Import OpenCandle data file"
                 hidden
                 onChange={(event) => {
                   const file = event.target.files?.[0];
