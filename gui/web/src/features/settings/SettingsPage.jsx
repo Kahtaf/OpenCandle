@@ -10,6 +10,7 @@ export function SettingsPage({
   modelSetup,
   catalog,
   focusProvider,
+  preferencesSnapshot,
   send,
   setToast,
   onOpenProviders,
@@ -53,6 +54,7 @@ export function SettingsPage({
                   modelSetup={modelSetup}
                   catalog={catalog}
                   focusProvider={focusProvider}
+                  preferencesSnapshot={preferencesSnapshot}
                   send={send}
                   setToast={setToast}
                   onOpenProviders={onOpenProviders}

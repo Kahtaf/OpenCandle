@@ -546,6 +546,7 @@ export function AppShell() {
             modelSetup={gui.modelSetup}
             catalog={gui.catalog}
             focusProvider={search?.provider}
+            preferencesSnapshot={gui.preferencesSnapshot}
             send={gui.send}
             onOpenProviders={openProviderSettings}
             onOpenModelSetup={openModelSettings}

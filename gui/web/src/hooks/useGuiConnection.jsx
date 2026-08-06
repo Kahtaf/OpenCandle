@@ -224,6 +224,7 @@ export function useGuiConnection() {
   const pendingModelKeySaveRef = useRef("");
   const [role, setRole] = useState("connecting");
   const [catalog, setCatalog] = useState({ tools: [], workflows: [], providers: [] });
+  const [preferencesSnapshot, setPreferencesSnapshot] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
@@ -362,6 +363,13 @@ export function useGuiConnection() {
               });
             } else if (message.type === "catalog") {
               startTransition(() => setCatalog(message.catalog));
+            } else if (message.type === "preferences") {
+              startTransition(() =>
+                setPreferencesSnapshot({
+                  preferences: message.preferences || [],
+                  toolDefaults: message.toolDefaults || [],
+                }),
+              );
             } else if (message.type === "provider.status") {
               startTransition(() =>
                 setCatalog((current) =>
@@ -677,6 +685,7 @@ export function useGuiConnection() {
       currentSessionPersisted,
       coordination,
       modelSetup,
+      preferencesSnapshot,
       supportsSessionActions,
       setToast,
       send,
@@ -698,6 +707,7 @@ export function useGuiConnection() {
       currentSessionId,
       currentSessionPersisted,
       modelSetup,
+      preferencesSnapshot,
       supportsSessionActions,
       setToast,
       send,

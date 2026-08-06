@@ -23,7 +23,7 @@ import { useRuntimeTransport } from "../../../runtime/runtime-transport-context.
  * and `tool_defaults`. Read and delete only. Editing a saved value is out of
  * scope; a wrong value is removed and re-learned from the next conversation.
  */
-export function PreferencesSection({ role = "writer", setToast }) {
+export function PreferencesSection({ role = "writer", setToast, preferencesSnapshot }) {
   const transport = useRuntimeTransport();
   const hosted = transport?.kind === "hosted";
   // Only a local follower is read-only. A hosted follower forwards mutations to
@@ -58,6 +58,35 @@ export function PreferencesSection({ role = "writer", setToast }) {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
+  }, [load]);
+
+  // The local server broadcasts a fresh snapshot after any preference
+  // mutation, including one made from another window. Adopt it directly.
+  useEffect(() => {
+    if (!preferencesSnapshot) return;
+    setSnapshot({
+      preferences: Array.isArray(preferencesSnapshot.preferences)
+        ? preferencesSnapshot.preferences
+        : [],
+      toolDefaults: Array.isArray(preferencesSnapshot.toolDefaults)
+        ? preferencesSnapshot.toolDefaults
+        : [],
+    });
+    setError("");
+  }, [preferencesSnapshot]);
+
+  // Agent turns can persist a new preference without a broadcast reaching
+  // this tab, so returning to the page re-reads the durable store.
+  useEffect(() => {
+    const refetch = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", refetch);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", refetch);
+    };
   }, [load]);
 
   const runDelete = useCallback(

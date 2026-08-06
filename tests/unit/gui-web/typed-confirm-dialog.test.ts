@@ -94,6 +94,33 @@ describe("TypedConfirmDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("forgets a typed confirmation when the dialog closes and reopens", () => {
+    const { input } = render();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(input, "DELETE");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      root.render(
+        React.createElement(TypedConfirmDialog, {
+          open: false,
+          onOpenChange: () => {},
+          title: "Clear all data?",
+          confirmLabel: "Clear all",
+          onConfirm: () => {},
+        }),
+      );
+    });
+    expect(document.querySelector('[data-slot="typed-confirm-dialog"]')).toBeNull();
+    const reopened = render({ open: true });
+    expect(reopened.input.value).toBe("");
+    expect(reopened.confirm.disabled).toBe(true);
+  });
+
   it("stays disabled while the action is pending", () => {
     const { input, confirm } = render({ pending: true });
 

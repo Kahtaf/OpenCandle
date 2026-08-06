@@ -235,6 +235,33 @@ describe("Settings preferences section", () => {
     expect(document.body.textContent).not.toContain("unavailable in this window");
   });
 
+  it("adopts a pushed preferences broadcast without refetching", async () => {
+    const transport = makeTransport();
+    renderSection(transport);
+    await settle();
+    expect(document.body.textContent).toContain("risk_profile");
+
+    renderSection(transport, {
+      preferencesSnapshot: {
+          preferences: [
+            {
+              namespace: "workflow",
+              key: "moneyness_preference",
+              value: "itm",
+              source: "conversation",
+              confidence: "high",
+              updatedAt: "2026-08-06T00:00:00.000Z",
+            },
+          ],
+          toolDefaults: [],
+      },
+    });
+    await settle();
+    expect(document.body.textContent).toContain("moneyness_preference");
+    expect(document.body.textContent).not.toContain("risk_profile");
+    expect(transport.getPreferences).toHaveBeenCalledTimes(1);
+  });
+
   it("reports a failed load without pretending both stores are empty", async () => {
     const transport = makeTransport({
       getPreferences: vi.fn(async () => {

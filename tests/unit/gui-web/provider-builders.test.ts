@@ -12,7 +12,7 @@ import {
   providerIcon,
   providerStatus,
   statusLabel,
-} from "../../../gui/web/src/features/settings/provider-builders/provider-status.jsx";
+} from "../../../gui/web/src/features/settings/provider-builders/provider-status-info.js";
 import { PublicHttpProviderBuilder } from "../../../gui/web/src/features/settings/provider-builders/public-http-provider-builder.jsx";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

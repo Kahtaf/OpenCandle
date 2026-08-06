@@ -2,14 +2,14 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils.js";
 import { ProviderBuilder } from "../provider-builders/provider-builder.jsx";
+import { ProviderStatusDot } from "../provider-builders/provider-status.jsx";
 import {
-  ProviderStatusDot,
   providerIcon,
   providerStatus,
   statusColor,
-  statusLabel,
-} from "../provider-builders/provider-status.jsx";
+} from "../provider-builders/provider-status-info.js";
 import { SettingsCard, SettingsNote } from "../settings-rows.jsx";
+import { isLocalOnly, statusLine } from "./provider-row-info.js";
 
 /**
  * Settings -> Data providers.
@@ -130,32 +130,4 @@ function ProviderRowLabel({ provider, Icon, children }) {
       </div>
     </>
   );
-}
-
-// Hosted runs cannot install a CLI or read desktop browser cookies, and a
-// descriptor whose browser transport is blocked has no hosted path at all.
-export function isLocalOnly(provider) {
-  if (provider.browserTransport === "blocked") return true;
-  return provider.hosted === true && provider.kind === "external-tool";
-}
-
-export function statusLine(provider, status = providerStatus(provider)) {
-  if (status === "env") return `Managed by ${provider.envVar}`;
-  if (status === "file" || status === "configured") {
-    return provider.maskedKeyHint ? `Configured (${provider.maskedKeyHint})` : "Configured";
-  }
-  const snoozedUntil = snoozeDate(provider);
-  if (snoozedUntil) return `Snoozed until ${snoozedUntil}`;
-  if (provider.onboarding?.status === "never_ask" || status === "skipped") {
-    return "Never ask, until you turn it back on";
-  }
-  return statusLabel(status);
-}
-
-function snoozeDate(provider) {
-  const raw = provider.onboarding?.snoozeUntil;
-  if (!raw) return "";
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

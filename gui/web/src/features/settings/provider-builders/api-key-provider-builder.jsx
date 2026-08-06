@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Button } from "../../../components/ui/button.jsx";
 import { Input } from "../../../components/ui/input.jsx";
 import { cn } from "../../../lib/utils.js";
-import { ProviderStatusDot, providerStatus, statusColor, statusLabel } from "./provider-status.jsx";
+import { ProviderStatusDot } from "./provider-status.jsx";
+import { providerStatus, statusColor, statusLabel } from "./provider-status-info.js";
 
 export function ApiKeyProviderBuilder({ provider, send, setToast }) {
   const providerStateKey = `${provider.id}:${provider.status || ""}`;

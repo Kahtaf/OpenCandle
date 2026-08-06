@@ -1,13 +1,13 @@
 import { RefreshCw } from "lucide-react";
 import { Button } from "../../../components/ui/button.jsx";
 import { cn } from "../../../lib/utils.js";
+import { ProviderStatusDot } from "./provider-status.jsx";
 import {
   formatRelativeTime,
-  ProviderStatusDot,
   providerStatus,
   statusColor,
   statusLabel,
-} from "./provider-status.jsx";
+} from "./provider-status-info.js";
 
 export function PublicHttpProviderBuilder({ provider, send, setToast }) {
   const status = providerStatus(provider);
