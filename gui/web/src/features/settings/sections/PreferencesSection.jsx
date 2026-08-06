@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +23,13 @@ import { useRuntimeTransport } from "../../../runtime/runtime-transport-context.
  * and `tool_defaults`. Read and delete only. Editing a saved value is out of
  * scope; a wrong value is removed and re-learned from the next conversation.
  */
+function normalizeSnapshot(value) {
+  return {
+    preferences: Array.isArray(value?.preferences) ? value.preferences : [],
+    toolDefaults: Array.isArray(value?.toolDefaults) ? value.toolDefaults : [],
+  };
+}
+
 export function PreferencesSection({ role = "writer", setToast, preferencesSnapshot }) {
   const transport = useRuntimeTransport();
   const hosted = transport?.kind === "hosted";
@@ -33,16 +40,32 @@ export function PreferencesSection({ role = "writer", setToast, preferencesSnaps
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState("");
   const [pendingRow, setPendingRow] = useState("");
+  const [adoptedPush, setAdoptedPush] = useState(null);
+  // Bumped whenever a pushed broadcast is adopted; a fetch that started
+  // before the bump is stale and must not overwrite the newer push.
+  const pushEpochRef = useRef(0);
+
+  // The local server broadcasts a fresh snapshot after any preference
+  // mutation, including one made from another window. Adopt it during
+  // render (the sanctioned derive-state-from-props form) so no effect
+  // resets state from a prop change.
+  if (preferencesSnapshot && preferencesSnapshot !== adoptedPush) {
+    setAdoptedPush(preferencesSnapshot);
+    setSnapshot(normalizeSnapshot(preferencesSnapshot));
+    setError("");
+    pushEpochRef.current += 1;
+  }
 
   const load = useCallback(
     async (signal) => {
+      const startEpoch = pushEpochRef.current;
       try {
         const next = await transport.getPreferences(signal);
         if (signal?.aborted) return;
-        setSnapshot({
-          preferences: Array.isArray(next?.preferences) ? next.preferences : [],
-          toolDefaults: Array.isArray(next?.toolDefaults) ? next.toolDefaults : [],
-        });
+        // A broadcast that arrived while this read was in flight is newer
+        // than what the read started from; keep the pushed rows.
+        if (pushEpochRef.current !== startEpoch) return;
+        setSnapshot(normalizeSnapshot(next));
         setError("");
       } catch (loadError) {
         if (signal?.aborted) return;
@@ -59,21 +82,6 @@ export function PreferencesSection({ role = "writer", setToast, preferencesSnaps
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
-
-  // The local server broadcasts a fresh snapshot after any preference
-  // mutation, including one made from another window. Adopt it directly.
-  useEffect(() => {
-    if (!preferencesSnapshot) return;
-    setSnapshot({
-      preferences: Array.isArray(preferencesSnapshot.preferences)
-        ? preferencesSnapshot.preferences
-        : [],
-      toolDefaults: Array.isArray(preferencesSnapshot.toolDefaults)
-        ? preferencesSnapshot.toolDefaults
-        : [],
-    });
-    setError("");
-  }, [preferencesSnapshot]);
 
   // Agent turns can persist a new preference without a broadcast reaching
   // this tab, so returning to the page re-reads the durable store.

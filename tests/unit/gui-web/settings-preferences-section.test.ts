@@ -243,17 +243,17 @@ describe("Settings preferences section", () => {
 
     renderSection(transport, {
       preferencesSnapshot: {
-          preferences: [
-            {
-              namespace: "workflow",
-              key: "moneyness_preference",
-              value: "itm",
-              source: "conversation",
-              confidence: "high",
-              updatedAt: "2026-08-06T00:00:00.000Z",
-            },
-          ],
-          toolDefaults: [],
+        preferences: [
+          {
+            namespace: "workflow",
+            key: "moneyness_preference",
+            value: "itm",
+            source: "conversation",
+            confidence: "high",
+            updatedAt: "2026-08-06T00:00:00.000Z",
+          },
+        ],
+        toolDefaults: [],
       },
     });
     await settle();

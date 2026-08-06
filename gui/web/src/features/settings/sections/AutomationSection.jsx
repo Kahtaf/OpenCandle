@@ -11,7 +11,9 @@ export function AutomationSection({ role, setToast }) {
   const transport = useRuntimeTransport();
   const hosted = transport.kind === "hosted";
   const invokeTool = useSettingsToolInvoker();
-  const readOnly = role !== "writer";
+  // Only a local follower is read-only. A hosted follower forwards mutations
+  // to the elected writer, exactly as saved market state and preferences do.
+  const readOnly = role !== "writer" && !hosted;
   const [saved, setSaved] = useState(false);
   const [webhook, setWebhook] = useState("unknown");
 
