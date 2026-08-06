@@ -106,6 +106,15 @@ function window52Weeks(bars) {
   return bars.filter((bar) => bar.timeMs >= targetMs);
 }
 
+// The daily series can still end at the previous session while the quote
+// already carries the current one, so the live price and the session's own
+// range join the 52-week window. A figure that is not a usable price is left
+// out rather than dragging the range to zero.
+function sessionExtreme(options, key, current) {
+  const value = options?.[key];
+  return Number.isFinite(value) && value > 0 ? value : current;
+}
+
 function highOf(bar) {
   return Number.isFinite(bar.high) && bar.high > 0 ? bar.high : bar.close;
 }
@@ -155,9 +164,14 @@ export function deriveHorizonReturns(bars, options = {}) {
 
   const window = window52Weeks(normalized);
   if (window && window.length > 0) {
-    // A price above every historical high is the new high, so the distance is
-    // zero rather than a positive number the label could not honestly carry.
-    const high = Math.max(current, ...window.map(highOf));
+    // The distance is measured from the highest price of the last 52 weeks,
+    // including the current session, so a high set today and given back since
+    // still reads as the high it was.
+    const high = Math.max(
+      current,
+      sessionExtreme(options, "sessionHigh", current),
+      ...window.map(highOf),
+    );
     const percent = percentChange(current, high);
     if (percent != null) entries.push({ key: "fromHigh52w", percent });
   }
@@ -238,12 +252,20 @@ export function deriveKeyLevels(bars, options = {}) {
 
   const window = window52Weeks(normalized);
   if (window && window.length > 0) {
-    // The live price is itself part of the last 52 weeks, and the daily bars
+    // The current session is part of the last 52 weeks, and the daily bars
     // behind these levels are fetched separately from the quote. Leaving the
-    // price out would let the hero strip report a new high while this card
+    // session out would let the hero strip report a new high while this card
     // offered an alert at a level the price has already passed.
-    push("week52High", "52-week high", Math.max(current, ...window.map(highOf)));
-    push("week52Low", "52-week low", Math.min(current, ...window.map(lowOf)));
+    push(
+      "week52High",
+      "52-week high",
+      Math.max(current, sessionExtreme(options, "sessionHigh", current), ...window.map(highOf)),
+    );
+    push(
+      "week52Low",
+      "52-week low",
+      Math.min(current, sessionExtreme(options, "sessionLow", current), ...window.map(lowOf)),
+    );
   }
   push("sma20", "20-day average", movingAverage(normalized, 20));
   push("sma50", "50-day average", movingAverage(normalized, 50));
@@ -320,6 +342,9 @@ export function buildSymbolViewModel({ bars, quote, historyStale, historyAsOf } 
   });
   const low = quoteOk ? quote.low : undefined;
   const high = quoteOk ? quote.high : undefined;
+  // The 52-week window reads the current session from the quote, because the
+  // daily history behind it can still end at the previous one.
+  const window52 = { currentPrice, sessionHigh: high, sessionLow: low };
 
   return {
     currentPrice: Number.isFinite(currentPrice) ? currentPrice : null,
@@ -328,8 +353,8 @@ export function buildSymbolViewModel({ bars, quote, historyStale, historyAsOf } 
       Number.isFinite(low) && Number.isFinite(high) && high >= low && high > 0
         ? { low, high }
         : null,
-    horizonReturns: deriveHorizonReturns(normalized, { currentPrice }),
-    keyLevels: deriveKeyLevels(normalized, { currentPrice }),
+    horizonReturns: deriveHorizonReturns(normalized, window52),
+    keyLevels: deriveKeyLevels(normalized, window52),
     trend: deriveTrendSummary(normalized, { currentPrice }),
     volume,
     volumeLabel: formatVolumeContext(volume),

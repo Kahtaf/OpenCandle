@@ -173,6 +173,24 @@ describe("deriveKeyLevels", () => {
     expect(low?.distancePercent).toBeCloseTo(0, 6);
   });
 
+  it("counts the session's own high and low inside the 52-week range", () => {
+    // The daily history can still end at yesterday while the quote already
+    // carries today's range, so a new high set intraday and given back must
+    // not be reported as the current price.
+    const levels = deriveKeyLevels(FULL_YEAR, {
+      currentPrice: 480,
+      sessionHigh: 620,
+      sessionLow: 40,
+    });
+    expect(levels.find((level) => level.key === "week52High")?.value).toBe(620);
+    expect(levels.find((level) => level.key === "week52Low")?.value).toBe(40);
+    expect(
+      deriveHorizonReturns(FULL_YEAR, { currentPrice: 480, sessionHigh: 620 }).find(
+        (entry) => entry.key === "fromHigh52w",
+      )?.percent,
+    ).toBeCloseTo((480 / 620 - 1) * 100, 6);
+  });
+
   it("omits levels the history cannot support", () => {
     expect(deriveKeyLevels(PARTIAL_YEAR, { currentPrice: 219 }).map((level) => level.key)).toEqual([
       "sma20",
@@ -263,6 +281,18 @@ describe("buildSymbolViewModel", () => {
       hasDailyHistory: false,
     });
     expect(view.trend).toEqual({ rows: [], sentence: null });
+  });
+
+  it("hands the quote's own session range to the 52-week levels", () => {
+    const view = buildSymbolViewModel({
+      bars: FULL_YEAR,
+      quote: { status: "ok", price: 600, high: 620, low: 590 },
+    });
+    expect(view.keyLevels.find((level) => level.key === "week52High")?.value).toBe(620);
+    expect(view.horizonReturns.find((entry) => entry.key === "fromHigh52w")?.percent).toBeCloseTo(
+      (600 / 620 - 1) * 100,
+      6,
+    );
   });
 
   it("carries the history freshness the page has to disclose", () => {
