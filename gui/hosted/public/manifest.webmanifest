@@ -1,0 +1,25 @@
+{
+  "name": "OpenCandle",
+  "short_name": "OpenCandle",
+  "id": "/",
+  "description": "Open source financial investigator",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#34474e",
+  "icons": [
+    {
+      "src": "/icons/opencandle-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/opencandle-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

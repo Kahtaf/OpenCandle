@@ -55,7 +55,10 @@ describe("AllocationDonut", () => {
     );
 
     expect(html).toContain('data-slot="allocation-donut"');
-    expect(html).toContain("$1,234.50");
+    // The portfolio total belongs to the stat header, so the donut does not
+    // print it a second time in its own centre.
+    expect(html).not.toContain("$1,234.50");
+    expect(html).not.toContain("Total value");
     expect(html).toContain("AAPL");
     expect(html).toContain("60.0%");
     expect(html).toContain("$740.70");

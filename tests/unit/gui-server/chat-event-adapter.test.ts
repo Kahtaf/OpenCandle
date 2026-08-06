@@ -5,6 +5,119 @@ import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapt
 import { reduceChatEvents } from "../../../gui/shared/event-reducer.js";
 
 describe("sessionEntriesToChatEvents", () => {
+  it("renders persisted assistant failures instead of dropping empty error messages", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("a1", {
+          role: "assistant",
+          content: [],
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5-mini",
+          usage: usage(),
+          stopReason: "error",
+          errorMessage: "OpenAI API error (401): invalid_api_key",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toEqual([
+      expect.objectContaining({ type: "session.updated", seq: 1 }),
+      {
+        type: "custom.message",
+        sessionId: "s1",
+        messageId: "model-error-a1",
+        customType: "opencandle-model-run-failed",
+        content: [{ type: "text", text: "OpenAI API error (401): invalid_api_key" }],
+        details: {
+          source: "persisted-assistant",
+          reason: "model_error",
+          provider: "openai",
+          model: "gpt-5-mini",
+        },
+        seq: 2,
+      },
+    ]);
+  });
+
+  it("keeps the visible user prompt on a synthesized failure card for retry after reload", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "compare AAPL and MSFT",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          role: "assistant",
+          content: [],
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5-mini",
+          usage: usage(),
+          stopReason: "error",
+          errorMessage: "OpenAI API error (401): invalid_api_key",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        customType: "opencandle-model-run-failed",
+        details: expect.objectContaining({ prompt: "compare AAPL and MSFT" }),
+      }),
+    );
+  });
+
+  it("deduplicates only the assistant failure paired with an explicit failure card", () => {
+    const failedAssistant = (): Message =>
+      ({
+        role: "assistant",
+        content: [],
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-5-mini",
+        usage: usage(),
+        stopReason: "error",
+        errorMessage: "OpenAI API error (401): invalid_api_key",
+        timestamp: Date.now(),
+      }) as Message;
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("a1", failedAssistant()),
+        {
+          type: "custom_message",
+          id: "cm1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-model-run-failed",
+          content: "Chat could not authenticate the configured model key.",
+        } as unknown as SessionEntry,
+        messageEntry("u2", {
+          role: "user",
+          content: "second prompt",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a2", failedAssistant()),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(
+      events
+        .filter(
+          (event) =>
+            event.type === "custom.message" && event.customType === "opencandle-model-run-failed",
+        )
+        .map((event) => (event.type === "custom.message" ? event.messageId : "")),
+    ).toEqual(["cm1", "model-error-a2"]);
+  });
+
   it("converts messages and paired tool calls into canonical events", () => {
     const events = sessionEntriesToChatEvents(
       [
@@ -89,6 +202,40 @@ describe("sessionEntriesToChatEvents", () => {
     });
     // The marker entry itself must not render as a separate message.
     expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
+  });
+
+  it("preserves a slash command persisted immediately before its workflow marker", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("original", "opencandle-user-input", {
+          original: "/analyze MSFT",
+          attachments: [],
+        }),
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+          analystsTotal: 5,
+        }),
+        messageEntry("workflow-user-1", {
+          role: "user",
+          content: "Begin comprehensive analysis of MSFT.",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "message.completed",
+        content: [{ type: "text", text: "/analyze MSFT" }],
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        customType: "opencandle-workflow-step",
+      }),
+    );
   });
 
   it("adapts persisted workflow prompts into steps while preserving genuine user turns", () => {
@@ -223,7 +370,7 @@ describe("sessionEntriesToChatEvents", () => {
     ).toHaveLength(3);
   });
 
-  it("keeps the final validation prompt in its workflow group", () => {
+  it("closes the workflow group after terminal validation", () => {
     const events = sessionEntriesToChatEvents(
       [
         customEntry("workflow", "opencandle-workflow", {
@@ -237,9 +384,9 @@ describe("sessionEntriesToChatEvents", () => {
         } as Message),
         messageEntry("assistant-synthesis", assistantMessage("Synthesis output")),
         customEntry("validation", "opencandle-validation", { passed: true, mismatches: [] }),
-        messageEntry("workflow-user-validation", {
+        messageEntry("genuine-follow-up", {
           role: "user",
-          content: "[Validation Check] Verify the synthesis evidence.",
+          content: "What is the biggest risk?",
           timestamp: Date.now(),
         } as Message),
       ],
@@ -248,21 +395,52 @@ describe("sessionEntriesToChatEvents", () => {
 
     expect(
       events.filter(
+        (event) => event.type === "message.completed" && event.messageId === "genuine-follow-up",
+      ),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
         (event) =>
-          event.type === "message.completed" && event.messageId === "workflow-user-validation",
+          event.type === "custom.message" && event.messageId === "workflow-step-genuine-follow-up",
       ),
     ).toHaveLength(0);
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "custom.message",
-        messageId: "workflow-step-workflow-user-validation",
-        customType: "opencandle-workflow-step",
-        details: expect.objectContaining({
-          label: "Validation and synthesis",
-          stage: "validation",
+  });
+
+  it("closes a non-synthesis workflow group after its terminal completion marker", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("workflow", "opencandle-workflow", { workflow: "portfolio_builder" }),
+        customEntry("original", "opencandle-user-input", { original: "Build a portfolio" }),
+        messageEntry("workflow-user-final", {
+          role: "user",
+          content: "Present the final portfolio draft",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("assistant-final", assistantMessage("Portfolio output")),
+        customEntry("workflow-complete", "opencandle-workflow-complete", {
+          workflow: "portfolio_builder",
+          status: "completed",
         }),
-      }),
+        messageEntry("genuine-follow-up", {
+          role: "user",
+          content: "What is the biggest risk?",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
     );
+
+    expect(
+      events.filter(
+        (event) => event.type === "message.completed" && event.messageId === "genuine-follow-up",
+      ),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.messageId === "workflow-step-genuine-follow-up",
+      ),
+    ).toHaveLength(0);
   });
 
   it("does not apply an analyst stage to earlier unclassified workflow prompts", () => {
@@ -373,6 +551,78 @@ describe("sessionEntriesToChatEvents", () => {
       content: [{ type: "text", text: "am I too concentrated?" }],
       attachments: [{ kind: "portfolio", label: "Portfolio" }],
     });
+  });
+
+  it("does not expose an internal workflow prompt after a retroactive attachment marker", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content:
+            "analyze this portfolio\n\n[Attached by user — portfolio]\nPortfolio lots:\n- ASTS",
+          timestamp: Date.now(),
+        } as Message),
+        customEntry("original", "opencandle-user-input", {
+          original: "analyze this portfolio",
+          attachments: [{ kind: "portfolio", label: "Portfolio" }],
+        }),
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+        }),
+        messageEntry("workflow-user", {
+          role: "user",
+          content: "Internal analyst prompt",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "workflow-step-workflow-user",
+      }),
+    );
+  });
+
+  it("preserves a slash command marker after an intervening custom entry", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("previous-user", {
+          role: "user",
+          content: "previous prompt",
+          timestamp: Date.now(),
+        } as Message),
+        {
+          type: "custom_message",
+          id: "notice",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-model-setup",
+          content: "Previous turn notice",
+        } as unknown as SessionEntry,
+        customEntry("original", "opencandle-user-input", { original: "/analyze MSFT" }),
+        customEntry("workflow", "opencandle-workflow", {
+          workflow: "comprehensive_analysis",
+        }),
+        messageEntry("workflow-user", {
+          role: "user",
+          content: "Internal analyst prompt",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "message.completed",
+        messageId: "workflow-user",
+        content: [{ type: "text", text: "/analyze MSFT" }],
+      }),
+    );
   });
 
   it("preserves visible custom messages as custom chat events", () => {

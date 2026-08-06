@@ -6,10 +6,16 @@ import {
   type ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { validateModelKey } from "../onboarding/validate-model-key.js";
+import { previouslyValidatedModelKeyInteraction } from "./model-key-login-guard.js";
+import {
+  type FirstClassModelProviderId,
+  modelSetupProviders,
+  sortModels,
+} from "./model-provider-catalog.js";
 
 type SetupMode = "startup" | "manual";
 type SetupRequirement = "ready" | "select_model" | "connect_auth";
-type ApiKeyProviderId = "google" | "openai" | "anthropic";
+type ApiKeyProviderId = FirstClassModelProviderId;
 type OAuthProviderChoice = "google-gemini-cli" | "openai-codex" | "anthropic" | "advanced";
 type SetupResult = "ready" | "shutdown" | "cancelled";
 
@@ -26,9 +32,12 @@ type SetupResult = "ready" | "shutdown" | "cancelled";
  */
 const DEFAULT_LLM_MODELS: Record<string, { provider: string; id: string }> = {
   // API-key providers
-  google: { provider: "google", id: "gemini-2.5-flash" },
-  openai: { provider: "openai", id: "gpt-5-mini" },
-  anthropic: { provider: "anthropic", id: "claude-haiku-4-5" },
+  ...Object.fromEntries(
+    modelSetupProviders.map((provider) => [
+      provider.id,
+      { provider: provider.defaultProvider, id: provider.defaultModel },
+    ]),
+  ),
   // OAuth providers
   "google-gemini-cli": { provider: "google-gemini-cli", id: "gemini-2.5-flash" },
   "openai-codex": { provider: "openai-codex", id: "gpt-5.1-codex-mini" },
@@ -36,20 +45,8 @@ const DEFAULT_LLM_MODELS: Record<string, { provider: string; id: string }> = {
 
 /** Human-readable labels for the three API-key providers, used in preamble copy. */
 const API_KEY_PROVIDER_LABELS: Record<ApiKeyProviderId, string> = {
-  google: "Google Gemini",
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-};
-
-function sortModels(models: Model<Api>[], preferredProvider?: string): Model<Api>[] {
-  return [...models].sort((a, b) => {
-    const aPreferred = preferredProvider && a.provider === preferredProvider ? -1 : 0;
-    const bPreferred = preferredProvider && b.provider === preferredProvider ? -1 : 0;
-    if (aPreferred !== bPreferred) return aPreferred - bPreferred;
-    const byProvider = a.provider.localeCompare(b.provider);
-    return byProvider !== 0 ? byProvider : a.id.localeCompare(b.id);
-  });
-}
+  ...Object.fromEntries(modelSetupProviders.map((provider) => [provider.id, provider.label])),
+} as Record<ApiKeyProviderId, string>;
 
 function getAvailableModels(ctx: ExtensionContext, preferredProvider?: string): Model<Api>[] {
   ctx.modelRegistry.refresh();
@@ -219,17 +216,23 @@ export async function runApiKeySetup(
     );
     return false;
   }
-  await modelRuntime.login(provider, "api_key", {
-    prompt: async () => trimmed,
-    notify: () => {},
-  });
-  await ctx.modelRegistry.refresh();
-  ctx.ui.notify(
-    validation.status === "transient"
-      ? `Saved — couldn't verify (network issue). ${label} API key saved to OpenCandle.`
-      : `${label} API key saved to OpenCandle.`,
-    "info",
+  if (validation.status !== "valid") {
+    ctx.ui.notify(
+      `Couldn't verify the ${validation.providerLabel} key (${validation.reason}). The key was not saved. Try again when the provider is reachable.`,
+      "error",
+    );
+    return false;
+  }
+  await modelRuntime.login(
+    provider,
+    "api_key",
+    previouslyValidatedModelKeyInteraction({
+      prompt: async () => trimmed,
+      notify: () => {},
+    }),
   );
+  await ctx.modelRegistry.refresh();
+  ctx.ui.notify(`${label} API key saved to OpenCandle.`, "info");
   return true;
 }
 

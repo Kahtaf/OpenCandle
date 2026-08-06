@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
+import { initDatabase, initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import {
   loadOnboardingState,
   markProviderNeverAsk,
@@ -20,6 +21,14 @@ vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   return {
     ...actual,
     initDefaultDatabase: () => actual.initDatabase(":memory:"),
+  };
+});
+
+vi.mock("../../../src/memory/sqlite.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/memory/sqlite.js")>();
+  return {
+    ...actual,
+    initDefaultDatabase: vi.fn(() => actual.initDatabase(":memory:")),
   };
 });
 
@@ -401,6 +410,8 @@ describe("opencandle extension", () => {
   });
 
   describe("memory integration", () => {
+    const stateDatabaseFactory = () => initDatabase(":memory:");
+
     function createSessionCtx() {
       return {
         hasUI: false,
@@ -416,7 +427,7 @@ describe("opencandle extension", () => {
 
     it("initializes storage on session_start", async () => {
       const fake = createFakeApi();
-      openCandleExtension(fake.api);
+      openCandleExtension(fake.api, { stateDatabaseFactory });
       await initMemory(fake);
 
       // Storage is initialized — before_agent_start should include system prompt
@@ -427,6 +438,17 @@ describe("opencandle extension", () => {
       );
       expect(result.systemPrompt).toContain("BASE");
       expect(result.systemPrompt).toContain("OpenCandle");
+    });
+
+    it("provisions native persistence when loaded as a standalone Pi extension", async () => {
+      vi.mocked(initDefaultDatabase).mockClear();
+      const fake = createFakeApi();
+      openCandleExtension(fake.api);
+      const callsBeforeSessionStart = vi.mocked(initDefaultDatabase).mock.calls.length;
+
+      await initMemory(fake);
+
+      expect(vi.mocked(initDefaultDatabase).mock.calls.length).toBe(callsBeforeSessionStart + 1);
     });
 
     it("records workflow runs after router dispatch", async () => {
@@ -444,6 +466,7 @@ describe("opencandle extension", () => {
       };
       openCandleExtension(fake.api, {
         routerLlmClient: { complete: async () => JSON.stringify(workflowOutput) },
+        stateDatabaseFactory,
       });
       await initMemory(fake);
 
@@ -481,6 +504,7 @@ describe("opencandle extension", () => {
       };
       openCandleExtension(fake.api, {
         routerLlmClient: { complete: async () => JSON.stringify(fallbackOutput) },
+        stateDatabaseFactory,
       });
       await initMemory(fake);
 
@@ -596,6 +620,46 @@ describe("opencandle extension", () => {
     // manager stub. An empty branch is the right default — these fixtures
     // simulate a fresh turn, not a multi-turn conversation.
     const emptySessionManager = { getBranch: () => [], getSessionId: () => "sid" };
+
+    it.each(["length", "error", "aborted"] as const)(
+      "restores the pre-route active tools after a terminal %s turn",
+      async (stopReason) => {
+        vi.stubEnv("OPENCANDLE_TOOL_SCOPE_MODE", "enforce");
+        resetConfigCache();
+        const fake = createFakeApi();
+        const baselineTools = ["get_stock_quote", "get_crypto_price"];
+        (fake.api.getAllTools as ReturnType<typeof vi.fn>).mockReturnValue(
+          getOpenCandleToolDefinitions(),
+        );
+        (fake.api.getActiveTools as ReturnType<typeof vi.fn>).mockReturnValue(baselineTools);
+        openCandleExtension(fake.api, { routerLlmClient: mockClient(fallbackOutput) });
+
+        const inputHandler = fake.handlers.get("input")?.[0];
+        await inputHandler!(
+          { type: "input", text: "What is happening with ASTS?", source: "interactive" },
+          {
+            isIdle: () => true,
+            ui: { notify: vi.fn() },
+            model: { id: "m" },
+            sessionManager: emptySessionManager,
+          },
+        );
+
+        expect(fake.api.setActiveTools).toHaveBeenCalled();
+        const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+        await turnEndHandler!(
+          {
+            type: "turn_end",
+            turnIndex: 0,
+            message: { role: "assistant", content: [], stopReason },
+            toolResults: [],
+          },
+          {},
+        );
+
+        expect(fake.api.setActiveTools).toHaveBeenLastCalledWith(baselineTools);
+      },
+    );
 
     it("returns a transform result when router dispatches a workflow", async () => {
       const fake = createFakeApi();
@@ -1198,6 +1262,59 @@ describe("opencandle extension", () => {
       expect(result?.content[0]?.text).toContain("silenced=true");
       expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
 
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("gives hosted users provider-settings instructions instead of a dead connect flow", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-hosted-provider-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Show provider setup instructions" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      const input = vi.fn();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage reason=missing unlocks="fundamentals" fallback=none]',
+        ),
+        { hasUI: false, ui: { input, notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.arrayContaining(["Show provider setup instructions"]),
+        }),
+      );
+      expect(input).not.toHaveBeenCalled();
+      expect(result?.content[0]?.text).toContain("Providers settings");
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("keeps inline provider connection available in an interactive Pi UI", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-interactive-provider-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Continue without Alpha Vantage for this run" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+
+      await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage reason=missing unlocks="fundamentals" fallback=none]',
+        ),
+        { hasUI: true, ui: { input: vi.fn(), notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.arrayContaining([expect.stringMatching(/^Connect now/)]),
+        }),
+      );
       rmSync(home, { recursive: true, force: true });
     });
 

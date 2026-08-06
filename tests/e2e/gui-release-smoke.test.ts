@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Browser, chromium, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-
 import type { ModelSetupRequirement } from "../../gui/server/model-setup.js";
+import { FIRST_RUN_SETUP_DISMISSED_KEY } from "../../gui/web/src/features/onboarding/setup-dismissal.js";
 
 const runGuiReleaseSmoke = process.env.OPENCANDLE_GUI_RELEASE_SMOKE === "1";
 const releaseStatusValues = new Set<ModelSetupRequirement>([
@@ -66,6 +66,21 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
       headless: true,
     });
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    // Every test below is written as a first run: it navigates to the home
+    // route and expects the setup dialog to auto-open. The product remembers a
+    // dismissed dialog per browser profile, and this suite shares one profile
+    // across tests, so one test's dismissal would otherwise suppress the dialog
+    // for all the tests after it. Forget the record on every navigation, which
+    // is what a genuinely fresh profile would look like. Do not do this by
+    // weakening the product: the persistence itself is covered by
+    // tests/unit/gui-web/first-run-setup-dialog.test.ts.
+    await page.addInitScript((key: string) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // A profile without storage access is already a fresh first run.
+      }
+    }, FIRST_RUN_SETUP_DISMISSED_KEY);
   });
 
   afterAll(async () => {
@@ -89,8 +104,10 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
     await expectVisible(page.getByText("OpenCandle").first());
-    await expectVisible(page.getByText("Connect an AI model"));
-    await expectVisible(page.getByRole("button", { name: "No model connected" }));
+    // First-run setup auto-opens as a modal dialog over the home surface.
+    const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+    await expectVisible(page.getByText("Market research, on your machine"));
 
     const bootstrap = await page.evaluate(async () => {
       const response = await fetch("/api/bootstrap");
@@ -100,53 +117,99 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     expect(bootstrap.modelSetup.requirement).toBe("connect_auth");
     expect(JSON.stringify(bootstrap.modelSetup)).not.toContain("needs_api_key");
 
-    // Shipped 0.11.0 behavior: the composer stays usable for drafting during
-    // first-run setup; only sending is blocked until a model is ready.
-    await expect(page.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await page.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+    const screenshot = await page.screenshot({ fullPage: true });
+    writeEvidence("first-run-home.png", screenshot);
+
+    await page.getByRole("button", { name: "Skip" }).click();
+    await expectVisible(page.getByRole("heading", { name: "Connect an AI model" }));
+  });
+
+  // The invariant: first-run setup must not strand the user. It is dismissible
+  // by Escape AND by the close control, and once dismissed the composer is
+  // FULLY usable — a real pointer click at its centre plus real keystrokes, no
+  // point-hunting around an overlapping dialog. Sending stays blocked until a
+  // model is connected. Do not weaken any of this to an `isEnabled()` check.
+  it("dismisses first-run setup with Escape and frees the composer", async () => {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+
+    await page.keyboard.press("Escape");
+    await setupDialog.waitFor({ state: "hidden" });
+
+    const composer = page.getByLabel("Message OpenCandle");
+    await expect(composer.isEnabled()).resolves.toBe(true);
+    // Nothing may sit on top of the composer's centre once setup is dismissed.
+    const centreHitsComposer = await page.evaluate(() => {
+      const composerEl = document.getElementById("chat-composer");
+      if (!composerEl) return false;
+      const box = composerEl.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return hit === composerEl;
+    });
+    expect(centreHitsComposer).toBe(true);
+
+    await composer.click();
+    await page.keyboard.type("Draft while I find my key");
+    await expect(composer.inputValue()).resolves.toBe("Draft while I find my key");
     await expect(page.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );
+  });
 
-    const screenshot = await page.screenshot({ fullPage: true });
-    writeEvidence("first-run-home.png", screenshot);
+  it("dismisses first-run setup from its close control", async () => {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+
+    await setupDialog.getByRole("button", { name: "Close dialog" }).click();
+    await setupDialog.waitFor({ state: "hidden" });
+
+    const composer = page.getByLabel("Message OpenCandle");
+    await composer.click();
+    await page.keyboard.type("Drafting after closing setup");
+    await expect(composer.inputValue()).resolves.toBe("Drafting after closing setup");
   });
 
   it("rejects an invalid OpenAI key inline without connecting a model", async () => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-    const setupCard = page
-      .getByRole("heading", { name: "Connect an AI model" })
-      .locator("xpath=../..");
-    // The provider heading sits in an inner wrapper div; the card with the
-    // key textbox and Save button is one level further up.
-    const openAiCard = setupCard
-      .getByRole("heading", { name: "OpenAI", exact: true })
-      .locator("xpath=../..");
-    await openAiCard.getByRole("textbox", { name: "API key" }).fill("garbage-openai-key");
-    await openAiCard.getByRole("button", { name: "Save key" }).click();
+    await page.getByRole("button", { name: "Skip" }).click();
+    const setupCard = page.locator('[data-slot="connect-model-panel"]');
+    await setupCard.getByRole("button", { name: /^OpenAI/ }).click();
+    await setupCard.getByRole("textbox", { name: "API key" }).fill("garbage-openai-key");
+    await setupCard.getByRole("button", { name: "Save key" }).click();
 
     await expectVisible(
       setupCard.getByRole("alert").filter({ hasText: "Key was rejected by OpenAI" }),
     );
+    // Escape must still dismiss after a failed save. A Radix Toast mounts its
+    // own dismissable layer, and DismissableLayer routes Escape only to the
+    // highest layer — so re-adding a toast for an error already shown inline
+    // here would silently make Escape dead. That is what this asserts.
+    // The composer sits behind the modal, so dismiss before asserting that the
+    // rejected key connected no model.
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
     await expectVisible(page.getByRole("button", { name: "No model connected" }));
   });
 
   it("rejects a Google API_KEY_INVALID response from the local probe stub", async () => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-    const setupCard = page
-      .getByRole("heading", { name: "Connect an AI model" })
-      .locator("xpath=../..");
-    const googleCard = setupCard
-      .getByRole("heading", { name: "Google Gemini", exact: true })
-      .locator("xpath=../..");
-    await googleCard.getByRole("textbox", { name: "API key" }).fill("garbage-google-key");
-    await googleCard.getByRole("button", { name: "Save key" }).click();
+    await page.getByRole("button", { name: "Skip" }).click();
+    const setupCard = page.locator('[data-slot="connect-model-panel"]');
+    await setupCard.getByRole("button", { name: /^Google Gemini/ }).click();
+    await setupCard.getByRole("textbox", { name: "API key" }).fill("garbage-google-key");
+    await setupCard.getByRole("button", { name: "Save key" }).click();
 
     await expectVisible(
       setupCard.getByRole("alert").filter({ hasText: "Key was rejected by Google Gemini" }),
     );
+    // The composer sits behind the modal, so dismiss before asserting that the
+    // rejected key connected no model.
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
     await expectVisible(page.getByRole("button", { name: "No model connected" }));
   });
 
@@ -175,14 +238,26 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
   it("opens model-key management from the disconnected composer", async () => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
+    // Re-entry after dismissing first-run setup must stay discoverable: the
+    // composer's model control is the way back in.
+    const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+    await page.keyboard.press("Escape");
+    await setupDialog.waitFor({ state: "hidden" });
+
     await page.getByRole("button", { name: "No model connected" }).click();
     const manageKeys = page.getByRole("menuitem", { name: "Manage model keys…" });
     await expectVisible(manageKeys);
     await manageKeys.click();
 
+    // Manage-keys opens straight on the provider choice, one option per
+    // supported model provider, each leading to its own key form.
+    const dialog = page.getByRole("dialog");
     await expect(
-      page.getByRole("dialog").getByRole("textbox", { name: "API key" }).count(),
+      dialog.locator('[data-slot="provider-option"]').count(),
     ).resolves.toBeGreaterThanOrEqual(3);
+    await dialog.getByRole("button", { name: /^OpenAI/ }).click();
+    await expectVisible(dialog.getByRole("textbox", { name: "API key" }));
   });
 });
 

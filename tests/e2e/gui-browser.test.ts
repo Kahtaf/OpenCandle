@@ -29,7 +29,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
-    await expectVisible(page.getByRole("button", { name: "What the agent sees" }).first());
+    await expectVisible(
+      page.getByRole("button", { name: /Browse workflows, tools, and providers/ }).first(),
+    );
   });
 
   it("renders a stock quote prompt and updates context", async () => {
@@ -41,9 +43,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("Stock Quote").first(), 45_000);
     await expectVisible(page.getByText("NVDA").first());
-    await page.getByRole("button", { name: "What the agent sees" }).click();
-    await expectVisible(page.getByRole("dialog", { name: "What the agent sees" }));
-    await expectVisible(page.getByText("Recent quotes"));
+    await expectVisible(page.getByRole("button", { name: "Attach context" }));
   }, 60_000);
 
   it("renders options, filings, macro, and news tool cards", async () => {
@@ -112,14 +112,34 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
-    await expectVisible(mocked.getByText("Connect an AI model"));
+    // First run auto-opens the onboarding carousel as a modal dialog; the key
+    // form is its last step, and the provider is chosen before its key.
+    const setupDialog = mocked.getByRole("dialog", { name: "Welcome to OpenCandle" });
+    await expectVisible(setupDialog);
+    await expectVisible(mocked.getByText("Market research, on your machine"));
+
+    await setupDialog.getByRole("button", { name: "Skip" }).click();
+    await expectVisible(setupDialog.getByRole("heading", { name: "Connect an AI model" }));
+    await setupDialog.getByRole("button", { name: /Google Gemini/ }).click();
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
-    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+
+    // Setup must not strand the user: Escape dismisses, and drafting is then
+    // fully available with sending still blocked until a model is connected.
+    await mocked.keyboard.press("Escape");
+    await setupDialog.waitFor({ state: "hidden" });
+    const composer = mocked.getByLabel("Message OpenCandle");
+    await expect(composer.isEnabled()).resolves.toBe(true);
+    await composer.click();
+    await mocked.keyboard.type("Draft while I find my key");
+    await expect(composer.inputValue()).resolves.toBe("Draft while I find my key");
     await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );
+
+    // Re-entry stays discoverable from the composer's model control.
+    await mocked.getByRole("button", { name: "No model connected" }).click();
+    await expectVisible(mocked.getByRole("menuitem", { name: "Manage model keys…" }));
     await mocked.close();
   });
 
@@ -138,14 +158,35 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
             signupUrl: "https://platform.openai.com/api-keys",
           },
         ],
-        availableModels: [{ provider: "openai", id: "gpt-5-mini", label: "openai/gpt-5-mini" }],
+        availableModels: [
+          { provider: "openai", id: "gpt-5-mini", label: "openai/gpt-5-mini" },
+          { provider: "openai", id: "gpt-4.1-mini", label: "openai/gpt-4.1-mini" },
+        ],
       },
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    await mocked.getByRole("button", { name: "gpt-5-mini" }).click();
-    await expectVisible(mocked.getByRole("menuitem", { name: "Manage model keys…" }));
-    await mocked.getByRole("menuitem", { name: "Manage model keys…" }).click();
+    const modelSelector = mocked.getByRole("button", { name: "gpt-5-mini" });
+    const manageModelKeys = mocked.getByRole("menuitem", { name: "Manage model keys…" });
+    await modelSelector.click();
+    const modelMenuId = await modelSelector.getAttribute("aria-controls");
+    expect(modelMenuId).toBeTruthy();
+    const modelMenu = mocked.locator(`[id="${modelMenuId}"]`);
+    await expectVisible(manageModelKeys);
+    await modelSelector.click();
+    await manageModelKeys.waitFor({ state: "hidden" });
+    await mocked.waitForTimeout(200);
+    await expect(modelMenu.evaluate((element) => getComputedStyle(element).display)).resolves.toBe(
+      "none",
+    );
+
+    await modelSelector.click();
+    await mocked.getByRole("menuitemradio", { name: /gpt-4\.1-mini/ }).click();
+    await expectVisible(mocked.getByRole("button", { name: "gpt-4.1-mini" }));
+
+    await mocked.getByRole("button", { name: "gpt-4.1-mini" }).click();
+    await expectVisible(manageModelKeys);
+    await manageModelKeys.click();
     await expectVisible(mocked.getByRole("dialog", { name: "Connect a model" }));
     await mocked.close();
   });
@@ -171,9 +212,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
+    await mocked.getByRole("button", { name: "Skip" }).click();
     await expectVisible(mocked.getByText("Model setup changes are unavailable"));
     await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
+    // A local follower cannot even choose a provider, so the whole key path
+    // stays unreachable rather than only the Save action.
+    await expect(mocked.getByRole("button", { name: /Google Gemini/ }).isDisabled()).resolves.toBe(
+      true,
+    );
     await mocked.close();
   });
 
@@ -210,7 +256,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
-  it("sends portfolio attachments and renders last-turn context receipts", async () => {
+  it("sends portfolio attachments through the shared chat request", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       dashboard: {
@@ -229,6 +275,10 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
           validation: { passed: false, mismatchCount: 2 },
         },
       },
+    });
+    await installMockMarketState(mocked, {
+      portfolios: [{ id: 1, name: "Portfolio" }],
+      watchlists: [{ id: 1, name: "Default", isDefault: true }],
     });
     await mocked.addInitScript(() => {
       const originalFetch = window.fetch.bind(window);
@@ -279,7 +329,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByLabel("Message OpenCandle").fill("am I too concentrated?");
     await mocked.getByRole("button", { name: "Send" }).click();
 
-    await expectVisible(mocked.getByText("am I too concentrated?"));
+    await expectVisible(mocked.getByText("am I too concentrated?").first());
     await expectVisible(mocked.getByText("Portfolio").first());
     await mocked.waitForFunction(() => window.__chatRunRequests?.length === 1);
     const requestBody = await mocked.evaluate(() => window.__chatRunRequests[0]);
@@ -289,13 +339,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       attachments: [{ kind: "portfolio" }],
     });
 
-    await mocked.getByRole("button", { name: "What the agent sees" }).click();
-    await expectVisible(mocked.getByRole("dialog", { name: "What the agent sees" }));
-    await expectVisible(mocked.getByText("Last turn"));
-    await expectVisible(mocked.getByText("Portfolio builder"));
-    await expectVisible(mocked.getByText("AAPL, MSFT"));
-    await expectVisible(mocked.getByText("user 1, default 1"));
-    await expectVisible(mocked.getByText("2 mismatches"));
     await mocked.close();
   }, 30_000);
 
@@ -329,6 +372,39 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
         portfolioQuotes: [],
         portfolioSummary: null,
       },
+    });
+    await mocked.addInitScript(() => {
+      const fetchImpl = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url, window.location.origin);
+        if (!url.pathname.endsWith("/api/sessions/mock-session/runs")) {
+          return fetchImpl(input, init);
+        }
+        const prompt = JSON.parse(String(init?.body ?? "{}")).prompt;
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            for (const event of [
+              { type: "run.started", sessionId: "mock-session", runId: "cashtag-run", seq: 1 },
+              {
+                type: "message.completed",
+                sessionId: "mock-session",
+                messageId: "cashtag-user",
+                role: "user",
+                content: [{ type: "text", text: prompt }],
+                seq: 2,
+              },
+              { type: "run.completed", sessionId: "mock-session", runId: "cashtag-run", seq: 3 },
+            ]) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\\n\\n`));
+            }
+            controller.close();
+          },
+        });
+        return Promise.resolve(
+          new Response(stream, { headers: { "content-type": "text/event-stream" } }),
+        );
+      };
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
@@ -384,7 +460,19 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   it("uses the sidebar app shell as market-state navigation", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
-    await installMockMarketState(mocked);
+    await installMockMarketState(mocked, {
+      instrumentCandidates: [
+        {
+          symbol: "AA",
+          name: "Alcoa Corp.",
+          quoteType: "EQUITY",
+          assetType: "equity",
+          exchange: "NYQ",
+          provider: "yahoo",
+          score: 100,
+        },
+      ],
+    });
 
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
@@ -399,17 +487,28 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       mocked.getByText("Market State", { exact: true }).evaluate(hasScrollableAncestor),
     ).resolves.toBe(true);
 
-    const addTickerAction = mocked
-      .locator("header")
-      .filter({ hasText: "Watchlists" })
-      .getByRole("button", { name: "Add ticker" });
+    const addTickerAction = mocked.getByRole("button", { name: "Add ticker" }).first();
     await addTickerAction.click();
     await expectVisible(mocked.getByRole("heading", { name: "Add Ticker", exact: true }).first());
+    await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
+    const watchlistAlcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
+    await expectVisible(watchlistAlcoaOption);
+    await expect(watchlistAlcoaOption.evaluate(isPointerTarget)).resolves.toBe(true);
+    await watchlistAlcoaOption.click();
+    await expectVisible(mocked.getByText("Selected AA"));
     await mocked.getByRole("button", { name: "Close panel" }).click();
 
     await mocked.getByRole("link", { name: "Portfolios" }).click();
     await mocked.waitForURL("**/portfolios", { timeout: 5_000 });
     await expectVisible(mocked.getByRole("heading", { name: "Portfolios" }));
+    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
+    const alcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
+    await expectVisible(alcoaOption);
+    await expect(alcoaOption.evaluate(isPointerTarget)).resolves.toBe(true);
+    await alcoaOption.click();
+    await expectVisible(mocked.getByText("Selected AA"));
+    await mocked.getByRole("button", { name: "Close panel" }).click();
 
     await mocked.getByRole("button", { name: "Collapse sidebar" }).click();
     await mocked
@@ -425,6 +524,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Open sidebar" }).click();
     await expectVisible(mocked.getByRole("dialog", { name: "Sessions" }));
     await expectVisible(mocked.getByRole("link", { name: "Reports" }));
+    await mocked.goto(`${guiUrl}/portfolios`, { waitUntil: "networkidle" });
+    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
+    const mobileAlcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
+    await expectVisible(mobileAlcoaOption);
+    await expect(mobileAlcoaOption.evaluate(isPointerTarget)).resolves.toBe(true);
+    await mobileAlcoaOption.click();
+    await expectVisible(mocked.getByText("Selected AA"));
     await mocked.close();
   });
 
@@ -451,24 +558,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Saved-state changes are unavailable"));
     await expectVisible(mocked.getByRole("heading", { name: "Active rules" }));
     await expect(
-      mocked
-        .locator("header")
-        .filter({ hasText: "Alerts" })
-        .getByRole("button", { name: "Create alert" })
-        .isDisabled(),
+      mocked.getByRole("button", { name: "Create alert" }).first().isDisabled(),
     ).resolves.toBe(true);
-    await expect(mocked.getByRole("button", { name: "Check now" }).isDisabled()).resolves.toBe(
-      true,
-    );
+    await expectVisible(mocked.getByText("Manual checks only"));
 
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
     await expect(
-      mocked
-        .locator("header")
-        .filter({ hasText: "Watchlists" })
-        .getByRole("button", { name: "Add ticker" })
-        .isDisabled(),
+      mocked.getByRole("button", { name: "Add ticker" }).first().isDisabled(),
     ).resolves.toBe(true);
     await mocked.close();
   });
@@ -662,7 +759,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     await mocked.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
     await mocked.getByRole("button", { name: /Providers/ }).click();
-    await mocked.getByRole("button", { name: /FRED/ }).click();
+    await mocked.getByRole("option", { name: /FRED/ }).click();
 
     // The saved secret never reaches the DOM: the input starts empty and the
     // configured state is communicated with a masked hint instead.
@@ -1326,6 +1423,15 @@ async function expectVisible(locator: Locator, timeout = 5_000): Promise<void> {
   await expect(locator.isVisible()).resolves.toBe(true);
 }
 
+function isPointerTarget(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    document
+      .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      ?.closest('[role="option"]') === element
+  );
+}
+
 async function waitForRunIdle(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
@@ -1681,6 +1787,7 @@ async function installMockSocket(
           this.emit({
             type: "boot",
             role: mockOverrides.role ?? "writer",
+            supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
             sessionId: bootSessionId,
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
@@ -1719,6 +1826,15 @@ async function installMockSocket(
         if (parsed.type === "session.delete") {
           this.sessions = this.sessions.filter((session) => session.path !== parsed.path);
           this.emit({ type: "sessions", sessions: this.sessions });
+        }
+        if (parsed.type === "model.setup.select_model") {
+          this.emit({
+            type: "model.setup",
+            modelSetup: {
+              ...(mockOverrides.modelSetup ?? {}),
+              currentModel: `${parsed.provider}/${parsed.modelId}`,
+            },
+          });
         }
       }
 

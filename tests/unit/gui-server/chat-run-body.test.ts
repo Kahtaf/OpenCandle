@@ -3,10 +3,42 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildDispatchedPrompt, parseChatRunBody } from "../../../gui/server/http-routes.js";
+import { shouldPersistOriginalInputMarker } from "../../../gui/shared/chat-run-input.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 
 describe("GUI chat-run body parsing", () => {
+  it("only pre-persists original input for commands that expand into workflow turns", () => {
+    expect(shouldPersistOriginalInputMarker("/analyze $NVDA", [])).toBe(true);
+    expect(shouldPersistOriginalInputMarker("/analyze", [])).toBe(false);
+    expect(shouldPersistOriginalInputMarker("/setup", [])).toBe(false);
+    expect(shouldPersistOriginalInputMarker("/connect openai", [])).toBe(false);
+    expect(
+      shouldPersistOriginalInputMarker("Review this", [{ kind: "portfolio", label: "P" }]),
+    ).toBe(true);
+  });
+
+  it("bounds and deduplicates saved-state attachments", () => {
+    expect(
+      parseChatRunBody({
+        prompt: "review",
+        attachments: [
+          { kind: "report", id: "latest" },
+          { kind: "report", id: "latest" },
+        ],
+      }),
+    ).toEqual({ ok: false, error: "Duplicate saved attachment" });
+    expect(
+      parseChatRunBody({
+        prompt: "review",
+        attachments: Array.from({ length: 9 }, (_, index) => ({
+          kind: "report",
+          id: String(index),
+        })),
+      }),
+    ).toEqual({ ok: false, error: "Attach up to 8 saved items" });
+  });
+
   it("expands saved-context attachments as data-only user blocks", async () => {
     const originalHome = process.env.OPENCANDLE_HOME;
     const home = mkdtempSync(join(tmpdir(), "opencandle-chat-run-body-"));

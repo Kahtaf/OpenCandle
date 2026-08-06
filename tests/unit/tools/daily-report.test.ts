@@ -53,6 +53,16 @@ describe("dailyReportTool", () => {
     expect(actionDescription).toContain("Use history");
   });
 
+  it("rejects unsupported direct actions without recording a report run", async () => {
+    await expect(dailyReportTool.execute("test", { action: "list" } as never)).rejects.toThrow(
+      "Unsupported daily report action",
+    );
+
+    const db = initDefaultDatabase();
+    expect(new MarketStateService(db).listReportRuns()).toEqual([]);
+    db.close();
+  });
+
   it("generates and records a default watchlist report", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
     await watchlistTool.execute("test", { action: "add", symbol: "MSFT" });

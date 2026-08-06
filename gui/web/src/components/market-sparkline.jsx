@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { tickerLineProxySparklineUrl } from "../../../shared/ticker-line.ts";
+import {
+  isTickerLineSvg,
+  readTickerLineTextWithLimit,
+  TICKER_LINE_MAX_JSON_BYTES,
+  TICKER_LINE_MAX_SVG_BYTES,
+  tickerLineProviderSparklineUrl,
+  tickerLineProxySparklineUrl,
+  tickerLineResponseFailure,
+} from "../../../shared/ticker-line.ts";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
+import { Skeleton } from "./ui/skeleton.jsx";
 
 const SPARKLINE_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
@@ -8,9 +18,14 @@ const SPARKLINE_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 const SPARKLINE_REFRESH_INTERVAL_MS = 5 * 60_000;
+const SPARKLINE_REQUEST_TIMEOUT_MS = 10_000;
 
 export function MarketSparkline({ symbol, assetType, className = "" }) {
-  const sparklineUrl = tickerLineProxySparklineUrl(symbol, assetType);
+  const transport = useRuntimeTransport();
+  const isHosted = transport.kind === "hosted";
+  const sparklineUrl = isHosted
+    ? tickerLineProviderSparklineUrl(symbol, assetType)
+    : tickerLineProxySparklineUrl(symbol, assetType);
 
   if (!sparklineUrl) {
     return <UnavailableSparkline className={className} kind="unsupported" />;
@@ -21,12 +36,20 @@ export function MarketSparkline({ symbol, assetType, className = "" }) {
       key={sparklineUrl}
       symbol={symbol}
       sparklineUrl={sparklineUrl}
+      metadataUrl={`${sparklineUrl}&${isHosted ? "format=json" : "metadata=1"}`}
+      renderSvgFromMetadata={isHosted}
       className={className}
     />
   );
 }
 
-function TickerLineSparkline({ symbol, sparklineUrl, className }) {
+function TickerLineSparkline({
+  symbol,
+  sparklineUrl,
+  metadataUrl,
+  renderSvgFromMetadata,
+  className,
+}) {
   const [failureCount, setFailureCount] = useState(0);
   const [metadata, setMetadata] = useState({ status: "loading" });
   const [isIntersecting, setIsIntersecting] = useState(false);
@@ -50,10 +73,14 @@ function TickerLineSparkline({ symbol, sparklineUrl, className }) {
     let refreshTimer;
     const refreshMetadata = async () => {
       try {
-        const dataAsOf = await fetchSparklineMetadata(sparklineUrl, controller.signal);
+        const result = await fetchSparklineMetadata(
+          metadataUrl,
+          controller.signal,
+          renderSvgFromMetadata,
+        );
         if (!controller.signal.aborted) {
           setFailureCount(0);
-          setMetadata({ status: "ok", dataAsOf });
+          setMetadata({ status: "ok", ...result });
         }
       } catch (error) {
         if (error?.name !== "AbortError") setMetadata({ status: "failed" });
@@ -68,7 +95,7 @@ function TickerLineSparkline({ symbol, sparklineUrl, className }) {
       window.clearTimeout(refreshTimer);
       controller.abort();
     };
-  }, [isVisible, sparklineUrl]);
+  }, [isVisible, metadataUrl, renderSvgFromMetadata]);
 
   let content;
   if (metadata.status === "loading") {
@@ -76,26 +103,36 @@ function TickerLineSparkline({ symbol, sparklineUrl, className }) {
   } else if (metadata.status === "failed" || failureCount > 1) {
     content = <UnavailableSparkline contained kind="provider" />;
   } else {
-    const versionedImageUrl = `${sparklineUrl}&asOf=${encodeURIComponent(metadata.dataAsOf)}`;
+    const versionedImageUrl =
+      metadata.imageUrl ?? `${sparklineUrl}&asOf=${encodeURIComponent(metadata.dataAsOf)}`;
     const imageUrl =
-      failureCount === 0 ? versionedImageUrl : `${versionedImageUrl}&retry=${failureCount}`;
+      failureCount === 0
+        ? versionedImageUrl
+        : `${versionedImageUrl}${metadata.imageUrl ? "#" : "&"}retry=${failureCount}`;
     const asOf = formatSparklineAsOf(metadata.dataAsOf);
     content = (
-      <figure data-slot="market-sparkline" data-source="Ticker Line" className="w-full">
+      // The per-row caption is deliberately gone; freshness for a saved list is
+      // stated once by its quote badge. The as-of stays reachable on the chart
+      // itself, by hover as well as by assistive technology, so it is not
+      // available only to one of them.
+      <div
+        data-slot="market-sparkline"
+        data-state="ready"
+        className="w-full"
+        title={`Price chart as of ${asOf}`}
+      >
         <img
           src={imageUrl}
-          alt={`${symbol} 1-day price sparkline from Ticker Line, data as of ${asOf}`}
+          alt={`${symbol} 1-day price chart, data as of ${asOf}`}
           width="120"
           height="30"
+          crossOrigin="anonymous"
           loading="lazy"
           decoding="async"
           onError={() => setFailureCount((count) => count + 1)}
           className="block h-[29px] w-24 object-contain sm:h-9 sm:w-[120px]"
         />
-        <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-          Ticker Line · {asOf}
-        </figcaption>
-      </figure>
+      </div>
     );
   }
   return (
@@ -111,64 +148,94 @@ function TickerLineSparkline({ symbol, sparklineUrl, className }) {
 
 function PendingSparkline({ className = "", contained = false }) {
   return (
-    <figure
+    <div
       data-slot="market-sparkline"
-      data-source="Ticker Line"
+      data-state="loading"
       className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
-      title="Loading Ticker Line sparkline"
+      role="status"
+      aria-label="Loading price chart"
     >
-      <div className="flex h-[29px] items-center text-[10px] text-muted-foreground sm:h-9">
-        Loading…
-      </div>
-      <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-        Ticker Line · loading
-      </figcaption>
-    </figure>
+      <Skeleton className="h-[29px] w-24 sm:h-9 sm:w-[120px]" />
+    </div>
   );
 }
 
 function UnavailableSparkline({ className = "", contained = false, kind }) {
   const providerFailure = kind === "provider";
   return (
-    <figure
+    <div
       data-slot="market-sparkline"
-      data-source="Ticker Line"
+      data-state="unavailable"
       className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
       title={
         providerFailure
-          ? "Ticker Line is temporarily unavailable"
-          : "Ticker Line does not support this instrument"
+          ? "Price chart is temporarily unavailable"
+          : "Price chart is not available for this instrument"
       }
     >
       <div className="flex h-[29px] items-center text-[10px] text-muted-foreground sm:h-9">
         Unavailable
       </div>
-      <figcaption className="truncate text-[10px] leading-4 tabular-nums text-muted-foreground">
-        Ticker Line · {providerFailure ? "provider unavailable" : "unavailable"}
-      </figcaption>
-    </figure>
+    </div>
   );
 }
 
-async function fetchSparklineMetadata(sparklineUrl, signal) {
-  const metadataUrl = `${sparklineUrl}&metadata=1`;
+async function fetchSparklineMetadata(metadataUrl, signal, requireSvg) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const request = createBoundedRequestSignal(signal);
     try {
       const response = await fetch(metadataUrl, {
         headers: { accept: "application/json" },
-        signal,
+        signal: request.signal,
       });
       if (!response.ok) throw new Error(`Ticker Line metadata returned HTTP ${response.status}`);
-      const metadata = await response.json();
+      const responseFailure = tickerLineResponseFailure(response.headers);
+      if (responseFailure) throw new Error(responseFailure);
+      const body = await readTickerLineTextWithLimit(response, TICKER_LINE_MAX_JSON_BYTES);
+      if (body.status === "too_large") {
+        throw new Error("Ticker Line metadata exceeded the size limit");
+      }
+      const metadata = JSON.parse(body.text);
       if (typeof metadata.dataAsOf !== "string" || !metadata.dataAsOf) {
         throw new Error("Ticker Line metadata did not include an as-of timestamp");
       }
-      return metadata.dataAsOf;
+      if (!requireSvg) return { dataAsOf: metadata.dataAsOf };
+      if (
+        typeof metadata.svg !== "string" ||
+        new TextEncoder().encode(metadata.svg).byteLength > TICKER_LINE_MAX_SVG_BYTES ||
+        !isTickerLineSvg(metadata.svg)
+      ) {
+        throw new Error("Ticker Line metadata did not include a valid SVG");
+      }
+      return {
+        dataAsOf: metadata.dataAsOf,
+        imageUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(metadata.svg)}`,
+      };
     } catch (error) {
       if (signal.aborted || attempt === 1) throw error;
+    } finally {
+      request.dispose();
     }
   }
   throw new Error("Ticker Line metadata request failed");
+}
+
+function createBoundedRequestSignal(parentSignal) {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal.aborted) abortFromParent();
+  else parentSignal.addEventListener("abort", abortFromParent, { once: true });
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Ticker Line request timed out", "TimeoutError")),
+    SPARKLINE_REQUEST_TIMEOUT_MS,
+  );
+  return {
+    signal: controller.signal,
+    dispose() {
+      window.clearTimeout(timeout);
+      parentSignal.removeEventListener("abort", abortFromParent);
+    },
+  };
 }
 
 function formatSparklineAsOf(dataAsOf) {

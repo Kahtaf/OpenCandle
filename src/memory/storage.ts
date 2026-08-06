@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { StateDatabase } from "../runtime/state-database.js";
 
 interface PreferenceInput {
   namespace?: string;
@@ -44,7 +44,7 @@ interface RecommendationInput {
 }
 
 export class MemoryStorage {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: StateDatabase) {}
 
   // --- Preferences ---
 

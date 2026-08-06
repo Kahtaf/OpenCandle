@@ -366,4 +366,14 @@ describe("provider status probes", () => {
     });
     expect(fetchImpl.mock.calls[0][0]).toContain("scanner.tradingview.com");
   });
+
+  it("uses the provider's identified headers for SEC reachability", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+
+    await probeProviderStatus("sec_edgar", { fetchImpl });
+
+    expect(fetchImpl.mock.calls[0]?.[1]?.headers).toMatchObject({
+      "User-Agent": "OpenCandle/1.0 (financial analysis agent)",
+    });
+  });
 });

@@ -223,11 +223,7 @@ describe("runProviderConnect", () => {
     }
   });
 
-  it("persists the key on transient validation failure and warns the user", async () => {
-    // Task 8.4 — a timeout, 5xx, or network error is transient. We can't
-    // block the user on a provider outage, so the key is saved with a
-    // warning. The next real tool call will surface any persistent issue
-    // via the credential-required tag and re-open the prompt.
+  it("does not persist the key on transient validation failure", async () => {
     vi.mocked(validationModule.validateCredential).mockResolvedValue({
       status: "transient",
       reason: "ECONNRESET",
@@ -239,18 +235,18 @@ describe("runProviderConnect", () => {
 
     const result = await runProviderConnect(ctx, "alpha_vantage");
 
-    expect(result.status).toBe("connected");
+    expect(result.status).toBe("verification_failed");
 
-    // Key WAS persisted despite the validation failure.
     const configPath = join(tempDir, "config.json");
-    const parsed = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(parsed.providers.alphaVantage.apiKey).toBe("maybe-good-key");
+    if (existsSync(configPath)) {
+      const parsed = JSON.parse(readFileSync(configPath, "utf-8"));
+      expect(parsed.providers?.alphaVantage).toBeUndefined();
+    }
 
-    // User got a warning mentioning the transient reason.
     const notifyCalls = ui.notify.mock.calls.map((call: any[]) => [call[0], call[1]]);
-    const warningNotify = notifyCalls.find((c: any[]) => c[1] === "warning");
-    expect(warningNotify).toBeDefined();
-    expect(warningNotify?.[0]).toContain("ECONNRESET");
+    const errorNotify = notifyCalls.find((c: any[]) => c[1] === "error");
+    expect(errorNotify).toBeDefined();
+    expect(errorNotify?.[0]).toContain("ECONNRESET");
   });
 
   it("calls validateCredential with the trimmed key and the correct provider id", async () => {

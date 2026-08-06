@@ -11,6 +11,10 @@ import {
   HISTORY_INTERVALS,
   type HISTORY_RANGES,
 } from "../../src/tools/market/stock-history.js";
+import {
+  buildMarketQuoteSnapshot as buildSharedMarketQuoteSnapshot,
+  type MarketStateQuoteSnapshot as SharedMarketStateQuoteSnapshot,
+} from "../shared/market-quote-snapshot.js";
 import { HistorySnapshotStore } from "./history-snapshot-store.js";
 
 type HistoryRange = (typeof HISTORY_RANGES)[number];
@@ -225,80 +229,7 @@ export interface MarketStateSnapshot {
   notificationDeliveryAttempts: ReturnType<MarketStateService["listNotificationDeliveryAttempts"]>;
 }
 
-export interface MarketStateQuoteSnapshot {
-  generatedAt: string;
-  watchlistQuotes: Array<{
-    itemId: number;
-    instrumentId: number;
-    symbol: string;
-    assetType: string;
-    name?: string;
-    status: "ok" | "unavailable";
-    price?: number;
-    change?: number;
-    changePercent?: number;
-    volume?: number;
-    dayHigh?: number;
-    dayLow?: number;
-    week52High?: number;
-    week52Low?: number;
-    currency?: string | null;
-    fetchedAt?: string;
-    dataAsOf?: string;
-    marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
-    extendedPrice?: number;
-    extendedChange?: number;
-    extendedChangePercent?: number;
-    extendedAsOf?: string;
-    stale?: boolean;
-    reason?: string;
-  }>;
-  portfolioQuotes: Array<{
-    lotId: number;
-    portfolioId: number;
-    instrumentId: number;
-    symbol: string;
-    assetType: string;
-    name?: string;
-    status: "ok" | "unavailable";
-    currentPrice?: number | null;
-    changePercent?: number;
-    marketValue?: number | null;
-    totalCost: number;
-    pnl?: number | null;
-    pnlPercent?: number | null;
-    allocationPercent?: number;
-    currency: string;
-    includedInTotals: boolean;
-    fetchedAt?: string;
-    dataAsOf?: string;
-    marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
-    extendedPrice?: number;
-    extendedChange?: number;
-    extendedChangePercent?: number;
-    extendedAsOf?: string;
-    stale?: boolean;
-    reason?: string;
-  }>;
-  portfolioSummary: {
-    portfolioId: number;
-    baseCurrency: string;
-    totalValue: number;
-    totalCost: number;
-    totalPnl: number;
-    totalPnlPercent: number;
-    excludedFromTotals: Array<{ symbol: string; currency: string; reason: string }>;
-  };
-  portfolioSummaries: Array<{
-    portfolioId: number;
-    baseCurrency: string;
-    totalValue: number;
-    totalCost: number;
-    totalPnl: number;
-    totalPnlPercent: number;
-    excludedFromTotals: Array<{ symbol: string; currency: string; reason: string }>;
-  }>;
-}
+export type MarketStateQuoteSnapshot = SharedMarketStateQuoteSnapshot;
 
 interface SavedSymbolsMemoOptions {
   ttlMs?: number;
@@ -390,212 +321,13 @@ export async function buildMarketStateQuoteSnapshot(
   db?: Database.Database,
 ): Promise<MarketStateQuoteSnapshot> {
   const ownedDb = db ?? initDefaultDatabase();
-  const service = new MarketStateService(ownedDb);
   try {
-    const watchlist = service
-      .listWatchlists()
-      .flatMap((watchlist) => service.listWatchlistItems(watchlist.id));
-    const portfolios = service.listPortfolios();
-    const portfolioLots = portfolios.flatMap((portfolio) =>
-      service.listPortfolioLots(portfolio.id),
-    );
-    const symbols = [
-      ...new Set([
-        ...watchlist.map((item) => item.symbol),
-        ...portfolioLots.map((lot) => lot.symbol),
-      ]),
-    ];
-    const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
-    for (const symbol of symbols) {
-      const quote = await fetchQuoteSnapshot(symbol);
-      quoteMap.set(symbol, quote);
-    }
-
-    const generatedAt = new Date().toISOString();
-    const watchlistQuotes = watchlist.map((item) => {
-      const quote = quoteMap.get(item.symbol);
-      if (quote == null || quote.status === "unavailable") {
-        return {
-          itemId: item.id,
-          instrumentId: item.instrumentId,
-          symbol: item.symbol,
-          assetType: item.assetType,
-          status: "unavailable" as const,
-          reason: quote?.reason ?? "quote unavailable",
-        };
-      }
-      return {
-        itemId: item.id,
-        instrumentId: item.instrumentId,
-        symbol: item.symbol,
-        assetType: item.assetType,
-        name: quote.name,
-        status: "ok" as const,
-        price: quote.price,
-        change: quote.change,
-        changePercent: quote.changePercent,
-        volume: quote.volume,
-        dayHigh: quote.high,
-        dayLow: quote.low,
-        week52High: quote.week52High,
-        week52Low: quote.week52Low,
-        currency: quote.currency,
-        fetchedAt: quote.fetchedAt,
-        dataAsOf: quote.dataAsOf,
-        marketState: quote.marketState,
-        extendedPrice: quote.extendedPrice,
-        extendedChange: quote.extendedChange,
-        extendedChangePercent: quote.extendedChangePercent,
-        extendedAsOf: quote.extendedAsOf,
-        stale: quote.stale,
-      };
+    return buildSharedMarketQuoteSnapshot(buildMarketStateSnapshot(ownedDb), {
+      fetchQuote: fetchQuoteSnapshot,
     });
-
-    const portfolioResults = portfolios.map((portfolio) =>
-      buildPortfolioQuoteResult({
-        portfolio,
-        lots: portfolioLots.filter((lot) => lot.portfolioId === portfolio.id),
-        quoteMap,
-      }),
-    );
-    const defaultPortfolio = portfolios.find((portfolio) => portfolio.isDefault) ?? portfolios[0];
-    const defaultResult =
-      portfolioResults.find((result) => result.summary.portfolioId === defaultPortfolio.id) ??
-      portfolioResults[0];
-    return {
-      generatedAt,
-      watchlistQuotes,
-      portfolioQuotes: portfolioResults.flatMap((result) => result.quotes),
-      portfolioSummary: defaultResult.summary,
-      portfolioSummaries: portfolioResults.map((result) => result.summary),
-    };
   } finally {
     if (!db) ownedDb.close();
   }
-}
-
-function buildPortfolioQuoteResult({
-  portfolio,
-  lots,
-  quoteMap,
-}: {
-  portfolio: ReturnType<MarketStateService["listPortfolios"]>[number];
-  lots: ReturnType<MarketStateService["listPortfolioLots"]>;
-  quoteMap: Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>;
-}): {
-  quotes: MarketStateQuoteSnapshot["portfolioQuotes"];
-  summary: MarketStateQuoteSnapshot["portfolioSummary"];
-} {
-  const baseCurrency = portfolio.baseCurrency ?? "USD";
-  const portfolioQuotes = lots.map((lot) => {
-    const quote = quoteMap.get(lot.symbol);
-    const lotCurrency = lot.currency || baseCurrency;
-    const quoteCurrency = lot.instrumentCurrency || lotCurrency;
-    const includedInTotals = lotCurrency === baseCurrency && quoteCurrency === baseCurrency;
-    const totalCost = lot.avgCost * lot.quantity;
-    if (quote == null || quote.status === "unavailable") {
-      return {
-        lotId: lot.id,
-        portfolioId: lot.portfolioId,
-        instrumentId: lot.instrumentId,
-        symbol: lot.symbol,
-        assetType: lot.assetType,
-        name: quote.name,
-        status: "unavailable" as const,
-        totalCost,
-        currency: lotCurrency,
-        includedInTotals: false,
-        reason: quote?.reason ?? "quote unavailable",
-      };
-    }
-    const resolvedQuoteCurrency = quote.currency ?? quoteCurrency;
-    if (resolvedQuoteCurrency !== lotCurrency) {
-      return {
-        lotId: lot.id,
-        portfolioId: lot.portfolioId,
-        instrumentId: lot.instrumentId,
-        symbol: lot.symbol,
-        assetType: lot.assetType,
-        status: "unavailable" as const,
-        currentPrice: null,
-        marketValue: null,
-        totalCost,
-        pnl: null,
-        pnlPercent: null,
-        currency: lotCurrency,
-        includedInTotals: false,
-        reason: `No FX conversion from ${resolvedQuoteCurrency} to ${lotCurrency}`,
-        fetchedAt: quote.fetchedAt,
-        dataAsOf: quote.dataAsOf,
-        marketState: quote.marketState,
-        extendedPrice: quote.extendedPrice,
-        extendedChange: quote.extendedChange,
-        extendedChangePercent: quote.extendedChangePercent,
-        extendedAsOf: quote.extendedAsOf,
-        stale: quote.stale,
-      };
-    }
-    const marketValue = quote.price * lot.quantity;
-    return {
-      lotId: lot.id,
-      portfolioId: lot.portfolioId,
-      instrumentId: lot.instrumentId,
-      symbol: lot.symbol,
-      assetType: lot.assetType,
-      name: quote.name,
-      status: "ok" as const,
-      currentPrice: quote.price,
-      changePercent: quote.changePercent,
-      marketValue,
-      totalCost,
-      pnl: marketValue - totalCost,
-      pnlPercent: totalCost > 0 ? ((marketValue - totalCost) / totalCost) * 100 : 0,
-      currency: lotCurrency,
-      includedInTotals,
-      fetchedAt: quote.fetchedAt,
-      dataAsOf: quote.dataAsOf,
-      marketState: quote.marketState,
-      extendedPrice: quote.extendedPrice,
-      extendedChange: quote.extendedChange,
-      extendedChangePercent: quote.extendedChangePercent,
-      extendedAsOf: quote.extendedAsOf,
-      stale: quote.stale,
-      reason: includedInTotals
-        ? undefined
-        : `No FX conversion from ${lotCurrency === baseCurrency ? quoteCurrency : lotCurrency} to ${baseCurrency}`,
-    };
-  });
-  const included = portfolioQuotes.filter(
-    (quote) => quote.status === "ok" && quote.includedInTotals,
-  );
-  const totalValue = included.reduce((sum, quote) => sum + (quote.marketValue ?? 0), 0);
-  const totalCost = included.reduce((sum, quote) => sum + quote.totalCost, 0);
-  const quotes = portfolioQuotes.map((quote) => {
-    if (quote.status !== "ok" || !quote.includedInTotals || totalValue <= 0) return quote;
-    return {
-      ...quote,
-      allocationPercent: ((quote.marketValue ?? 0) / totalValue) * 100,
-    };
-  });
-  const excludedFromTotals = quotes
-    .filter((quote) => quote.status !== "ok" || !quote.includedInTotals)
-    .map((quote) => ({
-      symbol: quote.symbol,
-      currency: quote.currency,
-      reason: quote.reason ?? "quote unavailable",
-    }));
-  return {
-    quotes,
-    summary: {
-      portfolioId: portfolio.id,
-      baseCurrency,
-      totalValue,
-      totalCost,
-      totalPnl: totalValue - totalCost,
-      totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
-      excludedFromTotals,
-    },
-  };
 }
 
 export async function searchInstrumentCandidates(query: string): Promise<{

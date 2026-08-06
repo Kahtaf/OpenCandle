@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { initDatabase, initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type { WorkflowDefinition } from "../../../src/runtime/prompt-step.js";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
@@ -361,7 +361,348 @@ afterEach(() => {
   clearRunContext();
 });
 
+describe("SessionCoordinator runtime composition", () => {
+  it("builds prompt capability context from injected runtime factories", () => {
+    const coord = new SessionCoordinator({
+      addonToolDescriptionsFactory: () => [
+        {
+          name: "get_browser_quote",
+          description: "Fetch a quote from a browser-safe provider.",
+        },
+      ],
+      toolDefaultsFactory: () =>
+        new Map([
+          [
+            "get_browser_quote",
+            {
+              currency: "USD",
+              nested: { timeframe: "1d" },
+              __enabled: true,
+            },
+          ],
+        ]),
+    });
+
+    const prompt = coord.buildSystemPrompt("base");
+
+    expect(prompt).toContain("get_browser_quote: Fetch a quote from a browser-safe provider.");
+    expect(prompt).toContain("currency: USD");
+    expect(prompt).toContain("nested.timeframe: 1d");
+    expect(prompt).not.toContain("__enabled");
+  });
+
+  it("initializes persistence through an injected StateDatabase factory", () => {
+    const database = initDatabase(":memory:");
+    const stateDatabaseFactory = vi.fn(() => database);
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory,
+    });
+
+    coord.initSession("browser-session");
+
+    expect(stateDatabaseFactory).toHaveBeenCalledOnce();
+    expect(coord.getStorage()).not.toBeNull();
+    database.close();
+  });
+
+  it("supports an intentionally ephemeral runtime composition", () => {
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: () => null,
+    });
+
+    coord.initSession("ephemeral-session");
+
+    expect(coord.getStorage()).toBeNull();
+    expect(coord.getRunner()).toBeDefined();
+  });
+});
+
 describe("SessionCoordinator workflow runtime ownership", () => {
+  it("finishes a workflow when the terminal assistant response is recorded before the queue reports idle", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        sendCount += 1;
+        const currentSend = sendCount;
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => {
+          entries.push(
+            assistantTextEntry(
+              currentSend === 1
+                ? "workflow response"
+                : "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+            ),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+
+    let completed = false;
+    const completion = coord.waitForActiveWorkflow().then(() => {
+      completed = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(completed).toBe(true);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "comprehensive_analysis",
+      status: "completed",
+    });
+    await completion;
+  });
+
+  it("does not crash the runtime when a completed workflow has a stale Pi context", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry("workflow response")), 10);
+      }),
+      appendEntry: vi.fn(() => {
+        throw new Error("This extension ctx is stale after session replacement or reload.");
+      }),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("stale-context"),
+      fakeQueueContext(() => false, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(coord.waitForActiveWorkflow()).resolves.toBeUndefined();
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "stale-context",
+      status: "completed",
+    });
+  });
+
+  it("fails a workflow instead of advancing after an aborted assistant response", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantEmptyEntry()), 10);
+        setTimeout(() => entries.push(userTextEntry("later unrelated question")), 15);
+        setTimeout(() => entries.push(assistantTextEntry("later unrelated answer")), 20);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    await coord.waitForActiveWorkflow();
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+  });
+
+  it("does not treat an older in-flight answer as the queued workflow response", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [userTextEntry("older question")];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        sendCount += 1;
+        if (sendCount === 1) {
+          setTimeout(() => entries.push(assistantTextEntry("older answer")), 10);
+          setTimeout(() => entries.push(userTextEntry(prompt)), 30);
+          setTimeout(() => entries.push(assistantTextEntry("workflow response")), 50);
+          return;
+        }
+        entries.push(userTextEntry(prompt));
+        setTimeout(
+          () =>
+            entries.push(
+              assistantTextEntry(
+                "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+              ),
+            ),
+          10,
+        );
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => false, entries),
+    );
+    const completion = coord.waitForActiveWorkflow();
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await completion;
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+  });
+
+  it("waits for every coordinator-managed workflow prompt to settle", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        sendCount += 1;
+        const currentSend = sendCount;
+        entries.push(userTextEntry(prompt));
+        setTimeout(
+          () =>
+            entries.push(
+              assistantTextEntry(
+                currentSend === 1
+                  ? "workflow response"
+                  : "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+              ),
+            ),
+          currentSend === 1 ? 10 : 60,
+        );
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+    let completed = false;
+    const completion = coord.waitForActiveWorkflow().then(() => {
+      completed = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(completed).toBe(false);
+    await vi.advanceTimersByTimeAsync(100);
+    await completion;
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+  });
+
+  it("does not advance through queued workflow prompts before Pi observes each prompt", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const definition: WorkflowDefinition = {
+      workflowType: "queued-prompt-guard",
+      steps: [
+        {
+          stepType: "one",
+          description: "one",
+          prompt: "one",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+        {
+          stepType: "two",
+          description: "two",
+          prompt: "two",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+        {
+          stepType: "three",
+          description: "three",
+          prompt: "three",
+          skippable: false,
+          requiredInputs: [],
+          expectedOutputs: [],
+        },
+      ],
+    };
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        setTimeout(() => entries.push(userTextEntry(prompt)), 300);
+        setTimeout(() => entries.push(assistantTextEntry(`${prompt} response`)), 310);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(pi as never, definition, {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+      // Pi's public extension context exposes the read-only branch rather
+      // than the hosted runtime's getEntries() helper.
+      sessionManager: { getBranch: () => entries },
+    });
+
+    // The second prompt is accepted only after the first response. Its own
+    // enqueue has not reached Pi yet, so a transient idle queue must not
+    // cause the third prompt to be sent.
+    await vi.advanceTimersByTimeAsync(450);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+
+    coord.cancelActiveWorkflow();
+  });
+
+  it("settles a transformed first step from Pi's persisted original user input", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(
+          () =>
+            entries.push(
+              assistantTextEntry(
+                "Valuation complete.\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+              ),
+            ),
+          10,
+        );
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    const transformed = coord.transformWorkflowInput(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+    entries.push(userTextEntry("/analyze AAPL"));
+    setTimeout(() => entries.push(assistantTextEntry("first-stage response")), 10);
+
+    expect(transformed).toBe("fetch prompt");
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+  });
+
   it("exposes the active workflow type so workflow turns can carry saved market state", () => {
     const coord = new SessionCoordinator();
     const pi = { sendUserMessage: vi.fn(), appendEntry: vi.fn() };
@@ -421,13 +762,13 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     const entries: SessionEntry[] = [];
     let sendCount = 0;
     const pi = {
-      sendUserMessage: vi.fn(() => {
+      sendUserMessage: vi.fn((prompt: string) => {
         sendCount += 1;
         const currentSend = sendCount;
         const stepCallId = `tc-${sendCount}`;
         const toolName = sendCount === 1 ? "get_stock_quote" : "get_company_overview";
         const symbol = sendCount === 1 ? "NVDA" : "AAPL";
-        entries.push(userTextEntry(`prompt ${sendCount}`));
+        entries.push(userTextEntry(prompt));
         setTimeout(() => {
           entries.push(assistantToolOnlyEntry(toolName));
           const toolResult = toolResultEntry(`${symbol} result`);
@@ -528,6 +869,11 @@ describe("SessionCoordinator workflow runtime ownership", () => {
                 "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
             },
           });
+          entries.push(
+            assistantTextEntry(
+              "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
+            ),
+          );
         }, 10);
       }),
       appendEntry: vi.fn(),
@@ -1318,7 +1664,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
     const prompt = coord.buildSystemPrompt(
       "base",
@@ -1357,7 +1705,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
 
     expect(coord.buildSystemPrompt("base")).not.toContain("Saved Market State");
@@ -1387,7 +1737,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     });
     db.close();
 
-    const coord = new SessionCoordinator();
+    const coord = new SessionCoordinator({
+      stateDatabaseFactory: initDefaultDatabase,
+    });
     coord.initSession("test-session");
     const prompt = coord.buildSystemPrompt("base", undefined, {
       assumptionsBlock: "",

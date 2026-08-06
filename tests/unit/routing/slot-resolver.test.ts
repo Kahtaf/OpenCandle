@@ -6,6 +6,20 @@ import {
 import type { ExtractedEntities } from "../../../src/routing/types.js";
 
 describe("resolvePortfolioSlots", () => {
+  it("uses user-provided position count and concentration cap", () => {
+    const result = resolvePortfolioSlots({
+      symbols: [],
+      budget: 100_000,
+      assetScope: "stocks_only",
+      positionCount: 8,
+      maxSinglePositionPct: 15,
+    });
+
+    expect(result.resolved.positionCount).toBe(8);
+    expect(result.resolved.maxSinglePositionPct).toBe(15);
+    expect(result.sources.positionCount).toBe("user");
+    expect(result.sources.maxSinglePositionPct).toBe("user");
+  });
   it("uses budget from entities and defaults for the rest", () => {
     const entities: ExtractedEntities = {
       symbols: [],
@@ -185,6 +199,17 @@ describe("resolveOptionsScreenerSlots", () => {
       expect(result.resolved.dteTarget).toBe("7_to_14_days");
       expect(result.sources.dteTarget).toBe("user");
     }
+  });
+
+  it("preserves an explicit maximum DTE window", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["AAPL"],
+      direction: "bullish",
+      dteHint: "0-60 days",
+    });
+
+    expect(result.resolved.dteTarget).toBe("0_to_60_days");
+    expect(result.sources.dteTarget).toBe("user");
   });
 
   it("passes through covered-call strategy and cost basis", () => {

@@ -76,6 +76,42 @@ describe("GUI model setup", () => {
     expect(state.requirement).toBe("ready");
   });
 
+  it("projects Pi thinking controls into the shared model setup state", () => {
+    const active = model("openai", "gpt-5-mini");
+
+    const state = buildModelSetupState(registry([active], new Set(["openai/gpt-5-mini"])), active, {
+      current: "medium",
+      available: ["off", "low", "medium", "high"],
+    });
+
+    expect(state).toMatchObject({
+      currentThinkingLevel: "medium",
+      availableThinkingLevels: ["off", "low", "medium", "high"],
+    });
+  });
+
+  it("sets thinking through Pi and flushes its canonical settings", async () => {
+    const setThinkingLevel = vi.fn();
+    const flush = vi.fn(async () => undefined);
+    const controller = createModelSetupController({
+      role: "writer",
+      getSession: () =>
+        ({
+          modelRuntime: {},
+          getAvailableThinkingLevels: () => ["off", "high"],
+          setThinkingLevel,
+          settingsManager: { flush },
+        }) as never,
+      getSessionManager: () => ({ appendCustomMessageEntry: vi.fn() }),
+      broadcastState: vi.fn(),
+    });
+
+    await controller.handleSetThinkingLevel?.("high");
+
+    expect(setThinkingLevel).toHaveBeenCalledWith("high");
+    expect(flush).toHaveBeenCalledOnce();
+  });
+
   it("prefers the provider default model after saving an API key", () => {
     const google = modelSetupProviders.find((provider) => provider.id === "google");
     if (!google) throw new Error("Missing google provider setup");
@@ -167,15 +203,15 @@ describe("GUI model setup", () => {
     expect(auth).toHaveLength(0);
   });
 
-  it("saves a model key with an honest notice when its probe has a network failure", async () => {
+  it("does not save a model key when its probe has a network failure", async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
-    const entries: unknown[] = [];
     const anthropic = model("anthropic", "claude-haiku-4-5");
+    const login = vi.fn(async () => {});
     const session = {
       modelRuntime: {
-        login: async () => {},
+        login,
         getAvailableSnapshot: () => [anthropic],
         hasConfiguredAuth: () => true,
         getModel: () => anthropic,
@@ -187,17 +223,39 @@ describe("GUI model setup", () => {
     const controller = createModelSetupController({
       role: "writer",
       getSession: () => session,
-      getSessionManager: () => ({
-        appendCustomMessageEntry: (...args: unknown[]) => entries.push(args),
-      }),
+      getSessionManager: () => ({ appendCustomMessageEntry: vi.fn() }),
       broadcastState: () => {},
     });
 
-    await controller.handleSaveModelApiKey("anthropic", "network-key");
-
-    expect(entries[0]).toEqual(
-      expect.arrayContaining([expect.stringContaining("Saved — couldn't verify (network issue)")]),
+    await expect(controller.handleSaveModelApiKey("anthropic", "network-key")).rejects.toThrow(
+      "Couldn't verify",
     );
+
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it("does not advertise or record a provider key when its shared probe cannot verify it", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const appendCustomMessageEntry = vi.fn();
+    const broadcastState = vi.fn();
+    const controller = createModelSetupController({
+      role: "writer",
+      // Provider admission must fail before it can touch the Pi session.
+      getSession: () => {
+        throw new Error("provider validation must not access the session");
+      },
+      getSessionManager: () => ({ appendCustomMessageEntry }),
+      broadcastState,
+    });
+
+    await expect(controller.handleSaveProviderApiKey("fred", "unverified-key")).rejects.toThrow(
+      "Couldn't verify the FRED key",
+    );
+
+    expect(appendCustomMessageEntry).not.toHaveBeenCalled();
+    expect(broadcastState).not.toHaveBeenCalled();
   });
 
   it("rejects model selection in follower mode", async () => {

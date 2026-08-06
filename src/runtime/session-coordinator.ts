@@ -15,7 +15,7 @@ import {
   formatPortfolioSummary,
   formatWatchlistSummary,
 } from "../market-state/summaries.js";
-import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
+import { MemoryStorage } from "../memory/storage.js";
 
 /**
  * Alias for the session-manager handle extensions receive via
@@ -25,17 +25,14 @@ import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/in
  */
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
-import type Database from "better-sqlite3";
 import type { FilteredMemoryEntry } from "../memory/manager.js";
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
 import type { MemoryEntry } from "../memory/types.js";
-import { runOpenCandleSetup } from "../pi/setup.js";
 import { type FallbackContext, PromptContextBuilder } from "../prompts/context-builder.js";
 import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
-import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { EvidenceRecord } from "./evidence.js";
 import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
@@ -47,6 +44,7 @@ import {
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import type { StateDatabase } from "./state-database.js";
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
@@ -66,6 +64,29 @@ interface ActiveStepCapture {
   rawText: string;
 }
 
+export interface SessionCoordinatorOptions {
+  /**
+   * Runtime-owned durable state factory. Browser-hosted and test compositions
+   * can intentionally return null while the WASM database is unavailable.
+   */
+  stateDatabaseFactory?: () => StateDatabase | null;
+  setupRunner?: SessionSetupRunner;
+  addonToolDescriptionsFactory?: () => ReadonlyArray<{
+    name: string;
+    description: string;
+  }>;
+  toolDefaultsFactory?: (
+    database: StateDatabase | null,
+  ) => ReadonlyMap<string, Record<string, unknown>>;
+}
+
+export type SessionSetupRunner = (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext | ExtensionCommandContext,
+  options: { mode: "startup" | "manual" },
+  modelRuntime?: ModelRuntime,
+) => Promise<"ready" | "shutdown" | "cancelled">;
+
 function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   if (typeof raw !== "string" || raw.length === 0) return undefined;
   try {
@@ -84,7 +105,10 @@ type QueueContext =
       isIdle(): boolean;
       hasPendingMessages?(): boolean;
       ui?: { notify(message: string, level?: string): void };
-      sessionManager?: { getEntries(): SessionEntry[] };
+      sessionManager?: {
+        getEntries?(): SessionEntry[];
+        getBranch?(): SessionEntry[];
+      };
     };
 
 function hasPendingMessages(ctx: QueueContext): boolean {
@@ -97,7 +121,54 @@ function isReadyForNextPrompt(ctx: QueueContext): boolean {
 
 function readSessionEntries(ctx: QueueContext): SessionEntry[] {
   const manager = "sessionManager" in ctx ? ctx.sessionManager : undefined;
-  return manager?.getEntries?.() ?? [];
+  const entries = manager?.getEntries?.() ?? manager?.getBranch?.();
+  return Array.isArray(entries) ? entries : [];
+}
+
+function canObserveSessionEntries(ctx: QueueContext): boolean {
+  const manager = "sessionManager" in ctx ? ctx.sessionManager : undefined;
+  return typeof manager?.getEntries === "function" || typeof manager?.getBranch === "function";
+}
+
+function messageContentText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const record = part as { type?: unknown; text?: unknown };
+      return record.type === "text" && typeof record.text === "string" ? record.text : "";
+    })
+    .join("")
+    .trim();
+}
+
+function terminalAssistantOutcomeAfterPrompt(
+  ctx: QueueContext,
+  entryCount: number,
+  expectedPrompt?: string,
+): "success" | "failure" | undefined {
+  const entries = readSessionEntries(ctx);
+  const promptIndex = entries.findIndex((entry, index) => {
+    if (index < entryCount || entry.type !== "message") return false;
+    const message = entry.message as { role?: unknown; content?: unknown };
+    if (message.role !== "user") return false;
+    return (
+      expectedPrompt === undefined || messageContentText(message.content) === expectedPrompt.trim()
+    );
+  });
+  if (promptIndex < 0) return undefined;
+
+  for (let index = promptIndex + 1; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry?.type !== "message") continue;
+    const message = entry.message as { role?: unknown; stopReason?: unknown };
+    if (message.role === "user") return undefined;
+    if (message.role !== "assistant") continue;
+    if (message.stopReason === "stop" || message.stopReason === "length") return "success";
+    if (message.stopReason === "error" || message.stopReason === "aborted") return "failure";
+  }
+  return undefined;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -107,23 +178,39 @@ function sleep(ms: number): Promise<void> {
 async function waitForPromptSettlement(
   ctx: QueueContext,
   isCurrentRun: () => boolean,
-  options: { requireActivity?: boolean } = {},
+  options: {
+    entriesBeforePrompt?: number;
+    expectedPrompt?: string;
+    requireActivity?: boolean;
+  } = {},
 ): Promise<boolean> {
   let sawBusyOrPending = !isReadyForNextPrompt(ctx);
+  // Browser-hosted composition exposes getEntries(), while Pi's canonical
+  // extension context exposes its read-only getBranch() view. If neither is
+  // available, retain the queue-only fallback rather than deadlocking an
+  // extension host that cannot provide transcript observation at all.
+  const requiresObservableActivity = options.requireActivity && canObserveSessionEntries(ctx);
   const startedAt = Date.now();
 
   while (isCurrentRun()) {
     const ready = isReadyForNextPrompt(ctx);
+    const terminalOutcome =
+      options.entriesBeforePrompt !== undefined &&
+      !hasPendingMessages(ctx) &&
+      terminalAssistantOutcomeAfterPrompt(ctx, options.entriesBeforePrompt, options.expectedPrompt);
+    if (terminalOutcome === "failure") {
+      throw new Error("workflow_prompt_failed");
+    }
     if (!ready) {
       sawBusyOrPending = true;
     }
 
-    if (sawBusyOrPending && ready) {
+    if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
       return true;
     }
 
     if (
-      !options.requireActivity &&
+      !requiresObservableActivity &&
       !sawBusyOrPending &&
       ready &&
       Date.now() - startedAt >= IMMEDIATE_IDLE_GRACE_MS
@@ -142,20 +229,21 @@ async function waitForPromptSettlement(
  * and prompt assembly. The extension delegates to this.
  */
 export class SessionCoordinator {
-  private db: Database.Database | null = null;
+  private db: StateDatabase | null = null;
   private storage: MemoryStorage | null = null;
   private memoryManager: MemoryManager | null = null;
   private eventLogger: WorkflowEventLogger | null = null;
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
   private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
+  private activeWorkflowPromise: Promise<void> | null = null;
   private activeWorkflowType: string | undefined;
   private activeStepCapture: ActiveStepCapture | null = null;
   private workflowEventCaptureInstalled = false;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
-  constructor() {
+  constructor(private readonly options: SessionCoordinatorOptions = {}) {
     // Runner is always available — event logger is optional and added after session init
     this.providerTracker = new ProviderTracker();
     this.runner = new WorkflowRunner({ providerTracker: this.providerTracker });
@@ -179,13 +267,13 @@ export class SessionCoordinator {
 
   /** Initialize session: database, memory, event logger, workflow runner. */
   initSession(sessionId: string): void {
-    this.db = initDefaultDatabase();
-    this.storage = new MemoryStorage(this.db);
-    this.memoryManager = new MemoryManager(this.storage);
-    this.eventLogger = new WorkflowEventLogger(this.db);
+    this.db = this.options.stateDatabaseFactory?.() ?? null;
+    this.storage = this.db ? new MemoryStorage(this.db) : null;
+    this.memoryManager = this.storage ? new MemoryManager(this.storage) : null;
+    this.eventLogger = this.db ? new WorkflowEventLogger(this.db) : null;
     this.providerTracker = new ProviderTracker();
     this.runner = new WorkflowRunner({
-      eventLogger: this.eventLogger,
+      eventLogger: this.eventLogger ?? undefined,
       providerTracker: this.providerTracker,
     });
     this.sessionId = sessionId;
@@ -198,7 +286,7 @@ export class SessionCoordinator {
     options: { mode: "startup" | "manual" },
     modelRuntime?: ModelRuntime,
   ): Promise<"ready" | "shutdown" | "cancelled"> {
-    return runOpenCandleSetup(pi, ctx, options, modelRuntime);
+    return this.options.setupRunner?.(pi, ctx, options, modelRuntime) ?? "ready";
   }
 
   /** Extract and persist user preferences from natural language. */
@@ -351,7 +439,7 @@ export class SessionCoordinator {
   ): string {
     const builder = new PromptContextBuilder();
 
-    const addonTools = getAddonToolDescriptions();
+    const addonTools = this.options.addonToolDescriptionsFactory?.() ?? [];
     const addonDescriptions =
       addonTools.length > 0 ? addonTools.map((t) => `${t.name}: ${t.description}`) : undefined;
 
@@ -380,7 +468,14 @@ export class SessionCoordinator {
       resolvedTurnContext,
     });
 
-    const toolDefaults = formatToolDefaultsForPrompt();
+    let toolDefaults: string[] = [];
+    try {
+      toolDefaults = formatToolDefaultsForPrompt(
+        this.options.toolDefaultsFactory?.(this.db) ?? new Map(),
+      );
+    } catch {
+      toolDefaults = [];
+    }
     const defaultsSection =
       toolDefaults.length > 0 ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}` : "";
 
@@ -433,6 +528,15 @@ export class SessionCoordinator {
     return this.activeWorkflowRunRef?.active ? this.activeWorkflowType : undefined;
   }
 
+  /** Wait until the current workflow, including every queued Pi prompt, is terminal. */
+  async waitForActiveWorkflow(): Promise<void> {
+    while (this.activeWorkflowPromise) {
+      const pending = this.activeWorkflowPromise;
+      await pending;
+      if (this.activeWorkflowPromise === pending) return;
+    }
+  }
+
   transformWorkflowInput(
     pi: ExtensionAPI,
     definition: WorkflowDefinition,
@@ -460,6 +564,8 @@ export class SessionCoordinator {
     this.activeWorkflowType = definition.workflowType;
 
     const [firstStep] = definition.steps;
+    let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
+    let activePrompt = firstPromptMode === "send" ? firstStep.prompt : undefined;
 
     if (firstPromptMode === "send") {
       const startedBusy = !isReadyForNextPrompt(ctx);
@@ -478,17 +584,20 @@ export class SessionCoordinator {
 
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
-    void runner
+    const workflowPromise = runner
       .start(
         definition.workflowType,
         stepDefs,
         async (step, stepIndex, _priorEvidence, context) => {
-          let entriesBeforeStep = readSessionEntries(ctx).length;
+          let entriesBeforeStep = entriesBeforeActivePrompt;
           const eventCapture = this.startStepCapture();
 
           // First step was already sent above — later steps are sent here.
           if (stepIndex > 0) {
-            const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+            const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeActivePrompt,
+              expectedPrompt: activePrompt,
+            });
             if (!settled || !runRef.active) {
               throw new Error("run_cancelled");
             }
@@ -500,17 +609,26 @@ export class SessionCoordinator {
               throw new Error("analyst_consensus");
             }
             entriesBeforeStep = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeStep;
             const prompt = this.prepareWorkflowPrompt(
               pi,
               definition.steps[stepIndex].prompt,
               step.stepType,
               runner.getActiveRun(),
             );
+            activePrompt = prompt;
             pi.sendUserMessage(prompt);
           }
 
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
-            requireActivity: stepIndex === 0 && firstPromptMode === "transform",
+            entriesBeforePrompt: entriesBeforeStep,
+            expectedPrompt: activePrompt,
+            // Pi accepts follow-up messages asynchronously. Do not interpret a
+            // briefly idle queue as a completed workflow step before that
+            // prompt is actually observed; doing so queues every remaining
+            // workflow instruction without any assistant/tool events between
+            // them.
+            requireActivity: true,
           });
           if (!settled || !runRef.active) {
             throw new Error("run_cancelled");
@@ -527,10 +645,17 @@ export class SessionCoordinator {
             isStructuredAnalystStep(step.stepType) &&
             !hasStructuredContract(step.stepType, rawText)
           ) {
-            pi.sendUserMessage(
-              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.",
-            );
-            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active);
+            const entriesBeforeRetry = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeRetry;
+            const retryPrompt =
+              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.";
+            activePrompt = retryPrompt;
+            pi.sendUserMessage(retryPrompt);
+            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeRetry,
+              expectedPrompt: retryPrompt,
+              requireActivity: true,
+            });
             if (!retrySettled || !runRef.active) {
               throw new Error("run_cancelled");
             }
@@ -539,6 +664,48 @@ export class SessionCoordinator {
             output = promptStepOutput(stepIndex, step.stepType, {
               evidence: capturedEvidence(eventCapture, stepEntries),
               rawText,
+            });
+          }
+
+          const outputValidation = definition.steps[stepIndex].outputValidation;
+          let validationErrors = outputValidation?.validate(rawText) ?? [];
+          if (outputValidation && validationErrors.length > 0) {
+            this.appendWorkflowEvent(pi, "output_validation_failed", {
+              stepType: step.stepType,
+              errors: validationErrors,
+            });
+            const entriesBeforeRepair = readSessionEntries(ctx).length;
+            entriesBeforeActivePrompt = entriesBeforeRepair;
+            eventCapture.rawText = "";
+            const repairPrompt = outputValidation.repairPrompt(validationErrors);
+            activePrompt = repairPrompt;
+            pi.sendUserMessage(repairPrompt);
+            const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+              entriesBeforePrompt: entriesBeforeRepair,
+              expectedPrompt: repairPrompt,
+              requireActivity: true,
+            });
+            if (!repairSettled || !runRef.active) {
+              throw new Error("run_cancelled");
+            }
+            stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
+            rawText = capturedText(eventCapture, stepEntries);
+            output = promptStepOutput(stepIndex, step.stepType, {
+              evidence: capturedEvidence(eventCapture, stepEntries),
+              rawText,
+            });
+            validationErrors = outputValidation.validate(rawText);
+            if (validationErrors.length > 0) {
+              this.appendWorkflowEvent(pi, "output_validation_failed", {
+                stepType: step.stepType,
+                errors: validationErrors,
+                repairAttempted: true,
+              });
+              throw new Error(`workflow_output_validation_failed: ${validationErrors.join("; ")}`);
+            }
+            this.appendWorkflowEvent(pi, "output_validation_passed", {
+              stepType: step.stepType,
+              repairAttempted: true,
             });
           }
 
@@ -570,6 +737,28 @@ export class SessionCoordinator {
           return structuredOutput;
         },
       )
+      .then((completedRun) => {
+        // Validation is only emitted by synthesis. Persist a neutral terminal
+        // marker for every completed or failed workflow so transcript
+        // consumers can end the workflow group before an ordinary later turn.
+        if (
+          this.activeWorkflowRunRef === runRef &&
+          (completedRun.status === "completed" || completedRun.status === "failed")
+        ) {
+          // A long workflow can finish after Pi replaces the session context
+          // (for example, when the GUI opens a new session). The terminal
+          // marker belongs to the old session, so do not let a stale-context
+          // assertion tear down the whole local runtime while cleaning up.
+          try {
+            pi.appendEntry("opencandle-workflow-complete", {
+              workflow: completedRun.workflowType,
+              status: completedRun.status,
+            });
+          } catch (error) {
+            if (!isStaleExtensionContextError(error)) throw error;
+          }
+        }
+      })
       .finally(() => {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeStepCapture = null;
@@ -578,7 +767,11 @@ export class SessionCoordinator {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeWorkflowRunRef = null;
         }
+        if (this.activeWorkflowPromise === workflowPromise) {
+          this.activeWorkflowPromise = null;
+        }
       });
+    this.activeWorkflowPromise = workflowPromise;
   }
 
   /** Cancel any active workflow. */
@@ -717,6 +910,10 @@ export class SessionCoordinator {
   }
 }
 
+function isStaleExtensionContextError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("extension ctx is stale");
+}
+
 function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {
   return capture.rawText.trim() || extractAssistantText(entries);
 }
@@ -846,19 +1043,17 @@ function isFreshnessStamp(value: unknown): value is FreshnessStamp {
   );
 }
 
-function formatToolDefaultsForPrompt(): string[] {
-  try {
-    return [...getAllDefaults()]
-      .filter(([, defaults]) => Object.keys(defaults).some((key) => key !== "__enabled"))
-      .map(([toolName, defaults]) => {
-        const pairs = flattenDefaults(defaults)
-          .filter(([key]) => key !== "__enabled")
-          .map(([key, value]) => `${key}: ${String(value)}`);
-        return `- User has set defaults for \`${toolName}\` (${pairs.join(", ")}). You may override when the user's request requires it.`;
-      });
-  } catch {
-    return [];
-  }
+function formatToolDefaultsForPrompt(
+  defaultsByTool: ReadonlyMap<string, Record<string, unknown>>,
+): string[] {
+  return [...defaultsByTool]
+    .filter(([, defaults]) => Object.keys(defaults).some((key) => key !== "__enabled"))
+    .map(([toolName, defaults]) => {
+      const pairs = flattenDefaults(defaults)
+        .filter(([key]) => key !== "__enabled")
+        .map(([key, value]) => `${key}: ${String(value)}`);
+      return `- User has set defaults for \`${toolName}\` (${pairs.join(", ")}). You may override when the user's request requires it.`;
+    });
 }
 
 function flattenDefaults(defaults: Record<string, unknown>, prefix = ""): Array<[string, unknown]> {
@@ -957,7 +1152,7 @@ function analystRoleFromStep(stepType: string): string | undefined {
   return stepType.startsWith("analyst_") ? stepType.slice("analyst_".length) : undefined;
 }
 
-function buildSavedMarketStateContext(db: Database.Database): string {
+function buildSavedMarketStateContext(db: StateDatabase): string {
   try {
     const service = new MarketStateService(db);
     const watchlist = service.listWatchlistItems();

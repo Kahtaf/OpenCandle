@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { extractBudget, extractEntities } from "../../../src/routing/entity-extractor.js";
 
 describe("extractEntities", () => {
+  it("extracts portfolio catalog constraints deterministically", () => {
+    const result = extractEntities(
+      "Build me a portfolio for long-term growth. Constraints: $100,000 budget, balanced risk, 5y horizon, stocks only, 8 positions, max 15% per position.",
+    );
+
+    expect(result.assetScope).toBe("stocks_only");
+    expect(result.positionCount).toBe(8);
+    expect(result.maxSinglePositionPct).toBe(15);
+  });
   describe("budget extraction", () => {
     it("extracts dollar amount with $ sign", () => {
       const result = extractEntities("I have $10,000 to invest");
@@ -360,6 +369,18 @@ describe("extractEntities", () => {
       );
       expect(result.assetScope).toBe("etf_focused");
     });
+
+    it("detects an explicit US-stock scope", () => {
+      const result = extractEntities(
+        "Build a long-term growth portfolio with four US stocks and moderate risk.",
+      );
+      expect(result.assetScope).toBe("stocks_only");
+    });
+  });
+
+  it("preserves an explicit maximum options horizon", () => {
+    const result = extractEntities("Screen AAPL calls expiring within 60 days.");
+    expect(result.dteHint).toBe("0-60 days");
   });
 
   describe("compare focus extraction", () => {

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const CURRENT_SESSION_KEY = "__current__";
 
@@ -51,7 +52,8 @@ export function isDuplicateChatRunAck(body) {
   return body?.ok === true && body?.duplicate === true;
 }
 
-export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart }) {
+export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
+  const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
   const runStatesRef = useRef({});
   const [runStates, setRunStates] = useState({});
@@ -101,14 +103,11 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       abortsRef.current.set(key, abort);
 
       try {
-        const response = await fetch(chatRunEndpoint(targetSessionId), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(
-            buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
-          ),
-          signal: abort.signal,
-        });
+        const response = await transport.startChatRun(
+          targetSessionId,
+          buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
+          abort.signal,
+        );
         if (!response.ok) {
           const error = await response.json().catch(() => ({ error: response.statusText }));
           if (isSessionChangedChatRunError(response.status, error)) {
@@ -132,6 +131,12 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
               ...current,
               [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "", ...runExtras },
             }));
+            // A terminal failure can arrive as a valid SSE event rather than a
+            // transport exception. Remove the local queued projection in both
+            // cases; otherwise the composer leaves a permanently "Queued"
+            // message even though the run has already reached its terminal
+            // state.
+            onRunError?.(targetSessionId);
             setRunStateFor(key, "failed");
             setToast(event.error?.message || "Run failed");
           }
@@ -146,6 +151,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           return updated;
         });
       } catch (error) {
+        onRunError?.(targetSessionId);
         if (error?.name === "AbortError") {
           setToast("Stopped response.");
           setRunStateFor(key, "ready");
@@ -157,7 +163,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         abortsRef.current.delete(key);
       }
     },
-    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart],
+    [activeSessionId, setRunStateFor, setToast, onEvent, onRunStart, onRunError, transport],
   );
 
   const stopRun = useCallback(

@@ -177,6 +177,36 @@ describe("portfolioTrackerTool", () => {
     expect(portfolios.filter((portfolio) => portfolio.name === "Retirement")).toHaveLength(1);
   });
 
+  it("resolves an explicitly named Default portfolio after the original default is renamed", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "rename",
+      new_portfolio_name: "Long term",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Default",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Default",
+      symbol: "AAPL",
+      shares: 2,
+      avg_cost: 100,
+      currency: "USD",
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.getDefaultPortfolio().name).toBe("Long term");
+    expect(service.listPortfolioLots(service.getDefaultPortfolio().id)).toEqual([]);
+    const namedDefault = service.getPortfolioByName("Default");
+    expect(namedDefault).not.toBeNull();
+    expect(service.listPortfolioLots(namedDefault!.id).map(({ symbol }) => symbol)).toEqual([
+      "AAPL",
+    ]);
+    db.close();
+  });
+
   it("rejects renaming a portfolio to an existing name", async () => {
     await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Retirement" });
     await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Trading" });
@@ -190,7 +220,7 @@ describe("portfolioTrackerTool", () => {
     ).rejects.toThrow("portfolio Retirement already exists");
   });
 
-  it("does not create a missing portfolio while renaming", async () => {
+  it("does not create a missing portfolio while viewing or renaming", async () => {
     await expect(
       portfolioTrackerTool.execute("test", {
         action: "rename",
@@ -199,11 +229,12 @@ describe("portfolioTrackerTool", () => {
       }),
     ).rejects.toThrow("portfolio Missing not found");
 
-    const missing = await portfolioTrackerTool.execute("test", {
-      action: "view",
-      portfolio_name: "Missing",
-    });
-    expect(missing.content[0].text).toContain("Missing is empty");
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "view",
+        portfolio_name: "Missing",
+      }),
+    ).rejects.toThrow("portfolio Missing not found");
   });
 
   it("does not emit NaN for a legacy zero-cost portfolio lot", async () => {
@@ -277,8 +308,8 @@ describe("portfolioTrackerTool", () => {
       "Quote unavailable: Yahoo returned no valid market data.",
     );
     expect(result.details).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      totalValue: null,
+      totalCost: 500,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -316,8 +347,8 @@ describe("portfolioTrackerTool", () => {
       "Quote unavailable: provider returned stale market data",
     );
     expect(result.details).toMatchObject({
-      totalValue: 0,
-      totalCost: 0,
+      totalValue: null,
+      totalCost: 500,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -333,6 +364,36 @@ describe("portfolioTrackerTool", () => {
           reason: "Quote unavailable: provider returned stale market data",
         }),
       ],
+    });
+  });
+
+  it("marks aggregate P&L unavailable when a base-currency lot cannot be valued", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      shares: 1,
+      avg_cost: 180,
+    });
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      symbol === "VTI"
+        ? quote("VTI", 300)
+        : quote("AAPL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Value: unavailable | P&L: unavailable");
+    expect(result.details).toMatchObject({
+      totalValue: null,
+      totalCost: 680,
+      totalPnl: null,
+      totalsStatus: "unavailable",
     });
   });
 
@@ -453,7 +514,7 @@ describe("portfolioTrackerTool", () => {
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(view.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
     expect(view.details).toMatchObject({
-      totalValue: 0,
+      totalValue: null,
       positions: [
         expect.objectContaining({
           symbol: "SHOP.TO",
@@ -517,6 +578,35 @@ describe("portfolioTrackerTool", () => {
       totalCost: 720,
       marketValue: 900,
     });
+  });
+
+  it("does not update a lot belonging to a different selected portfolio", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Retirement",
+    });
+    const added = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Retirement",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const lotId = (added.details as { id: number }).id;
+
+    const update = await portfolioTrackerTool.execute("test", {
+      action: "update",
+      portfolio_name: "Default",
+      lot_id: lotId,
+      shares: 99,
+    });
+
+    expect(update.content[0].text).toContain(`lot ${lotId} not found in portfolio`);
+    const retirement = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Retirement",
+    });
+    expect(retirement.details?.positions[0]).toMatchObject({ shares: 2, avgCost: 250 });
   });
 
   it("requires lot_id for portfolio updates and leaves same-symbol lots unchanged", async () => {
@@ -584,7 +674,7 @@ describe("portfolioTrackerTool", () => {
     expect(view.content[0].text.toLowerCase()).toContain("empty");
   });
 
-  it("removes all lots for a symbol", async () => {
+  it("requires a stable lot id instead of deleting every lot for a symbol", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",
       symbol: "VTI",
@@ -592,19 +682,15 @@ describe("portfolioTrackerTool", () => {
       avg_cost: 250,
     });
 
-    const remove = await portfolioTrackerTool.execute("test", {
-      action: "remove",
-      symbol: "VTI",
-    });
-    expect(remove.content[0].text).toContain("Removed");
-    expect(remove.details).toMatchObject({
-      symbol: "VTI",
-      removedCount: 1,
-      removedLotIds: [expect.any(Number)],
-    });
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "remove",
+        symbol: "VTI",
+      }),
+    ).rejects.toThrow("lot_id is required");
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
-    expect(view.content[0].text.toLowerCase()).toContain("empty");
+    expect(view.content[0].text).toContain("VTI [lot ");
   });
 
   it("removes only the selected lot when lot_id is supplied", async () => {
@@ -646,6 +732,33 @@ describe("portfolioTrackerTool", () => {
     });
     expect((view.details as { positions: unknown[] }).positions).toHaveLength(1);
     expect(secondLotId).not.toBe(firstLotId);
+  });
+
+  it("does not remove a lot from a different named portfolio", async () => {
+    const retirementLot = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Retirement",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const retirementLotId = (retirementLot.details as { id: number }).id;
+
+    const removeFromDefault = await portfolioTrackerTool.execute("test", {
+      action: "remove",
+      lot_id: retirementLotId,
+    });
+
+    expect(removeFromDefault.content[0].text).toBe(`lot ${retirementLotId} not found in portfolio`);
+    expect(removeFromDefault.details).toBeNull();
+
+    const retirement = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Retirement",
+    });
+    expect(retirement.details?.positions).toEqual([
+      expect.objectContaining({ lotId: retirementLotId, symbol: "VTI" }),
+    ]);
   });
 });
 

@@ -39,6 +39,22 @@ describe("buildAlertSentenceRows", () => {
     expect(row.enabled).toBe(true);
   });
 
+  it("prices a saved rule in the instrument's own currency", () => {
+    // The rule is evaluated against a EUR listing, so reading it back as dollars
+    // would state a monetary unit the alert never used.
+    const [row] = buildAlertSentenceRows(
+      [rule({ instrumentId: 5, conditionJson: { threshold: 168.64 } })],
+      [],
+      [{ id: 5, symbol: "SAP.DE", name: "SAP SE", currency: "EUR" }],
+      NOW,
+    );
+
+    expect(row.symbol).toBe("SAP.DE");
+    expect(row.sentence).toBe("Price crosses above EUR 168.64");
+    expect(row.explanation).toContain("EUR 204.25");
+    expect(row.explanation).not.toContain("$");
+  });
+
   it("describes RSI, percent-move, SMA, and volume rules in plain English", () => {
     const rows = buildAlertSentenceRows(
       [

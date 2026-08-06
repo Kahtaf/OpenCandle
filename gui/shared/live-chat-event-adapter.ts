@@ -1,16 +1,17 @@
 import type { AssistantMessage, Message } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type {
-  ChatEvent,
-  MessageAttachmentChip,
-  MessageContent,
-  ToolOutput,
-} from "../shared/chat-events.js";
+import type { ChatEvent, MessageAttachmentChip, MessageContent } from "./chat-events.js";
+import { normalizeToolOutput } from "./tool-output.js";
 
 export interface LiveChatEventAdapterOptions {
   runId: string;
   sessionId: string;
   startSeq: number;
+  /** Optional shared allocator for interleaving Pi events with runtime events. */
+  sequence?: {
+    next(): number;
+    peek(): number;
+  };
   emit: (event: ChatEvent) => void;
   /**
    * The user's words as typed. Workflow transforms can replace the first user
@@ -38,7 +39,8 @@ export function createLiveChatEventAdapter(
   const completedMessageIds = new Set<string>();
 
   const emit = (event: Omit<ChatEvent, "seq" | "sessionId">) => {
-    options.emit({ ...event, sessionId: options.sessionId, seq: seq++ } as ChatEvent);
+    const eventSeq = options.sequence ? options.sequence.next() : seq++;
+    options.emit({ ...event, sessionId: options.sessionId, seq: eventSeq } as ChatEvent);
   };
 
   const ensureAssistantMessage = (): string => {
@@ -175,7 +177,12 @@ export function createLiveChatEventAdapter(
           return;
 
         case "tool_execution_end": {
-          const output = toolOutput(event.result, event.isError);
+          const result = asRecord(event.result);
+          const output = normalizeToolOutput({
+            content: result.content,
+            details: result.details,
+            isError: event.isError,
+          });
           if (event.isError) {
             emit({
               type: "tool.failed",
@@ -199,7 +206,7 @@ export function createLiveChatEventAdapter(
       }
     },
     nextSeq() {
-      return seq;
+      return options.sequence ? options.sequence.peek() : seq;
     },
   };
 }
@@ -246,15 +253,6 @@ function userMessageContent(content: unknown, text: string): MessageContent[] {
     }
   }
   return parts;
-}
-
-function toolOutput(result: unknown, isError: boolean): ToolOutput {
-  const record = asRecord(result);
-  return {
-    content: Array.isArray(record.content) ? (record.content as ToolOutput["content"]) : [],
-    details: record.details,
-    isError,
-  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 export function useInstrumentHistory(symbol, range) {
+  const transport = useRuntimeTransport();
   const requestKey = `${symbol}:${range}`;
   const [state, setState] = useState({
     key: requestKey,
@@ -20,13 +22,7 @@ export function useInstrumentHistory(symbol, range) {
         error: null,
       });
       try {
-        const response = await fetch(
-          `/api/instruments/history?symbol=${encodeURIComponent(symbol)}&range=${range}`,
-        );
-        if (!response.ok) {
-          throw new Error(response.statusText || "Failed to load instrument history");
-        }
-        const data = await response.json();
+        const data = await transport.getInstrumentHistory(symbol, range);
         if (!disposed) {
           setState({ key: requestKey, snapshot: data, loading: false, error: null });
         }
@@ -46,7 +42,7 @@ export function useInstrumentHistory(symbol, range) {
     return () => {
       disposed = true;
     };
-  }, [symbol, range, requestKey]);
+  }, [symbol, range, requestKey, transport]);
 
   if (state.key === requestKey) {
     return { snapshot: state.snapshot, loading: state.loading, error: state.error };

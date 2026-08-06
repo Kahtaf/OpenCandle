@@ -9,6 +9,7 @@ export function UserMessage({
   content,
   attachments = EMPTY_ATTACHMENTS,
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
+  delivery = "sent",
 }) {
   const images = (content || []).filter((part) => part.type === "image");
   return (
@@ -41,6 +42,11 @@ export function UserMessage({
                 className="h-20 w-20 rounded-lg border border-border object-cover"
               />
             ))}
+          </div>
+        ) : null}
+        {delivery === "queued" ? (
+          <div className="mt-2 text-right text-[11px] font-medium text-muted-foreground">
+            Queued
           </div>
         ) : null}
       </div>

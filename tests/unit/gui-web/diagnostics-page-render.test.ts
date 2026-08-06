@@ -194,4 +194,36 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toMatch(/Failures<\/div><div class="[^"]*text-muted-foreground[^"]*">0<\/div>/);
     expect(html).toMatch(/Warnings<\/div><div class="[^"]*text-muted-foreground[^"]*">0<\/div>/);
   });
+
+  it("does not show local reconnect or browser-cookie controls to hosted followers", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(DiagnosticsPage, {
+        role: "follower",
+        initialReport: {
+          runtime: "hosted-web",
+          status: "degraded",
+          summary: "The browser runtime is ready.",
+          sections: [
+            {
+              id: "hosted-runtime",
+              label: "Hosted runtime",
+              status: "ready",
+              checks: [
+                {
+                  id: "browser-node",
+                  label: "Browser-hosted Node and Pi",
+                  status: "pass",
+                  detail: "v22",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Browser-hosted Node and Pi");
+    expect(html).not.toContain("reconnects local access");
+    expect(html).not.toContain("Check sessions");
+  });
 });

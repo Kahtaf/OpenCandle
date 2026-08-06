@@ -46,7 +46,7 @@ export function createLocalSessionCoordinator(
   const dedupeRetentionMs = options.dedupeRetentionMs ?? DEFAULT_DEDUPE_RETENTION_MS;
   const acceptedActions = new Map<string, AcceptedAction>();
   const activeActions = new Map<string, Promise<unknown>>();
-  const activeRunSessions = new Set<string>();
+  const sessionRunTails = new Map<string, Promise<void>>();
 
   async function runSessionAction<T>(
     action: SessionActionEnvelope,
@@ -59,12 +59,15 @@ export function createLocalSessionCoordinator(
     const active = activeActions.get(actionKey);
     if (active) return { ok: true, duplicate: true, result: (await active) as T };
 
-    if (isRunAdmissionAction(action) && activeRunSessions.has(action.sessionId)) {
+    const runAdmissionAction = isRunAdmissionAction(action);
+    const queueChatPrompt = action.actionType === "chat.prompt";
+    const previousRun = queueChatPrompt ? sessionRunTails.get(action.sessionId) : undefined;
+    if (runAdmissionAction && !queueChatPrompt && sessionRunTails.has(action.sessionId)) {
       return { ok: false, code: "session_busy", message: BUSY_MESSAGE };
     }
 
-    if (isRunAdmissionAction(action)) activeRunSessions.add(action.sessionId);
     const runAction = (async () => {
+      if (previousRun) await previousRun;
       const result = await handler(action);
       acceptedActions.set(actionKey, {
         expiresAt: now() + dedupeRetentionMs,
@@ -72,13 +75,24 @@ export function createLocalSessionCoordinator(
       });
       return result;
     })();
+    if (runAdmissionAction) {
+      const runTail = runAction.then(
+        () => undefined,
+        () => undefined,
+      );
+      sessionRunTails.set(action.sessionId, runTail);
+      void runTail.finally(() => {
+        if (sessionRunTails.get(action.sessionId) === runTail) {
+          sessionRunTails.delete(action.sessionId);
+        }
+      });
+    }
     activeActions.set(actionKey, runAction);
     try {
       const result = await runAction;
       return { ok: true, duplicate: false, result };
     } finally {
       activeActions.delete(actionKey);
-      if (isRunAdmissionAction(action)) activeRunSessions.delete(action.sessionId);
     }
   }
 

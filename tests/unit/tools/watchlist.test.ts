@@ -94,11 +94,11 @@ describe("watchlistTool", () => {
   });
 
   it("removes a symbol from the SQLite watchlist", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+    const added = await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
 
     const result = await watchlistTool.execute("test", {
       action: "remove",
-      symbol: "AAPL",
+      item_id: (added.details as { id: number }).id,
     });
 
     expect(result.content[0].text).toContain("Removed");
@@ -163,14 +163,32 @@ describe("watchlistTool", () => {
     expect(check.content[0].text).toContain("NVDA");
     await expect(
       watchlistTool.execute("test", { action: "check", watchlist_name: "Growth" }),
-    ).resolves.toMatchObject({
-      content: [
-        expect.objectContaining({ text: "Growth is empty. Use add action to add symbols." }),
-      ],
-    });
+    ).rejects.toThrow("watchlist Growth not found");
   });
 
-  it("does not create a missing watchlist while renaming", async () => {
+  it("resolves an explicitly named Default watchlist after the original default is renamed", async () => {
+    await watchlistTool.execute("test", {
+      action: "rename",
+      new_watchlist_name: "Growth",
+    });
+    await watchlistTool.execute("test", { action: "create", watchlist_name: "Default" });
+    await watchlistTool.execute("test", {
+      action: "add",
+      watchlist_name: "Default",
+      symbol: "AAPL",
+    });
+
+    const active = await watchlistTool.execute("test", { action: "check" });
+    const namedDefault = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "Default",
+    });
+    expect(active.content[0].text).toContain("Growth is empty");
+    expect(namedDefault.content[0].text).toContain("**Default**");
+    expect(namedDefault.content[0].text).toContain("AAPL");
+  });
+
+  it("does not create a missing watchlist while reading or renaming", async () => {
     await expect(
       watchlistTool.execute("test", {
         action: "rename",
@@ -179,11 +197,12 @@ describe("watchlistTool", () => {
       }),
     ).rejects.toThrow("watchlist Missing not found");
 
-    const missing = await watchlistTool.execute("test", {
-      action: "check",
-      watchlist_name: "Missing",
-    });
-    expect(missing.content[0].text).toContain("Missing is empty");
+    await expect(
+      watchlistTool.execute("test", {
+        action: "check",
+        watchlist_name: "Missing",
+      }),
+    ).rejects.toThrow("watchlist Missing not found");
   });
 
   it("deletes a named watchlist through the tool and selects another list", async () => {
@@ -199,12 +218,16 @@ describe("watchlistTool", () => {
   });
 
   it("removes a symbol from only the selected named watchlist", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
+    const mag7Item = await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      watchlist_name: "MAG7",
+    });
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "ETFs" });
 
     const removed = await watchlistTool.execute("test", {
       action: "remove",
-      symbol: "AAPL",
+      item_id: (mag7Item.details as { id: number }).id,
       watchlist_name: "MAG7",
     });
     const mag7 = await watchlistTool.execute("test", { action: "check", watchlist_name: "MAG7" });
@@ -213,6 +236,14 @@ describe("watchlistTool", () => {
     expect(removed.content[0].text).toContain("Removed AAPL from MAG7");
     expect(mag7.content[0].text).toContain("MAG7 is empty");
     expect(etfs.content[0].text).toContain("AAPL");
+  });
+
+  it("requires a stable item id for removal", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+
+    await expect(
+      watchlistTool.execute("test", { action: "remove", symbol: "AAPL" }),
+    ).rejects.toThrow("item_id is required");
   });
 
   it("checks equity watchlist symbols through a TradingView batch and fills suffix symbols with Yahoo", async () => {
@@ -240,8 +271,8 @@ describe("watchlistTool", () => {
     expect(getQuotes).toHaveBeenCalledWith(["AAPL"]);
     expect(getQuote).toHaveBeenCalledTimes(1);
     expect(getQuote).toHaveBeenCalledWith("BTC-USD");
-    expect(result.content[0].text).toContain("AAPL: $190.50");
-    expect(result.content[0].text).toContain("BTC-USD: $68000.00");
+    expect(result.content[0].text).toMatch(/AAPL \[item \d+\]: \$190\.50/);
+    expect(result.content[0].text).toMatch(/BTC-USD \[item \d+\]: \$68000\.00/);
     expect(result.content[0].text).toContain("TradingView scanner data may be delayed");
     expect(result.details?.items).toEqual([
       expect.objectContaining({

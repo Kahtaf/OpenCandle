@@ -82,6 +82,7 @@ const sourcePages = [
   },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
+  { source: "docs/hosted-pwa.md", output: "docs/hosted-pwa.html", section: "Guides" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
@@ -89,6 +90,11 @@ const sourcePages = [
     section: "Guides",
   },
   { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Reference" },
+  {
+    source: "docs/provider-relay.md",
+    output: "docs/provider-relay.html",
+    section: "Reference",
+  },
   { source: "docs/configuration.md", output: "docs/configuration.html", section: "Reference" },
   {
     source: "docs/system-architecture.md",

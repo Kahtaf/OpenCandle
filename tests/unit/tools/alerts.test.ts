@@ -73,6 +73,20 @@ describe("alertsTool", () => {
     );
   });
 
+  it("rejects unsupported create action prefixes before persisting an alert", async () => {
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_typo",
+        symbol: "AAPL",
+        threshold: 100,
+      } as never),
+    ).rejects.toThrow("Unsupported alert action");
+
+    const db = initDefaultDatabase();
+    expect(new MarketStateService(db).listAlertRules()).toEqual([]);
+    db.close();
+  });
+
   it("reports local runner status and recent check history for TUI parity", async () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
@@ -128,6 +142,30 @@ describe("alertsTool", () => {
     expect(listed.content[0].text).toContain("manual checks available");
   });
 
+  it("rejects invalid alert thresholds before resolving or persisting instruments", async () => {
+    const invalidAlerts = [
+      { action: "create_price_above" as const, threshold: 0 },
+      { action: "create_rsi_below" as const, threshold: 101 },
+      { action: "create_volume_spike" as const, threshold: 0 },
+      { action: "create_percent_move_up" as const, threshold: Number.NaN },
+    ];
+
+    for (const alert of invalidAlerts) {
+      await expect(alertsTool.execute("test", { ...alert, symbol: "AAPL" })).rejects.toThrow(
+        /threshold|multiplier/,
+      );
+    }
+
+    expect(getQuote).not.toHaveBeenCalled();
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    expect(
+      (db.prepare("SELECT COUNT(*) AS count FROM instruments").get() as { count: number }).count,
+    ).toBe(0);
+    db.close();
+  });
+
   it("updates and deletes alert rules through the shared TUI tool", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",
@@ -159,6 +197,37 @@ describe("alertsTool", () => {
 
     const listed = await alertsTool.execute("test", { action: "list" });
     expect(listed.content[0].text).toContain("No alert rules");
+  });
+
+  it("validates alert updates before resolving or persisting a replacement instrument", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+    vi.mocked(getQuote).mockClear();
+
+    await expect(
+      alertsTool.execute("test", {
+        action: "update",
+        id: 1,
+        condition_action: "create_price_below",
+        symbol: "MSFT",
+        threshold: 0,
+      }),
+    ).rejects.toThrow("threshold must be a finite number greater than 0");
+
+    expect(getQuote).not.toHaveBeenCalled();
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()[0]).toMatchObject({
+      instrumentId: 1,
+      conditionJson: { threshold: 250 },
+    });
+    expect(
+      (db.prepare("SELECT COUNT(*) AS count FROM instruments").get() as { count: number }).count,
+    ).toBe(1);
+    db.close();
   });
 
   it("creates instrument-scoped alerts without adding the symbol to the watchlist", async () => {

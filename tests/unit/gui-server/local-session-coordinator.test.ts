@@ -54,7 +54,39 @@ describe("local session coordinator", () => {
     expect(source).toContain("return actionAccepted;");
   });
 
-  it("returns a neutral busy result for a second active run action instead of queueing", async () => {
+  it("queues a second chat prompt until the active run finishes", async () => {
+    const coordinator = createLocalSessionCoordinator();
+    let finishFirst!: () => void;
+    const order: string[] = [];
+    const firstRun = coordinator.runSessionAction(
+      chatAction({ actionId: "action-1" }),
+      () =>
+        new Promise((resolve) => {
+          order.push("first-started");
+          finishFirst = () => {
+            order.push("first-finished");
+            resolve({ accepted: true });
+          };
+        }),
+    );
+
+    const secondRun = coordinator.runSessionAction(
+      chatAction({ actionId: "action-2" }),
+      async () => {
+        order.push("second-started");
+        return { accepted: true };
+      },
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual(["first-started"]);
+    finishFirst();
+    await expect(firstRun).resolves.toMatchObject({ ok: true, duplicate: false });
+    await expect(secondRun).resolves.toMatchObject({ ok: true, duplicate: false });
+    expect(order).toEqual(["first-started", "first-finished", "second-started"]);
+  });
+
+  it("keeps non-chat run actions fail-fast while a chat prompt is active", async () => {
     const coordinator = createLocalSessionCoordinator();
     let finishFirst!: () => void;
     const firstRun = coordinator.runSessionAction(
@@ -65,18 +97,18 @@ describe("local session coordinator", () => {
         }),
     );
 
-    const secondRun = await coordinator.runSessionAction(
-      chatAction({ actionId: "action-2" }),
+    const toolRun = await coordinator.runSessionAction(
+      chatAction({ actionId: "tool-1", actionType: "tool.invoke" }),
       async () => ({ accepted: true }),
     );
 
-    expect(secondRun).toEqual({
+    expect(toolRun).toEqual({
       ok: false,
       code: "session_busy",
       message: "OpenCandle is still working in this session. Try again when it finishes.",
     });
     finishFirst();
-    await expect(firstRun).resolves.toMatchObject({ ok: true, duplicate: false });
+    await firstRun;
   });
 
   it("dedupes a retry while the same action is still in flight", async () => {

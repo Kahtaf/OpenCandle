@@ -30,6 +30,7 @@ export function chatRowsFromEvents(events = [], liveEvents = [], defaultSessionI
         sessionId,
         content: message.content,
         attachments: message.attachments || [],
+        delivery: isOptimisticMessageId(message.id) ? "queued" : "sent",
       });
       continue;
     }
@@ -146,6 +147,12 @@ export function compactDuplicateUserRows(rows) {
       previous?.type === "user_message" &&
       userRowSignature(row) === userRowSignature(previous)
     ) {
+      // The local receipt appears first, then the canonical event arrives
+      // through the runtime stream. Prefer that canonical row so the queued
+      // badge clears as soon as the writer acknowledges the prompt.
+      if (previous.delivery === "queued" && row.delivery !== "queued") {
+        compacted[compacted.length - 1] = row;
+      }
       continue;
     }
     compacted.push(row);
@@ -161,6 +168,10 @@ function userRowSignature(row) {
       label: String(attachment?.label || ""),
     })),
   });
+}
+
+function isOptimisticMessageId(messageId) {
+  return String(messageId || "").startsWith("optimistic-user-");
 }
 
 function isBackgroundTool(tool) {

@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
@@ -11,23 +12,26 @@ import {
   validateModelKey,
 } from "../../src/onboarding/validate-model-key.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
+import { previouslyValidatedModelKeyInteraction } from "../../src/pi/model-key-login-guard.js";
+import {
+  findPreferredModel as findPreferredModelFromCatalog,
+  type ModelSetupProvider,
+  modelSetupProviders,
+  sortModels,
+} from "../../src/pi/model-provider-catalog.js";
 
 export type ModelSetupRequirement = "ready" | "select_model" | "connect_auth";
 
-export interface ModelSetupProvider {
-  id: string;
-  label: string;
-  envVar: string;
-  defaultProvider: string;
-  defaultModel: string;
-  signupUrl: string;
-}
+export type { ModelSetupProvider } from "../../src/pi/model-provider-catalog.js";
+export { modelSetupProviders, sortModels } from "../../src/pi/model-provider-catalog.js";
 
 export interface ModelSetupState {
   requirement: ModelSetupRequirement;
   currentModel?: string;
   providers: ModelSetupProvider[];
   availableModels: Array<{ provider: string; id: string; label: string }>;
+  currentThinkingLevel?: ThinkingLevel;
+  availableThinkingLevels?: ThinkingLevel[];
 }
 
 export interface ModelSetupRegistry {
@@ -40,6 +44,9 @@ interface ModelSetupSession {
   modelRuntime: ModelRuntime;
   model?: Model<Api>;
   setModel(model: Model<Api>): Promise<void>;
+  thinkingLevel?: ThinkingLevel;
+  getAvailableThinkingLevels?(): ThinkingLevel[];
+  setThinkingLevel?(level: ThinkingLevel): void;
   settingsManager: {
     flush(): Promise<void>;
   };
@@ -59,6 +66,7 @@ export interface ModelSetupController {
   handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void>;
   handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void>;
   handleSelectModel(provider: string, modelId: string): Promise<void>;
+  handleSetThinkingLevel?(level: string): Promise<void>;
 }
 
 export interface ModelSetupControllerOptions {
@@ -68,36 +76,10 @@ export interface ModelSetupControllerOptions {
   broadcastState: () => void;
 }
 
-export const modelSetupProviders: ModelSetupProvider[] = [
-  {
-    id: "google",
-    label: "Google Gemini",
-    envVar: "GEMINI_API_KEY",
-    defaultProvider: "google",
-    defaultModel: "gemini-2.5-flash",
-    signupUrl: "https://aistudio.google.com/app/apikey",
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    envVar: "OPENAI_API_KEY",
-    defaultProvider: "openai",
-    defaultModel: "gpt-5-mini",
-    signupUrl: "https://platform.openai.com/api-keys",
-  },
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    envVar: "ANTHROPIC_API_KEY",
-    defaultProvider: "anthropic",
-    defaultModel: "claude-haiku-4-5",
-    signupUrl: "https://console.anthropic.com/settings/keys",
-  },
-];
-
 export function buildModelSetupState(
   registry: ModelSetupRegistry,
   currentModel: Model<Api> | undefined,
+  thinking?: { current: ThinkingLevel; available: ThinkingLevel[] },
 ): ModelSetupState {
   registry.refresh();
   const availableModels = sortModels(registry.getAvailable()).map((model) => ({
@@ -122,6 +104,12 @@ export function buildModelSetupState(
         : undefined,
     providers: modelSetupProviders,
     availableModels,
+    ...(thinking
+      ? {
+          currentThinkingLevel: thinking.current,
+          availableThinkingLevels: thinking.available,
+        }
+      : {}),
   };
 }
 
@@ -129,22 +117,7 @@ export function findPreferredModel(
   registry: Pick<ModelSetupRegistry, "getAvailable">,
   provider: ModelSetupProvider,
 ): Model<Api> | undefined {
-  const available = sortModels(registry.getAvailable(), provider.defaultProvider);
-  return (
-    available.find(
-      (model) => model.provider === provider.defaultProvider && model.id === provider.defaultModel,
-    ) ?? available.find((model) => model.provider === provider.defaultProvider)
-  );
-}
-
-export function sortModels(models: Model<Api>[], preferredProvider?: string): Model<Api>[] {
-  return [...models].sort((a, b) => {
-    const aPreferred = preferredProvider && a.provider === preferredProvider ? -1 : 0;
-    const bPreferred = preferredProvider && b.provider === preferredProvider ? -1 : 0;
-    if (aPreferred !== bPreferred) return aPreferred - bPreferred;
-    const byProvider = a.provider.localeCompare(b.provider);
-    return byProvider !== 0 ? byProvider : a.id.localeCompare(b.id);
-  });
+  return findPreferredModelFromCatalog(registry.getAvailable(), provider);
 }
 
 export function createModelSetupController({
@@ -159,7 +132,16 @@ export function createModelSetupController({
 
   function buildCurrentModelSetupState(): ModelSetupState {
     const session = getSession();
-    return buildModelSetupState(new ModelRegistry(session.modelRuntime), session.model);
+    return buildModelSetupState(
+      new ModelRegistry(session.modelRuntime),
+      session.model,
+      session.thinkingLevel && session.getAvailableThinkingLevels
+        ? {
+            current: session.thinkingLevel,
+            available: session.getAvailableThinkingLevels(),
+          }
+        : undefined,
+    );
   }
 
   async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -177,12 +159,21 @@ export function createModelSetupController({
         `Key was rejected by ${validation.providerLabel}. The existing configuration was not changed.`,
       );
     }
+    if (validation.status !== "valid") {
+      throw new Error(
+        `Couldn't verify the ${validation.providerLabel} key (${validation.reason}). The existing configuration was not changed.`,
+      );
+    }
 
     const session = getSession();
-    await session.modelRuntime.login(provider.id, "api_key", {
-      prompt: async () => trimmed,
-      notify: () => {},
-    });
+    await session.modelRuntime.login(
+      provider.id,
+      "api_key",
+      previouslyValidatedModelKeyInteraction({
+        prompt: async () => trimmed,
+        notify: () => {},
+      }),
+    );
     const modelRegistry = new ModelRegistry(session.modelRuntime);
 
     const model = findPreferredModel(modelRegistry, provider);
@@ -196,9 +187,7 @@ export function createModelSetupController({
     await session.settingsManager.flush();
     getSessionManager().appendCustomMessageEntry(
       "opencandle-model-setup",
-      validation.status === "transient"
-        ? `Saved — couldn't verify (network issue). Connected ${provider.label} and selected ${model.provider}/${model.id}.`
-        : `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
+      `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );
@@ -232,13 +221,15 @@ export function createModelSetupController({
         `${descriptor.displayName} rejected the key${statusHint}${messageHint}. The existing configuration was not changed.`,
       );
     }
+    if (validation.status !== "valid") {
+      throw new Error(
+        `Couldn't verify the ${descriptor.displayName} key (${validation.reason}). The existing configuration was not changed.`,
+      );
+    }
 
     persistProviderCredential(descriptor.id, trimmed);
 
-    const verifiedNote =
-      validation.status === "transient"
-        ? `Saved ${descriptor.displayName} key but couldn't verify it (${validation.reason}). The next request will surface any issue.`
-        : `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
+    const verifiedNote = `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
 
     getSessionManager().appendCustomMessageEntry("opencandle-provider-setup", verifiedNote, true, {
       source: "gui",
@@ -258,10 +249,23 @@ export function createModelSetupController({
     await session.settingsManager.flush();
   }
 
+  async function handleSetThinkingLevel(level: string): Promise<void> {
+    ensureWriter();
+    const session = getSession();
+    const available = session.getAvailableThinkingLevels?.() ?? [];
+    if (!available.includes(level as ThinkingLevel) || !session.setThinkingLevel) {
+      throw new Error(`Unsupported thinking level: ${level}`);
+    }
+    session.setThinkingLevel(level as ThinkingLevel);
+    await session.settingsManager.flush();
+    broadcastState();
+  }
+
   return {
     buildCurrentModelSetupState,
     handleSaveModelApiKey,
     handleSaveProviderApiKey,
     handleSelectModel,
+    handleSetThinkingLevel,
   };
 }

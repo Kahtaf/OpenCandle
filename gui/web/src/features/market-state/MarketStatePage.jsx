@@ -1,5 +1,6 @@
 import { BellPlus, Loader2, Plus, RefreshCw, Search, Settings, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { toolOutcomeNeedsInput } from "../../../../shared/tool-output.js";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,10 +14,14 @@ import {
 } from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { ListHeader } from "../../components/ui/list-header.jsx";
 import { Select } from "../../components/ui/select.jsx";
+import { SelectField } from "../../components/ui/select-field.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
+import { cn } from "../../lib/utils.js";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
@@ -27,6 +32,11 @@ import {
 import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
+import {
+  alertCadenceSentence,
+  alertPreviewSentence,
+  thresholdDistanceHint,
+} from "./alert-view-model.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
 import { StatusBand } from "./shared.jsx";
@@ -61,6 +71,8 @@ const PAGE_META = {
   },
 };
 
+const FILL_HEIGHT_DOMAINS = new Set(["watchlists", "portfolios"]);
+
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
 
@@ -85,9 +97,29 @@ export async function invokeMarketStateMutation({
     if (typeof invokeToolRequest !== "function") {
       throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
     }
-    await invokeToolRequest(toolName, args, "", { recordTranscript: false });
-    await refresh();
-    await refreshQuotes?.();
+    const response = await invokeToolRequest(toolName, args, "", { recordTranscript: false });
+    const acknowledged = response?.result ?? response;
+    const payload = acknowledged?.result?.content ? acknowledged.result : acknowledged;
+    if (toolOutcomeNeedsInput(payload)) {
+      const message = payload?.content?.find?.((item) => item?.type === "text")?.text;
+      setToast?.(message || "More information is required before this can be saved.", {
+        destructive: true,
+      });
+      return false;
+    }
+    // A hosted direct-tool response is only released after the browser host
+    // has persisted its checkpoint. Do not keep the form open behind a second
+    // WebContainer request just to reread the same durable market state;
+    // polling and the hosted invalidation will reconcile the visible list.
+    void refresh();
+    if (refreshQuotes) {
+      void Promise.resolve(refreshQuotes()).catch((quoteError) => {
+        const message = quoteError instanceof Error ? quoteError.message : String(quoteError);
+        setToast?.(`Saved, but current quotes could not be refreshed: ${message}`, {
+          destructive: true,
+        });
+      });
+    }
     return true;
   } catch (mutationError) {
     const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
@@ -102,9 +134,19 @@ export async function invokeMarketStateMutation({
   }
 }
 
+// A level handed over in the URL only opens the sheet on a threshold the sheet
+// would itself accept. Anything else is dropped and the sheet falls back to its
+// own quote prefill rather than opening on a level nobody can save.
+export function alertThresholdFromLink(value) {
+  const level = Number(String(value ?? "").trim());
+  if (!Number.isFinite(level) || level <= 0) return undefined;
+  return alertThresholdPrefill(level) || undefined;
+}
+
 export function MarketStatePage({
   domain,
   alertSymbol,
+  alertThreshold,
   role,
   invokeTool: invokeToolRequest,
   navigate,
@@ -118,10 +160,19 @@ export function MarketStatePage({
   const readOnly = role !== "writer";
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
+  // Pages whose primary table plus detail rail should fill the desktop canvas
+  // instead of floating as short cards over dead white space.
+  const fillsHeight = FILL_HEIGHT_DOMAINS.has(activeId);
   const [filter, setFilter] = useState("");
   const [panel, setPanel] = useState(() =>
     domain === "alerts" && alertSymbol
-      ? { type: "alert-create", data: { symbol: alertSymbol.trim().toUpperCase() } }
+      ? {
+          type: "alert-create",
+          data: {
+            symbol: alertSymbol.trim().toUpperCase(),
+            threshold: alertThresholdFromLink(alertThreshold),
+          },
+        }
       : null,
   );
   const [pendingMutation, setPendingMutation] = useState(null);
@@ -170,8 +221,18 @@ export function MarketStatePage({
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
+      <main
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6",
+          fillsHeight && "xl:overflow-hidden",
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-[1240px] flex-col gap-3",
+            fillsHeight && "xl:h-full xl:min-h-0",
+          )}
+        >
           {activeId !== "watchlists" && activeId !== "portfolios" ? (
             <PageHeader
               meta={active}
@@ -189,7 +250,7 @@ export function MarketStatePage({
             </StatusBand>
           ) : null}
           {readOnly ? <StatusBand>{readOnlyMessage(role)}</StatusBand> : null}
-          <div className="flex min-w-0 flex-col gap-3">
+          <div className={cn("flex min-w-0 flex-col gap-3", fillsHeight && "xl:min-h-0 xl:flex-1")}>
             {activeId === "watchlists" ? (
               <WatchlistPage
                 state={state}
@@ -272,10 +333,12 @@ function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
   const PrimaryIcon = meta.primaryIcon ?? Plus;
   const SecondaryIcon = meta.secondaryIcon;
   return (
-    <header className="flex flex-col gap-2 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
-        <div className="flex items-center gap-2">
+    <ListHeader
+      className="shrink-0"
+      title={meta.title}
+      tabs={tabs}
+      actions={
+        <>
           {meta.secondaryLabel && SecondaryIcon ? (
             <Button
               type="button"
@@ -300,10 +363,9 @@ function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
           >
             {meta.primaryLabel}
           </Button>
-        </div>
-      </div>
-      {tabs ? <div className="border-t border-border">{tabs}</div> : null}
-    </header>
+        </>
+      }
+    />
   );
 }
 
@@ -339,6 +401,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
           const saved = await invokeTool("manage_watchlist", {
             action: "add",
             symbol: values.symbol,
+            ...(values.unverifiedExact ? { unverified_exact_symbol: true } : {}),
             watchlist_name: watchlist?.name,
           });
           if (saved) closePanel();
@@ -431,6 +494,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
             shares: Number(values.shares),
             avg_cost: Number(values.avg_cost),
             currency: values.currency || undefined,
+            ...(values.unverified_exact_symbol ? { unverified_exact_symbol: true } : {}),
             portfolio_name: portfolio?.name,
           });
           if (saved) closePanel();
@@ -447,6 +511,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
         invokeTool={invokeTool}
         onSaved={closePanel}
         symbol={panel.data?.symbol}
+        threshold={panel.data?.threshold}
         navigate={navigate}
       />
     );
@@ -739,15 +804,20 @@ export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
 export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState("");
+  const unverifiedExactRef = useRef(false);
   const resolvedSymbol = selected;
 
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    const saved = await onSubmit({ symbol: resolvedSymbol });
+    const saved = await onSubmit({
+      symbol: resolvedSymbol,
+      unverifiedExact: unverifiedExactRef.current,
+    });
     if (saved === false) return;
     setQuery("");
     setSelected("");
+    unverifiedExactRef.current = false;
   };
 
   return (
@@ -763,6 +833,9 @@ export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
         disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
@@ -773,18 +846,20 @@ export function SymbolActionPanel({ disabled, onSubmit, navigate }) {
 }
 
 export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
+  const transport = useRuntimeTransport();
   const quantityId = useId();
   const averageCostId = useId();
   const currencyId = useId();
   const previousAutofillRef = useRef({
     shares: "",
     avg_cost: "",
-    currency: lot?.currency ?? "USD",
+    currency: lot?.currency ?? "",
   });
+  const unverifiedExactRef = useRef(false);
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
-    currency: lot?.currency ?? "USD",
+    currency: lot?.currency ?? "",
   });
   const [query, setQuery] = useState(lot?.symbol ?? "");
   const [selected, setSelected] = useState(lot?.symbol ?? "");
@@ -812,7 +887,7 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     };
 
     applyAutofill(null);
-    getInstrumentQuote(resolvedSymbol)
+    getInstrumentQuote(resolvedSymbol, transport)
       .then((quote) => {
         if (!disposed) applyAutofill(quote);
       })
@@ -821,14 +896,17 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
     return () => {
       disposed = true;
     };
-  }, [lot, resolvedSymbol]);
+  }, [lot, resolvedSymbol, transport]);
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!resolvedSymbol || !values.shares || !values.avg_cost) return;
+    if (!resolvedSymbol || !values.shares || !values.avg_cost || !values.currency) return;
     setPending(true);
     try {
-      await onSubmit({ ...values, symbol: resolvedSymbol });
+      await onSubmit({
+        ...values,
+        ...holdingInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
+      });
     } finally {
       setPending(false);
     }
@@ -847,6 +925,9 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
         disabled={disabled || pending || Boolean(lot)}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
       <label htmlFor={quantityId} className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -884,10 +965,12 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
           id={currencyId}
           value={values.currency}
           disabled={disabled || pending}
+          required
           onChange={(event) =>
             setValues((current) => ({ ...current, currency: event.target.value }))
           }
         >
+          {!values.currency ? <option value="">Select currency</option> : null}
           {holdingCurrencyOptions(lot?.currency, values.currency).map((currency) => (
             <option key={currency} value={currency}>
               {currency}
@@ -897,7 +980,9 @@ export function HoldingForm({ disabled, lot, onSubmit, navigate }) {
       </label>
       <PendingSubmitButton
         pending={pending}
-        disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}
+        disabled={
+          disabled || !resolvedSymbol || !values.shares || !values.avg_cost || !values.currency
+        }
       >
         Save
       </PendingSubmitButton>
@@ -937,7 +1022,7 @@ function getHoldingAutofillDefaults({ selectedSymbol, selectedQuote }) {
   return {
     shares: "100",
     avg_cost: quote ? formatAutofillNumber(quote.price) : "",
-    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "USD",
+    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "",
   };
 }
 
@@ -954,8 +1039,7 @@ export function getHoldingAutofillValues({
   };
   const defaults = getHoldingAutofillDefaults({ selectedSymbol, selectedQuote });
   const replaceableValue = (field) =>
-    current[field] === "" ||
-    current[field] === String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
+    current[field] === "" || current[field] === String(previousAutofill?.[field] ?? "");
 
   return {
     shares: defaults.shares && replaceableValue("shares") ? defaults.shares : current.shares,
@@ -976,8 +1060,10 @@ export function SymbolSearchInput({
   disabled,
   onQueryChange,
   onSelectedChange,
+  onSelectionVerificationChange,
   navigate,
 }) {
+  const transport = useRuntimeTransport();
   const inputId = useId();
   const listboxId = useId();
   const searchRef = useRef(null);
@@ -995,9 +1081,9 @@ export function SymbolSearchInput({
   const activeOptionId = activeCandidate
     ? instrumentSuggestionOptionId(listboxId, clampedActiveIndex)
     : undefined;
-
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
+    onSelectionVerificationChange?.(true);
     onQueryChange(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
     setCandidates([]);
     setActiveIndex(-1);
@@ -1009,7 +1095,7 @@ export function SymbolSearchInput({
         Search ticker or company
       </label>
       <Search
-        className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground"
+        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         aria-hidden="true"
       />
       <Input
@@ -1036,9 +1122,22 @@ export function SymbolSearchInput({
             setActiveIndex((index) =>
               nextInstrumentActiveIndex(index, visibleCandidates.length, "previous"),
             );
-          } else if (event.key === "Enter" && activeCandidate) {
-            event.preventDefault();
-            selectCandidate(activeCandidate);
+          } else if (event.key === "Enter") {
+            if (activeCandidate) {
+              event.preventDefault();
+              selectCandidate(activeCandidate);
+              return;
+            }
+            const exactSymbol =
+              transport.kind === "hosted" ? normalizeExactHostedSymbol(query) : "";
+            if (exactSymbol) {
+              event.preventDefault();
+              onSelectedChange(exactSymbol);
+              onSelectionVerificationChange?.(false);
+              onQueryChange(exactSymbol);
+              setCandidates([]);
+              setActiveIndex(-1);
+            }
           } else if (event.key === "Escape" && visibleCandidates.length > 0) {
             event.preventDefault();
             setCandidates([]);
@@ -1050,6 +1149,7 @@ export function SymbolSearchInput({
           setActiveIndex(-1);
           onQueryChange(event.target.value);
           onSelectedChange("");
+          onSelectionVerificationChange?.(undefined);
         }}
       />
       {visibleCandidates.length ? (
@@ -1070,6 +1170,13 @@ export function SymbolSearchInput({
   );
 }
 
+export function normalizeExactHostedSymbol(value) {
+  const symbol = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  return /^[A-Z0-9][A-Z0-9.^/=_-]{0,31}$/.test(symbol) ? symbol : "";
+}
+
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
@@ -1080,11 +1187,98 @@ const ALERT_COOLDOWN_OPTIONS = [
   { value: 86_400, label: "1 day" },
 ];
 
+// Each condition carries one line saying what it watches, so the choice can be
+// made without knowing the vocabulary first.
+export const ALERT_CONDITION_OPTIONS = [
+  {
+    value: "create_price_above",
+    label: "Price above",
+    description: "The first time price crosses your level going up.",
+  },
+  {
+    value: "create_price_below",
+    label: "Price below",
+    description: "The first time price crosses your level going down.",
+  },
+  {
+    value: "create_price_above_sma",
+    label: "Price above its average",
+    description: "Price closes above its own moving average.",
+  },
+  {
+    value: "create_price_below_sma",
+    label: "Price below its average",
+    description: "Price closes below its own moving average.",
+  },
+  {
+    value: "create_rsi_above",
+    label: "RSI above",
+    description: "The RSI momentum reading rises above your level.",
+  },
+  {
+    value: "create_rsi_below",
+    label: "RSI below",
+    description: "The RSI momentum reading falls below your level.",
+  },
+  {
+    value: "create_volume_spike",
+    label: "Volume spike",
+    description: "Volume runs above its recent average by your multiple.",
+  },
+  {
+    value: "create_percent_move_up",
+    label: "Percent move up",
+    description: "Gains more than your percentage in one day.",
+  },
+  {
+    value: "create_percent_move_down",
+    label: "Percent move down",
+    description: "Falls more than your percentage in one day.",
+  },
+  {
+    value: "create_sma_cross_above",
+    label: "Fast average crosses above slow",
+    description: "The shorter average crosses above the longer one.",
+  },
+  {
+    value: "create_sma_cross_below",
+    label: "Fast average crosses below slow",
+    description: "The shorter average crosses below the longer one.",
+  },
+];
+
+const PRICE_THRESHOLD_CONDITIONS = new Set(["create_price_above", "create_price_below"]);
+
+// A threshold only means something inside its own condition. Switching to a
+// condition that measures something else clears the level instead of carrying a
+// price into an RSI field.
+export function nextAlertThreshold(previousCondition, nextCondition, threshold) {
+  if (previousCondition === nextCondition) return threshold;
+  const previous = alertConditionFormFields(previousCondition);
+  const next = alertConditionFormFields(nextCondition);
+  if (previous.thresholdLabel === next.thresholdLabel) return threshold;
+  return nextCondition === "create_volume_spike" ? "2" : "";
+}
+
+// The quoted price, not a rounded version of it. Two decimals read best for
+// ordinary listings, but rounding a sub-cent quote would write 0.00, which
+// validates as a threshold the price has already crossed.
+export function alertThresholdPrefill(price) {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return "";
+  if (price >= 0.01) return price.toFixed(2);
+  return String(Number(price.toPrecision(6)));
+}
+
 export function alertConditionFormFields(condition) {
   if (condition === "create_price_above" || condition === "create_price_below") {
     return {
-      threshold: { min: undefined, max: undefined, step: "0.01" },
-      thresholdLabel: "Price threshold ($)",
+      // `any` so a sub-cent instrument can be alerted at its real price instead
+      // of being snapped to the nearest cent.
+      threshold: { min: undefined, max: undefined, step: "any" },
+      thresholdLabel: "Price threshold",
+      // The level is read in the listing's own currency, so the field says which
+      // one as soon as a quote names it rather than always claiming dollars.
+      thresholdInCurrency: true,
       thresholdPlaceholder: "80.00",
       thresholdRequired: true,
     };
@@ -1172,7 +1366,16 @@ export function isAlertDraftValid(draft, fields) {
   return true;
 }
 
-export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, navigate }) {
+export function AlertCreateForm({
+  disabled,
+  invokeTool,
+  onSaved,
+  alert,
+  symbol,
+  threshold: initialThreshold,
+  navigate,
+}) {
+  const transport = useRuntimeTransport();
   const conditionId = useId();
   const thresholdId = useId();
   const periodId = useId();
@@ -1180,21 +1383,84 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   const slowPeriodId = useId();
   const cooldownId = useId();
   const isEditing = Boolean(alert);
-  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
+  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol, initialThreshold));
+  const [quote, setQuote] = useState(null);
+  const [pending, setPending] = useState(false);
+  const unverifiedExactRef = useRef(false);
+  const prefilledThresholdRef = useRef("");
+  // A level handed over by a link belongs to the symbol it was read from. It is
+  // not a quote prefill, so the quote arriving moments later leaves it alone,
+  // but it still has to leave when that symbol is replaced.
+  const linkedThresholdRef = useRef(
+    alert || !initialThreshold ? null : { symbol: symbol ?? "", threshold: initialThreshold },
+  );
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
     draft;
   const fields = alertConditionFormFields(condition);
   const resolvedSymbol = selected;
-  const summary = resolvedSymbol
-    ? `Notify once when ${resolvedSymbol} ${conditionSummary(
-        condition,
-        threshold,
-        period,
-        fast_period,
-        slow_period,
-      )} during a manual or local-runner check.`
-    : "Select an instrument to preview the alert rule.";
+  const currentPrice = quote?.status === "ok" ? quote.price : null;
+  const priceHint = PRICE_THRESHOLD_CONDITIONS.has(condition)
+    ? thresholdDistanceHint(currentPrice, threshold, quote?.currency)
+    : null;
+  const previewSentence = alertPreviewSentence({
+    condition,
+    threshold,
+    period,
+    fastPeriod: fast_period,
+    slowPeriod: slow_period,
+    currency: quote?.currency ?? null,
+  });
+
+  useEffect(() => {
+    // The quote and any level auto-filled from it belong to the symbol they
+    // came from, so both leave with it. Keeping either would let a level nobody
+    // chose be saved against the next symbol if its quote is slow or never
+    // arrives. A level typed by hand is not a prefill and is left alone.
+    setQuote(null);
+    // Read before the reset: the state updater runs on the next render, so it
+    // would otherwise compare against the value this effect just cleared.
+    const prefilled = prefilledThresholdRef.current;
+    prefilledThresholdRef.current = "";
+    const linked = linkedThresholdRef.current;
+    const linkedLeft = linked !== null && linked.symbol !== resolvedSymbol;
+    if (linkedLeft) linkedThresholdRef.current = null;
+    setDraft((current) =>
+      current.threshold === prefilled || (linkedLeft && current.threshold === linked.threshold)
+        ? { ...current, threshold: "" }
+        : current,
+    );
+    if (!resolvedSymbol) return undefined;
+    let disposed = false;
+    getInstrumentQuote(resolvedSymbol, transport)
+      .then((next) => {
+        if (!disposed) setQuote(next ?? null);
+      })
+      .catch(() => {
+        if (!disposed) setQuote(null);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [resolvedSymbol, transport]);
+
+  // A price level is easiest to judge from the price it is being compared with,
+  // so the field opens on the current quote until the level is typed over.
+  useEffect(() => {
+    if (isEditing || !PRICE_THRESHOLD_CONDITIONS.has(condition)) return;
+    if (typeof currentPrice !== "number" || !Number.isFinite(currentPrice)) return;
+    const prefill = alertThresholdPrefill(currentPrice);
+    if (!prefill) return;
+    // Same ordering rule as above: compare against the level this effect filled
+    // in last, not the one it is about to record.
+    const previous = prefilledThresholdRef.current;
+    prefilledThresholdRef.current = prefill;
+    setDraft((current) =>
+      current.threshold === "" || current.threshold === previous
+        ? { ...current, threshold: prefill }
+        : current,
+    );
+  }, [condition, currentPrice, isEditing]);
 
   return (
     <form
@@ -1202,17 +1468,23 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
       onSubmit={async (event) => {
         event.preventDefault();
         if (!resolvedSymbol || !isAlertDraftValid(draft, fields)) return;
-        const saved = await invokeTool("manage_alerts", {
-          action: isEditing ? "update" : condition,
-          id: alert?.id,
-          condition_action: isEditing ? condition : undefined,
-          symbol: resolvedSymbol,
-          threshold: fields.threshold && threshold ? Number(threshold) : undefined,
-          period: fields.period ? numberOrUndefined(period) : undefined,
-          fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
-          slow_period: fields.slowPeriod ? numberOrUndefined(slow_period) : undefined,
-          cooldown_seconds: numberOrUndefined(cooldown),
-        });
+        setPending(true);
+        let saved = false;
+        try {
+          saved = await invokeTool("manage_alerts", {
+            action: isEditing ? "update" : condition,
+            id: alert?.id,
+            condition_action: isEditing ? condition : undefined,
+            ...alertInstrumentArgs(resolvedSymbol, unverifiedExactRef.current),
+            threshold: fields.threshold && threshold ? Number(threshold) : undefined,
+            period: fields.period ? numberOrUndefined(period) : undefined,
+            fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
+            slow_period: fields.slowPeriod ? numberOrUndefined(slow_period) : undefined,
+            cooldown_seconds: numberOrUndefined(cooldown),
+          });
+        } finally {
+          setPending(false);
+        }
         if (saved) {
           if (!isEditing) {
             setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
@@ -1221,45 +1493,57 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
         }
       }}
     >
-      <p className="text-xs text-muted-foreground">
-        Pick a symbol and condition. Rules are checked while OpenCandle is open.
-      </p>
       <SymbolSearchInput
         query={query}
         selected={selected}
         disabled={disabled}
         onQueryChange={(value) => setDraftField("query", value)}
         onSelectedChange={(value) => setDraftField("selected", value)}
+        onSelectionVerificationChange={(verified) => {
+          unverifiedExactRef.current = verified === false;
+        }}
         navigate={navigate}
       />
+      <div data-slot="alert-preview" className="rounded-md bg-secondary px-3 py-3">
+        {resolvedSymbol ? (
+          <>
+            <div className="text-[13px] font-semibold text-foreground">{resolvedSymbol}</div>
+            <p className="mt-0.5 text-[15px] font-medium leading-snug text-foreground">
+              {previewSentence}
+            </p>
+          </>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">
+            Search for a symbol to preview this rule.
+          </p>
+        )}
+        <p className="mt-1.5 text-xs text-muted-foreground">{alertCadenceSentence(cooldown)}</p>
+      </div>
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
-        <Select
+        <SelectField
           id={conditionId}
-          className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
+          aria-label="Alert condition"
           value={condition}
+          options={ALERT_CONDITION_OPTIONS}
           disabled={disabled}
-          onChange={(event) => setDraftField("condition", event.target.value)}
-        >
-          <option value="create_price_above">Price above</option>
-          <option value="create_price_below">Price below</option>
-          <option value="create_price_above_sma">Price above SMA</option>
-          <option value="create_price_below_sma">Price below SMA</option>
-          <option value="create_rsi_above">RSI above</option>
-          <option value="create_rsi_below">RSI below</option>
-          <option value="create_volume_spike">Volume spike</option>
-          <option value="create_percent_move_up">Percent move up</option>
-          <option value="create_percent_move_down">Percent move down</option>
-          <option value="create_sma_cross_above">Fast SMA crosses above slow SMA</option>
-          <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
-        </Select>
+          onValueChange={(value) =>
+            setDraft((current) => ({
+              ...current,
+              condition: value,
+              threshold: nextAlertThreshold(current.condition, value, current.threshold),
+            }))
+          }
+        />
       </label>
       {fields.threshold ? (
         <label
           htmlFor={thresholdId}
           className="grid gap-1 text-xs font-medium text-muted-foreground"
         >
-          {fields.thresholdLabel}
+          {fields.thresholdInCurrency && quote?.currency
+            ? `${fields.thresholdLabel} (${quote.currency})`
+            : fields.thresholdLabel}
           <Input
             id={thresholdId}
             type="number"
@@ -1271,6 +1555,11 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
             disabled={disabled}
             onChange={(event) => setDraftField("threshold", event.target.value)}
           />
+          {priceHint ? (
+            <span data-slot="threshold-hint" className="tabular-nums font-normal">
+              {priceHint}
+            </span>
+          ) : null}
         </label>
       ) : null}
       {fields.period ? (
@@ -1339,18 +1628,28 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
           ))}
         </Select>
       </label>
-      <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
-        {summary}
-      </div>
-      <Button
-        type="submit"
-        variant="brand"
+      <PendingSubmitButton
+        pending={pending}
         disabled={disabled || !resolvedSymbol || !isAlertDraftValid(draft, fields)}
       >
         {isEditing ? "Save alert" : "Create alert"}
-      </Button>
+      </PendingSubmitButton>
     </form>
   );
+}
+
+export function alertInstrumentArgs(symbol, unverifiedExactSymbol) {
+  return {
+    symbol,
+    ...(unverifiedExactSymbol ? { unverified_exact_symbol: true } : {}),
+  };
+}
+
+export function holdingInstrumentArgs(symbol, unverifiedExactSymbol) {
+  return {
+    symbol,
+    ...(unverifiedExactSymbol ? { unverified_exact_symbol: true } : {}),
+  };
 }
 
 function readOnlyMessage(role) {
@@ -1376,14 +1675,19 @@ function panelTitle(type) {
   };
   return titles[type] || "Details";
 }
-function initialAlertDraft(alert, symbol) {
+function initialAlertDraft(alert, symbol, initialThreshold) {
   const condition = alert ? conditionActionFromAlert(alert) : "create_price_above";
   const conditionJson =
     alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
   return {
     query: symbol ?? "",
     selected: symbol ?? "",
-    threshold: alertThresholdValue(condition, conditionJson),
+    // A level chosen elsewhere (a key level on the symbol page) opens the form
+    // on that level. It is not recorded as a quote prefill, so the quote that
+    // arrives moments later leaves it alone.
+    threshold: alert
+      ? alertThresholdValue(condition, conditionJson)
+      : (initialThreshold ?? alertThresholdValue(condition, conditionJson)),
     condition,
     period: alertPeriodValue(condition, conditionJson),
     fast_period: stringifyDraftValue(conditionJson.fast_period ?? 50),
@@ -1435,20 +1739,6 @@ function alertPeriodValue(condition, conditionJson) {
 
 function stringifyDraftValue(value) {
   return value == null ? "" : String(value);
-}
-
-function conditionSummary(condition, threshold, period, fastPeriod, slowPeriod) {
-  const label = condition.replace("create_", "").replaceAll("_", " ");
-  if (condition.includes("sma_cross")) {
-    return `${label} using ${fastPeriod || "fast"} and ${slowPeriod || "slow"} periods`;
-  }
-  if (condition.includes("percent_move")) return `${label} ${threshold || "the threshold"}%`;
-  if (condition.includes("_sma")) return `${label} over ${period || "the selected"} periods`;
-  if (condition.includes("_rsi_"))
-    return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
-  if (condition === "create_volume_spike")
-    return `has a volume spike above ${threshold || "2"}x the ${period || "selected"}-period average`;
-  return `${label} $${threshold || "the threshold"}`;
 }
 
 function numberOrUndefined(value) {

@@ -10,19 +10,19 @@ import {
 } from "react";
 import { cn } from "../../lib/utils.js";
 
+const CLOSE_ANIMATION_MS = 120;
+
 export function Popover({ open: openProp, defaultOpen = false, onOpenChange, children }) {
   const [openState, setOpenState] = useState(defaultOpen);
   const open = openProp !== undefined ? openProp : openState;
-  const hasOpenedRef = useRef(Boolean(defaultOpen || openProp));
-  useEffect(() => {
-    if (open) hasOpenedRef.current = true;
-  }, [open]);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
   const setOpen = useCallback(
     (next) => {
       if (openProp === undefined) setOpenState(next);
-      onOpenChange?.(next);
+      onOpenChangeRef.current?.(next);
     },
-    [onOpenChange, openProp],
+    [openProp],
   );
   const triggerRef = useRef(null);
   const contentRef = useRef(null);
@@ -33,6 +33,11 @@ export function Popover({ open: openProp, defaultOpen = false, onOpenChange, chi
     if (!open) return undefined;
     const onPointerDown = (event) => {
       const target = event.target;
+      const owningTrigger =
+        target instanceof Element ? target.closest("[data-popover-trigger]") : null;
+      if (owningTrigger?.getAttribute("data-popover-trigger") === triggerId) return;
+      const owningContent = target instanceof Element ? target.closest('[role="menu"]') : null;
+      if (owningContent?.id === contentId) return;
       if (triggerRef.current?.contains(target)) return;
       if (contentRef.current?.contains(target)) return;
       setOpen(false);
@@ -50,11 +55,10 @@ export function Popover({ open: openProp, defaultOpen = false, onOpenChange, chi
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [open, setOpen]);
+  }, [contentId, open, setOpen, triggerId]);
 
   const context = {
     open,
-    hasOpened: hasOpenedRef.current,
     setOpen,
     triggerRef,
     contentRef,
@@ -87,6 +91,7 @@ export const PopoverTrigger = forwardRef(function PopoverTrigger(
     "aria-expanded": open,
     "aria-haspopup": "menu",
     "aria-controls": open ? contentId : undefined,
+    "data-popover-trigger": triggerId,
     id: triggerId,
     onClick: handleClick,
     ref: triggerRef,
@@ -106,7 +111,18 @@ export const PopoverContent = forwardRef(function PopoverContent(
   { className, align = "start", side = "bottom", sideOffset = 6, children, ...props },
   _ref,
 ) {
-  const { open, hasOpened, contentRef, contentId, triggerId } = usePopover();
+  const { open, contentRef, contentId, triggerId } = usePopover();
+  const [closeAnimationComplete, setCloseAnimationComplete] = useState(!open);
+  useEffect(() => {
+    if (open) {
+      setCloseAnimationComplete(false);
+      return undefined;
+    }
+    if (closeAnimationComplete) return undefined;
+    const timeout = window.setTimeout(() => setCloseAnimationComplete(true), CLOSE_ANIMATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [closeAnimationComplete, open]);
+  const state = open ? "open" : closeAnimationComplete ? "dormant" : "closed";
   const alignClass =
     align === "end" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0";
   const sideClass =
@@ -121,7 +137,7 @@ export const PopoverContent = forwardRef(function PopoverContent(
       aria-labelledby={triggerId}
       aria-hidden={!open}
       inert={!open}
-      data-state={open ? "open" : hasOpened ? "closed" : "dormant"}
+      data-state={state}
       style={{ "--popover-offset": `${sideOffset}px` }}
       className={cn(
         "absolute z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card shadow-subtle-md outline-none data-[state=dormant]:hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:pointer-events-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in",

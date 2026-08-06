@@ -178,6 +178,22 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
   if (typeof e.shareQuantity === "number") out.shareQuantity = e.shareQuantity;
   if (typeof e.timeHorizon === "string") out.timeHorizon = e.timeHorizon;
+  if (
+    typeof e.positionCount === "number" &&
+    Number.isInteger(e.positionCount) &&
+    e.positionCount >= 1 &&
+    e.positionCount <= 50
+  ) {
+    out.positionCount = e.positionCount;
+  }
+  if (
+    typeof e.maxSinglePositionPct === "number" &&
+    Number.isFinite(e.maxSinglePositionPct) &&
+    e.maxSinglePositionPct > 0 &&
+    e.maxSinglePositionPct <= 100
+  ) {
+    out.maxSinglePositionPct = e.maxSinglePositionPct;
+  }
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
@@ -217,6 +233,8 @@ export function postProcessRouterOutput(
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
       assetScope: output.entities.assetScope ?? extracted.assetScope,
+      positionCount: output.entities.positionCount ?? extracted.positionCount,
+      maxSinglePositionPct: output.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
       compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
@@ -225,8 +243,11 @@ export function postProcessRouterOutput(
       heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
       dteHint:
-        output.entities.dteHint ??
-        (output.workflow === "options_screener" ? extracted.dteHint : undefined),
+        output.workflow === "options_screener"
+          ? extracted.dteHint?.startsWith("0-")
+            ? extracted.dteHint
+            : (output.entities.dteHint ?? extracted.dteHint)
+          : output.entities.dteHint,
     },
     diagnostics,
   };
@@ -498,6 +519,9 @@ export function postProcessRouterOutput(
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
         assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
+        positionCount: deterministic.entities.positionCount ?? extracted.positionCount,
+        maxSinglePositionPct:
+          deterministic.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
         compareMetrics: mergeStringArrays(
           deterministic.entities.compareMetrics,
           extracted.compareMetrics,
@@ -841,13 +865,18 @@ function isPortfolioEvaluationRequest(text: string): boolean {
   const hasOwnedAssetMix =
     /\b(?:my|current|have|holding|hold|own|invested|positions?|\d+(?:\.\d+)?%)\b/.test(lower) &&
     /\b(?:equity|fixed\s+income|bonds?|cash|stocks?|etfs?|funds?)\b/.test(lower);
-  const hasConstructionIntent =
-    /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
-    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
+  const hasExplicitConstructionIntent =
+    /\b(?:build|construct|put\s+together)\b/.test(lower) && hasExplicitPortfolioSubject;
+  const hasFundedConstructionIntent =
+    /\b(?:create|invest|allocate)\b/.test(lower) &&
+    /\$\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:k|usd|cad|eur|gbp|jpy|aud|chf)\b|\bbudget\b|\bcapital\b/.test(
+      lower,
+    );
   return (
     hasEvaluationIntent &&
     (hasExplicitPortfolioSubject || hasOwnedAssetMix) &&
-    !hasConstructionIntent
+    !hasExplicitConstructionIntent &&
+    !hasFundedConstructionIntent
   );
 }
 

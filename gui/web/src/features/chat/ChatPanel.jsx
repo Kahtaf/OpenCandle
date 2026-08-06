@@ -17,7 +17,12 @@ import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
 import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
-import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
+import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
+import {
+  isFirstRunSetupSatisfied,
+  readFirstRunSetupDismissed,
+  writeFirstRunSetupDismissed,
+} from "../onboarding/setup-dismissal.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
@@ -71,6 +76,7 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(readFirstRunSetupDismissed);
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -91,7 +97,11 @@ export function ChatPanel({
     () => enrichGroupedRows(rawGroupedRows, sessionMarketFacts),
     [rawGroupedRows, sessionMarketFacts],
   );
-  const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
+  const runElapsedSeconds = useRunElapsedSeconds(runState);
+  const activity = useMemo(
+    () => buildAgentActivity(liveState, runState, role, runElapsedSeconds),
+    [liveState, role, runElapsedSeconds, runState],
+  );
   const hasAskUserPrompts = askUserPrompts.length > 0;
   const autoOpenRunId = useMemo(() => {
     if (!allowToolAutoOpen) return null;
@@ -182,14 +192,44 @@ export function ChatPanel({
   ) {
     setAllowToolAutoOpen(false);
   }
-  const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  // Drafting stays available during first-run setup (shipped 0.11.0
-  // behavior); needsSetup blocks only sending, via chatDisabled and submit.
+  // Hosted followers begin with a deliberately non-secret placeholder model
+  // setup while they wait for the writer's canonical bootstrap. Do not present
+  // that placeholder as a first-run credential flow: the shared connection
+  // state already disables actions and shows its reconnecting status.
+  const needsSetup =
+    role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
+  // Auto-open rule: the first-run setup dialog opens whenever setup is
+  // required and the user has not dismissed it. Dismissal is remembered for as
+  // long as setup stays required, so later modelSetup broadcasts, re-renders,
+  // new chats, route changes, reloads, and new tabs never reopen it. The
+  // dismissal is forgotten only on positive proof that setup is satisfied, so a
+  // later regression back to "needs setup" opens it once more. A reconnecting
+  // or not-yet-broadcast setup state proves nothing and must not re-arm it.
+  // App.jsx forgets the persisted record on every route, including the ones
+  // that replace this panel; this clears the panel's own state while it stays
+  // mounted. Reaching setup again after dismissing is done through the
+  // composer's model control.
+  const setupSatisfied = isFirstRunSetupSatisfied({
+    role,
+    requirement: modelSetup?.requirement,
+  });
+  if (setupSatisfied && setupDismissed) setSetupDismissed(false);
+  const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
+  useEffect(() => {
+    writeFirstRunSetupDismissed(setupDismissed);
+  }, [setupDismissed]);
+  // The composer is never disabled by setup: needsSetup blocks only sending,
+  // via chatDisabled and submit. The first-run dialog is modal, so drafting
+  // resumes as soon as it is dismissed (Escape, the close control, or a click
+  // outside) rather than being blocked until a model is connected.
   const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
+  const attachmentsEnabled = modelSetup?.supportsAttachments !== false;
   const pendingAttachments =
-    pendingAttachmentState.sessionId === sessionId ? pendingAttachmentState.attachments : [];
+    attachmentsEnabled && pendingAttachmentState.sessionId === sessionId
+      ? pendingAttachmentState.attachments
+      : [];
 
   const submit = (value = draft, { includePendingAttachments = true } = {}) => {
     const prompt = String(value || "").trim();
@@ -246,8 +286,10 @@ export function ChatPanel({
   const placeholder = needsSetup
     ? "Draft a question, then connect a model to send"
     : "Ask anything";
+  // First-run setup is a dialog now, so the home surface keeps its normal
+  // empty state behind it instead of being replaced by a setup card.
   const isEmptyThread =
-    !needsSetup && !sessionLoading && visibleRows.length === 0 && !activity && !hasAskUserPrompts;
+    !sessionLoading && visibleRows.length === 0 && !activity && !hasAskUserPrompts;
   const homePrompts = homePromptsForMarketState({
     watchlists: marketState.state?.watchlists,
     watchlistItems: marketState.state?.watchlist,
@@ -271,6 +313,7 @@ export function ChatPanel({
       send={send}
       setToast={setToast}
       pendingAttachments={pendingAttachments}
+      attachmentsEnabled={attachmentsEnabled}
       portfolios={marketState.state?.portfolios}
       watchlists={marketState.state?.watchlists}
       onAddAttachment={addAttachment}
@@ -300,9 +343,7 @@ export function ChatPanel({
           onKeyDown={transcript.onReaderIntent}
           onClick={onTranscriptClick}
         >
-          {needsSetup ? (
-            <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
-          ) : sessionLoading ? (
+          {sessionLoading ? (
             <SessionLoadingState />
           ) : isEmptyThread ? (
             <HomeDashboard
@@ -383,6 +424,16 @@ export function ChatPanel({
         navigate={navigate}
       />
       {!isEmptyThread ? composer : null}
+      <ModelSetupDialog
+        open={setupDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) setSetupDismissed(true);
+        }}
+        variant="first-run"
+        modelSetup={modelSetup}
+        role={role}
+        send={send}
+      />
     </section>
   );
 }
@@ -748,11 +799,13 @@ function AgentActivity({ activity }) {
 
   return (
     <div className="max-w-[760px]">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+      <div
+        className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
         <StatusDot status={activity.status} />
-        <TextShimmer active={activity.status === "pending"}>
-          {hasThinking ? "Analyzing" : "Working"}
-        </TextShimmer>
+        <TextShimmer active={activity.status === "pending"}>{activity.label}</TextShimmer>
       </div>
       {hasThinking ? (
         <div className="border-l border-dashed border-border pl-4 text-sm leading-relaxed text-muted-foreground">
@@ -850,6 +903,7 @@ function MessageRowContent({
         content={entry.content}
         attachments={entry.attachments}
         knownSymbols={knownSymbols}
+        delivery={entry.delivery}
       />
     );
   if (entry.type === "tool_result")
@@ -909,23 +963,79 @@ function positionRowElement(viewport, row) {
   viewport.scrollTo({ top, behavior: "auto" });
 }
 
-function buildAgentActivity(liveState, runState) {
+function useRunElapsedSeconds(runState) {
+  const active = runState === "connecting" || runState === "streaming";
+  const startedAtRef = useRef(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      startedAtRef.current = 0;
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    startedAtRef.current ||= Date.now();
+    const update = () => setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, [active]);
+
+  return elapsedSeconds;
+}
+
+function buildAgentActivity(liveState, runState, role, elapsedSeconds) {
   const isActive = runState === "connecting" || runState === "streaming";
   if (!isActive) return null;
 
   const runs = [...liveState.runs.values()];
   const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
   const thinking = activeRun ? thinkingForRun(liveState, activeRun) : undefined;
-  const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
+  const activeTool = [...liveState.tools.values()].find((tool) => tool.status === "running");
   const assistantText = liveState.messages.some(
     (message) => message.role === "assistant" && message.text.trim(),
   );
 
-  if (!thinking?.text && (activeTool || assistantText)) return null;
+  if (thinking?.text) {
+    return {
+      status: thinking.status === "completed" ? "completed" : "pending",
+      label: "Analyzing",
+      thinkingText: thinking.text,
+    };
+  }
+  if (activeTool) {
+    return {
+      status: "pending",
+      label: `Running ${friendlyToolName(activeTool.name)}…`,
+      thinkingText: "",
+    };
+  }
+  if (assistantText) {
+    return { status: "pending", label: "Writing answer…", thinkingText: "" };
+  }
+  if (runState === "connecting") {
+    return {
+      status: "pending",
+      label: role === "follower" ? "Sending to the active tab…" : "Starting your request…",
+      thinkingText: "",
+    };
+  }
   return {
-    status: thinking?.status === "completed" ? "completed" : "pending",
-    thinkingText: thinking?.text || "",
+    status: "pending",
+    label:
+      elapsedSeconds >= 20
+        ? "Still working — research can take a little longer…"
+        : elapsedSeconds >= 8
+          ? "Waiting for the model response…"
+          : "Request received…",
+    thinkingText: "",
   };
+}
+
+function friendlyToolName(name) {
+  return String(name || "tool")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function thinkingForRun(liveState, run) {

@@ -53,9 +53,11 @@ describe("sec-edgar provider", () => {
     await searchFilings("AAPL", ["10-K", "10-Q"]);
 
     const url = vi.mocked(globalThis.fetch).mock.calls[0][0] as string;
+    const init = vi.mocked(globalThis.fetch).mock.calls[0][1];
     expect(url).toContain("efts.sec.gov");
     expect(url).toContain("AAPL");
     expect(url).toContain("10-K");
+    expect(new Headers(init?.headers).get("accept")).toBe("application/json");
   });
 
   it("returns typed SECFiling objects", async () => {

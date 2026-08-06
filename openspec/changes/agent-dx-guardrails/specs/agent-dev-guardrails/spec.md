@@ -41,15 +41,15 @@ The repo SHALL provide `scripts/agent-bootstrap.mjs`, exposed as `npm run bootst
 - **THEN** the env-copy behavior operates on those directories without requiring a real git worktree
 
 ### Requirement: Checked-in delegation contract and resume template
-The repo SHALL provide `.agents/delegation/subagent-contract.md` and `.agents/delegation/resume-template.md`. The contract MUST begin with a per-run variables block (owned tasks, commit policy, branch and PR target, test scope, extra constraints) and MUST include standing clauses covering: bootstrap-first, stop-and-report on contradictions, TDD with the failing run observed, `npm run gates` green before handoff, truthful task bookkeeping with declared deviations, no production-code edits to make evals pass, no live evals without credentials, secret hygiene, scope fencing, CHANGELOG entry, `graphify update .`, waiting asynchronously for the automated Codex PR review and resolving its comments before calling a PR review-clean, and the final report shape. The resume template MUST instruct continuation from the preserved working tree and re-running `npm run gates`.
+The repo SHALL provide `.agents/delegation/subagent-contract.md` and `.agents/delegation/resume-template.md`. The contract MUST begin with a per-run variables block (owned tasks, commit policy, branch and PR target, test scope, extra constraints) and MUST include standing clauses covering: bootstrap-first, stop-and-report on contradictions, TDD with the failing run observed, `npm run gates` green before handoff, truthful task bookkeeping with declared deviations, no production-code edits to make evals pass, no live evals without credentials, secret hygiene, scope fencing, CHANGELOG entry, `graphify update .`, checking advisory Codex PR review feedback without treating it as a merge gate, and the final report shape. The resume template MUST instruct continuation from the preserved working tree and re-running `npm run gates`.
 
 #### Scenario: Orchestrator composes a delegation prompt
 - **WHEN** an orchestrating agent prepends the contract file to a task description and fills the variables block
 - **THEN** no standing clause needs to be authored by hand in the prompt
 
-#### Scenario: PR waits for the asynchronous Codex review
-- **WHEN** a delegated run opens or updates a PR covered by the automated Codex review
-- **THEN** the contract directs the agent to monitor the PR's checks and comments until the review completes (it posts a few minutes after push), address or rebut every comment, and resolve the threads before reporting the PR review-clean or merge-ready
+#### Scenario: PR treats Codex review as advisory
+- **WHEN** a delegated run opens or updates a PR that receives an automatic or manually requested Codex review
+- **THEN** the contract directs the agent to address or rebut available feedback without waiting for a Codex status check or treating the review as merge-blocking
 
 #### Scenario: Interrupted run resumes with the template
 - **WHEN** a delegated run dies (timeout, crash, capacity error) and the orchestrator sends the resume template with the reason filled in

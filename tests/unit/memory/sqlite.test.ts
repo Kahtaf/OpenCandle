@@ -165,7 +165,7 @@ describe("initDatabase", () => {
       DROP TABLE schema_version;
 
       CREATE TABLE schema_version (version INTEGER NOT NULL);
-      INSERT INTO schema_version (version) VALUES (999);
+      INSERT INTO schema_version (version) VALUES (1);
 
       CREATE TABLE sessions (
         id TEXT PRIMARY KEY,
@@ -228,6 +228,30 @@ describe("initDatabase", () => {
     ).not.toThrow();
 
     resetDb.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  it("refuses to open state written by a newer schema without modifying it", () => {
+    const base = mkdtempSync(join(tmpdir(), "opencandle-sqlite-newer-schema-"));
+    const dbPath = join(base, "state.db");
+    const newerDb = initDatabase(dbPath);
+    newerDb.exec(`
+      CREATE TABLE newer_state (value TEXT NOT NULL);
+      INSERT INTO newer_state (value) VALUES ('keep-me');
+      DELETE FROM schema_version;
+      INSERT INTO schema_version (version) VALUES (999);
+    `);
+    newerDb.close();
+
+    expect(() => initDatabase(dbPath)).toThrow("newer OpenCandle schema version 999");
+
+    expect(existsSync(`${dbPath}-wal`)).toBe(false);
+    expect(existsSync(`${dbPath}-shm`)).toBe(false);
+
+    const untouched = new Database(dbPath);
+    expect(untouched.prepare("SELECT value FROM newer_state").get()).toEqual({ value: "keep-me" });
+    expect(untouched.prepare("SELECT version FROM schema_version").get()).toEqual({ version: 999 });
+    untouched.close();
     rmSync(base, { recursive: true, force: true });
   });
 

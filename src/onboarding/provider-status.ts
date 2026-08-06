@@ -268,6 +268,7 @@ async function probePublicHttp(
   try {
     const response = await options.fetchImpl(provider.probeUrl, {
       method: "GET",
+      ...(provider.probeHeaders ? { headers: provider.probeHeaders } : {}),
       signal: AbortSignal.timeout(PUBLIC_HTTP_TIMEOUT_MS),
     });
     return {

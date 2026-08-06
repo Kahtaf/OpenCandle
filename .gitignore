@@ -1,4 +1,5 @@
 node_modules/
+.wrangler/
 .env
 dist/
 .tmp/
@@ -11,9 +12,14 @@ tests/evals/runs/*
 graphify-out/
 tests/screenshots/out/
 website/dist/
+gui/hosted/public/runtime/
+spikes/browser-runtime/
 validation-output/
 dogfood-output/
 design-inspo/
 
 # PR runtime evidence stays machine-local; durable decision records go in docs/internal/ as markdown
 docs/internal/pr-evidence/
+
+# Local UI/UX reference scratch (Mobbin screenshots, not for distribution)
+tmp/

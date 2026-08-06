@@ -6,15 +6,19 @@ import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPag
 import {
   AlertCreateForm,
   alertConditionFormFields,
+  alertInstrumentArgs,
+  alertThresholdFromLink,
   ContextPanel,
   clampComboboxActiveIndex,
   getHoldingAutofillValues,
   HoldingForm,
+  holdingInstrumentArgs,
   invokeMarketStateMutation,
   isAlertDraftValid,
   MarketStatePage,
   nextComboboxActiveIndex,
   nextStateTabIndex,
+  normalizeExactHostedSymbol,
   PendingSubmitButton,
   PortfolioRenameForm,
   StateTabs,
@@ -93,7 +97,11 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain('aria-label="^GSPC details"');
     expect(html).toContain("Create alert");
-    expect(html).toContain("Open full page");
+    // The rail navigates from the ticker itself, so the big action stays a real
+    // action instead of a second link to the same page.
+    expect(html).not.toContain("Open full page");
+    expect(html).toContain('data-slot="inspector-symbol-link"');
+    expect(html).toContain("Open symbol page");
     expect(html.match(/href="\/symbol\/%5EGSPC"/g)).toHaveLength(2);
   });
 
@@ -167,11 +175,14 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Apple Inc. quote name");
-    expect(html).toContain("24 hr sparkline");
+    // Chart-first trend cell: no column label, no caption, just the chart.
+    expect(html).not.toContain("24 hr sparkline");
+    expect(html).toContain(">Trend</span>");
     expect(html).toContain('data-slot="market-sparkline"');
     expect(html).not.toContain("<img");
-    expect(html).toContain('data-source="Ticker Line"');
-    expect(html).toContain("Ticker Line · loading");
+    expect(html).not.toMatch(/ticker\s*line/i);
+    expect(html).toContain('data-state="loading"');
+    expect(html).toContain("animate-pulse");
     expect(html).toContain('data-slot="mobile-watchlist-row"');
     expect(html).toContain('data-slot="watchlist-inspector-sheet"');
     expect(html).not.toContain("ticker-line.com");
@@ -183,15 +194,15 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("No alerts");
     expect(html).toContain('data-slot="watchlist-alert-chip"');
     expect(html).toContain('aria-label="1 active alert for AAPL"');
-    expect(html).toContain("1.25");
-    expect(html).toContain("+0.66%");
+    // One line, one colour: signed money carries the percent inline.
+    expect(html).toContain("+$1.25 (+0.66%)");
     expect(html).toContain("After hours");
     expect(html).toContain("$83.02");
     expect(html).toContain("−0.64%");
     expect(html).not.toContain("−$0.53");
     expect(html).toContain('data-slot="extended-session-dot"');
     const extendedHoursQuoteClasses = html.match(
-      /data-slot="extended-hours-quote" class="([^"]+)"/,
+      /data-slot="extended-hours-quote"[^>]*? class="([^"]+)"/,
     )?.[1];
     expect(extendedHoursQuoteClasses?.split(" ")).not.toContain("hidden");
     expect(html).toContain("Day range");
@@ -199,7 +210,43 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Create alert");
     expect(html).toContain('aria-label="Actions for AAPL"');
     expect(html).toContain("bg-brand text-brand-foreground");
-    expect(html).toContain("border-destructive/40 bg-destructive/10 text-foreground");
+    // Removal is a quiet secondary that opens the existing confirm dialog.
+    expect(html).toContain('data-slot="inspector-remove"');
+    expect(html).toContain("Remove from watchlist");
+    expect(html).not.toContain("border-destructive/40 bg-destructive/10 text-foreground");
+  });
+
+  it("marks no watchlist row as selected while the detail rail is not on screen", () => {
+    // The desktop table renders from sm, but the rail only appears at xl. Below
+    // that breakpoint nothing is showing the fallback row, so claiming it as the
+    // current selection would announce a selection the reader never made.
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistPage, {
+        loading: false,
+        state: {
+          watchlists: [{ id: 1, name: "Default", isDefault: true }],
+          watchlist: [
+            { id: 10, watchlistId: 1, instrumentId: 4, symbol: "AAPL", name: "Apple Inc." },
+            { id: 11, watchlistId: 1, instrumentId: 5, symbol: "MSFT", name: "Microsoft" },
+          ],
+          alerts: [],
+          alertEvents: [],
+          instruments: [],
+          portfolio: [],
+          quoteSnapshot: { watchlistQuotes: [], portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        navigate: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('aria-selected="false"');
+    expect(html).not.toContain('aria-selected="true"');
   });
 
   it("keeps the quote-board skeleton visible while watchlist data loads", () => {
@@ -236,6 +283,39 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain('data-slot="portfolio-skeleton"');
     expect(html).not.toContain("No holdings yet");
+    // One loading vocabulary: shaped skeletons for the stats, the allocation and
+    // the table, never a data cell filled with prose or an em dash.
+    expect(html).toContain('data-slot="portfolio-summary-loading"');
+    expect(html).toContain('data-slot="allocation-donut-loading"');
+    expect(html).toContain('aria-label="Loading holdings"');
+    expect(html).not.toContain("—");
+  });
+
+  it("offers the primary action from the empty portfolio and hides the stat header", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain("No holdings yet");
+    expect(html).toContain(
+      "Add a holding when you are ready, or keep using watchlists without a portfolio.",
+    );
+    expect(html).not.toContain('data-slot="portfolio-summary"');
+    expect(html).not.toContain("Market value");
+    expect(html).not.toContain("Search holdings");
   });
 
   it("links desktop and mobile portfolio symbols to encoded symbol pages", () => {
@@ -272,7 +352,41 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('aria-label="Expand ^GSPC lots"');
   });
 
-  it("renders portfolio allocation with the shared donut", () => {
+  it("renders skeleton stats, not prose, while portfolio totals are still loading", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "AAPL",
+              assetType: "equity",
+              name: "Apple Inc.",
+              quantity: 2,
+              avgCost: 100,
+              currency: "USD",
+            },
+          ],
+          quoteSnapshot: { portfolioQuotes: [] },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    expect(html).toContain('data-slot="portfolio-summary-loading"');
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("Totals appear once quotes load.");
+  });
+
+  it("opens the portfolio on a stat header with allocation beside it and a diet holdings table", () => {
     const html = renderToStaticMarkup(
       React.createElement(PortfolioPage, {
         loading: false,
@@ -340,6 +454,7 @@ describe("MarketStatePage rendering", () => {
               totalPnl: 200,
               totalPnlPercent: 66.67,
               baseCurrency: "USD",
+              excludedFromTotals: [{ symbol: "SHOP.TO", currency: "CAD", reason: "CAD" }],
             },
           },
         },
@@ -352,37 +467,57 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
+    // The page opens on the three figures a holder checks first, in that order,
+    // before any table row.
+    expect(html.indexOf("Market value")).toBeLessThan(html.indexOf("Today&#x27;s change"));
+    expect(html.indexOf("Today&#x27;s change")).toBeLessThan(html.indexOf("Total gain"));
+    expect(html.indexOf("Market value")).toBeLessThan(html.indexOf("Holdings"));
+    expect(html).toContain('data-slot="portfolio-summary"');
+    expect(html).toContain('data-slot="portfolio-summary-stats"');
+    expect(html).not.toContain("Portfolio value");
+    expect(html).not.toContain("All time");
+    // Today's change is stated in currency, not as a bare percent.
+    expect(html).toContain("+$0.95");
+    expect(html).toContain("+0.2%");
+    expect(html).not.toContain("today ·");
+    // Allocation sits beside the totals it explains, not buried under the table.
     expect(html).toContain('data-slot="allocation-donut-loading"');
-    expect(html).toContain(">Portfolio value</h2>");
-    expect(html.indexOf("Portfolio value")).toBeLessThan(
-      html.indexOf('data-slot="portfolio-summary-deltas"'),
+    expect(html.indexOf('data-slot="allocation-donut-loading"')).toBeLessThan(
+      html.indexOf("Holdings"),
     );
     expect(html).toContain("NVDA");
-    expect(html).toContain("40.0%");
     expect(html.indexOf("Holdings")).toBeLessThan(html.indexOf("Add holding"));
-    expect(html).toContain('data-slot="portfolio-summary-deltas"');
-    expect(html).toContain("Today");
-    expect(html).toContain("All time");
-    expect(html).toContain("+$0.95 (+0.2%)");
-    expect(html).not.toContain("today ·");
-    expect(html).toContain("Price");
-    expect(html).toContain("Value");
-    expect(html).toContain("24 hr sparkline");
-    expect(html).toContain("Change");
-    expect(html).toContain("Total Gain/Loss");
-    expect(html).toContain("% of Portfolio");
-    expect(html).toContain("Quantity");
-    expect(html).toContain("Avg. Cost Basis");
-    expect(html).toContain("Actions");
-    expect(html).toContain("min-w-[920px]");
-    expect(html).not.toContain("min-w-[1180px]");
+    // Partial totals stay explicit and stay next to the total they qualify.
+    expect(html).toContain('data-slot="portfolio-excluded-note"');
+    expect(html).toContain("Kept out of the USD total: SHOP.TO (CAD)");
+    expect(html.indexOf('data-slot="portfolio-excluded-note"')).toBeLessThan(
+      html.indexOf("Holdings"),
+    );
+    // Column diet: gain dollars and percent share one cell, the sparkline has no
+    // header label, and no column exists purely to hold row actions.
+    expect(html).toContain(">Price</th>");
+    expect(html).toContain(">Today</th>");
+    expect(html).toContain(">Value</th>");
+    expect(html).toContain(">Total gain</th>");
+    // Allocation rides with the value it comes from instead of taking a column.
+    expect(html).not.toContain(">Allocation</th>");
+    expect(html).toContain("60.0% of portfolio");
+    expect(html).toContain(">Quantity</th>");
+    expect(html).toContain(">Avg cost</th>");
+    expect(html).not.toContain("24 hr sparkline");
+    expect(html).not.toContain("Total Gain/Loss");
+    expect(html).not.toContain("% of Portfolio");
+    expect(html).not.toContain("Avg. Cost Basis");
+    expect(html).not.toContain(">Actions</th>");
+    expect(html).toContain("+$100.00 (+50.0%)");
+    expect(html).toContain("min-w-[900px]");
+    expect(html).not.toContain("min-w-[920px]");
     expect(html).toContain('data-slot="portfolio-lot-row"');
-    expect(html).toContain('aria-label="Edit AAPL lot"');
-    expect(html).toContain('aria-label="Remove AAPL lot"');
-    expect(html).toContain("min-h-10 min-w-10");
+    expect(html).toContain('aria-label="Actions for the AAPL lot"');
     expect(html).not.toContain("font-mono");
     expect(html).not.toContain("<img");
-    expect(html).toContain("Ticker Line · loading");
+    expect(html).not.toMatch(/ticker\s*line/i);
+    expect(html).toContain('data-state="loading"');
     expect(html).not.toContain("ticker-line.dev");
     expect(html).toContain('data-slot="avg-cost-basis"');
     expect(html).toContain('data-slot="mobile-portfolio-holding"');
@@ -394,6 +529,99 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("+0.83%");
     expect(html).toContain("transition-transform duration-150");
     expect(html).toContain("transition-[grid-template-rows] duration-150");
+  });
+
+  it("prices a foreign-currency holding in its own currency without touching base totals", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioPage, {
+        loading: false,
+        state: {
+          portfolios: [{ id: 1, name: "Default", isDefault: true }],
+          portfolio: [
+            {
+              id: 1,
+              portfolioId: 1,
+              symbol: "AAPL",
+              assetType: "equity",
+              name: "Apple Inc.",
+              quantity: 2,
+              avgCost: 100,
+              currency: "USD",
+            },
+            {
+              id: 2,
+              portfolioId: 1,
+              symbol: "SAP.DE",
+              assetType: "equity",
+              name: "SAP SE",
+              quantity: 10,
+              avgCost: 150,
+              currency: "EUR",
+            },
+          ],
+          quoteSnapshot: {
+            portfolioQuotes: [
+              {
+                lotId: 1,
+                status: "ok",
+                includedInTotals: true,
+                totalCost: 200,
+                marketValue: 300,
+                pnl: 100,
+                allocationPercent: 100,
+                currentPrice: 150,
+                changePercent: 1,
+                currency: "USD",
+              },
+              {
+                lotId: 2,
+                status: "ok",
+                includedInTotals: false,
+                totalCost: 1500,
+                marketValue: 1686.4,
+                pnl: 186.4,
+                currentPrice: 168.64,
+                changePercent: 0.75,
+                currency: "EUR",
+                reason: "No FX conversion from EUR to USD",
+              },
+            ],
+            portfolioSummary: {
+              portfolioId: 1,
+              totalValue: 300,
+              totalPnl: 100,
+              totalPnlPercent: 50,
+              baseCurrency: "USD",
+              excludedFromTotals: [
+                {
+                  symbol: "SAP.DE",
+                  currency: "EUR",
+                  reason: "No FX conversion from EUR to USD",
+                },
+              ],
+            },
+          },
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        renderPageHeader: () => null,
+      }),
+    );
+
+    // The holding keeps the price, day change and value the watchlist already
+    // shows for it, stated in euros.
+    expect(html).toContain("EUR 168.64");
+    expect(html).toContain("EUR 1,686.40");
+    expect(html).toContain("+EUR 186.40");
+    // Its allocation is stated as excluded, never as a share of the USD total.
+    expect(html).toContain("Kept out of the total");
+    expect(html).toContain("Kept out of the USD total: SAP.DE (No FX conversion from EUR to USD)");
+    // Today's change stays the base-currency figure for AAPL alone.
+    expect(html).toContain("+$2.97");
+    expect(html).not.toContain("$1,686.40");
   });
 
   it("renders market-state panels as overlay sheets without reserving page width", () => {
@@ -464,16 +692,15 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('tabindex="-1"');
     expect(html).toContain('aria-label="Rename watchlist MAG7"');
-    expect(html).toContain("size-10");
+    expect(html).toContain("size-10 min-h-10 min-w-10");
   });
 
-  it("keeps a single watchlist tab and its rename action together without a count badge", () => {
+  it("keeps a single watchlist tab with its count and hover-revealed rename", () => {
     const html = renderToStaticMarkup(
       React.createElement(StateTabs, {
         items: [{ id: 1, name: "Default" }],
         activeItem: { id: 1, name: "Default" },
         counts: new Map([[1, 1]]),
-        compactSingle: true,
         readOnly: false,
         renameLabel: "Rename watchlist",
         onSelect: () => undefined,
@@ -481,9 +708,10 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain('data-slot="single-state-tab"');
-    expect(html).toContain("flex-none");
-    expect(html).not.toContain(">1</span>");
+    expect(html).toContain('data-slot="list-tabs"');
+    expect(html).toContain(">Default</span>");
+    expect(html).toContain(">1</span>");
+    expect(html).toContain('data-slot="list-tab-rename"');
     expect(html).toContain('aria-label="Rename watchlist Default"');
   });
 
@@ -515,6 +743,17 @@ describe("MarketStatePage rendering", () => {
         selectedQuote: { status: "ok", price: 154.2, currency: "CAD" },
       }),
     ).toEqual({ shares: "100", avg_cost: "154.2", currency: "CAD" });
+  });
+
+  it("does not invent USD when quote currency resolution fails", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "SHOP.TO",
+        currentValues: { shares: "", avg_cost: "", currency: "" },
+        previousAutofill: { shares: "", avg_cost: "", currency: "" },
+        selectedQuote: { status: "unavailable" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "", currency: "" });
   });
 
   it("does not overwrite holding fields the user has already edited", () => {
@@ -628,7 +867,31 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain("Create Alert");
     expect(html).toContain('value="MSFT"');
-    expect(html).toContain("Price threshold ($)");
+    expect(html).toContain("Price threshold");
+  });
+
+  it("opens the alert create form on a level handed over in the route", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        alertSymbol: "MSFT",
+        alertThreshold: "401.15",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('value="401.15"');
+  });
+
+  it("drops a route level the alert sheet could not save", () => {
+    expect(alertThresholdFromLink("401.153")).toBe("401.15");
+    expect(alertThresholdFromLink("0.0000073214")).toBe("0.0000073214");
+    expect(alertThresholdFromLink("0")).toBeUndefined();
+    expect(alertThresholdFromLink("-4")).toBeUndefined();
+    expect(alertThresholdFromLink("not-a-price")).toBeUndefined();
+    expect(alertThresholdFromLink(undefined)).toBeUndefined();
   });
 
   it("uses human cooldown choices and condition-specific alert field labels", () => {
@@ -646,7 +909,7 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain(">Price threshold ($)<input");
+    expect(html).toContain(">Price threshold<input");
     expect(html).toContain('placeholder="80.00"');
     expect(html).toContain(">Re-alert at most every<span");
     expect(html).toContain(">15 minutes<");
@@ -780,7 +1043,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("Search Yahoo candidates before saving");
   });
 
-  it("renders the alert log as durable alert state", () => {
+  it("renders durable alert state as rules plus one activity feed", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
         domain: "alerts",
@@ -792,7 +1055,10 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Active rules");
-    expect(html).toContain("Alert log");
+    // A first-run page shows one empty state, not three empty card shells.
+    expect(html).not.toContain("Activity");
+    expect(html).not.toContain("Alert log");
+    expect(html).not.toContain("Notifications");
     expect(html).not.toContain("Instrument #");
   });
 
@@ -825,16 +1091,17 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain("Recurring");
+    expect(html).toContain("Repeats");
     expect(html).not.toContain(">recurring<");
     expect(html).toContain('aria-label="Pause RKLB alert"');
     expect(html).toContain('aria-label="Edit RKLB alert"');
     expect(html).toContain('aria-label="Delete RKLB alert"');
     expect(html).toContain("min-h-10");
-    expect(html).toContain("text-destructive");
+    expect(html).toContain("hover:text-destructive");
     expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
-    expect(html).toContain('data-slot="alert-row-actions"');
-    expect(html).toContain("col-span-3");
+    expect(html).toContain('data-slot="alert-rule-row"');
+    // The action cluster rests invisible on pointer surfaces.
+    expect(html).toContain("md:opacity-0");
   });
 
   it("reserves plus icons for create actions in alert and report headers", () => {
@@ -906,7 +1173,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Jul 5, 10:05 PM");
     expect(html).toContain("Done");
     expect(html).toContain('data-slot="notification-message"');
-    expect(html).toContain('data-slot="notification-channel"');
+    // One line per notification: title, then the date on the right. The
+    // delivery channel was internal vocabulary and is gone.
+    expect(html).toContain('data-slot="activity-date"');
+    expect(html).not.toContain("in-app");
     expect(html).toContain("min-w-0");
     expect(html).toContain("shrink-0");
   });
@@ -971,6 +1241,17 @@ describe("MarketStatePage rendering", () => {
     expect(nextComboboxActiveIndex(2, 3, "next")).toBe(0);
     expect(nextComboboxActiveIndex(-1, 3, "previous")).toBe(2);
     expect(nextComboboxActiveIndex(0, 3, "previous")).toBe(2);
+  });
+
+  it("accepts bounded exact symbols for hosted state forms when suggestions are unavailable", () => {
+    expect(normalizeExactHostedSymbol(" aapl ")).toBe("AAPL");
+    expect(normalizeExactHostedSymbol("BRK.B")).toBe("BRK.B");
+    expect(normalizeExactHostedSymbol("BTC-USD")).toBe("BTC-USD");
+    expect(normalizeExactHostedSymbol("ES=F")).toBe("ES=F");
+    expect(normalizeExactHostedSymbol("A".repeat(32))).toBe("A".repeat(32));
+    expect(normalizeExactHostedSymbol("A".repeat(33))).toBe("");
+    expect(normalizeExactHostedSymbol("not a symbol")).toBe("");
+    expect(normalizeExactHostedSymbol("../escape")).toBe("");
   });
 
   it("keeps holding forms out of the first viewport", () => {
@@ -1041,6 +1322,91 @@ describe("MarketStatePage rendering", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
+  it("does not hold the saved-state acknowledgement open while quotes refresh", async () => {
+    let resolveQuotes: (() => void) | undefined;
+    const refreshQuotes = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveQuotes = resolve;
+        }),
+    );
+
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "AAPL" },
+      invokeToolRequest: vi.fn(async () => undefined),
+      refresh: vi.fn(async () => undefined),
+      refreshQuotes,
+    });
+
+    expect(saved).toBe(true);
+    expect(refreshQuotes).toHaveBeenCalledOnce();
+    resolveQuotes?.();
+  });
+
+  it("keeps a market-state form open when a tool requires more input", async () => {
+    const refresh = vi.fn();
+    const refreshQuotes = vi.fn();
+    const setToast = vi.fn();
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "SHOP" },
+      invokeToolRequest: vi.fn(async () => ({
+        content: [{ type: "text", text: "Choose a listing." }],
+        details: { status: "needs_selection", query: "SHOP", candidates: [] },
+      })),
+      setToast,
+      refresh,
+      refreshQuotes,
+    });
+
+    expect(saved).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(refreshQuotes).not.toHaveBeenCalled();
+    expect(setToast).toHaveBeenCalledWith("Choose a listing.", { destructive: true });
+  });
+
+  it("propagates the hosted exact-symbol verification state from alert forms", async () => {
+    expect(alertInstrumentArgs("AAPL", true)).toEqual({
+      symbol: "AAPL",
+      unverified_exact_symbol: true,
+    });
+    expect(alertInstrumentArgs("AAPL", false)).toEqual({ symbol: "AAPL" });
+    expect(holdingInstrumentArgs("AAPL", true)).toEqual({
+      symbol: "AAPL",
+      unverified_exact_symbol: true,
+    });
+    expect(holdingInstrumentArgs("AAPL", false)).toEqual({ symbol: "AAPL" });
+  });
+
+  it("unwraps an acknowledged tool result before handling semantic validation", async () => {
+    const refresh = vi.fn();
+    const setToast = vi.fn();
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "SHOP" },
+      invokeToolRequest: vi.fn(async () => ({
+        type: "tool.invoke.result",
+        ok: true,
+        result: {
+          toolCallId: "call-1",
+          content: [{ type: "text", text: "Choose a listing." }],
+          details: { status: "needs_selection", query: "SHOP", candidates: [] },
+          isError: false,
+        },
+      })),
+      setToast,
+      refresh,
+    });
+
+    expect(saved).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(setToast).toHaveBeenCalledWith("Choose a listing.", { destructive: true });
+  });
+
   it("names market-state form controls for assistive technology", () => {
     const alertHtml = renderToStaticMarkup(
       React.createElement(AlertCreateForm, {
@@ -1064,7 +1430,7 @@ describe("MarketStatePage rendering", () => {
 
     expect(alertHtml).toContain(">Condition");
     expect(alertHtml).toContain("<select");
-    expect(alertHtml).toContain(">Price threshold ($)<input");
+    expect(alertHtml).toContain(">Price threshold<input");
     // Period only renders for SMA/RSI/volume conditions; the default price-above
     // condition hides it instead of showing a disabled field.
     expect(alertHtml).not.toContain(">Period (days)<input");

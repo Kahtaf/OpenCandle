@@ -1,3 +1,4 @@
+import * as DismissableLayerPrimitive from "@radix-ui/react-dismissable-layer";
 import { ExternalLink } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -66,6 +67,7 @@ export function InstrumentSuggestionList({
     <div
       id={id}
       role="listbox"
+      data-instrument-suggestion-list
       aria-label={ariaLabel}
       aria-activedescendant={activeDescendant}
       tabIndex={activeDescendant ? -1 : undefined}
@@ -145,9 +147,11 @@ export function InstrumentSuggestionList({
 
   if (!portalAnchor || !position || typeof document === "undefined") return list;
   return createPortal(
-    <div className="fixed z-50" style={position}>
-      {list}
-    </div>,
+    <DismissableLayerPrimitive.Branch asChild>
+      <div className="pointer-events-auto fixed z-50" style={position}>
+        {list}
+      </div>
+    </DismissableLayerPrimitive.Branch>,
     document.body,
   );
 }

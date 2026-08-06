@@ -100,5 +100,13 @@ function validateGuiSearch(search) {
     researchId: typeof search.researchId === "string" ? search.researchId : undefined,
     synthesisId: typeof search.synthesisId === "string" ? search.synthesisId : undefined,
     alertSymbol: typeof search.alertSymbol === "string" ? search.alertSymbol : undefined,
+    // The router's search parser reads a bare number out of the query string,
+    // so a price level arrives typed rather than as text. Both forms are kept
+    // as text here; the alerts page decides whether the level is one it could
+    // save.
+    alertThreshold:
+      typeof search.alertThreshold === "string" || typeof search.alertThreshold === "number"
+        ? String(search.alertThreshold)
+        : undefined,
   };
 }

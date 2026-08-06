@@ -11,7 +11,11 @@ import {
   rejectTimedOutToolInvoke,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
+  resolveEventChannelBootTimeout,
   resolveSnapshotCoordination,
+  resolveSupportsSessionActions,
+  resolveToolInvokeTimeout,
+  resolveWritableRole,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   shouldReconnectOnForeground,
@@ -19,6 +23,28 @@ import {
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("useGuiConnection helpers", () => {
+  it("allows hosted mutations time for durable browser checkpoints", () => {
+    expect(resolveToolInvokeTimeout("hosted")).toBe(120_000);
+    expect(resolveToolInvokeTimeout("loopback")).toBe(30_000);
+  });
+
+  it("allows the hosted event channel to finish booting its WebContainer", () => {
+    expect(resolveEventChannelBootTimeout("hosted")).toBe(120_000);
+    expect(resolveEventChannelBootTimeout("loopback")).toBe(1_500);
+  });
+
+  it("lets a hosted follower use the shared writer while preserving offline read-only state", () => {
+    expect(resolveWritableRole("follower", { writable: true })).toBe("writer");
+    expect(resolveWritableRole("follower", { writable: false })).toBe("follower");
+    expect(resolveWritableRole("offline", { writable: false })).toBe("offline");
+  });
+
+  it("disables session actions whenever the runtime is offline or explicitly read-only", () => {
+    expect(resolveSupportsSessionActions(true, "offline", { writable: false })).toBe(false);
+    expect(resolveSupportsSessionActions(false, "writer", { writable: true })).toBe(false);
+    expect(resolveSupportsSessionActions(true, "follower", { writable: true })).toBe(true);
+  });
+
   it("treats empty toast messages as a no-op payload", () => {
     expect(buildGuiToastPayload("")).toBeNull();
     expect(buildGuiToastPayload(null)).toBeNull();
@@ -194,6 +220,21 @@ describe("useGuiConnection helpers", () => {
     expect(() => buildSessionActionSocketMessage("ask_user.cancel", { id: "ask-3" }, "")).toThrow(
       "sessionId is required",
     );
+  });
+
+  it("allows global model setup commands before a session bootstrap completes", () => {
+    expect(
+      buildSessionActionSocketMessage(
+        "model.setup.save_api_key",
+        { provider: "openai", apiKey: "test-key", storageMode: "session" },
+        "",
+      ),
+    ).toMatchObject({
+      type: "model.setup.save_api_key",
+      provider: "openai",
+      apiKey: "test-key",
+      storageMode: "session",
+    });
   });
 
   it("does not send legacy active-session chat prompts from browser call sites", () => {

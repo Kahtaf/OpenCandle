@@ -3,13 +3,14 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenCandleSession } from "../../../src/pi/session.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 describe("createOpenCandleSession", () => {
   const originalEnv = { ...process.env };
+  const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
@@ -17,6 +18,57 @@ describe("createOpenCandleSession", () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("guards Pi API-key logins before creating the interactive session", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("Forbidden", { status: 403 }),
+    ) as unknown as typeof fetch;
+    const { credentials, modelRuntime } = await createTestModelRuntime();
+    const result = await createOpenCandleSession({
+      modelRuntime,
+      settingsManager: SettingsManager.inMemory(),
+      sessionManager: SessionManager.inMemory(),
+      useInlineExtension: false,
+    });
+
+    await expect(
+      modelRuntime.login("openai", "api_key", {
+        prompt: vi.fn(async () => "bad-key"),
+        notify: vi.fn(),
+      }),
+    ).rejects.toThrow("Key was rejected by OpenAI");
+    expect(await credentials.read("openai")).toBeUndefined();
+
+    result.session.dispose();
+  });
+
+  it("guards API-key login when Pi creates the model runtime", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("Forbidden", { status: 403 }),
+    ) as unknown as typeof fetch;
+    const agentDir = mkdtempSync(join(tmpdir(), "opencandle-login-guard-agent-"));
+    try {
+      const result = await createOpenCandleSession({
+        agentDir,
+        settingsManager: SettingsManager.inMemory(),
+        sessionManager: SessionManager.inMemory(),
+        useInlineExtension: false,
+      });
+
+      await expect(
+        result.session.modelRuntime.login("openai", "api_key", {
+          prompt: vi.fn(async () => "bad-key"),
+          notify: vi.fn(),
+        }),
+      ).rejects.toThrow("Key was rejected by OpenAI");
+
+      result.session.dispose();
+    } finally {
+      await rm(agentDir, { recursive: true, force: true });
+    }
   });
 
   it("starts in finance-only mode and loads the bundled OpenCandle extension", async () => {
@@ -39,6 +91,8 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).toHaveLength(
       getOpenCandleToolDefinitions().length + 1,
     );
+    expect(result.coordinator).toBeDefined();
+    await expect(result.waitForSettled()).resolves.toBeUndefined();
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");
     }

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "../../components/ui/table.jsx";
 import { cn } from "../../lib/utils.js";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { Badge, StatusBand } from "../market-state/shared.jsx";
 
@@ -81,11 +82,13 @@ export function DiagnosticsPage({
   initialReport,
   dataQuality,
 }) {
+  const transport = useRuntimeTransport();
   const [report, setReport] = useState(initialReport ?? null);
   const [loading, setLoading] = useState(!initialReport);
   const [checkingSessions, setCheckingSessions] = useState(false);
   const [sessionCheckDialogOpen, setSessionCheckDialogOpen] = useState(false);
   const [error, setError] = useState("");
+  const hosted = report?.runtime === "hosted-web";
 
   const loadReport = useCallback(
     async ({ sessions = false } = {}) => {
@@ -93,10 +96,7 @@ export function DiagnosticsPage({
       setCheckingSessions(sessions);
       setError("");
       try {
-        const path = sessions ? "/api/doctor?sessions=1" : "/api/doctor";
-        const response = await fetch(path);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data?.error || response.statusText);
+        const data = await transport.getDiagnostics({ sessions });
         setReport(data);
       } catch (loadError) {
         const message = loadError instanceof Error ? loadError.message : String(loadError);
@@ -107,7 +107,7 @@ export function DiagnosticsPage({
         setCheckingSessions(false);
       }
     },
-    [setToast],
+    [setToast, transport],
   );
 
   useEffect(() => {
@@ -165,21 +165,23 @@ export function DiagnosticsPage({
               >
                 Refresh
               </Button>
-              <Button
-                type="button"
-                variant="brand"
-                size="sm"
-                prefixIcon={ShieldCheck}
-                disabled={loading || checkingSessions}
-                onClick={checkSessions}
-              >
-                {checkingSessions ? "Checking..." : "Check sessions"}
-              </Button>
+              {!hosted ? (
+                <Button
+                  type="button"
+                  variant="brand"
+                  size="sm"
+                  prefixIcon={ShieldCheck}
+                  disabled={loading || checkingSessions}
+                  onClick={checkSessions}
+                >
+                  {checkingSessions ? "Checking..." : "Check sessions"}
+                </Button>
+              ) : null}
             </div>
           </header>
 
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
-          {role === "follower" ? (
+          {role === "follower" && !hosted ? (
             <StatusBand>
               Some setup changes are unavailable while OpenCandle reconnects local access.
             </StatusBand>

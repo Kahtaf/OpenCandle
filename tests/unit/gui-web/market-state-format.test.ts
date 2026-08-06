@@ -74,6 +74,80 @@ describe("degradedQuoteBadge", () => {
       ),
     ).toBeNull();
     expect(degradedQuoteBadge([{ status: "unavailable" }], NOW)).toBe("Quotes unavailable");
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            refreshStatus: "unavailable",
+            fetchedAt: "2026-06-12T14:34:00Z",
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("Quotes unavailable · last updated 26m ago");
+  });
+});
+
+describe("degradedQuoteBadge vocabulary", () => {
+  it("uses the as-of date instead of a raw minute count for hours-old prior-day quotes", () => {
+    // Regression: the badge printed "Quotes 1051m old" on a Wednesday morning.
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            fetchedAt: "2026-06-11T21:29:00Z",
+            dataAsOf: "2026-06-11T20:00:00Z",
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("As of Jun 11");
+  });
+
+  it("uses hours when the pipeline stalled but the data is still from today", () => {
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            fetchedAt: "2026-06-12T11:30:00Z",
+            dataAsOf: "2026-06-12T11:29:00Z",
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("Quotes 3h old");
+  });
+
+  it("keeps prior-day as-of copy even when an extended-session quote is present", () => {
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            fetchedAt: "2026-06-11T21:29:00Z",
+            dataAsOf: "2026-06-11T20:00:00Z",
+            extendedPrice: 83.02,
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("As of Jun 11");
+  });
+
+  it("never renders a minute count of an hour or more, and never names a provider", () => {
+    for (let ageMinutes = 16; ageMinutes <= 60 * 48; ageMinutes += 7) {
+      const fetchedAt = new Date(NOW - ageMinutes * 60_000).toISOString();
+      for (const dataAsOf of [fetchedAt, undefined]) {
+        const badge = degradedQuoteBadge([{ status: "ok", fetchedAt, dataAsOf }], NOW);
+        if (badge === null) continue;
+        expect(badge).not.toMatch(/ticker line/i);
+        const minutes = badge.match(/(\d+)m old/);
+        if (minutes) expect(Number(minutes[1])).toBeLessThan(60);
+      }
+    }
   });
 });
 

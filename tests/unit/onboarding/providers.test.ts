@@ -4,6 +4,7 @@ import * as configModule from "../../../src/config.js";
 import {
   getCredential,
   getCredentialSource,
+  getHostedBrowserCapabilityReport,
   getProvider,
   getProvidersByCategory,
   getProvidersByTier,
@@ -14,6 +15,7 @@ import {
   listAllProviders,
   PROVIDERS,
   type ProviderId,
+  resolveHostedBrowserCapabilityReport,
   resolveProviderFromArgument,
 } from "../../../src/onboarding/providers.js";
 
@@ -58,18 +60,74 @@ afterEach(() => {
 });
 
 describe("provider registry — shape", () => {
+  it("classifies every provider for hosted-browser transport and fails closed", () => {
+    const report = getHostedBrowserCapabilityReport();
+
+    expect(report.direct.map((provider) => provider.id)).toEqual([
+      "alpha_vantage",
+      "coingecko",
+      "polymarket",
+    ]);
+    expect(report.unavailable).toHaveLength(PROVIDERS.length - 3);
+    for (const provider of PROVIDERS) {
+      expect(["direct", "proxy", "blocked"]).toContain(provider.browserTransport.mode);
+      expect(provider.browserTransport.reason.trim()).not.toBe("");
+      if (provider.browserTransport.mode === "direct") {
+        expect(provider.browserTransport.proof).toMatchObject({
+          browser: "chromium",
+          test: expect.stringContaining("hosted-pwa.e2e"),
+        });
+      }
+    }
+  });
+
+  it("identifies desktop-cookie providers as blocked and CORS-only providers as proxy", () => {
+    expect(getProvider("twitter").browserTransport).toMatchObject({
+      mode: "blocked",
+      reason: expect.stringContaining("CLI"),
+    });
+    expect(getProvider("reddit").browserTransport).toMatchObject({
+      mode: "blocked",
+      reason: expect.stringContaining("CLI"),
+    });
+    expect(getProvider("yahoo").browserTransport.mode).toBe("proxy");
+  });
+
+  it("resolves proxy providers through a compatible hosted relay without unblocking CLIs", () => {
+    const report = resolveHostedBrowserCapabilityReport(["yahoo", "fred", "twitter"]);
+
+    expect(report.direct.map((provider) => provider.id)).toEqual([
+      "alpha_vantage",
+      "coingecko",
+      "polymarket",
+    ]);
+    expect(report.relayed.map((provider) => provider.id).sort()).toEqual(["fred", "yahoo"]);
+    expect(report.available.map((provider) => provider.id).sort()).toEqual([
+      "alpha_vantage",
+      "coingecko",
+      "fred",
+      "polymarket",
+      "yahoo",
+    ]);
+    expect(report.unavailable.map((provider) => provider.id)).toContain("twitter");
+  });
+
   it("contains API-key, external-tool, and public HTTP providers with stable ids", () => {
     const ids = PROVIDERS.map((p) => p.id).sort();
     expect(ids).toEqual(
       [
         "alpha_vantage",
         "brave",
+        "coingecko",
+        "ddg",
         "exa",
+        "fear_greed",
         "finnhub",
         "fred",
         "lse",
         "polymarket",
         "reddit",
+        "sec_edgar",
         "tradingview",
         "twitter",
         "yahoo",
@@ -118,7 +176,14 @@ describe("provider registry — shape", () => {
 
   it("hard-tier providers have null fallback descriptions", () => {
     const hard = PROVIDERS.filter((p) => p.tier === "hard");
-    expect(hard.map((p) => p.id).sort()).toEqual(["alpha_vantage", "fred", "polymarket", "yahoo"]);
+    expect(hard.map((p) => p.id).sort()).toEqual([
+      "alpha_vantage",
+      "coingecko",
+      "fred",
+      "polymarket",
+      "sec_edgar",
+      "yahoo",
+    ]);
     for (const p of hard) {
       expect(p.fallbackDescription).toBeNull();
     }
@@ -127,7 +192,17 @@ describe("provider registry — shape", () => {
   it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
     expect(soft.map((p) => p.id).sort()).toEqual(
-      ["brave", "exa", "finnhub", "lse", "reddit", "tradingview", "twitter"].sort(),
+      [
+        "brave",
+        "ddg",
+        "exa",
+        "fear_greed",
+        "finnhub",
+        "lse",
+        "reddit",
+        "tradingview",
+        "twitter",
+      ].sort(),
     );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();
@@ -258,19 +333,29 @@ describe("provider registry — lookup helpers", () => {
     const ids = getProvidersByTier("hard")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["alpha_vantage", "fred", "polymarket", "yahoo"]);
+    expect(ids).toEqual(["alpha_vantage", "coingecko", "fred", "polymarket", "sec_edgar", "yahoo"]);
   });
 
   it("getProvidersByTier('soft') returns soft enrichment providers", () => {
     const ids = getProvidersByTier("soft")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["brave", "exa", "finnhub", "lse", "reddit", "tradingview", "twitter"]);
+    expect(ids).toEqual([
+      "brave",
+      "ddg",
+      "exa",
+      "fear_greed",
+      "finnhub",
+      "lse",
+      "reddit",
+      "tradingview",
+      "twitter",
+    ]);
   });
 
   it("getProvidersByCategory returns sentiment providers", () => {
     const ids = getProvidersByCategory("sentiment").map((p) => p.id);
-    expect(ids).toEqual(["twitter", "reddit"]);
+    expect(ids).toEqual(["fear_greed", "twitter", "reddit"]);
   });
 });
 
@@ -364,7 +449,7 @@ describe("provider registry — resolveProviderFromArgument", () => {
     expect(Array.isArray(result)).toBe(true);
     const arr = result as ReadonlyArray<{ id: ProviderId }>;
     const ids = arr.map((p) => p.id).sort();
-    expect(ids).toEqual(["brave", "exa"]);
+    expect(ids).toEqual(["brave", "ddg", "exa"]);
   });
 
   it("returns undefined for unknown argument", () => {
@@ -392,7 +477,7 @@ describe("provider registry — import safety", () => {
     const loadFileConfigMock = configModule.loadFileConfig as ReturnType<typeof vi.fn>;
     // Freshly import the registry after the mock is in place.
     const providersModule = await import("../../../src/onboarding/providers.js");
-    expect(providersModule.PROVIDERS.length).toBe(11);
+    expect(providersModule.PROVIDERS.length).toBe(15);
     // Module evaluation must not trigger loadFileConfig.
     expect(loadFileConfigMock).not.toHaveBeenCalled();
     // Calling a credential helper SHOULD invoke loadFileConfig (lazy, on demand).

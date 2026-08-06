@@ -359,6 +359,17 @@ describe("GUI server route guards", () => {
     expect(wsSource).toContain("Legacy active-session chat prompts are no longer supported");
   });
 
+  it("persists slash-command input before the local GUI dispatches a workflow", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const sseStart = source.indexOf("async function streamAcceptedSseChatRun");
+    const dispatchStart = source.indexOf("await promptAndSettle(", sseStart);
+    const beforeDispatch = source.slice(sseStart, dispatchStart);
+
+    expect(beforeDispatch).toContain(
+      "if (shouldPersistOriginalInputMarker(prompt, inputAttachmentLabels))",
+    );
+  });
+
   it("keeps proxy forwarding reachable from the browser runs route but not the proxy target", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
 
@@ -538,9 +549,10 @@ describe("GUI server route guards", () => {
 
   it("records tool actions as accepted once the tool transcript starts", () => {
     const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const sharedSource = readFileSync(resolve("gui/shared/invoke-tool-from-ui.ts"), "utf-8");
     const invokeIndex = source.indexOf("result = await invokeTool");
-    const transcriptIndex = source.indexOf("sessionManager.appendMessage(assistant);");
-    const hookIndex = source.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
+    const transcriptIndex = sharedSource.indexOf("sessionManager.appendMessage(assistant);");
+    const hookIndex = sharedSource.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
 
     expect(invokeIndex).toBeGreaterThan(-1);
     expect(source.slice(invokeIndex, source.indexOf("});", invokeIndex))).toContain(

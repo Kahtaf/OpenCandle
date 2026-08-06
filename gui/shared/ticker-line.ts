@@ -1,4 +1,6 @@
 const TICKER_LINE_SPARKLINE_ENDPOINT = "https://ticker-line.com/v1/sparkline";
+export const TICKER_LINE_MAX_SVG_BYTES = 512 * 1024;
+export const TICKER_LINE_MAX_JSON_BYTES = TICKER_LINE_MAX_SVG_BYTES + 16_384;
 
 const INDEX_TICKERS = new Map([
   ["^GSPC", "SPX500/USD"],
@@ -95,6 +97,57 @@ export function tickerLineProxySparklineUrl(symbol: unknown, assetType: unknown)
     assetType: String(assetType).trim(),
   });
   return `/api/market-state/sparkline?${params.toString()}`;
+}
+
+export function tickerLineResponseFailure(headers: Headers): string | null {
+  const code = headers.get("x-error-code");
+  const status = headers.get("x-error-status");
+  const message = headers.get("x-error-message") ?? headers.get("x-ticker-line-error");
+  if (code || status || message) {
+    return `Ticker Line unavailable: ${message ?? code ?? status}`;
+  }
+  if (headers.get("x-cache")?.toUpperCase() === "STALE") {
+    const dataAsOf = headers.get("x-data-as-of");
+    return `Ticker Line returned stale market data${dataAsOf ? ` as of ${dataAsOf}` : ""}`;
+  }
+  return null;
+}
+
+export function isTickerLineSvg(value: string): boolean {
+  return /^(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(value.trimStart());
+}
+
+export async function readTickerLineTextWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<{ status: "ok"; text: string } | { status: "too_large" }> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body?.cancel();
+    return { status: "too_large" };
+  }
+  if (!response.body) return { status: "ok", text: "" };
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let byteLength = 0;
+  let text = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      byteLength += chunk.value.byteLength;
+      if (byteLength > maxBytes) {
+        await reader.cancel();
+        return { status: "too_large" };
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+    return { status: "ok", text };
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function normalizeStockSymbol(symbol: string): string {

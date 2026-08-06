@@ -12,6 +12,7 @@ describe("optimistic GUI user messages", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       type: "user_message",
+      delivery: "queued",
       content: [{ type: "text", text: "What is AAPL trading at?" }],
     });
   });
@@ -41,7 +42,9 @@ describe("optimistic GUI user messages", () => {
     const persisted = persistedUserEvents("persisted-user", "Compare MSFT and GOOGL");
 
     expect(chatRowsFromEvents(persisted, optimistic)).toHaveLength(1);
+    expect(chatRowsFromEvents(persisted, optimistic)[0]).toMatchObject({ delivery: "sent" });
     expect(chatRowsFromEvents(optimistic, persisted)).toHaveLength(1);
+    expect(chatRowsFromEvents(optimistic, persisted)[0]).toMatchObject({ delivery: "sent" });
   });
 
   it("deduplicates attachment sends once the persisted server message arrives", () => {

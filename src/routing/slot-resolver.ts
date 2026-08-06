@@ -105,12 +105,16 @@ export function resolvePortfolioSlots(
   sources.assetScope = scope.source;
   if (scope.source === "default") defaultsUsed.push("assetScope");
 
-  const count = resolve(undefined, preferences.positionCount, PORTFOLIO_DEFAULTS.positionCount);
+  const count = resolve(
+    entities.positionCount,
+    preferences.positionCount,
+    PORTFOLIO_DEFAULTS.positionCount,
+  );
   sources.positionCount = count.source;
   if (count.source === "default") defaultsUsed.push("positionCount");
 
   const maxPct = resolve(
-    undefined,
+    entities.maxSinglePositionPct,
     preferences.maxSinglePositionPct,
     PORTFOLIO_DEFAULTS.maxSinglePositionPct,
   );

@@ -43,6 +43,22 @@ describe("validateModelKey", () => {
     });
   });
 
+  it("uses Anthropic's browser-safe Pi request header during validation", async () => {
+    const fetchMock = mockFetch(new Response("{}", { status: 200 }));
+
+    await validateModelKey("anthropic", "anthropic-key");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.anthropic.com/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-api-key": "anthropic-key",
+          "anthropic-dangerous-direct-browser-access": "true",
+        }),
+      }),
+    );
+  });
+
   it("accepts a Google key after the provider accepts the probe", async () => {
     const fetchMock = mockFetch(new Response("{}", { status: 200 }));
 

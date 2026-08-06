@@ -8,6 +8,7 @@ import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
+import { useForgetFirstRunSetupDismissalWhenSatisfied } from "./features/onboarding/setup-dismissal.js";
 import {
   chatRunSessionTarget,
   hasSessionContent,
@@ -20,6 +21,7 @@ import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
 import { domainFromPath, tickerFromPath } from "./route-resolution.js";
+import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
 const CatalogOverlay = lazy(() =>
@@ -83,6 +85,21 @@ export function AppShell() {
       },
       [activeSessionId, pathname, routeSessionId, navigate, gui],
     ),
+    onRunError: useCallback((sessionId) => {
+      if (!sessionId) return;
+      setLiveEventsBySession((current) => {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
+      setLiveBaseEventCountBySession((current) => {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
+    }, []),
   });
   const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
@@ -91,8 +108,41 @@ export function AppShell() {
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
+  // The remembered first-run onboarding dismissal is forgotten wherever setup
+  // becomes satisfied, not only on the chat route: the dialog above is opened
+  // from Diagnostics and the dashboard too, and the chat panel is unmounted
+  // there. Without this, a key saved off the chat route would leave the record
+  // behind and suppress the automatic opening after keys are cleared again.
+  useForgetFirstRunSetupDismissalWhenSatisfied({
+    role: gui.role,
+    requirement: gui.modelSetup?.requirement,
+  });
   const homeResetSessionRef = useRef("");
+  const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);
+  const createFreshHomeSession = useCallback(() => {
+    if (homeSessionCreationRef.current) return homeSessionCreationRef.current;
+    const creation = gui.newSession();
+    homeSessionCreationRef.current = creation;
+    void creation.finally(() => {
+      if (homeSessionCreationRef.current === creation) homeSessionCreationRef.current = null;
+    });
+    return creation;
+  }, [gui.newSession]);
+  const hasGuiSessionContent = hasSessionContent(visibleEvents);
+  const canPrepareFreshHomeSession =
+    gui.role === "writer" &&
+    gui.supportsSessionActions &&
+    !search?.messageId &&
+    chatRun.runState !== "connecting" &&
+    chatRun.runState !== "streaming";
+  const shouldPrepareFreshHomeSession = shouldStartFreshHomeSession({
+    pathname,
+    currentSessionId: gui.currentSessionId,
+    entryCount: hasGuiSessionContent ? visibleEvents.length : 0,
+    lastResetSessionId: homeResetSessionRef.current,
+    canStartFreshHomeSession: canPrepareFreshHomeSession && gui.currentSessionPersisted,
+  });
   const sessionView = routeSessionView({
     pathname,
     currentSessionId:
@@ -100,8 +150,8 @@ export function AppShell() {
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
-    canStartFreshHomeSession:
-      gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
+    canStartFreshHomeSession: canPrepareFreshHomeSession,
+    pendingFreshHomeSession: shouldPrepareFreshHomeSession,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
@@ -113,12 +163,11 @@ export function AppShell() {
     : gui.askUserPrompts.filter(
         (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
       );
-  const hasGuiSessionContent = hasSessionContent(visibleEvents);
-  const guiEventCount = visibleEvents.length;
   const inputDisabled =
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
     !gui.supportsSessionActions;
+  const actionRole = actionSurfaceRole(gui.role, gui.supportsSessionActions);
 
   const openDrawer = useCallback(
     (drawer) => {
@@ -174,29 +223,12 @@ export function AppShell() {
       homeResetSessionRef.current = "";
       return;
     }
-    if (
-      !shouldStartFreshHomeSession({
-        pathname,
-        currentSessionId: gui.currentSessionId,
-        entryCount: hasGuiSessionContent ? guiEventCount : 0,
-        lastResetSessionId: homeResetSessionRef.current,
-        canStartFreshHomeSession:
-          gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
-      })
-    )
-      return;
+    if (!shouldPrepareFreshHomeSession) return;
     homeResetSessionRef.current = gui.currentSessionId;
-    void gui.newSession();
-  }, [
-    pathname,
-    gui.currentSessionId,
-    hasGuiSessionContent,
-    guiEventCount,
-    gui.newSession,
-    gui.role,
-    gui.supportsSessionActions,
-    search?.messageId,
-  ]);
+    void createFreshHomeSession().then((sessionId) => {
+      if (sessionId) homeResetSessionRef.current = sessionId;
+    });
+  }, [pathname, gui.currentSessionId, createFreshHomeSession, shouldPrepareFreshHomeSession]);
 
   useEffect(() => {
     if (
@@ -250,10 +282,6 @@ export function AppShell() {
         hasCurrentSessionContent: hasGuiSessionContent,
         canStartFreshHomeSession: gui.role === "writer",
       });
-      if (target.mode === "current") {
-        void chatRun.startChatRun(prompt, options);
-        return;
-      }
       if (target.mode === "route") {
         const result = await chatRun.startChatRun(prompt, {
           ...options,
@@ -267,11 +295,20 @@ export function AppShell() {
         }
         return;
       }
+      // A freshly opened follower can render the home dashboard before it has
+      // received a current session projection. Give its first submission a
+      // durable session instead of passing an empty id into useChatRun and
+      // silently dropping the prompt while writer ownership changes.
+      const needsInitialHomeSession = target.mode === "current" && !activeSessionId;
+      if (target.mode === "current" && !needsInitialHomeSession) {
+        void chatRun.startChatRun(prompt, options);
+        return;
+      }
       if (freshRunPendingRef.current) return;
       freshRunPendingRef.current = true;
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
-          const freshSessionId = await gui.newSession();
+          const freshSessionId = await createFreshHomeSession();
           if (!freshSessionId) return;
           homeResetSessionRef.current = freshSessionId;
           const result = await chatRun.startChatRun(prompt, {
@@ -295,7 +332,7 @@ export function AppShell() {
       hasGuiSessionContent,
       gui.role,
       gui.supportsSessionActions,
-      gui.newSession,
+      createFreshHomeSession,
       gui.setToast,
       chatRun.startChatRun,
       clearLiveEventsForSession,
@@ -305,6 +342,17 @@ export function AppShell() {
   const openHome = useCallback(() => {
     void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
   }, [navigate]);
+
+  // Pages outside chat have no composer of their own, so a prompt handed over
+  // from one of them opens chat first and lands in the same draft the catalog
+  // fills. Nothing is sent: the reader still submits.
+  const prefillComposerFromPage = useCallback(
+    (text) => {
+      openHome();
+      fillComposer(text);
+    },
+    [openHome, fillComposer],
+  );
 
   const newSession = useCallback(() => {
     void (async () => {
@@ -387,6 +435,58 @@ export function AppShell() {
     },
     [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );
+  const runCatalogTool = useCallback(
+    async (toolName, args) => {
+      const target = chatRunSessionTarget({
+        pathname,
+        supportsSessionActions: gui.supportsSessionActions,
+        hasCurrentSessionContent: hasGuiSessionContent,
+        canStartFreshHomeSession: gui.role === "writer",
+      });
+      let targetSessionId =
+        target.mode === "route" ? target.sessionId : sessionView.activeSessionId;
+      const routeToToolSession = async (sessionId) => {
+        if (pathname !== "/") return;
+        homeResetSessionRef.current = sessionId;
+        gui.adoptSessionId(sessionId);
+        await navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId },
+          search: (current) => ({ ...current, drawer: undefined }),
+        });
+      };
+
+      if (target.mode === "fresh") {
+        if (freshRunPendingRef.current) {
+          throw new Error("A new session is already being prepared. Please retry shortly.");
+        }
+        freshRunPendingRef.current = true;
+        try {
+          targetSessionId = await createFreshHomeSession();
+          if (!targetSessionId) throw new Error("Unable to create a session for this tool run.");
+          await routeToToolSession(targetSessionId);
+          return invokeToolForVisibleSession(toolName, args, targetSessionId);
+        } finally {
+          freshRunPendingRef.current = false;
+        }
+      }
+
+      if (!targetSessionId) throw new Error("Open a session before running this tool.");
+      await routeToToolSession(targetSessionId);
+      return invokeToolForVisibleSession(toolName, args, targetSessionId);
+    },
+    [
+      pathname,
+      gui.supportsSessionActions,
+      gui.role,
+      gui.adoptSessionId,
+      hasGuiSessionContent,
+      sessionView.activeSessionId,
+      createFreshHomeSession,
+      invokeToolForVisibleSession,
+      navigate,
+    ],
+  );
   const scrollAnchorId = search?.messageId || search?.researchId || search?.synthesisId || "";
 
   return (
@@ -409,10 +509,9 @@ export function AppShell() {
         ) : ticker ? (
           <SymbolPage
             ticker={ticker}
-            startChatRun={startRoutedChatRun}
-            navigate={navigate}
+            fillComposer={prefillComposerFromPage}
             invokeTool={invokeToolForVisibleSession}
-            role={gui.role}
+            role={actionRole}
             setToast={gui.setToast}
             onOpenSidebar={() => openDrawer("history")}
             onOpenHome={openHome}
@@ -423,7 +522,8 @@ export function AppShell() {
           <MarketStatePage
             domain={marketDomain}
             alertSymbol={search?.alertSymbol}
-            role={gui.role}
+            alertThreshold={search?.alertThreshold}
+            role={actionRole}
             send={gui.send}
             invokeTool={invokeToolForVisibleSession}
             navigate={navigate}
@@ -479,6 +579,7 @@ export function AppShell() {
             send={gui.send}
             setToast={gui.setToast}
             startChatRun={startRoutedChatRun}
+            invokeTool={runCatalogTool}
             fillComposer={fillComposer}
             sessionId={sessionView.activeSessionId}
           />
@@ -490,7 +591,6 @@ export function AppShell() {
         modelSetup={gui.modelSetup}
         role={gui.role}
         send={gui.send}
-        setToast={gui.setToast}
       />
       <Toaster />
     </ToolDrawerProvider>

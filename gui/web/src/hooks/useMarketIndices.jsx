@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { loopbackRuntimeTransport } from "../runtime/runtime-transport.js";
+import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 import { QUOTE_REFRESH_INTERVAL_MS } from "./useMarketState.jsx";
 
 const INITIAL_STATE = { loading: true, quotes: [], unavailable: false };
 
 export class MarketIndicesStore {
-  constructor({ pollMs = QUOTE_REFRESH_INTERVAL_MS } = {}) {
+  constructor({ pollMs = QUOTE_REFRESH_INTERVAL_MS, transport = loopbackRuntimeTransport } = {}) {
     this.pollMs = pollMs;
+    this.transport = transport;
     this.state = INITIAL_STATE;
     this.listeners = new Set();
     this.timer = null;
@@ -22,9 +25,7 @@ export class MarketIndicesStore {
 
   async refresh() {
     try {
-      const response = await fetch("/api/market-state/indices");
-      if (!response.ok) throw new Error(response.statusText || "Failed to load market indices");
-      const snapshot = await response.json();
+      const snapshot = await this.transport.getMarketIndices();
       const quotes = (snapshot.indices ?? []).filter((quote) => quote?.status === "ok");
       this.setState({ loading: false, quotes, unavailable: quotes.length === 0 });
     } catch {
@@ -53,17 +54,27 @@ export class MarketIndicesStore {
 
 export const marketIndicesStore = new MarketIndicesStore();
 
-export function useMarketIndices({ store = marketIndicesStore } = {}) {
-  const [state, setState] = useState(() => store.getState());
+export function useMarketIndices({ store } = {}) {
+  const transport = useRuntimeTransport();
+  const resolvedStore = useMemo(
+    () =>
+      store ??
+      (transport === loopbackRuntimeTransport
+        ? marketIndicesStore
+        : new MarketIndicesStore({ transport })),
+    [store, transport],
+  );
+  const [state, setState] = useState(() => resolvedStore.getState());
 
   useEffect(() => {
-    const unsubscribe = store.subscribe(setState);
-    void store.start();
+    setState(resolvedStore.getState());
+    const unsubscribe = resolvedStore.subscribe(setState);
+    void resolvedStore.start();
     return () => {
       unsubscribe();
-      store.stop();
+      resolvedStore.stop();
     };
-  }, [store]);
+  }, [resolvedStore]);
 
   return state;
 }

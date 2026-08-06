@@ -53,6 +53,7 @@ export function CatalogOverlay({
   send,
   setToast,
   startChatRun,
+  invokeTool,
   fillComposer,
   sessionId,
 }) {
@@ -62,7 +63,7 @@ export function CatalogOverlay({
   const [lastOpenStateKey, setLastOpenStateKey] = useState(openStateKey);
   const [tab, setTab] = useState(activeInitialTab);
   const [query, setQuery] = useState("");
-  const [selection, setSelection] = useState(null); // { kind: 'tool'|'workflow'|'provider', id }
+  const [selection, setSelection] = useState(initialSelection); // { kind: 'tool'|'workflow'|'provider', id }
   // Body container ref so we can rewind scrollTop when the user pushes/pops
   // between list and builder views — otherwise a list scroll position carries
   // over and hides the builder header on mobile.
@@ -118,6 +119,7 @@ export function CatalogOverlay({
                 send={send}
                 setToast={setToast}
                 startChatRun={startChatRun}
+                invokeTool={invokeTool}
                 fillComposer={fillComposer}
                 onClose={close}
                 lookupSymbol={lookupSymbol}
@@ -476,6 +478,7 @@ function BuilderBody({
   send,
   setToast,
   startChatRun,
+  invokeTool,
   fillComposer,
   onClose,
   lookupSymbol,
@@ -483,11 +486,16 @@ function BuilderBody({
 }) {
   const entity = resolveSelection(selection, catalog);
   if (!entity) {
+    const catalogIsStillLoading = !catalogHasEntries(catalog);
     return (
       <div className="grid gap-2 p-12 text-center">
-        <p className="text-sm font-medium text-foreground">Selection no longer available</p>
+        <p className="text-sm font-medium text-foreground">
+          {catalogIsStillLoading ? "Loading catalog…" : "Selection no longer available"}
+        </p>
         <p className="text-xs text-muted-foreground">
-          The catalog refreshed while you were viewing this entry.
+          {catalogIsStillLoading
+            ? "Preparing the selected entry."
+            : "The catalog refreshed while you were viewing this entry."}
         </p>
       </div>
     );
@@ -509,8 +517,8 @@ function BuilderBody({
     return (
       <ToolBuilder
         tool={entity}
-        send={send}
         startChatRun={startChatRun}
+        invokeTool={invokeTool}
         fillComposer={fillComposer}
         onClose={onClose}
         setToast={setToast}
@@ -519,6 +527,12 @@ function BuilderBody({
     );
   }
   return <ProviderBuilder provider={entity} send={send} setToast={setToast} />;
+}
+
+function catalogHasEntries(catalog) {
+  return [catalog?.workflows, catalog?.tools, catalog?.providers].some(
+    (entries) => Array.isArray(entries) && entries.length > 0,
+  );
 }
 
 function WorkflowBuilder({
@@ -644,8 +658,8 @@ export function buildCatalogToolInvokePayload(toolName, args, sessionId = "") {
 
 function ToolBuilder({
   tool,
-  send,
   startChatRun,
+  invokeTool,
   fillComposer,
   onClose,
   setToast,
@@ -654,6 +668,7 @@ function ToolBuilder({
 }) {
   const schema = useMemo(() => fieldsForTool(tool), [tool]);
   const [values, setValues] = useState(() => defaultValuesFor(schema));
+  const [running, setRunning] = useState(false);
   const setField = useCallback(
     (name, value) => setValues((prev) => ({ ...prev, [name]: value })),
     [],
@@ -666,7 +681,7 @@ function ToolBuilder({
     [tool, cleanArgs],
   );
 
-  const submit = (mode) => {
+  const submit = async (mode) => {
     if (issues.length > 0) {
       setToast?.(issues[0]);
       return;
@@ -683,9 +698,19 @@ function ToolBuilder({
       return;
     }
     if (mode === "run") {
-      if (send?.("tool.invoke", buildCatalogToolInvokePayload(tool.name, cleanArgs, sessionId))) {
-        setToast?.(`Running ${tool.label || tool.name}…`);
+      if (!invokeTool) {
+        setToast?.("This tool cannot run until the GUI connection is ready.");
+        return;
+      }
+      setRunning(true);
+      try {
+        await invokeTool(tool.name, cleanArgs, sessionId);
+        setToast?.(`${tool.label || tool.name} completed.`);
         onClose();
+      } catch (error) {
+        setToast?.(error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
       }
     }
   };
@@ -715,8 +740,14 @@ function ToolBuilder({
         <Button variant="bordered" size="sm" onClick={() => submit("draft")}>
           Edit in chat
         </Button>
-        <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>
-          Run now
+        <Button
+          variant="brand"
+          size="sm"
+          prefixIcon={Play}
+          disabled={running}
+          onClick={() => void submit("run")}
+        >
+          {running ? "Running…" : "Run now"}
         </Button>
       </div>
     </div>
@@ -841,7 +872,7 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
           {envBlocked
             ? `Currently set via ${provider.envVar}. Unset that variable to manage the key here.`
             : status === "file"
-              ? `Saved to ~/.opencandle/config.json${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
+              ? `${provider.hosted ? "Saved only in this browser" : "Saved to ~/.opencandle/config.json"}${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
               : provider.instructionsHint || "Saved to ~/.opencandle/config.json."}
         </p>
       </div>

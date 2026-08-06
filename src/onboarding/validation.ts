@@ -7,9 +7,8 @@
 //   - `valid`      — provider accepted the credential (persist it)
 //   - `invalid`    — provider rejected the credential (do NOT persist;
 //                    re-prompt or return a classified failure)
-//   - `transient`  — network/timeout/server error (persist anyway; the next
-//                    tool call will surface any real issue and re-open the
-//                    prompt via the credential-required tag)
+//   - `transient`  — network/timeout/server error (do NOT persist; the user
+//                    can retry once the provider is reachable)
 //
 // The endpoint chosen for each provider is the cheapest one available that
 // also exercises the auth header/query param — we don't pay for meaningful
@@ -52,8 +51,8 @@ async function validateWithFetch(
       return { status: "invalid", httpStatus: 400 };
     }
 
-    // 5xx and other non-2xx — treat as transient. Don't block the user on a
-    // provider outage; the next real tool call will surface a fresh error.
+    // 5xx and other non-2xx — treat as transient. The caller keeps the prior
+    // credential unchanged and asks the user to retry after the outage.
     if (!response.ok) {
       return { status: "transient", reason: `HTTP ${response.status}` };
     }

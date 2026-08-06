@@ -1,7 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
-import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 import {
   type CollectionRecord,
   MarketStateService,
@@ -11,6 +10,7 @@ import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { getQuotes, type TradingViewQuote } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { resolveStatefulInstrument, type StatefulToolOptions } from "./stateful-tool-options.js";
 
 interface WatchlistCheck extends WatchlistItemRecord {
   currentPrice: number | null;
@@ -36,141 +36,169 @@ const params = Type.Object({
       description: "Named watchlist to create or use. Omit to use the default watchlist.",
     }),
   ),
-  symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
+  symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add)" })),
+  item_id: Type.Optional(
+    Type.Integer({ minimum: 1, description: "Stable watchlist row id for an exact remove." }),
+  ),
   new_watchlist_name: Type.Optional(
     Type.String({ description: "New watchlist name (required for rename)." }),
   ),
 });
 
-export const watchlistTool: AgentTool<typeof params> = {
-  name: "manage_watchlist",
-  label: "Watchlist",
-  description:
-    "Manage named watchlists of stocks and crypto. Create, rename, or delete watchlists, add symbols, remove symbols, or check current prices.",
-  parameters: params,
-  async execute(_toolCallId, args) {
-    const db = initDefaultDatabase();
-    const service = new MarketStateService(db);
+export function createWatchlistTool(options: StatefulToolOptions): AgentTool<typeof params> {
+  return {
+    name: "manage_watchlist",
+    label: "Watchlist",
+    description:
+      "Manage named watchlists of stocks and crypto. Create, rename, or delete watchlists, add symbols, remove symbols, or check current prices.",
+    parameters: params,
+    async execute(_toolCallId, args) {
+      const db = options.stateDatabaseFactory();
+      const service = new MarketStateService(db);
 
-    try {
-      if (args.action === "create") {
-        if (!args.watchlist_name) {
-          throw new Error("watchlist_name is required for create action.");
+      try {
+        if (args.action === "create") {
+          if (!args.watchlist_name) {
+            throw new Error("watchlist_name is required for create action.");
+          }
+          const watchlist = service.createWatchlist(args.watchlist_name);
+          return {
+            content: [{ type: "text", text: `Created watchlist ${watchlist.name}` }],
+            details: watchlist,
+          };
         }
-        const watchlist = service.createWatchlist(args.watchlist_name);
-        return {
-          content: [{ type: "text", text: `Created watchlist ${watchlist.name}` }],
-          details: watchlist,
-        };
-      }
 
-      if (args.action === "rename") {
-        if (!args.new_watchlist_name) {
-          throw new Error("new_watchlist_name is required for rename action.");
+        if (args.action === "rename") {
+          if (!args.new_watchlist_name) {
+            throw new Error("new_watchlist_name is required for rename action.");
+          }
+          const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
+          const current = args.watchlist_name
+            ? service.getWatchlistByName(currentName)
+            : service.getDefaultWatchlist();
+          if (current == null) {
+            throw new Error(`watchlist ${currentName} not found.`);
+          }
+          const watchlist = service.renameWatchlist(current.name, args.new_watchlist_name);
+          return {
+            content: [{ type: "text", text: `Renamed ${current.name} to ${watchlist.name}` }],
+            details: watchlist,
+          };
         }
-        const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
-        const current = args.watchlist_name
-          ? service.getWatchlistByName(currentName)
-          : service.getDefaultWatchlist();
-        if (current == null) {
-          throw new Error(`watchlist ${currentName} not found.`);
-        }
-        const watchlist = service.renameWatchlist(current.name, args.new_watchlist_name);
-        return {
-          content: [{ type: "text", text: `Renamed ${current.name} to ${watchlist.name}` }],
-          details: watchlist,
-        };
-      }
 
-      if (args.action === "delete") {
-        service.listWatchlists();
-        const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
-        const current = args.watchlist_name
-          ? service.getWatchlistByName(currentName)
-          : service.getDefaultWatchlist();
-        if (current == null) {
-          throw new Error(`watchlist ${currentName} not found.`);
-        }
-        const watchlist = service.deleteWatchlist(current.name);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Deleted ${current.name}. ${watchlist.name} is now active.`,
-            },
-          ],
-          details: watchlist,
-        };
-      }
-
-      const watchlist = service.getOrCreateWatchlist(args.watchlist_name);
-
-      if (args.action === "add") {
-        if (!args.symbol) {
-          throw new Error("symbol is required for add action.");
-        }
-        const instrument = await resolveInstrumentForMutation(args.symbol);
-        if (instrument.status === "needs_selection") {
+        if (args.action === "delete") {
+          service.listWatchlists();
+          const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
+          const current = args.watchlist_name
+            ? service.getWatchlistByName(currentName)
+            : service.getDefaultWatchlist();
+          if (current == null) {
+            throw new Error(`watchlist ${currentName} not found.`);
+          }
+          const watchlist = service.deleteWatchlist(current.name);
           return {
             content: [
               {
                 type: "text",
-                text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to ${watchlist.name}.`,
+                text: `Deleted ${current.name}. ${watchlist.name} is now active.`,
               },
             ],
-            details: instrument,
+            details: watchlist,
           };
         }
-        const item = service.addWatchlistItem({
-          instrument: instrument.instrument,
-          watchlistId: watchlist.id,
-        });
-        return {
-          content: [{ type: "text", text: `Added ${item.symbol} to ${watchlist.name}` }],
-          details: item,
-        };
-      }
 
-      if (args.action === "remove") {
-        if (!args.symbol) {
-          throw new Error("symbol is required for remove action.");
+        const defaultWatchlist = service.getDefaultWatchlist();
+        const watchlist = !args.watchlist_name
+          ? defaultWatchlist
+          : args.action === "add"
+            ? service.getOrCreateWatchlist(args.watchlist_name)
+            : service.getWatchlistByName(args.watchlist_name);
+        if (watchlist == null) {
+          throw new Error(`watchlist ${args.watchlist_name?.trim()} not found.`);
         }
-        const symbol = args.symbol.toUpperCase();
-        if (!service.removeWatchlistItemBySymbol(symbol, watchlist.id)) {
+
+        if (args.action === "add") {
+          if (!args.symbol) {
+            throw new Error("symbol is required for add action.");
+          }
+          const instrument = await resolveStatefulInstrument(options, args.symbol, {
+            unverifiedExactSymbol:
+              (args as typeof args & { unverified_exact_symbol?: unknown })
+                .unverified_exact_symbol === true,
+          });
+          if (instrument.status === "needs_selection") {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to ${watchlist.name}.`,
+                },
+              ],
+              details: instrument,
+            };
+          }
+          const item = service.addWatchlistItem({
+            instrument: instrument.instrument,
+            watchlistId: watchlist.id,
+          });
           return {
-            content: [{ type: "text", text: `${symbol} not found in ${watchlist.name}` }],
-            details: null,
+            content: [{ type: "text", text: `Added ${item.symbol} to ${watchlist.name}` }],
+            details: item,
           };
         }
-        return {
-          content: [{ type: "text", text: `Removed ${symbol} from ${watchlist.name}` }],
-          details: null,
-        };
-      }
 
-      const items = service.listWatchlistItems(watchlist.id);
-      if (items.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `${watchlist.name} is empty. Use add action to add symbols.`,
-            },
-          ],
-          details: { watchlist, items: [] },
-        };
-      }
+        if (args.action === "remove") {
+          if (args.item_id != null) {
+            const item = service
+              .listWatchlistItems(watchlist.id)
+              .find(({ id }) => id === args.item_id);
+            if (!item || !service.removeWatchlistItem(args.item_id, watchlist.id)) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Watchlist item ${args.item_id} not found in ${watchlist.name}`,
+                  },
+                ],
+                details: null,
+              };
+            }
+            return {
+              content: [{ type: "text", text: `Removed ${item.symbol} from ${watchlist.name}` }],
+              details: null,
+            };
+          }
+          throw new Error(
+            "item_id is required for remove action. Use check to find the stable watchlist item id.",
+          );
+        }
 
-      const checks = await checkWatchlistPrices(items);
-      return {
-        content: [{ type: "text", text: formatWatchlistCheck(watchlist, checks) }],
-        details: { watchlist, items: checks },
-      };
-    } finally {
-      db.close();
-    }
-  },
-};
+        const items = service.listWatchlistItems(watchlist.id);
+        if (items.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${watchlist.name} is empty. Use add action to add symbols.`,
+              },
+            ],
+            details: { watchlist, items: [] },
+          };
+        }
+
+        const checks = await checkWatchlistPrices(items);
+        return {
+          content: [{ type: "text", text: formatWatchlistCheck(watchlist, checks) }],
+          details: { watchlist, items: checks },
+        };
+      } finally {
+        if (options.closeDatabaseAfterExecute !== false) db.close();
+      }
+    },
+  };
+}
+
+export const watchlistTool = createWatchlistTool({ stateDatabaseFactory: initDefaultDatabase });
 
 function formatWatchlistCheck(watchlist: CollectionRecord, checks: WatchlistCheck[]): string {
   const lines = [`**${watchlist.name}** — ${checks.length} symbols`, ""];
@@ -196,7 +224,7 @@ function formatWatchlistCheck(watchlist: CollectionRecord, checks: WatchlistChec
       : "";
     const priceStr =
       typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
-    lines.push(`  ${c.symbol}: ${priceStr}${sourceStr}${statusStr}`);
+    lines.push(`  ${c.symbol} [item ${c.id}]: ${priceStr}${sourceStr}${statusStr}`);
   }
   return lines.join("\n");
 }

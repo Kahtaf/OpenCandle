@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { AgentSession, SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -155,6 +156,10 @@ export function createWsHub({
           );
           broadcastModelSetup();
           break;
+        case "model.setup.set_thinking":
+          await modelSetupController.handleSetThinkingLevel?.(String(data.level ?? ""));
+          broadcastModelSetup();
+          break;
         case "provider.save_api_key":
           await modelSetupController.handleSaveProviderApiKey(
             String(data.providerId ?? ""),
@@ -200,8 +205,13 @@ export function createWsHub({
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // Echo the request's actionId so the browser can attribute this failure
+      // to the request that caused it. Without it, an untagged catch-all error
+      // is indistinguishable from any other in-flight request's failure.
+      const actionId = typeof data.actionId === "string" ? data.actionId : "";
       client.send({
         type: "error",
+        ...(actionId ? { actionId } : {}),
         message:
           errorMessage === "Read-only follower mode"
             ? "OpenCandle is reconnecting to this session."
@@ -227,6 +237,7 @@ export function createWsHub({
       role,
       lock: publicWriterLock(lock),
       sessionId: sessionManager.getSessionId(),
+      sessionPersisted: isSessionPersisted(sessionManager),
       coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
@@ -246,6 +257,7 @@ export function createWsHub({
     return {
       role,
       sessionId: sessionManager.getSessionId(),
+      sessionPersisted: isSessionPersisted(sessionManager),
       coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
@@ -282,6 +294,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
         sessionId,
@@ -300,6 +313,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
         sessionId,
@@ -397,4 +411,9 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function isSessionPersisted(sessionManager: SessionManager): boolean {
+  const sessionFile = sessionManager.getSessionFile?.();
+  return Boolean(sessionFile && existsSync(sessionFile));
 }

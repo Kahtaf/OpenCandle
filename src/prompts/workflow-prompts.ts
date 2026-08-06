@@ -149,8 +149,11 @@ function formatSlotValue(value: unknown): string {
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {
   const { resolved: s, sources } = resolution;
   const normalizedScope = s.assetScope.toLowerCase();
+  const isStocksOnly = /(?:^|_)stocks?_only(?:$|_)/.test(normalizedScope);
+  const isStocksAndEtfs = normalizedScope.includes("stocks_and_etfs");
+  const isStocksAndCrypto = normalizedScope.includes("stocks_and_crypto");
   const isFundBuildingBlocks =
-    normalizedScope.includes("etf") ||
+    (!isStocksAndEtfs && normalizedScope.includes("etf")) ||
     normalizedScope.includes("fund") ||
     normalizedScope.includes("building_blocks");
 
@@ -166,14 +169,35 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
     sources as Record<string, SlotSource | undefined>,
   );
 
+  const candidateInstruction = isStocksOnly
+    ? `Identify exactly ${s.positionCount} individual listed common-stock candidates. Exclude ETFs, funds, indexes, cryptocurrencies, commodities, and cash products.`
+    : isStocksAndEtfs
+      ? `Identify exactly ${s.positionCount} candidates drawn only from individual listed stocks and exchange-traded funds. Exclude cryptocurrencies and commodity spot products.`
+      : isStocksAndCrypto
+        ? `Identify exactly ${s.positionCount} candidates drawn only from individual listed stocks and cryptocurrencies. Exclude ETFs and mutual funds.`
+        : isFundBuildingBlocks
+          ? `Identify exactly ${s.positionCount} diversified fund/ETF building-block candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.`
+          : `Identify exactly ${s.positionCount} diverse candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.`;
+
   const toolSteps = isFundBuildingBlocks
     ? `1. Identify ${s.positionCount} diversified fund/ETF building-block candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
    Include distinct asset-class roles such as core domestic equity, international equity, fixed income, short-duration or cash-like stability, and inflation-sensitive ballast when appropriate.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 4. Use analyze_correlation across all candidates to check diversification.`
-    : `1. Identify ${s.positionCount} diverse candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
-   Avoid over-concentration in individual equities unless the user explicitly asked for stock picks; use diversified funds where they better fit the requested horizon and risk profile.
+    : isStocksAndEtfs
+      ? `1. ${candidateInstruction}
+2. Use get_stock_quote for each candidate to get current prices.
+3. Use get_company_overview only for individual-stock candidates; do not require company fundamentals for ETF candidates.
+4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
+5. Use analyze_correlation across all candidates to check diversification.`
+      : isStocksAndCrypto
+        ? `1. ${candidateInstruction}
+   Label every candidate as stock or cryptocurrency. For cryptocurrency candidates, include the canonical CoinGecko id used by the crypto tools.
+2. For each stock candidate, use get_stock_quote for current price, get_company_overview for fundamentals, and analyze_risk for volatility, Sharpe, and max drawdown.
+3. For each cryptocurrency candidate, use get_crypto_price with its canonical CoinGecko id for current price and get_crypto_history with that same id for dated price history. Do not send cryptocurrencies to stock-only quote, company, or risk tools.
+4. Use analyze_correlation only across the stock candidates. Assess stock/crypto diversification from the dated evidence available and explicitly disclose that a cross-asset correlation matrix is unavailable instead of substituting stock symbols for crypto ids.`
+        : `1. ${candidateInstruction}
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use get_company_overview for fundamentals on each candidate.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
@@ -193,6 +217,9 @@ Steps:
 ${toolSteps}
 
 Portfolio construction guardrails:
+- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
+- Use exactly ${s.positionCount} eligible positions, make allocations sum to 100%, and keep every position at or below ${s.maxSinglePositionPct}%.
+- The eligible universe is "${s.assetScope}". Do not introduce an asset outside that universe during candidate selection or risk review.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
 - If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.

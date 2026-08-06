@@ -96,7 +96,10 @@ export async function searchFilings(
 
   const url = `${EFTS_BASE}?${params}`;
   const data = await httpGet<EFTSResponse>(url, {
-    headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "OpenCandle/1.0 (financial analysis agent)",
+    },
   });
 
   // Deduplicate by accession number (EDGAR returns multiple hits per filing)
