@@ -30,6 +30,9 @@ const LazyMarketChart = lazy(() =>
   import("../../components/market-chart.jsx").then((m) => ({ default: m.MarketChart })),
 );
 
+const INVALID_SYMBOL_REASON =
+  /(?:unknown|invalid) symbol|symbol (?:was )?not found|no company fundamentals returned/i;
+
 export default function SymbolPage({
   ticker,
   fillComposer,
@@ -109,6 +112,14 @@ export function SymbolPageView({
 
   const descriptor = data.descriptor;
   const currency = data.quote?.currency ?? "USD";
+  // The chart reloads its series whenever this array's identity changes, which
+  // also refits the time scale and throws away any pan or zoom the reader has
+  // applied. The page itself re-renders on every quote poll, so the series has
+  // to survive those renders.
+  const chartSeries = useMemo(
+    () => [{ symbol: data.symbol || ticker, bars: data.history?.bars ?? [] }],
+    [data.symbol, ticker, data.history?.bars],
+  );
   const has = (section) => descriptorHasSection(descriptor, section);
   const levelsLoading = data.viewModelLoading && (data.viewModel?.keyLevels ?? []).length === 0;
 
@@ -210,9 +221,7 @@ export function SymbolPageView({
                         ) : (
                           <Suspense fallback={<ChartSkeleton />}>
                             <ChartComponent
-                              series={[
-                                { symbol: data.symbol || ticker, bars: data.history?.bars ?? [] },
-                              ]}
+                              series={chartSeries}
                               mode="area"
                               prevClose={data.quote?.previousClose}
                               range={range}
@@ -273,9 +282,7 @@ export function SymbolPageView({
 }
 
 function isInvalidSymbolReason(reason) {
-  return /(?:unknown|invalid) symbol|symbol (?:was )?not found|no company fundamentals returned/i.test(
-    String(reason ?? ""),
-  );
+  return INVALID_SYMBOL_REASON.test(String(reason ?? ""));
 }
 
 function ChartSkeleton() {

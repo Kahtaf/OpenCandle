@@ -42,6 +42,25 @@ describe("symbol route", () => {
       researchId: undefined,
       synthesisId: undefined,
       alertSymbol: undefined,
+      alertThreshold: undefined,
+    });
+  });
+});
+
+describe("alerts route", () => {
+  it("keeps a level handed over in the link, however the search parser typed it", () => {
+    const route = router.routesByPath["/alerts"];
+
+    // The router's default parser reads a bare number out of the query string,
+    // so a price level arrives typed rather than as text.
+    expect(
+      route.options.validateSearch({ alertSymbol: "MSFT", alertThreshold: 401.15 }),
+    ).toMatchObject({ alertSymbol: "MSFT", alertThreshold: "401.15" });
+    expect(
+      route.options.validateSearch({ alertSymbol: "MSFT", alertThreshold: "401.15" }),
+    ).toMatchObject({ alertThreshold: "401.15" });
+    expect(route.options.validateSearch({ alertThreshold: { level: 1 } })).toMatchObject({
+      alertThreshold: undefined,
     });
   });
 });

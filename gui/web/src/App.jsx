@@ -510,7 +510,6 @@ export function AppShell() {
           <SymbolPage
             ticker={ticker}
             fillComposer={prefillComposerFromPage}
-            navigate={navigate}
             invokeTool={invokeToolForVisibleSession}
             role={actionRole}
             setToast={gui.setToast}
