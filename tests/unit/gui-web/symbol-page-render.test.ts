@@ -392,6 +392,31 @@ describe("symbol page", () => {
     expect(html).not.toContain("$168.64");
   });
 
+  it("prices nothing in dollars while the quote currency is unknown", () => {
+    const levels = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "SAP.DE",
+        levels: [{ key: "sma20", label: "20-day average", value: 168.64, distancePercent: -2.1 }],
+        role: "writer",
+      }),
+    );
+    expect(levels).toContain("168.64");
+    expect(levels).not.toContain("$168.64");
+
+    const hero = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "SAP.DE",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
+        overview: { status: "ok", name: "SAP SE" },
+        quote: { status: "unavailable", reason: "provider unavailable" },
+      }),
+    );
+    expect(hero).toContain("417.20 – 423.80");
+    expect(hero).not.toContain("$417.20");
+    expect(hero).not.toContain(">USD<");
+  });
+
   it("omits the key levels card entirely when no level is computable", () => {
     expect(
       renderToStaticMarkup(

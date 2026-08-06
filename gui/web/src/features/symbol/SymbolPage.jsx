@@ -113,7 +113,10 @@ export function SymbolPageView({
     isInvalidSymbolReason(data.overview.reason);
 
   const descriptor = data.descriptor;
-  const currency = data.quote?.currency ?? "USD";
+  // Left unknown rather than assumed: the derived levels are computed from
+  // history that survives a failed quote, and a foreign listing's levels must
+  // not be printed as dollars just because the quote did not arrive.
+  const currency = data.quote?.currency ?? null;
   // The chart reloads its series whenever this array's identity changes, which
   // also refits the time scale and throws away any pan or zoom the reader has
   // applied. The page itself re-renders on every quote poll, so the series has

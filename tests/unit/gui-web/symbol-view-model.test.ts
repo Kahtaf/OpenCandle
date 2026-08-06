@@ -295,6 +295,17 @@ describe("buildSymbolViewModel", () => {
     );
   });
 
+  it("reads the session range from a saved-state quote's own field names", () => {
+    // The watchlist snapshot the page prefers for a saved symbol names the
+    // session bounds dayHigh and dayLow.
+    const view = buildSymbolViewModel({
+      bars: FULL_YEAR,
+      quote: { status: "ok", price: 600, dayHigh: 620, dayLow: 590 },
+    });
+    expect(view.dayRange).toEqual({ low: 590, high: 620 });
+    expect(view.keyLevels.find((level) => level.key === "week52High")?.value).toBe(620);
+  });
+
   it("carries the history freshness the page has to disclose", () => {
     const view = buildSymbolViewModel({
       bars: FULL_YEAR,

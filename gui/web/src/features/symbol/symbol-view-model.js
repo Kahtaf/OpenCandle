@@ -340,8 +340,11 @@ export function buildSymbolViewModel({ bars, quote, historyStale, historyAsOf } 
   const volume = deriveVolumeContext(normalized, {
     volume: quoteOk ? quote.volume : undefined,
   });
-  const low = quoteOk ? quote.low : undefined;
-  const high = quoteOk ? quote.high : undefined;
+  // The page reads either the instrument quote or, for a saved symbol, the
+  // market-state snapshot, and the snapshot names the session bounds
+  // `dayHigh`/`dayLow`. Both shapes carry the same figures.
+  const low = quoteOk ? (quote.low ?? quote.dayLow) : undefined;
+  const high = quoteOk ? (quote.high ?? quote.dayHigh) : undefined;
   // The 52-week window reads the current session from the quote, because the
   // daily history behind it can still end at the previous one.
   const window52 = { currentPrice, sessionHigh: high, sessionLow: low };

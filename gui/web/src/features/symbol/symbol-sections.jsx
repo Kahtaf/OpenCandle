@@ -8,6 +8,7 @@ import {
   formatMoney,
   formatNumber,
   formatPercent,
+  formatPrice,
   formatQuantity,
 } from "../../lib/financial-format.js";
 import { cn } from "../../lib/utils.js";
@@ -67,7 +68,10 @@ export function SymbolHero({
 }) {
   if (quoteLoading && !quote) return <HeroSkeleton ticker={ticker} descriptor={descriptor} />;
 
-  const currency = quote?.currency ?? "USD";
+  // A quote that never arrived says nothing about the listing's currency, so
+  // the price and the derived stats stay unlabelled rather than reading as
+  // dollars.
+  const currency = quote?.currency ?? null;
   const change = quote?.change;
   const direction = change > 0 ? "up" : change < 0 ? "down" : "unchanged";
   const DirectionIcon = direction === "down" ? ArrowDown : ArrowUp;
@@ -104,9 +108,11 @@ export function SymbolHero({
           <div className={cn("rounded-lg px-1 py-1", flashClass)} data-slot="symbol-price-row">
             <div className="flex flex-wrap items-end gap-3">
               <span className="text-4xl font-semibold leading-none tabular-nums text-foreground sm:text-5xl">
-                {formatMoney(quote?.price, currency)}
+                {formatPrice(quote?.price, currency)}
               </span>
-              <span className="pb-0.5 text-xs font-medium text-muted-foreground">{currency}</span>
+              {currency ? (
+                <span className="pb-0.5 text-xs font-medium text-muted-foreground">{currency}</span>
+              ) : null}
               {quote?.status === "ok" && Number.isFinite(change) ? (
                 <span
                   className={cn(
@@ -174,7 +180,7 @@ function HeroStatStrip({ descriptor, viewModel, currency, basisNote, loading }) 
       stats.push({
         key,
         label,
-        value: `${formatMoney(range.low, currency)} – ${formatMoney(range.high, currency)}`,
+        value: `${formatPrice(range.low, currency)} – ${formatPrice(range.high, currency)}`,
       });
       continue;
     }
@@ -273,7 +279,7 @@ function HeroSkeleton({ ticker, descriptor }) {
 export function KeyLevelsCard({
   ticker,
   levels = NO_LEVELS,
-  currency = "USD",
+  currency,
   role = "writer",
   basisNote,
 }) {
@@ -308,7 +314,9 @@ export function KeyLevelsCard({
                   {level.label}
                 </span>
                 <span className="w-[86px] shrink-0 text-right text-[13px] tabular-nums text-foreground">
-                  {formatMoney(level.value, currency)}
+                  {/* A level whose currency is unknown is a number, not a
+                      dollar amount. */}
+                  {formatPrice(level.value, currency)}
                 </span>
                 <SignedPercent
                   value={level.distancePercent}
