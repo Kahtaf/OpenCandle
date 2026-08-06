@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Card } from "../../components/ui/card.jsx";
+import { DetailRailLayout } from "../../components/ui/detail-rail-layout.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import {
@@ -8,14 +9,19 @@ import {
   StatusBand,
   useQuoteChangeFlash,
 } from "../market-state/shared.jsx";
+import { descriptorHasSection } from "./asset-descriptor.js";
 import { invokeSymbolMutation } from "./symbol-actions.js";
 import {
+  AboutCard,
   AlertsCard,
   AnalyzePanel,
+  AvailabilityNote,
+  KeyLevelsCard,
+  KeyLevelsSkeleton,
   KeyStats,
-  LimitedStatsNotice,
   PositionCard,
-  SymbolHeader,
+  SymbolHero,
+  TrendCard,
   WatchlistMembership,
 } from "./symbol-sections.jsx";
 import { useSymbolData } from "./use-symbol-data.js";
@@ -26,7 +32,7 @@ const LazyMarketChart = lazy(() =>
 
 export default function SymbolPage({
   ticker,
-  startChatRun,
+  fillComposer,
   invokeTool,
   role,
   setToast,
@@ -61,7 +67,7 @@ export default function SymbolPage({
       range={range}
       onRangeChange={setRange}
       role={role}
-      startChatRun={startChatRun}
+      fillComposer={fillComposer}
       onAddToWatchlist={() => mutate("manage_watchlist", { action: "add", symbol: data.symbol })}
       createAlertHref={
         data.quote?.status === "ok"
@@ -83,7 +89,7 @@ export function SymbolPageView({
   range,
   onRangeChange,
   role = "writer",
-  startChatRun,
+  fillComposer,
   onAddToWatchlist,
   createAlertHref,
   flashClass,
@@ -100,14 +106,62 @@ export function SymbolPageView({
     overviewUnavailable &&
     isInvalidSymbolReason(data.quote.reason) &&
     isInvalidSymbolReason(data.overview.reason);
-  const showEquitySections = !isNonEquitySymbol(ticker) && data.overview?.status === "ok";
+
+  const descriptor = data.descriptor;
+  const currency = data.quote?.currency ?? "USD";
+  const has = (section) => descriptorHasSection(descriptor, section);
+  const levelsLoading = data.viewModelLoading && (data.viewModel?.keyLevels ?? []).length === 0;
+
+  // The rail is a desktop region; below its breakpoint the same cards join the
+  // single column in reading order. `DetailRailLayout` hides its rail slot at
+  // narrow widths, so the stacked copies are rendered here and hidden again
+  // once the rail takes over. Only one copy is ever displayed, so assistive
+  // technology sees each card once.
+  const keyLevels = has("keyLevels") ? (
+    levelsLoading ? (
+      <KeyLevelsSkeleton key="key-levels" />
+    ) : (
+      <KeyLevelsCard
+        key="key-levels"
+        ticker={ticker}
+        levels={data.viewModel?.keyLevels ?? []}
+        currency={currency}
+        role={role}
+      />
+    )
+  ) : null;
+  const trend = has("trend") ? <TrendCard key="trend" trend={data.viewModel?.trend} /> : null;
+  const position = has("position") ? (
+    <PositionCard key="position" ticker={ticker} positionRows={data.positionRows} />
+  ) : null;
+  const alerts = has("alerts") ? (
+    <AlertsCard
+      key="alerts"
+      ticker={ticker}
+      alertRows={data.alertRows}
+      role={role}
+      createAlertHref={createAlertHref}
+    />
+  ) : null;
+  const membership = has("watchlist") ? (
+    <WatchlistMembership
+      key="watchlist"
+      ticker={ticker}
+      memberships={data.memberships}
+      role={role}
+      onAdd={onAddToWatchlist}
+    />
+  ) : null;
+  const analyze = has("analyze") ? (
+    <AnalyzePanel key="analyze" ticker={ticker} role={role} fillComposer={fillComposer} />
+  ) : null;
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1120px] min-w-0 flex-col gap-3">
+        <div className="mx-auto flex w-full max-w-[1240px] min-w-0 flex-col gap-3">
           {notFound ? (
             <Panel title={`${ticker} was not found`} headingLevel="h1" headingClassName="text-xl">
               <div className="p-6 text-center">
@@ -118,68 +172,91 @@ export function SymbolPageView({
             </Panel>
           ) : (
             <>
-              {data.quoteLoading && !data.quote ? (
-                <HeaderSkeleton ticker={ticker} />
-              ) : (
-                <SymbolHeader
-                  ticker={ticker}
-                  quote={data.quote}
-                  overview={data.overview}
-                  flashClass={flashClass}
-                />
-              )}
+              <DetailRailLayout
+                // React Doctor's `jsx-no-jsx-as-prop` fires on this slot. It is
+                // accepted here for the same reason the watchlist accepts it:
+                // the layout is a plain component, and every card in the rail
+                // re-renders with the quote poll that re-renders this page.
+                rail={
+                  keyLevels || trend || position || alerts || membership || analyze ? (
+                    <div className="flex min-w-0 flex-col gap-3">
+                      {keyLevels}
+                      {trend}
+                      {position}
+                      {alerts}
+                      {membership}
+                      {analyze}
+                    </div>
+                  ) : null
+                }
+              >
+                <div className="flex min-w-0 flex-col gap-3">
+                  <SymbolHero
+                    ticker={ticker}
+                    quote={data.quote}
+                    overview={data.overview}
+                    descriptor={descriptor}
+                    viewModel={data.viewModel}
+                    flashClass={flashClass}
+                    quoteLoading={data.quoteLoading}
+                    statsLoading={data.viewModelLoading && !data.viewModel?.hasDailyHistory}
+                  />
 
-              <fieldset aria-label="Price chart" className="m-0 min-w-0 border-0 p-0">
-                <Panel title="Price chart">
-                  <div className="min-w-0">
-                    {data.historyLoading && !data.history ? (
-                      <ChartSkeleton />
-                    ) : (
-                      <Suspense fallback={<ChartSkeleton />}>
-                        <ChartComponent
-                          series={[
-                            { symbol: data.symbol || ticker, bars: data.history?.bars ?? [] },
-                          ]}
-                          mode="area"
-                          prevClose={data.quote?.previousClose}
-                          range={range}
-                          onRangeChange={onRangeChange}
-                          showVolume
-                          height={420}
-                        />
-                      </Suspense>
-                    )}
+                  <fieldset aria-label="Price chart" className="m-0 min-w-0 border-0 p-0">
+                    <Panel title="Price chart">
+                      <div className="min-w-0">
+                        {data.historyLoading && !data.history ? (
+                          <ChartSkeleton />
+                        ) : (
+                          <Suspense fallback={<ChartSkeleton />}>
+                            <ChartComponent
+                              series={[
+                                { symbol: data.symbol || ticker, bars: data.history?.bars ?? [] },
+                              ]}
+                              mode="area"
+                              prevClose={data.quote?.previousClose}
+                              range={range}
+                              onRangeChange={onRangeChange}
+                              showVolume
+                              height={420}
+                            />
+                          </Suspense>
+                        )}
+                      </div>
+                    </Panel>
+                  </fieldset>
+
+                  <div
+                    data-slot="symbol-stacked-rail"
+                    className="xl:hidden flex min-w-0 flex-col gap-3 empty:hidden"
+                  >
+                    {position}
+                    {keyLevels}
                   </div>
-                </Panel>
-              </fieldset>
 
-              {isNonEquitySymbol(ticker) ? <LimitedStatsNotice ticker={ticker} /> : null}
-
-              {showEquitySections ? (
-                <>
-                  {data.overviewLoading && !data.overview ? (
-                    <StatsSkeleton />
+                  {has("keyStats") ? (
+                    data.overviewLoading && !data.overview ? (
+                      <StatsSkeleton />
+                    ) : (
+                      <KeyStats overview={data.overview} currency={currency} />
+                    )
                   ) : (
-                    <KeyStats overview={data.overview} currency={data.quote?.currency ?? "USD"} />
+                    <AvailabilityNote note={descriptor?.availabilityNote} />
                   )}
-                  <PositionCard ticker={ticker} positionRows={data.positionRows} />
-                  <AlertsCard
-                    ticker={ticker}
-                    alertRows={data.alertRows}
-                    role={role}
-                    createAlertHref={createAlertHref}
-                  />
-                  <WatchlistMembership
-                    ticker={ticker}
-                    memberships={data.memberships}
-                    role={role}
-                    onAdd={onAddToWatchlist}
-                  />
-                  <AnalyzePanel ticker={ticker} role={role} startChatRun={startChatRun} />
-                </>
-              ) : data.overviewLoading && !isNonEquitySymbol(ticker) ? (
-                <StatsSkeleton />
-              ) : null}
+
+                  {has("about") ? <AboutCard overview={data.overview} /> : null}
+
+                  <div
+                    data-slot="symbol-stacked-rail"
+                    className="xl:hidden flex min-w-0 flex-col gap-3 empty:hidden"
+                  >
+                    {trend}
+                    {alerts}
+                    {membership}
+                    {analyze}
+                  </div>
+                </div>
+              </DetailRailLayout>
 
               {data.error ? <StatusBand tone="error">{data.error}</StatusBand> : null}
               {role !== "writer" ? (
@@ -195,29 +272,9 @@ export function SymbolPageView({
   );
 }
 
-export function isNonEquitySymbol(ticker) {
-  const symbol = ticker.trim().toUpperCase();
-  return symbol.startsWith("^") || symbol.endsWith("-USD");
-}
-
 function isInvalidSymbolReason(reason) {
   return /(?:unknown|invalid) symbol|symbol (?:was )?not found|no company fundamentals returned/i.test(
     String(reason ?? ""),
-  );
-}
-
-function HeaderSkeleton({ ticker }) {
-  return (
-    <Card
-      data-slot="symbol-header-skeleton"
-      role="status"
-      aria-label="Loading symbol quote"
-      className="rounded-xl p-5"
-    >
-      <h1 className="sr-only">Loading {ticker}</h1>
-      <Skeleton className="h-7 w-64" />
-      <Skeleton className="mt-5 h-12 w-80 max-w-full" />
-    </Card>
   );
 }
 

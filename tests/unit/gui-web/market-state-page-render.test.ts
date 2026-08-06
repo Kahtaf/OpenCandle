@@ -7,6 +7,7 @@ import {
   AlertCreateForm,
   alertConditionFormFields,
   alertInstrumentArgs,
+  alertThresholdFromLink,
   ContextPanel,
   clampComboboxActiveIndex,
   getHoldingAutofillValues,
@@ -867,6 +868,30 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Create Alert");
     expect(html).toContain('value="MSFT"');
     expect(html).toContain("Price threshold");
+  });
+
+  it("opens the alert create form on a level handed over in the route", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        alertSymbol: "MSFT",
+        alertThreshold: "401.15",
+        role: "writer",
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('value="401.15"');
+  });
+
+  it("drops a route level the alert sheet could not save", () => {
+    expect(alertThresholdFromLink("401.153")).toBe("401.15");
+    expect(alertThresholdFromLink("0.0000073214")).toBe("0.0000073214");
+    expect(alertThresholdFromLink("0")).toBeUndefined();
+    expect(alertThresholdFromLink("-4")).toBeUndefined();
+    expect(alertThresholdFromLink("not-a-price")).toBeUndefined();
+    expect(alertThresholdFromLink(undefined)).toBeUndefined();
   });
 
   it("uses human cooldown choices and condition-specific alert field labels", () => {

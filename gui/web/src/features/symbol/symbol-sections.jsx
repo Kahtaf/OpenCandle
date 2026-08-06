@@ -1,6 +1,7 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, BellPlus } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
 import { buttonVariants } from "../../components/ui/button-variants.js";
+import { Skeleton } from "../../components/ui/skeleton.jsx";
 import {
   formatCompactMoney,
   formatCompactNumber,
@@ -19,18 +20,46 @@ import {
   SignedPercent,
   StatusDot,
 } from "../market-state/shared.jsx";
+import { levelAlertHref } from "./symbol-actions.js";
 import { analyzePromptsForSymbol } from "./symbol-prompts.js";
 
-export function SymbolHeader({ ticker, quote, overview, flashClass }) {
+const ACTION_CLASS =
+  "min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]";
+
+// Row-level controls stay out of the way on pointer devices and keep a full
+// touch target where hovering is not possible. Same rule as the alert rows.
+const ROW_ACTION_CLASS =
+  "transition-opacity duration-150 ease-out motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100";
+
+const READ_ONLY_NOTE = "Available in the writer window.";
+
+export function SymbolHero({
+  ticker,
+  quote,
+  overview,
+  descriptor,
+  viewModel,
+  flashClass,
+  quoteLoading = false,
+  statsLoading = false,
+}) {
+  if (quoteLoading && !quote) return <HeroSkeleton ticker={ticker} descriptor={descriptor} />;
+
   const currency = quote?.currency ?? "USD";
   const change = quote?.change;
   const direction = change > 0 ? "up" : change < 0 ? "down" : "unchanged";
   const DirectionIcon = direction === "down" ? ArrowDown : ArrowUp;
   const staleBadge = quote?.status === "ok" ? degradedQuoteBadge([quote]) : null;
-  const marketStateLabel = marketStateText(quote?.marketState);
+  // An instrument that never closes says so instead of reporting a session it
+  // does not have.
+  const sessionLabel = descriptor?.continuousTrading
+    ? descriptor.sessionLabel
+    : marketStateText(quote?.marketState);
   const hasExtendedQuote =
+    !descriptor?.continuousTrading &&
     (quote?.marketState === "PRE" || quote?.marketState === "POST") &&
     Number.isFinite(quote?.extendedPrice);
+  const metaLine = [ticker, descriptor?.typeLabel, overview?.exchange].filter(Boolean).join(" · ");
 
   return (
     <fieldset
@@ -45,7 +74,7 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
         title={
           <>
             <span>{overview?.name || quote?.name || ticker}</span>
-            <span className="text-xs font-medium text-muted-foreground">{ticker}</span>
+            <span className="text-xs font-medium text-muted-foreground">{metaLine}</span>
           </>
         }
       >
@@ -85,12 +114,234 @@ export function SymbolHeader({ ticker, quote, overview, flashClass }) {
                 currency={currency}
                 className="mt-0 justify-start"
               />
-            ) : marketStateLabel ? (
-              <Badge>{marketStateLabel}</Badge>
+            ) : sessionLabel ? (
+              <Badge>{sessionLabel}</Badge>
             ) : null}
             {staleBadge ? <Badge tone="warn">{staleBadge}</Badge> : null}
           </div>
         </div>
+        <HeroStatStrip
+          descriptor={descriptor}
+          viewModel={viewModel}
+          currency={currency}
+          loading={statsLoading}
+        />
+      </Panel>
+    </fieldset>
+  );
+}
+
+/**
+ * One horizon-and-context strip under the price. Every entry is read from the
+ * view model; a stat the fetched data cannot support is left out of the strip
+ * rather than printed as a zero or a dash.
+ */
+function HeroStatStrip({ descriptor, viewModel, currency, loading }) {
+  const keys = descriptor?.stats ?? [];
+  if (keys.length === 0) return null;
+  if (loading) return <StatStripSkeleton count={keys.length} />;
+
+  const returns = new Map((viewModel?.horizonReturns ?? []).map((entry) => [entry.key, entry]));
+  const stats = [];
+  for (const key of keys) {
+    const label = descriptor.statLabels?.[key] ?? key;
+    if (key === "dayRange") {
+      const range = viewModel?.dayRange;
+      if (!range) continue;
+      stats.push({
+        key,
+        label,
+        value: `${formatMoney(range.low, currency)} – ${formatMoney(range.high, currency)}`,
+      });
+      continue;
+    }
+    if (key === "volume") {
+      if (!viewModel?.volumeLabel) continue;
+      stats.push({ key, label, value: viewModel.volumeLabel });
+      continue;
+    }
+    const entry = returns.get(key);
+    if (!entry) continue;
+    stats.push({
+      key,
+      label,
+      value: <SignedPercent value={entry.percent} decimals={1} />,
+    });
+  }
+  if (stats.length === 0) return null;
+
+  return (
+    <dl
+      data-slot="symbol-hero-stats"
+      className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border px-4 py-4 sm:px-5"
+    >
+      {stats.map((stat) => (
+        <div data-slot="symbol-stat" className="min-w-[84px]" key={stat.key}>
+          <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {stat.label}
+          </dt>
+          <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{stat.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function StatStripSkeleton({ count }) {
+  return (
+    <div
+      data-slot="symbol-stats-strip-skeleton"
+      role="status"
+      aria-label="Loading price context"
+      className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border px-4 py-4 sm:px-5"
+    >
+      {Array.from({ length: count }, (_, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder row
+        <div className="min-w-[84px]" key={index}>
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="mt-2 h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HeroSkeleton({ ticker, descriptor }) {
+  return (
+    <fieldset aria-label="Symbol quote" className="m-0 min-w-0 border-0 p-0">
+      <Panel>
+        <div data-slot="symbol-hero-skeleton" role="status" aria-label="Loading symbol quote">
+          <h1 className="sr-only">Loading {ticker}</h1>
+          <div className="p-4 sm:p-5">
+            <Skeleton className="h-7 w-56 max-w-full" />
+            <Skeleton className="mt-4 h-12 w-72 max-w-full" />
+            <Skeleton className="mt-3 h-[22px] w-32" />
+          </div>
+          <StatStripSkeleton count={Math.max(descriptor?.stats?.length ?? 0, 4)} />
+        </div>
+      </Panel>
+    </fieldset>
+  );
+}
+
+/**
+ * The 52-week range and the moving averages the history can support, each with
+ * the distance from the current price and a way to watch it. The alert sheet
+ * stays authoritative: the row only hands it the symbol and the level.
+ */
+export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "writer" }) {
+  if (levels.length === 0) return null;
+  const readOnly = role !== "writer";
+
+  return (
+    <fieldset aria-label="Key levels" className="m-0 min-w-0 border-0 p-0">
+      <Panel title="Key levels" meta="Calculated from recent price action.">
+        <ul className="divide-y divide-border/70 px-4">
+          {levels.map((level) => {
+            const href = levelAlertHref(ticker, level.value);
+            const alertLabel = `Create alert at the ${lowerFirst(level.label)}`;
+            return (
+              <li className="group flex items-center gap-2 py-2" key={level.key}>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+                  {level.label}
+                </span>
+                <span className="text-[13px] tabular-nums text-foreground">
+                  {formatMoney(level.value, currency)}
+                </span>
+                <SignedPercent
+                  value={level.distancePercent}
+                  decimals={1}
+                  className="w-[62px] shrink-0 text-right text-[13px]"
+                />
+                {!readOnly && href ? (
+                  <a
+                    href={href}
+                    aria-label={alertLabel}
+                    title={alertLabel}
+                    className={cn(
+                      buttonVariants({ variant: "ghost", size: "icon-xs" }),
+                      ROW_ACTION_CLASS,
+                      "md:h-8 md:min-h-8 md:w-8 md:min-w-8",
+                    )}
+                  >
+                    <BellPlus aria-hidden="true" />
+                  </a>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled
+                    aria-label={alertLabel}
+                    className="md:h-8 md:min-h-8 md:w-8 md:min-w-8"
+                  >
+                    <BellPlus aria-hidden="true" />
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {readOnly ? (
+          <p className="px-4 pb-4 text-xs text-muted-foreground">{READ_ONLY_NOTE}</p>
+        ) : null}
+      </Panel>
+    </fieldset>
+  );
+}
+
+export function KeyLevelsSkeleton() {
+  return (
+    <fieldset aria-label="Key levels" className="m-0 min-w-0 border-0 p-0">
+      <Panel title="Key levels">
+        <div
+          data-slot="symbol-levels-skeleton"
+          role="status"
+          aria-label="Loading key levels"
+          className="space-y-3 p-4"
+        >
+          {[0, 1, 2, 3].map((row) => (
+            <div className="flex items-center justify-between gap-3" key={row}>
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3.5 w-16" />
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </fieldset>
+  );
+}
+
+/** Price against its moving averages, in plain English, with one sentence. */
+export function TrendCard({ trend }) {
+  const rows = trend?.rows ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <fieldset aria-label="Trend summary" className="m-0 min-w-0 border-0 p-0">
+      <Panel title="Trend summary">
+        <ul className="divide-y divide-border/70 px-4">
+          {rows.map((row) => (
+            <li className="flex items-center justify-between gap-3 py-2" key={row.key}>
+              <span className="min-w-0 truncate text-[13px] text-muted-foreground">
+                {row.label}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <Badge tone={row.state === "above" ? "ok" : "warn"}>{row.stateLabel}</Badge>
+                <SignedPercent
+                  value={row.distancePercent}
+                  decimals={1}
+                  className="w-[62px] text-right text-[13px]"
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+        {trend?.sentence ? (
+          <p className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground">
+            {trend.sentence}
+          </p>
+        ) : null}
       </Panel>
     </fieldset>
   );
@@ -116,11 +367,11 @@ export function KeyStats({ overview, currency = "USD" }) {
   return (
     <fieldset aria-label="Key stats" className="m-0 min-w-0 border-0 p-0">
       <Panel title="Key stats">
-        <dl className="grid grid-cols-1 px-4 md:grid-cols-2 xl:grid-cols-3">
+        <dl className="grid grid-cols-1 px-4 sm:grid-cols-2 xl:grid-cols-3">
           {stats.map(([label, value, formatter]) => (
             <div
               key={label}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border/70 py-3 md:px-4"
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border/70 py-3 sm:px-4"
             >
               <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
               <dd className="text-right tabular-nums text-sm text-foreground">
@@ -142,16 +393,47 @@ function formatRatioPercent(value) {
   return formatPercent(value, { decimals: 2, ratio: true });
 }
 
-export function LimitedStatsNotice({ ticker }) {
-  const message = ticker.trim().toUpperCase().startsWith("^")
-    ? "Fundamental stats aren't available for market indices."
-    : "Fundamental stats aren't available for crypto assets.";
+/** The company profile in prose, with the facts that classify the listing. */
+export function AboutCard({ overview }) {
+  if (overview?.status !== "ok") return null;
+  const description = String(overview.description ?? "").trim();
+  if (!description) return null;
+  const facts = [
+    ["Sector", overview.sector],
+    ["Industry", overview.industry],
+    ["Exchange", overview.exchange],
+  ].filter(([, value]) => String(value ?? "").trim());
+
   return (
-    <fieldset aria-label="Fundamental data availability" className="m-0 min-w-0 border-0 p-0">
-      <Panel title="Key stats">
-        <p className="flex min-h-24 items-center p-4 text-sm text-muted-foreground">{message}</p>
+    <fieldset aria-label="About" className="m-0 min-w-0 border-0 p-0">
+      <Panel title="About">
+        <div className="p-4">
+          <p className="max-w-prose text-sm leading-6 text-muted-foreground">{description}</p>
+          {facts.length ? (
+            <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
+              {facts.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd className="mt-1 text-[13px] text-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </div>
       </Panel>
     </fieldset>
+  );
+}
+
+/** What this instrument type cannot show, stated once instead of left blank. */
+export function AvailabilityNote({ note }) {
+  if (!note) return null;
+  return (
+    <p data-slot="symbol-availability-note" className="px-1 text-xs text-muted-foreground">
+      {note}
+    </p>
   );
 }
 
@@ -174,7 +456,7 @@ export function PositionCard({ ticker, positionRows = [] }) {
             />
           </dl>
         ) : (
-          <p className="p-4 text-sm text-muted-foreground">No saved position in {ticker}.</p>
+          <p className="p-4 text-sm text-muted-foreground">{ticker} is not held.</p>
         )}
       </Panel>
     </fieldset>
@@ -183,8 +465,6 @@ export function PositionCard({ ticker, positionRows = [] }) {
 
 export function AlertsCard({ ticker, alertRows = [], createAlertHref, role = "writer" }) {
   const readOnly = role !== "writer";
-  const actionClass =
-    "min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]";
   return (
     <fieldset aria-label="Alerts" className="m-0 min-w-0 border-0 p-0">
       <Panel
@@ -194,12 +474,12 @@ export function AlertsCard({ ticker, alertRows = [], createAlertHref, role = "wr
           !readOnly && createAlertHref ? (
             <a
               href={createAlertHref}
-              className={cn(buttonVariants({ variant: "bordered", size: "sm" }), actionClass)}
+              className={cn(buttonVariants({ variant: "bordered", size: "sm" }), ACTION_CLASS)}
             >
               Create alert
             </a>
           ) : (
-            <Button type="button" variant="bordered" size="sm" disabled className={actionClass}>
+            <Button type="button" variant="bordered" size="sm" disabled className={ACTION_CLASS}>
               Create alert
             </Button>
           )
@@ -220,7 +500,7 @@ export function AlertsCard({ ticker, alertRows = [], createAlertHref, role = "wr
           <p className="p-4 text-sm text-muted-foreground">No alerts for {ticker} yet.</p>
         )}
         {readOnly ? (
-          <p className="px-4 pb-4 text-xs text-muted-foreground">Available in the writer window.</p>
+          <p className="px-4 pb-4 text-xs text-muted-foreground">{READ_ONLY_NOTE}</p>
         ) : null}
       </Panel>
     </fieldset>
@@ -239,7 +519,7 @@ export function WatchlistMembership({ ticker, memberships = [], role = "writer",
             variant="bordered"
             size="sm"
             disabled={readOnly || memberships.length > 0}
-            className="min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]"
+            className={ACTION_CLASS}
             onClick={onAdd}
           >
             Add to watchlist
@@ -258,19 +538,23 @@ export function WatchlistMembership({ ticker, memberships = [], role = "writer",
           <p className="p-4 text-sm text-muted-foreground">{ticker} is not in a watchlist yet.</p>
         )}
         {readOnly ? (
-          <p className="px-4 pb-4 text-xs text-muted-foreground">Available in the writer window.</p>
+          <p className="px-4 pb-4 text-xs text-muted-foreground">{READ_ONLY_NOTE}</p>
         ) : null}
       </Panel>
     </fieldset>
   );
 }
 
-export function AnalyzePanel({ ticker, role = "writer", startChatRun }) {
+/**
+ * Prompts that open the chat box already written. Nothing is sent: the reader
+ * edits and submits, so a chip can hand over an unfinished prompt.
+ */
+export function AnalyzePanel({ ticker, role = "writer", fillComposer }) {
   const readOnly = role !== "writer";
   return (
     <fieldset aria-label="Analyze" className="m-0 min-w-0 border-0 p-0">
-      <Panel title="Analyze">
-        <div className="flex flex-wrap gap-2 p-4">
+      <Panel title="Analyze" meta="Opens chat with the prompt ready.">
+        <div className="flex flex-col gap-2 p-4">
           {analyzePromptsForSymbol(ticker).map(([label, prompt]) => (
             <Button
               key={prompt}
@@ -278,8 +562,8 @@ export function AnalyzePanel({ ticker, role = "writer", startChatRun }) {
               variant="bordered"
               size="sm"
               disabled={readOnly}
-              className="min-h-10 transition-[background-color,color,box-shadow,transform,scale] duration-150 ease-out active:scale-[0.96]"
-              onClick={() => startChatRun?.(prompt)}
+              className={cn(ACTION_CLASS, "justify-start text-left")}
+              onClick={() => fillComposer?.(prompt)}
             >
               {label}
             </Button>
@@ -302,6 +586,11 @@ function ContextMetric({ label, value }) {
       <dd className="text-right tabular-nums text-foreground">{value}</dd>
     </div>
   );
+}
+
+function lowerFirst(value) {
+  const text = String(value ?? "");
+  return text ? text[0].toLowerCase() + text.slice(1) : text;
 }
 
 function marketStateText(marketState) {

@@ -100,5 +100,6 @@ function validateGuiSearch(search) {
     researchId: typeof search.researchId === "string" ? search.researchId : undefined,
     synthesisId: typeof search.synthesisId === "string" ? search.synthesisId : undefined,
     alertSymbol: typeof search.alertSymbol === "string" ? search.alertSymbol : undefined,
+    alertThreshold: typeof search.alertThreshold === "string" ? search.alertThreshold : undefined,
   };
 }

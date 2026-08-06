@@ -343,6 +343,17 @@ export function AppShell() {
     void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
   }, [navigate]);
 
+  // Pages outside chat have no composer of their own, so a prompt handed over
+  // from one of them opens chat first and lands in the same draft the catalog
+  // fills. Nothing is sent: the reader still submits.
+  const prefillComposerFromPage = useCallback(
+    (text) => {
+      openHome();
+      fillComposer(text);
+    },
+    [openHome, fillComposer],
+  );
+
   const newSession = useCallback(() => {
     void (async () => {
       const sessionId = await gui.newSession();
@@ -498,7 +509,7 @@ export function AppShell() {
         ) : ticker ? (
           <SymbolPage
             ticker={ticker}
-            startChatRun={startRoutedChatRun}
+            fillComposer={prefillComposerFromPage}
             navigate={navigate}
             invokeTool={invokeToolForVisibleSession}
             role={actionRole}
@@ -512,6 +523,7 @@ export function AppShell() {
           <MarketStatePage
             domain={marketDomain}
             alertSymbol={search?.alertSymbol}
+            alertThreshold={search?.alertThreshold}
             role={actionRole}
             send={gui.send}
             invokeTool={invokeToolForVisibleSession}

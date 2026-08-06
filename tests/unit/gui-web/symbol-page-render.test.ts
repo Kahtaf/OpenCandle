@@ -1,15 +1,23 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { assetDescriptor } from "../../../gui/web/src/features/symbol/asset-descriptor.js";
+import * as symbolPageModule from "../../../gui/web/src/features/symbol/SymbolPage.jsx";
 import { SymbolPageView } from "../../../gui/web/src/features/symbol/SymbolPage.jsx";
-import { invokeSymbolMutation } from "../../../gui/web/src/features/symbol/symbol-actions.js";
+import {
+  invokeSymbolMutation,
+  levelAlertHref,
+} from "../../../gui/web/src/features/symbol/symbol-actions.js";
 import { analyzePromptsForSymbol } from "../../../gui/web/src/features/symbol/symbol-prompts.js";
 import {
+  AboutCard,
   AlertsCard,
   AnalyzePanel,
+  KeyLevelsCard,
   KeyStats,
   PositionCard,
-  SymbolHeader,
+  SymbolHero,
+  TrendCard,
   WatchlistMembership,
 } from "../../../gui/web/src/features/symbol/symbol-sections.jsx";
 import { deriveSymbolContext } from "../../../gui/web/src/features/symbol/use-symbol-data.js";
@@ -99,6 +107,73 @@ const STATE = {
   },
 };
 
+const EQUITY_VIEW_MODEL = {
+  currentPrice: 420.5,
+  currency: "USD",
+  dayRange: { low: 417.2, high: 423.8 },
+  horizonReturns: [
+    { key: "week", percent: 2.41 },
+    { key: "month", percent: -3.06 },
+    { key: "ytd", percent: 11.72 },
+    { key: "year", percent: 24.5 },
+    { key: "fromHigh52w", percent: -8.25 },
+  ],
+  keyLevels: [
+    { key: "week52High", label: "52-week high", value: 468.35, distancePercent: 11.38 },
+    { key: "week52Low", label: "52-week low", value: 344.77, distancePercent: -18.01 },
+    { key: "sma20", label: "20-day average", value: 412.6, distancePercent: -1.88 },
+    { key: "sma50", label: "50-day average", value: 401.15, distancePercent: -4.6 },
+  ],
+  trend: {
+    rows: [
+      {
+        key: "sma20",
+        label: "20-day average",
+        period: 20,
+        average: 412.6,
+        state: "above",
+        stateLabel: "Above",
+        distancePercent: 1.92,
+      },
+      {
+        key: "sma50",
+        label: "50-day average",
+        period: 50,
+        average: 401.15,
+        state: "above",
+        stateLabel: "Above",
+        distancePercent: 4.82,
+      },
+      {
+        key: "sma200",
+        label: "200-day average",
+        period: 200,
+        average: 430.9,
+        state: "below",
+        stateLabel: "Below",
+        distancePercent: -2.41,
+      },
+    ],
+    sentence:
+      "Signals are mixed: price is above its 20 and 50 day averages and below its 200 day average.",
+  },
+  volume: { volume: 12_400_000, averageVolume: 15_500_000, multiple: 0.8 },
+  volumeLabel: "12.4M · 0.8× avg",
+  hasDailyHistory: true,
+};
+
+const EMPTY_VIEW_MODEL = {
+  currentPrice: null,
+  currency: null,
+  dayRange: null,
+  horizonReturns: [],
+  keyLevels: [],
+  trend: { rows: [], sentence: null },
+  volume: null,
+  volumeLabel: null,
+  hasDailyHistory: false,
+};
+
 describe("symbol page", () => {
   it("derives only the requested symbol's position, alerts, and watchlist membership", () => {
     const result = deriveSymbolContext(STATE, "msft");
@@ -114,53 +189,59 @@ describe("symbol page", () => {
     expect(result.stateQuote).toMatchObject({ symbol: "MSFT", price: 421 });
   });
 
+  it("no longer exports the ticker-string asset heuristic", () => {
+    expect("isNonEquitySymbol" in symbolPageModule).toBe(false);
+  });
+
   it.each([
     [2.5, 0.6, "up", "+$2.50", "+0.60%"],
     [-3.25, -0.75, "down", "−$3.25", "−0.75%"],
-  ])(
-    "renders a signed, icon-labeled %s header change",
-    (change, percent, direction, money, pct) => {
-      const html = renderToStaticMarkup(
-        React.createElement(SymbolHeader, {
-          ticker: "MSFT",
-          overview: { status: "ok", name: "Microsoft Corporation" },
-          quote: {
-            status: "ok",
-            symbol: "MSFT",
-            price: 420.5,
-            change,
-            changePercent: percent,
-            currency: "USD",
-            marketState: "REGULAR",
-            fetchedAt: new Date().toISOString(),
-          },
-        }),
-      );
+  ])("renders a signed, icon-labeled %s hero change", (change, percent, direction, money, pct) => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
+        overview: { status: "ok", name: "Microsoft Corporation", exchange: "NasdaqGS" },
+        quote: {
+          status: "ok",
+          symbol: "MSFT",
+          price: 420.5,
+          change,
+          changePercent: percent,
+          currency: "USD",
+          marketState: "REGULAR",
+          fetchedAt: new Date().toISOString(),
+        },
+      }),
+    );
 
-      expect(html).toContain("<h1");
-      expect(html).toContain('data-slot="panel-card"');
-      expect(html).toContain('data-slot="panel-header"');
-      expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
-        html.indexOf('data-slot="symbol-price-row"'),
-      );
-      expect(html).toContain("text-balance");
-      expect(html).toContain("Microsoft Corporation");
-      expect(html).toContain("MSFT");
-      expect(html).toContain("$420.50");
-      expect(html).toContain("tabular-nums");
-      expect(html).toContain(`Price moved ${direction}:`);
-      expect(html).toContain(money);
-      expect(html).toContain(pct);
-      expect(html).toContain("USD");
-      expect(html).toContain("Regular market");
-      expect(html).not.toContain('data-slot="extended-hours-quote"');
-    },
-  );
+    expect(html).toContain("<h1");
+    expect(html).toContain('data-slot="panel-card"');
+    expect(html).toContain('data-slot="panel-header"');
+    expect(html.indexOf('data-slot="panel-header"')).toBeLessThan(
+      html.indexOf('data-slot="symbol-price-row"'),
+    );
+    expect(html).toContain("Microsoft Corporation");
+    expect(html).toContain("MSFT");
+    expect(html).toContain("Stock");
+    expect(html).toContain("NasdaqGS");
+    expect(html).toContain("$420.50");
+    expect(html).toContain("tabular-nums");
+    expect(html).toContain(`Price moved ${direction}:`);
+    expect(html).toContain(money);
+    expect(html).toContain(pct);
+    expect(html).toContain("USD");
+    expect(html).toContain("Regular market");
+    expect(html).not.toContain('data-slot="extended-hours-quote"');
+  });
 
   it("reuses ExtendedHoursQuote for pre-market quotes", () => {
     const html = renderToStaticMarkup(
-      React.createElement(SymbolHeader, {
+      React.createElement(SymbolHero, {
         ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
         overview: { status: "ok", name: "Microsoft Corporation" },
         quote: {
           status: "ok",
@@ -184,6 +265,182 @@ describe("symbol page", () => {
       html.indexOf('data-slot="symbol-price-row"'),
     );
     expect(html).not.toContain("Pre-market session");
+  });
+
+  it("renders the equity stat strip from the descriptor vocabulary and view model", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
+        overview: { status: "ok", name: "Microsoft Corporation" },
+        quote: okQuote("MSFT"),
+      }),
+    );
+
+    expect(html).toContain('data-slot="symbol-hero-stats"');
+    expect(html.match(/data-slot="symbol-stat"/g)).toHaveLength(7);
+    for (const label of ["5D", "1M", "YTD", "1Y", "From 52-week high", "Day range", "Volume"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain("+2.4%");
+    expect(html).toContain("−3.1%");
+    expect(html).toContain("−8.3%");
+    expect(html).toContain("$417.20 – $423.80");
+    expect(html).toContain("12.4M · 0.8× avg");
+    expect(html).toContain("tabular-nums");
+  });
+
+  it("swaps crypto vocabulary and states continuous trading in the session line", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "BTC-USD",
+        descriptor: assetDescriptor("crypto"),
+        viewModel: EQUITY_VIEW_MODEL,
+        overview: { status: "unavailable", reason: "no fundamentals" },
+        quote: { ...okQuote("BTC-USD"), marketState: "CLOSED" },
+      }),
+    );
+
+    expect(html).toContain("1W");
+    expect(html).toContain("24h range");
+    expect(html).not.toContain(">5D<");
+    expect(html).not.toContain("Day range");
+    expect(html).toContain("Trades 24/7");
+    expect(html).not.toContain("Market closed");
+  });
+
+  it("omits horizons the history cannot support instead of showing zero or a dash", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "NEWCO",
+        descriptor: assetDescriptor("stock"),
+        viewModel: {
+          ...EMPTY_VIEW_MODEL,
+          currentPrice: 12.5,
+          currency: "USD",
+          horizonReturns: [{ key: "week", percent: 4.2 }],
+        },
+        overview: { status: "ok", name: "Newco" },
+        quote: okQuote("NEWCO"),
+      }),
+    );
+
+    expect(html).toContain("5D");
+    expect(html).toContain("+4.2%");
+    expect(html).not.toContain("YTD");
+    expect(html).not.toContain("1Y");
+    expect(html).not.toContain("From 52-week high");
+    expect(html).not.toContain("Volume");
+    expect(html).not.toContain("0.0%");
+    expect(html).not.toContain("—");
+  });
+
+  it("renders hero skeletons shaped like the price block and stat strip", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EMPTY_VIEW_MODEL,
+        overview: null,
+        quote: null,
+        quoteLoading: true,
+        statsLoading: true,
+      }),
+    );
+
+    expect(html).toContain('data-slot="symbol-hero-skeleton"');
+    expect(html).toContain("Loading MSFT</h1>");
+    expect(html).toContain("motion-reduce:animate-none");
+    expect(html.match(/data-slot="skeleton"/g)?.length).toBeGreaterThan(3);
+  });
+
+  it("prices key levels in the quote currency with a signed distance and an alert link", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "MSFT",
+        currency: "USD",
+        levels: EQUITY_VIEW_MODEL.keyLevels,
+        role: "writer",
+      }),
+    );
+
+    expect(html).toContain('aria-label="Key levels"');
+    expect(html).toContain("Calculated from recent price action.");
+    expect(html).toContain("52-week high");
+    expect(html).toContain("$468.35");
+    expect(html).toContain("+11.4%");
+    expect(html).toContain("50-day average");
+    expect(html).toContain("$401.15");
+    expect(html).toContain("−4.6%");
+    expect(html).toContain('href="/alerts?alertSymbol=MSFT&amp;alertThreshold=401.15"');
+    expect(html).toContain("Create alert at the 50-day average");
+    expect(html).toContain("tabular-nums");
+  });
+
+  it("prices key levels in a non-dollar quote currency", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "SAP.DE",
+        currency: "EUR",
+        levels: [{ key: "sma20", label: "20-day average", value: 168.64, distancePercent: -2.1 }],
+        role: "writer",
+      }),
+    );
+
+    expect(html).toContain("EUR 168.64");
+    expect(html).not.toContain("$168.64");
+  });
+
+  it("omits the key levels card entirely when no level is computable", () => {
+    expect(
+      renderToStaticMarkup(
+        React.createElement(KeyLevelsCard, { ticker: "MSFT", currency: "USD", levels: [] }),
+      ),
+    ).toBe("");
+  });
+
+  it("disables level alert creation in a follower window", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "MSFT",
+        currency: "USD",
+        levels: EQUITY_VIEW_MODEL.keyLevels,
+        role: "follower",
+      }),
+    );
+
+    expect(html).toContain('disabled=""');
+    expect(html).not.toContain('href="/alerts?alertSymbol=MSFT');
+    expect(html).toContain("Available in the writer window.");
+  });
+
+  it("builds a level alert href on the alert sheet's own threshold formatting", () => {
+    expect(levelAlertHref("msft", 401.153)).toBe("/alerts?alertSymbol=MSFT&alertThreshold=401.15");
+    expect(levelAlertHref("PEPE-USD", 0.0000073214)).toBe(
+      "/alerts?alertSymbol=PEPE-USD&alertThreshold=0.0000073214",
+    );
+    expect(levelAlertHref("MSFT", 0)).toBe(null);
+    expect(levelAlertHref("", 12)).toBe(null);
+  });
+
+  it("labels each trend horizon and states one summary sentence", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TrendCard, { trend: EQUITY_VIEW_MODEL.trend, currency: "USD" }),
+    );
+
+    expect(html).toContain('aria-label="Trend summary"');
+    expect(html).toContain("20-day average");
+    expect(html).toContain("Above");
+    expect(html).toContain("200-day average");
+    expect(html).toContain("Below");
+    expect(html).toContain(EQUITY_VIEW_MODEL.trend.sentence);
+  });
+
+  it("omits the trend card when no horizon is computable", () => {
+    expect(
+      renderToStaticMarkup(React.createElement(TrendCard, { trend: { rows: [], sentence: null } })),
+    ).toBe("");
   });
 
   it("renders available key stats as a divided definition list and omits provider placeholders", () => {
@@ -210,11 +467,8 @@ describe("symbol page", () => {
     expect(html).toContain("<dl");
     expect(html).toContain("<dt");
     expect(html).toContain("<dd");
-    expect(html).toContain("md:grid-cols-2");
-    expect(html).toContain("xl:grid-cols-3");
     expect(html).toContain("border-b");
     expect(html).toContain("text-muted-foreground");
-    expect(html).toContain("text-right tabular-nums");
     expect(html).toContain("Forward P/E");
     expect(html).toContain("28.4");
     expect(html).not.toContain("Market cap");
@@ -242,6 +496,30 @@ describe("symbol page", () => {
 
     expect(html).toContain("CAD 3.00B");
     expect(html).not.toContain("$3.00B");
+  });
+
+  it("renders the about card from the company profile and omits it without one", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AboutCard, {
+        overview: {
+          status: "ok",
+          description: "Microsoft develops and supports software and services.",
+          sector: "Technology",
+          industry: "Software",
+          exchange: "NasdaqGS",
+        },
+      }),
+    );
+
+    expect(html).toContain('aria-label="About"');
+    expect(html).toContain("Microsoft develops and supports software and services.");
+    expect(html).toContain("Technology");
+    expect(html).toContain("Software");
+    expect(
+      renderToStaticMarkup(
+        React.createElement(AboutCard, { overview: { status: "ok", description: "" } }),
+      ),
+    ).toBe("");
   });
 
   it("renders populated position, alert, and watchlist context with tabular P&L", () => {
@@ -313,27 +591,26 @@ describe("symbol page", () => {
       ),
     );
 
-    expect(html).toContain("No saved position in MSFT");
+    expect(html).toContain("MSFT is not held.");
+    expect(html).not.toContain("<table");
     expect(html).toContain("No alerts for MSFT yet");
     expect(html).toContain("Add to watchlist");
     expect(html).not.toContain('disabled=""');
   });
 
-  it("templates analyze chips and dispatches a writer click through startChatRun", () => {
+  it("templates action chips and prefills the composer without sending", () => {
     expect(analyzePromptsForSymbol("nvda")).toEqual([
-      ["What is NVDA trading at?", "What is NVDA trading at?"],
-      ["Options chain for NVDA", "Show options chain for NVDA"],
-      ["Deep research: NVDA (multi-analyst, takes a few minutes)", "/analyze NVDA"],
+      ["Deep research (takes a few minutes)", "/analyze NVDA"],
+      ["Options chain", "Show options chain for NVDA"],
+      ["Compare with another asset", "Compare NVDA with "],
+      ["Alert me if it drops 10% in a week", "Alert me if NVDA drops 10% in a week"],
     ]);
-    const startChatRun = vi.fn();
-    const tree = AnalyzePanel({ ticker: "NVDA", role: "writer", startChatRun });
-    const chip = findElementWithText(
-      tree,
-      "Deep research: NVDA (multi-analyst, takes a few minutes)",
-    );
+    const fillComposer = vi.fn();
+    const tree = AnalyzePanel({ ticker: "NVDA", role: "writer", fillComposer });
+    const chip = findElementWithText(tree, "Deep research (takes a few minutes)");
 
     chip.props.onClick();
-    expect(startChatRun).toHaveBeenCalledWith("/analyze NVDA");
+    expect(fillComposer).toHaveBeenCalledWith("/analyze NVDA");
   });
 
   it("keeps follower analysis and mutation labels visible but disabled with neutral copy", () => {
@@ -344,7 +621,7 @@ describe("symbol page", () => {
         React.createElement(AnalyzePanel, {
           ticker: "NVDA",
           role: "follower",
-          startChatRun: vi.fn(),
+          fillComposer: vi.fn(),
         }),
         React.createElement(AlertsCard, {
           ticker: "NVDA",
@@ -361,12 +638,11 @@ describe("symbol page", () => {
       ),
     );
 
-    expect(html).toContain("What is NVDA trading at?");
-    expect(html).toContain("Options chain for NVDA");
-    expect(html).toContain("Deep research: NVDA");
+    expect(html).toContain("Options chain");
+    expect(html).toContain("Deep research");
     expect(html).toContain("Create alert");
     expect(html).toContain("Add to watchlist");
-    expect(html.match(/disabled=""/g)?.length).toBe(5);
+    expect(html.match(/disabled=""/g)?.length).toBe(6);
     expect(html).toContain("Available in the writer window");
     expect(html).toContain("min-h-10");
     expect(html).toContain("active:scale-[0.96]");
@@ -398,22 +674,83 @@ describe("symbol page", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    ["BTC-USD", "Fundamental stats aren&#x27;t available for crypto assets."],
-    ["^GSPC", "Fundamental stats aren&#x27;t available for market indices."],
-  ])("renders %s with an explicit limited-data note", (ticker, note) => {
+  it("fills the desktop canvas with a primary column beside a fixed detail rail", () => {
     const html = renderSymbolPage({
-      ticker,
-      data: okSymbolData(ticker, { overview: { status: "unavailable", reason: "N/A" } }),
+      ticker: "MSFT",
+      data: { ...okSymbolData("MSFT"), ...deriveSymbolContext(STATE, "MSFT") },
     });
 
-    expect(html).toContain(ticker);
+    expect(html).toContain('data-slot="detail-rail-layout"');
+    expect(html).toContain('data-slot="detail-rail"');
+    expect(html).not.toContain("max-w-[1120px]");
+    expect(html.match(/<main/g)).toHaveLength(1);
+    expect(html.match(/<h1/g)).toHaveLength(1);
+  });
+
+  it("stacks hero, chart, position, key levels, stats, and about below the rail breakpoint", () => {
+    const html = renderSymbolPage({
+      ticker: "MSFT",
+      data: { ...okSymbolData("MSFT"), ...deriveSymbolContext(STATE, "MSFT") },
+    });
+    const stacked = html.slice(0, html.indexOf('data-slot="detail-rail"'));
+    const labels = ["Symbol quote", "Price chart", "Position", "Key levels", "Key stats", "About"];
+    const indices = labels.map((label) => stacked.indexOf(`aria-label="${label}"`));
+
+    for (const index of indices) expect(index).toBeGreaterThan(-1);
+    expect(indices).toEqual([...indices].sort((a, b) => a - b));
+    expect(html.match(/<main[^>]*overflow-x-auto/g)).toBeNull();
+    expect(html).not.toContain("min-w-[560px]");
+  });
+
+  it("keeps the rail cards out of the flow below the rail breakpoint", () => {
+    const html = renderSymbolPage({
+      ticker: "MSFT",
+      data: { ...okSymbolData("MSFT"), ...deriveSymbolContext(STATE, "MSFT") },
+    });
+    const rail = html.slice(html.indexOf('data-slot="detail-rail"'));
+
+    for (const label of ["Key levels", "Trend summary", "Position", "Alerts", "Analyze"]) {
+      expect(rail).toContain(`aria-label="${label}"`);
+    }
+    expect(html.match(/data-slot="symbol-stacked-rail"/g)).toHaveLength(2);
+    expect(html).toContain('data-slot="symbol-stacked-rail" class="xl:hidden');
+  });
+
+  it("omits equity-only sections for a crypto instrument instead of emptying them", () => {
+    const html = renderSymbolPage({
+      ticker: "BTC-USD",
+      data: {
+        ...okSymbolData("BTC-USD", { overview: { status: "unavailable", reason: "N/A" } }),
+        descriptor: assetDescriptor("crypto"),
+      },
+    });
+
     expect(html).toContain('data-slot="test-chart"');
     expect(html).not.toContain('aria-label="Key stats"');
-    expect(html).toContain('aria-label="Fundamental data availability"');
-    expect(html).toContain(note);
-    expect(html).not.toContain('aria-label="Position"');
+    expect(html).not.toContain('aria-label="About"');
+    expect(html).toContain("Fundamental stats are not available for crypto assets.");
+    expect(html).toContain('aria-label="Position"');
+    expect(html).toContain('aria-label="Key levels"');
+  });
+
+  it("keeps an unresolved instrument to quote, chart, and saved context", () => {
+    const html = renderSymbolPage({
+      ticker: "ZZ=F",
+      data: {
+        ...okSymbolData("ZZ=F", { overview: { status: "unavailable", reason: "N/A" } }),
+        descriptor: assetDescriptor("unknown"),
+      },
+    });
+
+    expect(html).toContain('data-slot="test-chart"');
+    expect(html).toContain("Further detail is not available for this instrument.");
+    expect(html).not.toContain('aria-label="Key stats"');
+    expect(html).not.toContain('aria-label="Key levels"');
+    expect(html).not.toContain('aria-label="Trend summary"');
     expect(html).not.toContain('aria-label="Analyze"');
+    expect(html).toContain('aria-label="Position"');
+    expect(html).toContain('aria-label="Alerts"');
+    expect(html).toContain('aria-label="Watchlist membership"');
   });
 
   it("renders a named not-found state when quote and overview are unavailable", () => {
@@ -468,25 +805,7 @@ describe("symbol page", () => {
     expect(html).toContain('data-slot="test-chart"');
   });
 
-  it("assembles one-main, one-heading equity sections in the fixed order", () => {
-    const context = deriveSymbolContext(STATE, "MSFT");
-    const html = renderSymbolPage({
-      ticker: "MSFT",
-      data: { ...okSymbolData("MSFT"), ...context },
-    });
-
-    expect(html.match(/<main/g)).toHaveLength(1);
-    expect(html.match(/<h1/g)).toHaveLength(1);
-    const labels = ["Symbol quote", "Price chart", "Key stats", "Position", "Alerts", "Analyze"];
-    for (const label of labels) expect(html).toContain(`aria-label="${label}"`);
-    const indices = labels.map((label) => html.indexOf(`aria-label="${label}"`));
-    expect(indices).toEqual([...indices].sort((a, b) => a - b));
-    expect(html).toContain('aria-label="Watchlist membership"');
-    expect(html).not.toContain("min-w-[560px]");
-    expect(html.match(/<main[^>]*overflow-x-auto/g)).toBeNull();
-  });
-
-  it("renders stable header, chart, and stats skeleton blocks on initial load", () => {
+  it("renders stable hero, chart, and stats skeleton blocks on initial load", () => {
     const html = renderSymbolPage({
       ticker: "MSFT",
       data: {
@@ -497,30 +816,38 @@ describe("symbol page", () => {
         quoteLoading: true,
         overviewLoading: true,
         historyLoading: true,
+        viewModel: EMPTY_VIEW_MODEL,
+        viewModelLoading: true,
       },
     });
 
-    expect(html).toContain('data-slot="symbol-header-skeleton"');
+    expect(html).toContain('data-slot="symbol-hero-skeleton"');
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).toContain("Loading MSFT</h1>");
     expect(html).toContain('data-slot="symbol-chart-skeleton"');
     expect(html).toContain('data-slot="symbol-stats-skeleton"');
+    expect(html).toContain('data-slot="symbol-levels-skeleton"');
+    expect(html).toContain("motion-reduce:animate-none");
     expect(html).not.toContain("animate-in");
     expect(html).not.toContain("fade-in");
   });
 
   it("uses the existing degraded quote badge and price-flash class without fresh quote chrome", () => {
     const fresh = renderToStaticMarkup(
-      React.createElement(SymbolHeader, {
+      React.createElement(SymbolHero, {
         ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
         overview: { status: "ok", name: "Microsoft" },
         quote: okSymbolData("MSFT").quote,
         flashClass: "transition-colors bg-success/[0.08]",
       }),
     );
     const stale = renderToStaticMarkup(
-      React.createElement(SymbolHeader, {
+      React.createElement(SymbolHero, {
         ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
         overview: { status: "ok", name: "Microsoft" },
         quote: {
           ...okSymbolData("MSFT").quote,
@@ -533,6 +860,16 @@ describe("symbol page", () => {
     expect(fresh).not.toMatch(/Quotes \d+m old/);
     expect(stale).toContain("Quotes 20m old");
   });
+
+  it("keeps every user-visible symbol string free of em dashes", () => {
+    const html = renderSymbolPage({
+      ticker: "MSFT",
+      data: { ...okSymbolData("MSFT"), ...deriveSymbolContext(STATE, "MSFT") },
+    });
+
+    expect(html).not.toContain("—");
+    expect(html).not.toContain("&mdash;");
+  });
 });
 
 function renderSymbolPage({ ticker, data }) {
@@ -543,7 +880,7 @@ function renderSymbolPage({ ticker, data }) {
       range: "1M",
       onRangeChange: vi.fn(),
       role: "writer",
-      startChatRun: vi.fn(),
+      fillComposer: vi.fn(),
       ChartComponent: TestChart,
     }),
   );
@@ -553,25 +890,33 @@ function TestChart({ range }) {
   return React.createElement("div", { "data-slot": "test-chart" }, `Chart ${range}`);
 }
 
+function okQuote(ticker) {
+  return {
+    symbol: ticker,
+    status: "ok",
+    name: ticker === "MSFT" ? "Microsoft Corporation" : ticker,
+    price: 420.5,
+    change: 2.5,
+    changePercent: 0.6,
+    currency: "USD",
+    marketState: "REGULAR",
+    previousClose: 418,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 function okSymbolData(ticker, overrides = {}) {
   return {
     symbol: ticker,
-    quote: {
-      symbol: ticker,
-      status: "ok",
-      name: ticker === "MSFT" ? "Microsoft Corporation" : ticker,
-      price: 420.5,
-      change: 2.5,
-      changePercent: 0.6,
-      currency: "USD",
-      marketState: "REGULAR",
-      previousClose: 418,
-      fetchedAt: new Date().toISOString(),
-    },
+    quote: okQuote(ticker),
     overview: {
       symbol: ticker,
       status: "ok",
       name: ticker === "MSFT" ? "Microsoft Corporation" : ticker,
+      description: "A company that makes things.",
+      exchange: "NasdaqGS",
+      sector: "Technology",
+      industry: "Software",
       marketCap: 3_100_000_000_000,
       pe: 36.5,
       forwardPe: 28.4,
@@ -583,12 +928,18 @@ function okSymbolData(ticker, overrides = {}) {
       range: "1M",
       bars: [{ time: 1_784_204_100, open: 418, high: 422, low: 417, close: 420.5 }],
     },
+    descriptor: assetDescriptor("stock"),
+    viewModel: EQUITY_VIEW_MODEL,
+    derivedHistory: null,
+    instrument: null,
     positionRows: [],
     alertRows: [],
     memberships: [],
     quoteLoading: false,
     overviewLoading: false,
     historyLoading: false,
+    viewModelLoading: false,
+    assetTypeLoading: false,
     refresh: vi.fn(),
     refreshQuotes: vi.fn(),
     ...overrides,

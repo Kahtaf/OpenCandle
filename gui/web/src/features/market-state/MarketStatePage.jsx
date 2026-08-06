@@ -134,9 +134,19 @@ export async function invokeMarketStateMutation({
   }
 }
 
+// A level handed over in the URL only opens the sheet on a threshold the sheet
+// would itself accept. Anything else is dropped and the sheet falls back to its
+// own quote prefill rather than opening on a level nobody can save.
+export function alertThresholdFromLink(value) {
+  const level = Number(String(value ?? "").trim());
+  if (!Number.isFinite(level) || level <= 0) return undefined;
+  return alertThresholdPrefill(level) || undefined;
+}
+
 export function MarketStatePage({
   domain,
   alertSymbol,
+  alertThreshold,
   role,
   invokeTool: invokeToolRequest,
   navigate,
@@ -156,7 +166,13 @@ export function MarketStatePage({
   const [filter, setFilter] = useState("");
   const [panel, setPanel] = useState(() =>
     domain === "alerts" && alertSymbol
-      ? { type: "alert-create", data: { symbol: alertSymbol.trim().toUpperCase() } }
+      ? {
+          type: "alert-create",
+          data: {
+            symbol: alertSymbol.trim().toUpperCase(),
+            threshold: alertThresholdFromLink(alertThreshold),
+          },
+        }
       : null,
   );
   const [pendingMutation, setPendingMutation] = useState(null);
@@ -495,6 +511,7 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
         invokeTool={invokeTool}
         onSaved={closePanel}
         symbol={panel.data?.symbol}
+        threshold={panel.data?.threshold}
         navigate={navigate}
       />
     );
@@ -1349,7 +1366,15 @@ export function isAlertDraftValid(draft, fields) {
   return true;
 }
 
-export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, navigate }) {
+export function AlertCreateForm({
+  disabled,
+  invokeTool,
+  onSaved,
+  alert,
+  symbol,
+  threshold: initialThreshold,
+  navigate,
+}) {
   const transport = useRuntimeTransport();
   const conditionId = useId();
   const thresholdId = useId();
@@ -1358,7 +1383,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol, 
   const slowPeriodId = useId();
   const cooldownId = useId();
   const isEditing = Boolean(alert);
-  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
+  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol, initialThreshold));
   const [quote, setQuote] = useState(null);
   const [pending, setPending] = useState(false);
   const unverifiedExactRef = useRef(false);
@@ -1639,14 +1664,19 @@ function panelTitle(type) {
   };
   return titles[type] || "Details";
 }
-function initialAlertDraft(alert, symbol) {
+function initialAlertDraft(alert, symbol, initialThreshold) {
   const condition = alert ? conditionActionFromAlert(alert) : "create_price_above";
   const conditionJson =
     alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
   return {
     query: symbol ?? "",
     selected: symbol ?? "",
-    threshold: alertThresholdValue(condition, conditionJson),
+    // A level chosen elsewhere (a key level on the symbol page) opens the form
+    // on that level. It is not recorded as a quote prefill, so the quote that
+    // arrives moments later leaves it alone.
+    threshold: alert
+      ? alertThresholdValue(condition, conditionJson)
+      : (initialThreshold ?? alertThresholdValue(condition, conditionJson)),
     condition,
     period: alertPeriodValue(condition, conditionJson),
     fast_period: stringifyDraftValue(conditionJson.fast_period ?? 50),
