@@ -250,14 +250,17 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     await expectVisible(manageKeys);
     await manageKeys.click();
 
-    // Manage-keys opens straight on the provider choice, one option per
-    // supported model provider, each leading to its own key form.
-    const dialog = page.getByRole("dialog");
+    // Manage-keys lands on Settings -> Model, which opens straight on the
+    // provider choice: one option per supported model provider, each leading
+    // to its own key form.
+    await page.waitForURL(/\/settings\/model$/);
+    const modelSection = page.locator('[data-slot="model-section"]');
+    await expectVisible(modelSection);
     await expect(
-      dialog.locator('[data-slot="provider-option"]').count(),
+      modelSection.locator('[data-slot="provider-option"]').count(),
     ).resolves.toBeGreaterThanOrEqual(3);
-    await dialog.getByRole("button", { name: /^OpenAI/ }).click();
-    await expectVisible(dialog.getByRole("textbox", { name: "API key" }));
+    await modelSection.getByRole("button", { name: /^OpenAI/ }).click();
+    await expectVisible(modelSection.getByRole("textbox", { name: "API key" }));
   });
 });
 

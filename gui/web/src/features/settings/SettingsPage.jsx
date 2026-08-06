@@ -7,7 +7,13 @@ import { settingsSectionList } from "./section-registry.jsx";
 export function SettingsPage({
   section = DEFAULT_SETTINGS_SECTION,
   role,
+  modelSetup,
+  catalog,
+  focusProvider,
+  send,
   setToast,
+  onOpenProviders,
+  onOpenModelSetup,
   onOpenSidebar,
   onOpenHome,
   sidebarCollapsed = false,
@@ -41,7 +47,17 @@ export function SettingsPage({
                 </p>
               </div>
               <div className="mt-3 min-w-0" data-slot="settings-section" data-section={active.slug}>
-                <SectionBody section={active} role={role} setToast={setToast} />
+                <SectionBody
+                  section={active}
+                  role={role}
+                  modelSetup={modelSetup}
+                  catalog={catalog}
+                  focusProvider={focusProvider}
+                  send={send}
+                  setToast={setToast}
+                  onOpenProviders={onOpenProviders}
+                  onOpenModelSetup={onOpenModelSetup}
+                />
               </div>
             </div>
           </div>

@@ -32,14 +32,14 @@ vi.mock("../../../gui/web/src/components/ui/alert-dialog.jsx", async () => {
 });
 
 import {
-  DiagnosticsPage,
+  DiagnosticsContent,
   SessionCheckDialog,
 } from "../../../gui/web/src/features/diagnostics/DiagnosticsPage.jsx";
 
-describe("DiagnosticsPage rendering", () => {
+describe("DiagnosticsContent rendering", () => {
   it("renders report sections and remediation actions", () => {
     const html = renderToStaticMarkup(
-      React.createElement(DiagnosticsPage, {
+      React.createElement(DiagnosticsContent, {
         role: "writer",
         dataQuality: { hardSkips: [{ provider: "fred" }], softGaps: [] },
         initialReport: {
@@ -116,7 +116,7 @@ describe("DiagnosticsPage rendering", () => {
       }),
     );
 
-    expect(html).toContain("Diagnostics");
+    expect(html).toContain("OpenCandle is usable with degraded capabilities.");
     expect(html).toContain("Runtime");
     expect(html).toContain("Model");
     expect(html).toContain("Providers");
@@ -130,6 +130,8 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("rounded-xl");
     expect(html).toContain("text-balance");
     expect(html).toContain("tabular-nums");
+    // The report is a settings section now: the page frame belongs to the shell.
+    expect(html).not.toContain("<main");
     expect(html).toContain("TradingView Lightweight Charts");
     expect(html).toContain("Copyright (c) 2025 TradingView, Inc.");
     expect(html).toContain("https://www.tradingview.com/");
@@ -155,7 +157,7 @@ describe("DiagnosticsPage rendering", () => {
 
   it("renders unknown-only checks as ready grouped rows with neutral zero counts", () => {
     const html = renderToStaticMarkup(
-      React.createElement(DiagnosticsPage, {
+      React.createElement(DiagnosticsContent, {
         role: "writer",
         initialReport: {
           schemaVersion: 1,
@@ -197,7 +199,7 @@ describe("DiagnosticsPage rendering", () => {
 
   it("does not show local reconnect or browser-cookie controls to hosted followers", () => {
     const html = renderToStaticMarkup(
-      React.createElement(DiagnosticsPage, {
+      React.createElement(DiagnosticsContent, {
         role: "follower",
         initialReport: {
           runtime: "hosted-web",

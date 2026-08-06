@@ -1,20 +1,4 @@
-import {
-  ArrowRight,
-  ChevronLeft,
-  Clipboard,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Globe2,
-  KeyRound,
-  Play,
-  RefreshCw,
-  Search,
-  Sparkles,
-  Terminal,
-  Wrench,
-  X,
-} from "lucide-react";
+import { ArrowRight, ChevronLeft, Play, Search, Sparkles, Wrench, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
@@ -26,7 +10,6 @@ import {
   CommandItem,
   CommandList,
 } from "../../components/ui/command.jsx";
-import { Input } from "../../components/ui/input.jsx";
 import { Kbd } from "../../components/ui/kbd.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { cn } from "../../lib/utils.js";
@@ -39,7 +22,6 @@ import { schemaForWorkflow } from "./workflow-schemas.js";
 const TABS = [
   { id: "workflows", label: "Workflows", icon: Sparkles },
   { id: "tools", label: "Tools", icon: Wrench },
-  { id: "providers", label: "Providers", icon: KeyRound },
 ];
 
 const INITIAL_TAB = "workflows";
@@ -47,10 +29,8 @@ const INITIAL_TAB = "workflows";
 export function CatalogOverlay({
   open,
   initialTab,
-  initialProviderId,
   catalog,
   onClose,
-  send,
   setToast,
   startChatRun,
   invokeTool,
@@ -58,12 +38,11 @@ export function CatalogOverlay({
   sessionId,
 }) {
   const activeInitialTab = initialTab ?? INITIAL_TAB;
-  const initialSelection = initialProviderId ? { kind: "provider", id: initialProviderId } : null;
-  const openStateKey = open ? `open:${activeInitialTab}:${initialProviderId || ""}` : "closed";
+  const openStateKey = open ? `open:${activeInitialTab}` : "closed";
   const [lastOpenStateKey, setLastOpenStateKey] = useState(openStateKey);
   const [tab, setTab] = useState(activeInitialTab);
   const [query, setQuery] = useState("");
-  const [selection, setSelection] = useState(initialSelection); // { kind: 'tool'|'workflow'|'provider', id }
+  const [selection, setSelection] = useState(null); // { kind: 'tool'|'workflow', id }
   // Body container ref so we can rewind scrollTop when the user pushes/pops
   // between list and builder views — otherwise a list scroll position carries
   // over and hides the builder header on mobile.
@@ -74,7 +53,7 @@ export function CatalogOverlay({
     if (open) {
       setTab(activeInitialTab);
       setQuery("");
-      setSelection(initialSelection);
+      setSelection(null);
     }
   }
 
@@ -116,7 +95,6 @@ export function CatalogOverlay({
               <BuilderBody
                 selection={selection}
                 catalog={catalog}
-                send={send}
                 setToast={setToast}
                 startChatRun={startChatRun}
                 invokeTool={invokeTool}
@@ -209,7 +187,6 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
 
 function searchPlaceholder(tab) {
   if (tab === "workflows") return "Search workflows";
-  if (tab === "providers") return "Search providers";
   return "Search tools by name, label, or domain";
 }
 
@@ -232,7 +209,6 @@ export function CatalogList({
         counts={{
           workflows: catalog?.workflows?.length ?? 0,
           tools: catalog?.tools?.length ?? 0,
-          providers: catalog?.providers?.length ?? 0,
         }}
       />
       <CommandList ref={bodyRef} className="min-h-0 !max-h-none flex-1 overscroll-contain">
@@ -268,24 +244,6 @@ function ListBody({ tab, query, catalog, onSelect }) {
       <div className="grid divide-y divide-border">
         {workflows.map((workflow) => (
           <WorkflowRow key={workflow.id} workflow={workflow} onSelect={onSelect} />
-        ))}
-      </div>
-    );
-  }
-
-  if (tab === "providers") {
-    const providers = filterProviders(catalog?.providers ?? [], query);
-    if (providers.length === 0) {
-      return (
-        <CommandEmpty>
-          <EmptyState query={query} kind="providers" />
-        </CommandEmpty>
-      );
-    }
-    return (
-      <div className="grid divide-y divide-border">
-        {providers.map((provider) => (
-          <ProviderRow key={provider.id} provider={provider} onSelect={onSelect} />
         ))}
       </div>
     );
@@ -393,34 +351,6 @@ function ToolRow({ tool, onSelect }) {
   );
 }
 
-function ProviderRow({ provider, onSelect }) {
-  const status = providerStatus(provider);
-  const Icon = providerIcon(provider);
-  return (
-    <CommandItem
-      value={`provider:${provider.id}`}
-      onSelect={() => onSelect({ kind: "provider", id: provider.id })}
-      className="group w-full items-start gap-3 rounded-none px-4 py-3 text-left hover:bg-secondary"
-    >
-      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{provider.displayName}</span>
-          <ProviderStatusDot status={status} />
-          <span className={cn("text-[11px]", statusColor(status))}>{statusLabel(status)}</span>
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-          {(provider.unlocks || []).join(" · ")}
-        </p>
-      </div>
-      <ArrowRight
-        aria-hidden="true"
-        className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-      />
-    </CommandItem>
-  );
-}
-
 function EmptyState({ query, kind }) {
   return (
     <div className="grid gap-2 p-12 text-center">
@@ -443,7 +373,6 @@ function EmptyState({ query, kind }) {
 
 function BuilderHeader({ selection, catalog, onBack }) {
   const entity = resolveSelection(selection, catalog);
-  const ProviderIcon = selection.kind === "provider" && entity ? providerIcon(entity) : KeyRound;
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2 sm:px-4">
       <Button variant="ghost" size="icon-sm" aria-label="Back to catalog" onClick={onBack}>
@@ -455,9 +384,6 @@ function BuilderHeader({ selection, catalog, onBack }) {
         ) : null}
         {selection.kind === "tool" ? (
           <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        ) : null}
-        {selection.kind === "provider" ? (
-          <ProviderIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         ) : null}
         <h2 className="truncate text-sm font-semibold text-foreground">
           {builderTitle(selection, entity)}
@@ -475,7 +401,6 @@ function BuilderHeader({ selection, catalog, onBack }) {
 function BuilderBody({
   selection,
   catalog,
-  send,
   setToast,
   startChatRun,
   invokeTool,
@@ -526,11 +451,11 @@ function BuilderBody({
       />
     );
   }
-  return <ProviderBuilder provider={entity} send={send} setToast={setToast} />;
+  return null;
 }
 
 function catalogHasEntries(catalog) {
-  return [catalog?.workflows, catalog?.tools, catalog?.providers].some(
+  return [catalog?.workflows, catalog?.tools].some(
     (entries) => Array.isArray(entries) && entries.length > 0,
   );
 }
@@ -754,288 +679,6 @@ function ToolBuilder({
   );
 }
 
-function ProviderBuilder({ provider, send, setToast }) {
-  if (provider.kind === "external-tool") {
-    return <ExternalToolProviderBuilder provider={provider} send={send} setToast={setToast} />;
-  }
-  if (provider.kind === "public-http") {
-    return <PublicHttpProviderBuilder provider={provider} send={send} setToast={setToast} />;
-  }
-  return <ApiKeyProviderBuilder provider={provider} send={send} setToast={setToast} />;
-}
-
-function ApiKeyProviderBuilder({ provider, send, setToast }) {
-  const providerStateKey = `${provider.id}:${provider.status || ""}`;
-  const [lastProviderStateKey, setLastProviderStateKey] = useState(providerStateKey);
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const status = providerStatus(provider);
-  const envBlocked = status === "env";
-  const trimmed = apiKey.trim();
-  const canSave = !envBlocked && trimmed.length > 0;
-
-  if (lastProviderStateKey !== providerStateKey) {
-    setLastProviderStateKey(providerStateKey);
-    setApiKey("");
-    setShowApiKey(false);
-  }
-
-  const save = () => {
-    if (envBlocked) {
-      setToast?.(
-        `${provider.displayName} is set via ${provider.envVar}. Unset it to override here.`,
-      );
-      return;
-    }
-    if (!trimmed) return;
-    setToast?.(`Verifying ${provider.displayName} key…`);
-    if (send?.("provider.save_api_key", { providerId: provider.id, apiKey: trimmed })) {
-      setApiKey("");
-    }
-  };
-
-  return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
-      <div className="grid gap-1.5">
-        <div className="flex items-center gap-2">
-          <ProviderStatusDot status={status} />
-          <span className={cn("text-xs font-medium", statusColor(status))}>
-            {statusLabel(status)}
-          </span>
-          {envBlocked ? (
-            <code className="text-[11px] text-muted-foreground">env: {provider.envVar}</code>
-          ) : null}
-        </div>
-        <p className="text-sm leading-5 text-muted-foreground">
-          {provider.fallbackDescription ? (
-            <>If absent: {provider.fallbackDescription}.</>
-          ) : (
-            <>Required for: {(provider.unlocks || []).join(", ") || "this provider's tools"}.</>
-          )}
-        </p>
-      </div>
-
-      <div className="grid gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Unlocks
-        </span>
-        <ul className="grid gap-1">
-          {(provider.unlocks || []).map((entry) => (
-            <li key={entry} className="flex items-baseline gap-2 text-sm text-foreground">
-              <span aria-hidden="true" className="mt-1 h-1 w-1 rounded-full bg-foreground/40" />
-              <span>{entry}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="grid gap-2">
-        <label
-          htmlFor={`provider-api-key-${provider.id}`}
-          className="text-xs font-medium text-foreground"
-        >
-          API key
-        </label>
-        <div className="relative">
-          <Input
-            id={`provider-api-key-${provider.id}`}
-            type={showApiKey ? "text" : "password"}
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={`Paste your ${provider.displayName} key`}
-            disabled={envBlocked}
-            className="pr-10 font-mono"
-            autoCapitalize="none"
-            autoComplete="off"
-            spellCheck={false}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && canSave) {
-                event.preventDefault();
-                save();
-              }
-            }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="absolute right-1 top-1/2 -translate-y-1/2"
-            aria-label={showApiKey ? "Hide API key" : "Show API key"}
-            tooltip={showApiKey ? "Hide API key" : "Show API key"}
-            onClick={() => setShowApiKey((showing) => !showing)}
-            disabled={!apiKey}
-          >
-            {showApiKey ? <EyeOff /> : <Eye />}
-          </Button>
-        </div>
-        <p className="text-[11px] leading-4 text-muted-foreground">
-          {envBlocked
-            ? `Currently set via ${provider.envVar}. Unset that variable to manage the key here.`
-            : status === "file"
-              ? `${provider.hosted ? "Saved only in this browser" : "Saved to ~/.opencandle/config.json"}${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
-              : provider.instructionsHint || "Saved to ~/.opencandle/config.json."}
-        </p>
-      </div>
-
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        {provider.signupUrl ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            suffixIcon={ExternalLink}
-            onClick={() => window.open(provider.signupUrl, "_blank", "noreferrer")}
-          >
-            Get a key
-          </Button>
-        ) : null}
-        <Button variant="brand" size="sm" onClick={save} disabled={!canSave}>
-          {status === "file" ? "Replace key" : "Save key"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ExternalToolProviderBuilder({ provider, send, setToast }) {
-  const status = providerStatus(provider);
-  const detail = provider.statusDetail;
-  const reenable = status === "skipped";
-
-  const checkInstall = () => {
-    setToast?.(
-      reenable
-        ? `Re-enabling ${provider.displayName} and checking install status...`
-        : `Checking ${provider.displayName} install status...`,
-    );
-    send?.("provider.status.check", { providerId: provider.id, mode: "install", reenable });
-  };
-  const checkSession = () => {
-    setToast?.(
-      reenable
-        ? `Re-enabling ${provider.displayName} and checking session. This may read browser cookies and trigger a Keychain prompt.`
-        : `Checking ${provider.displayName} session. This may read browser cookies and trigger a Keychain prompt.`,
-    );
-    send?.("provider.status.check", { providerId: provider.id, mode: "session", reenable });
-  };
-  const copyInstall = () => {
-    void navigator.clipboard?.writeText?.(provider.installCmd);
-    setToast?.("Install command copied.");
-  };
-
-  return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
-      <div className="grid gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <ProviderStatusDot status={status} />
-          <span className={cn("text-xs font-medium", statusColor(status))}>
-            {statusLabel(status)}
-          </span>
-          {detail?.checkedAt ? (
-            <span className="text-[11px] text-muted-foreground">
-              Checked {formatRelativeTime(detail.checkedAt)}
-            </span>
-          ) : null}
-        </div>
-        <p className="text-sm leading-5 text-muted-foreground">{provider.fallbackDescription}</p>
-      </div>
-
-      <div className="grid gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Install
-        </span>
-        <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2">
-          <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-foreground">
-            {provider.installCmd}
-          </code>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Copy install command"
-            tooltip="Copy install command"
-            onClick={copyInstall}
-          >
-            <Clipboard />
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Session source
-        </span>
-        <p className="text-sm leading-5 text-muted-foreground">
-          Uses your normal browser session. Supported browsers:{" "}
-          {(provider.supportedBrowsers || []).join(", ") || "Chrome, Arc, Edge, Firefox, Brave"}.
-        </p>
-        {detail?.message ? (
-          <p className="rounded-md border border-border bg-secondary px-3 py-2 text-xs leading-5 text-muted-foreground">
-            {detail.message}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="bordered" size="sm" prefixIcon={RefreshCw} onClick={checkInstall}>
-          {reenable ? "Re-enable & check install" : "Check install"}
-        </Button>
-        <Button variant="brand" size="sm" onClick={checkSession}>
-          {reenable ? "Re-enable & check session" : "Check session"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PublicHttpProviderBuilder({ provider, send, setToast }) {
-  const status = providerStatus(provider);
-  const detail = provider.statusDetail;
-  const checkReachability = () => {
-    setToast?.(`Checking ${provider.displayName} reachability...`);
-    send?.("provider.status.check", { providerId: provider.id });
-  };
-
-  return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
-      <div className="grid gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <ProviderStatusDot status={status} />
-          <span className={cn("text-xs font-medium", statusColor(status))}>
-            {statusLabel(status)}
-          </span>
-          {detail?.checkedAt ? (
-            <span className="text-[11px] text-muted-foreground">
-              Checked {formatRelativeTime(detail.checkedAt)}
-            </span>
-          ) : null}
-        </div>
-        <p className="text-sm leading-5 text-muted-foreground">
-          {provider.fallbackDescription || "No account or API key is required."}
-        </p>
-      </div>
-
-      <div className="grid gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Probe
-        </span>
-        <code className="overflow-x-auto rounded-md border border-border bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
-          {provider.probeUrl}
-        </code>
-        {detail?.message ? (
-          <p className="text-xs leading-5 text-muted-foreground">{detail.message}</p>
-        ) : null}
-      </div>
-
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="brand" size="sm" prefixIcon={RefreshCw} onClick={checkReachability}>
-          Check reachability
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function PromptPreview({ prompt, title = "Chat prompt" }) {
   return (
     <div className="grid gap-1.5">
@@ -1058,8 +701,6 @@ function resolveSelection(selection, catalog) {
   if (selection.kind === "workflow")
     return catalog.workflows?.find((w) => w.id === selection.id) ?? null;
   if (selection.kind === "tool") return catalog.tools?.find((t) => t.name === selection.id) ?? null;
-  if (selection.kind === "provider")
-    return catalog.providers?.find((p) => p.id === selection.id) ?? null;
   return null;
 }
 
@@ -1067,7 +708,6 @@ function builderTitle(selection, entity) {
   if (!entity) return "Catalog";
   if (selection.kind === "workflow") return entity.name;
   if (selection.kind === "tool") return entity.label || prettyToolName(entity.name);
-  if (selection.kind === "provider") return entity.displayName;
   return "Catalog";
 }
 
@@ -1144,28 +784,6 @@ function filterWorkflows(workflows, query) {
   );
 }
 
-function filterProviders(providers, query) {
-  if (!query.trim()) return providers;
-  const q = query.toLowerCase();
-  return providers.filter((provider) =>
-    [
-      provider.id,
-      provider.kind,
-      provider.displayName,
-      provider.envVar,
-      provider.binary,
-      provider.installCmd,
-      provider.probeUrl,
-      ...(provider.aliases || []),
-      ...(provider.unlocks || []),
-    ].some((field) =>
-      String(field || "")
-        .toLowerCase()
-        .includes(q),
-    ),
-  );
-}
-
 function groupBy(items, keyFn) {
   const map = new Map();
   for (const item of items) {
@@ -1174,66 +792,4 @@ function groupBy(items, keyFn) {
     map.get(key).push(item);
   }
   return map;
-}
-
-function providerStatus(provider) {
-  return provider.statusDetail?.state ?? provider.status ?? provider.source ?? "absent";
-}
-
-function providerIcon(provider) {
-  if (provider.kind === "external-tool") return Terminal;
-  if (provider.kind === "public-http") return Globe2;
-  return KeyRound;
-}
-
-function ProviderStatusDot({ status }) {
-  const cls = successStatuses.has(status)
-    ? "bg-success"
-    : infoStatuses.has(status)
-      ? "bg-info"
-      : dangerStatuses.has(status)
-        ? "bg-destructive"
-        : "bg-warning";
-  return <span aria-hidden="true" className={cn("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
-}
-
-function statusLabel(status) {
-  if (status === "configured") return "Configured";
-  if (status === "file") return "Configured";
-  if (status === "env") return "From environment";
-  if (status === "installed") return "Installed";
-  if (status === "missing") return "Missing";
-  if (status === "session_ok") return "Session ready";
-  if (status === "session_missing") return "Login needed";
-  if (status === "session_stale") return "Session stale";
-  if (status === "skipped") return "Skipped";
-  if (status === "reachable") return "Reachable";
-  if (status === "unreachable") return "Unreachable";
-  if (status === "error") return "Needs attention";
-  if (status === "unknown") return "Not verified yet";
-  return "Not configured";
-}
-
-function statusColor(status) {
-  if (successStatuses.has(status)) return "text-success";
-  if (infoStatuses.has(status)) return "text-info";
-  if (dangerStatuses.has(status)) return "text-destructive";
-  return "text-warning";
-}
-
-const successStatuses = new Set(["configured", "file", "installed", "session_ok", "reachable"]);
-const infoStatuses = new Set(["env", "skipped"]);
-const dangerStatuses = new Set(["error", "unreachable"]);
-
-function formatRelativeTime(value) {
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) return "just now";
-  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
 }
