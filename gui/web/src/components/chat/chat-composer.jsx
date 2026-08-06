@@ -29,7 +29,6 @@ export function ChatComposer({
   onStop,
   onOpenCatalog,
   modelSetup,
-  role,
   send,
   setToast,
   pendingAttachments = EMPTY_ATTACHMENTS,
@@ -38,6 +37,7 @@ export function ChatComposer({
   watchlists,
   onAddAttachment,
   onRemoveAttachment,
+  onManageModelKeys,
 }) {
   const imageCount = pendingAttachments.filter((attachment) => attachment.kind === "image").length;
   const textareaRef = useRef(null);
@@ -131,10 +131,9 @@ export function ChatComposer({
           <div className="[&>div>button]:h-10 [&>div>button]:min-h-10 md:[&>div>button]:h-7 md:[&>div>button]:min-h-0">
             <ModelSelector
               modelSetup={modelSetup}
-              role={role}
               send={send}
-              setToast={setToast}
               disabled={disabled}
+              onManageKeys={onManageModelKeys}
             />
           </div>
           {attachmentsEnabled ? (

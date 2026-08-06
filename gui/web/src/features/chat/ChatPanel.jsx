@@ -309,7 +309,6 @@ export function ChatPanel({
       onStop={stop}
       onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
       modelSetup={modelSetup}
-      role={role}
       send={send}
       setToast={setToast}
       pendingAttachments={pendingAttachments}
@@ -318,6 +317,7 @@ export function ChatPanel({
       watchlists={marketState.state?.watchlists}
       onAddAttachment={addAttachment}
       onRemoveAttachment={removeAttachment}
+      onManageModelKeys={onOpenModelSetup}
     />
   );
 
