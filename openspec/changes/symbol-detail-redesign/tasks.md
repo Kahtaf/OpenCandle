@@ -207,7 +207,80 @@ must be verified live (1440px and 390px), including a crypto and an FX symbol.
       route of the app, unrelated to this page. FX prices print at
       `financial-format.js`'s fixed two decimals ("$1.16"), which is the rounding rule D3
       pins and what the watchlist already does.
-- [ ] 4.4 Autoreview (`npm run review:pr` range mode over the change commits); fix findings.
+- [x] 4.4 Autoreview (`npm run review:pr` range mode over the change commits); fix findings.
+      2026-08-06: VERDICT "patch is correct" (0.86), zero findings, over
+      `8120b6e5..a0e07895`. Five passes with the repo autoreview
+      (`--mode range --base <sha> --head <sha> --prompt-file
+      .agents/skills/autoreview/references/opencandle-review.md`, codex engine, React
+      Doctor scoped to the ten changed React files). Passing resolved SHAs matters: the
+      React Doctor integration rejects a `^`-suffixed base ref. Seven findings in total,
+      six fixed and one recorded below. Each fix was written test first, and `npm run
+      gates` was rerun green (`exit=0`) after every one.
+      PASS 1 (`..53aa33fe`), 2 findings, "patch is incorrect".
+      P1 stale history, FIXED in `a7b40f57`: the horizon returns, the volume multiple,
+      the key levels and the trend summary all read one daily series that the history
+      endpoint can serve `stale: true` from a retained copy, and the page printed them
+      with no sign of it under "Calculated from recent price action.". The view model now
+      carries that flag and the date the series stops at, and the three derived surfaces
+      each state it. The figures stay visible: a degraded provider is disclosed, not
+      blanked. Live at 1440 and 390 with the 1Y response rewritten to stale: exactly
+      three visible notes, all reading "Price history as of Aug 1", key levels still
+      populated, no page errors, and nothing shown when the history is current
+      (`tmp/symbol-verify/verify-stale-history.mjs`, 9/9).
+      P2 React Doctor `rerender-memo-with-default-value` on `levels = []`, FIXED in the
+      same commit with a module-level constant. React Doctor now reports one new warning
+      for the whole range, the `jsx-no-jsx-as-prop` on the rail slot that 3.1 accepted in
+      a code comment for the same reason the watchlist accepts it.
+      PASS 2 (`..a7b40f57`), 3 findings, "patch is incorrect".
+      P2 linked alert level, FIXED in `36395c9c`: a level handed over by a key-levels
+      link was deliberately not recorded as a quote prefill so the arriving quote would
+      leave it alone, which also left it behind when the reader replaced the symbol in
+      the sheet. One instrument's 50-day average could be saved as a rule on another,
+      contradicting the shipped "a prefilled level leaves when the symbol it was read
+      from is replaced" rule. The level now travels with its symbol and leaves with it.
+      Live: the sheet still opens on 309.65 from the link and empties when the symbol is
+      replaced (`tmp/symbol-verify/verify-linked-level-clears.mjs`, 2/2), and the
+      prefill-to-saved-alert flow still passes (`verify-alert-save.mjs`).
+      P2 52-week high excluded the live price, FIXED in `36395c9c`: the hero strip
+      counted the current price in its 52-week window and the key levels card did not, so
+      the strip could report a new high at zero percent while the card offered an alert at
+      a level the price had already passed.
+      P2 `baselineClose` on a discontinuous series, NOT FIXED, recorded as a follow-up.
+      The coverage check compares the target with the earliest bar only, so a daily series
+      with a months-long hole could hand a far older close to the 5D or 1M horizon. The
+      guard the finding asks for cannot be added at the horizon's own tolerance: the week
+      horizon tolerates 1.4 days, and a Sunday target legitimately resolves to the
+      previous Friday, so the naive guard would drop 5D on ordinary weeks. Discontinuous
+      history equally corrupts the moving averages, so rejecting it belongs in one place
+      with its own fixtures rather than in a closeout patch, and 1.1's tolerance rules are
+      settled. No provider in the fallback chain is known to return such a payload.
+      PASS 3 (`..36395c9c`), 1 finding, "patch is incorrect".
+      P1 session high and low, FIXED in `f3e88397`: with the live price inside the
+      52-week window, the session's own range had to join it too, because the daily
+      history is fetched separately and can still end at the previous session. A high set
+      today and given back since now reads as the high it was.
+      PASS 4 (`..f3e88397`), 2 findings, "patch is incorrect".
+      P1 saved-state quote field names, FIXED in `a0e07895`: for a saved symbol the page
+      prefers the market-state snapshot, which names the session bounds `dayHigh` and
+      `dayLow` (`gui/shared/market-quote-snapshot.ts`), so the day range stat vanished for
+      exactly the symbols a reader has saved and the 52-week window lost today's extreme
+      with it. The view model reads either shape.
+      P1 assumed USD, FIXED in `a0e07895`: the page denominated everything in dollars
+      whenever the quote carried no currency, including levels derived from history that
+      outlives a failed quote, which contradicts D3's "currency follows the quote's own
+      currency". An unknown currency now prints the number alone through the repo's own
+      `formatPrice`, and the hero drops the currency label rather than guessing one.
+      PASS 5 (`..a0e07895`): clean, both review batches reporting no findings.
+      DETERMINISTIC ADVISORIES: the helper reported no diff signals in any pass. Confirmed
+      by hand: the `[Unreleased]` CHANGELOG entry exists and gained a sentence for the
+      stale-history disclosure, the range touches no SQLite schema or migration, and it
+      changes no router or prompt fixtures (only `gui/web/src`, `tests/unit/gui-web`,
+      `tests/screenshots`, `openspec` and `CHANGELOG.md`).
+      NOTE: `a5185a15` (cashtag analyze prompts) landed on the branch from another agent
+      while this review was running and is inside the final clean pass. The machine-local
+      `tmp/symbol-verify/verify-local.mjs` still expects the pre-cashtag chip text, so its
+      chip assertion now reads as a failure against that older expectation; the other 79
+      checks pass. Its alert count assertion also assumes a home with no saved alerts.
 - [x] 4.5 CHANGELOG entry; `graphify update .`.
       2026-08-05: sections 1 and 2 landed with no CHANGELOG entry on purpose. The view
       models and the descriptor change nothing a reader can see until section 3 renders
