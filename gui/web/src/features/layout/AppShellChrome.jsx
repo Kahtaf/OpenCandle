@@ -1,13 +1,15 @@
 import { Menu, PanelLeftOpen } from "lucide-react";
 import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { AppStatusSlot } from "../../runtime/app-status-slot.jsx";
 
 export function DesktopSidebarRestore({ onExpandSidebar }) {
   return (
-    <div className="hidden h-12 shrink-0 items-center border-b border-border bg-background px-3 md:flex">
+    <div className="hidden h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 md:flex">
       <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={onExpandSidebar}>
         <PanelLeftOpen />
       </Button>
+      <AppStatusSlot />
     </div>
   );
 }
@@ -27,6 +29,7 @@ export function MobileHeader({ onOpenSidebar, onOpenHome }) {
         <OpenCandleLogo />
         <span className="truncate">OpenCandle</span>
       </button>
+      <AppStatusSlot />
     </header>
   );
 }

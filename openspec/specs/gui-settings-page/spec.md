@@ -121,7 +121,7 @@ Settings → Notifications & automation SHALL surface the daily report schedule 
 
 ### Requirement: Data & privacy section
 
-Settings → Data & privacy SHALL host data-management controls. In the hosted GUI it SHALL carry the actions currently in `HostedRuntimePanel`: install update (only when an update is waiting), export data, import data, clear secrets, and clear all. Clear all SHALL require a typed confirmation in an app dialog (the user types a fixed confirmation word) instead of the native `confirm()`. In the local GUI the section SHALL show a read-only readout of where state lives (`~/.opencandle`, honoring `OPENCANDLE_HOME`) without destructive actions. Follower tabs and offline states SHALL disable mutating actions with the same neutral language used elsewhere.
+Settings → Data & privacy SHALL host data-management controls. In the hosted GUI it SHALL carry install update (only when an update is waiting), export data, import data, clear secrets, and clear all. Clear all SHALL require a typed confirmation in an app dialog (the user types a fixed confirmation word) instead of the native `confirm()`. In the local GUI the section SHALL show a read-only readout of where state lives (`~/.opencandle`, honoring `OPENCANDLE_HOME`) without destructive actions. Follower tabs and offline states SHALL disable mutating actions with the same neutral language used elsewhere.
 
 #### Scenario: Clear all requires typed confirmation
 
@@ -141,15 +141,33 @@ Settings → Data & privacy SHALL host data-management controls. In the hosted G
 - **THEN** the section states the OpenCandle home directory path and that provider keys live in the local config file
 - **AND** renders no clear/export/import controls
 
-### Requirement: Hosted runtime panel becomes status-only
+### Requirement: Hosted runtime status is a transient pill
 
-The hosted runtime footer panel SHALL present only runtime status (phase dot and message, and the install-update affordance MAY remain as a status-row action) and SHALL no longer contain export, import, clear secrets, or clear all controls; it SHALL link to Settings → Data & privacy for data management.
+The hosted app SHALL render no footer strip and no permanent runtime status text. Runtime state SHALL appear only as a transient status pill beside the OpenCandle logo, carrying the preparing, offline, and error states while they persist and an install-update action while a service-worker update is waiting. When the runtime is ready and no update is waiting, the pill SHALL NOT be present in the DOM. Data management SHALL be reached through Settings → Data & privacy, not through runtime chrome. The shared app shell SHALL expose the pill through a host-neutral slot so the local GUI renders nothing there.
 
-#### Scenario: Footer panel after relocation
+#### Scenario: Ready runtime is silent
 
-- **WHEN** the hosted app renders after this change
-- **THEN** the footer strip shows runtime status without a data-management menu
-- **AND** a link or button in the strip navigates to `/settings/data`
+- **WHEN** the hosted runtime is ready and no update is waiting
+- **THEN** no footer strip renders
+- **AND** no status pill is present in the DOM
+- **AND** no runtime chrome offers a data-management link
+
+#### Scenario: Transient states appear beside the logo
+
+- **WHEN** the hosted runtime is preparing, offline, or has failed
+- **THEN** a status pill renders beside the OpenCandle logo in the sidebar header and in the mobile header
+- **AND** it exposes the state as a status region to assistive technology
+
+#### Scenario: Waiting update offers an install action
+
+- **WHEN** a downloaded service-worker update is waiting
+- **THEN** the pill renders a focusable button offering to install the update
+- **AND** activating it runs the existing prepare-update and activate flow
+
+#### Scenario: Local GUI renders no hosted chrome
+
+- **WHEN** the local GUI renders its sidebar and mobile header
+- **THEN** the status slot renders nothing and no hosted-only module is imported
 
 ### Requirement: Catalog keeps run surfaces only
 

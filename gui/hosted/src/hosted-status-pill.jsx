@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { refreshHostedRuntimeStatus } from "./hosted-runtime-status.js";
+import { Badge } from "../../web/src/components/ui/badge.jsx";
+import { Button } from "../../web/src/components/ui/button.jsx";
+import { hostedStatusPillView, refreshHostedRuntimeStatus } from "./hosted-runtime-status.js";
 
-export const MANAGE_DATA_PATH = "/settings/data";
-
-// Status only. Export, import, and clearing live in Settings, Data & privacy.
-export function HostedRuntimePanel({ host, actions, onManageData }) {
+// Quiet chrome beside the OpenCandle logo. It carries runtime state only while
+// that state is worth reading: preparing, offline, a failure, or a waiting
+// update. Data management lives in Settings, Data and privacy.
+export function HostedStatusPill({ host, actions }) {
   const initialProgress = host.getRuntimeProgress?.();
   const [status, setStatus] = useState({
     role: host.getRole?.() || "candidate",
@@ -72,35 +74,32 @@ export function HostedRuntimePanel({ host, actions, onManageData }) {
     }
   };
 
+  const view = hostedStatusPillView(status, { updateWaiting: Boolean(waitingWorker) });
+  if (!view) return null;
+
+  if (view.kind === "action") {
+    return (
+      <Button
+        type="button"
+        variant="bordered"
+        size="xs"
+        className="shrink-0"
+        disabled={status.busy}
+        onClick={installUpdate}
+      >
+        {view.text}
+      </Button>
+    );
+  }
+
   return (
-    <aside className="hosted-runtime-panel" aria-label="Hosted OpenCandle status">
-      <div className="hosted-runtime-strip">
-        <span className={`hosted-runtime-dot ${status.online ? "is-online" : ""}`} />
-        <span className="hosted-runtime-message">{status.message}</span>
-        <span className="hosted-runtime-detail">
-          {status.role === "follower"
-            ? "Requests from this tab run through the active browser runtime."
-            : "The Pi runtime, sessions, and market state stay in this browser profile."}
-        </span>
-        <div className="hosted-runtime-actions">
-          {waitingWorker ? (
-            <button type="button" onClick={installUpdate} disabled={status.busy}>
-              Install update
-            </button>
-          ) : null}
-          <a
-            href={MANAGE_DATA_PATH}
-            onClick={(event) => {
-              if (!onManageData) return;
-              event.preventDefault();
-              onManageData();
-            }}
-          >
-            Manage data
-          </a>
-        </div>
-      </div>
-      {status.actionError ? <p role="alert">{status.actionError}</p> : null}
-    </aside>
+    <Badge
+      variant={view.kind === "alert" ? "destructive" : "outline"}
+      role={view.kind === "alert" ? "alert" : "status"}
+      title={view.text}
+      className="min-w-0 max-w-[11rem] shrink overflow-hidden"
+    >
+      <span className="truncate">{view.text}</span>
+    </Badge>
   );
 }

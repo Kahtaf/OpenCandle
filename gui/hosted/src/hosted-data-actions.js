@@ -1,5 +1,5 @@
 // Hosted data flows as plain functions over the browser runtime handle, so the
-// status strip and the Settings Data & privacy section run exactly the same
+// status pill and the Settings Data & privacy section run exactly the same
 // export, import, clear, and update commands.
 export function createHostedDataActions(host, env = {}) {
   const doc = env.document ?? globalThis.document;

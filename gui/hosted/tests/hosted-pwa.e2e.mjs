@@ -286,7 +286,7 @@ try {
     stage = "session reload";
     const restored = await context.newPage();
     await restored.goto(page.url(), { waitUntil: "domcontentloaded" });
-    await waitForText(restored, "Ready through the active tab", 120_000);
+    await waitForRuntimeReady(restored, 120_000);
     await waitForText(restored, prompt, 120_000);
     if (relayE2e) {
       await waitForText(restored, "Stock quote", 120_000);
@@ -297,7 +297,7 @@ try {
     }
     await page.close();
     page = restored;
-    await waitForText(page, "Running on this device", 120_000);
+    await waitForRuntimeReady(page, 120_000);
   }
 
   // The opt-in live relay smoke selects a real Yahoo candidate. Ordinary CI
@@ -389,7 +389,7 @@ try {
     stage = "runtime status chrome";
     const desktopViewport = page.viewportSize();
     await page.setViewportSize({ width: 1440, height: 960 });
-    await assertRuntimeStatusClearsPageAction(page, "desktop watchlists at 1440");
+    await assertRuntimeStatusIsSilentWhenReady(page, "desktop watchlists at 1440");
     if (desktopViewport) await page.setViewportSize(desktopViewport);
 
     follower = await context.newPage();
@@ -399,8 +399,8 @@ try {
       await follower.evaluate(() => Boolean(navigator.serviceWorker.controller)),
       "service worker control on a subsequent navigation",
     );
-    await waitForText(follower, "Ready through the active tab", 120_000);
-    await waitForText(follower, "AAPL", 30_000);
+    await waitForRuntimeReady(follower, 120_000);
+    await waitForText(follower, "AAPL", 120_000);
     const followerAddTicker = follower.getByRole("button", { name: "Add ticker" }).last();
     await waitForEnabled(followerAddTicker, 30_000);
     await followerAddTicker.click();
@@ -429,10 +429,10 @@ try {
     stage = "mobile layout";
     await mobile.setViewportSize({ width: 390, height: 844 });
     await mobile.goto(`${origin}/watchlists`, { waitUntil: "domcontentloaded" });
-    await waitForText(mobile, "Ready through the active tab", 120_000);
-    await waitForText(mobile, "AAPL", 30_000);
+    await waitForRuntimeReady(mobile, 120_000);
+    await waitForText(mobile, "AAPL", 120_000);
     await assertNoHorizontalOverflow(mobile, "mobile watchlist");
-    await assertRuntimeStatusClearsPageAction(mobile, "mobile watchlists at 390");
+    await assertRuntimeStatusIsSilentWhenReady(mobile, "mobile watchlists at 390");
 
     const exportPath = join(tmpdir(), `opencandle-hosted-export-${Date.now()}.json`);
     stage = "data export";
@@ -475,8 +475,7 @@ try {
       );
     });
     await page
-      .locator(".hosted-runtime-panel")
-      .getByRole("button", { name: "Install update" })
+      .getByRole("button", { name: "Install update?", exact: true })
       .click();
     await waitFor(
       () =>
@@ -700,10 +699,12 @@ function sqliteCount(database, table) {
   return Number(rows[0]?.values?.[0]?.[0] ?? 0);
 }
 
-// Data management lives in Settings now. The status strip only links to it.
+// Data management lives in Settings now, reached from the sidebar like any
+// other page. Hosted chrome carries no data link of its own.
 async function openHostedDataSettings(page) {
   if (!page.url().includes("/settings/data")) {
-    await page.locator(".hosted-runtime-panel a", { hasText: "Manage data" }).click();
+    await page.getByRole("link", { name: "Settings", exact: true }).click();
+    await page.getByRole("link", { name: "Data & privacy", exact: true }).click();
   }
   await page
     .getByRole("button", { name: "Export", exact: true })
@@ -714,45 +715,50 @@ async function openWatchlists(page) {
   await page.getByRole("link", { name: "Watchlists" }).click();
 }
 
-// Hosted runtime status is chrome, so it may never sit on top of the app's own
-// controls. It stays readable and inside the viewport while the page action it
-// used to cover stays clickable.
-async function assertRuntimeStatusClearsPageAction(page, label) {
-  const panel = page.locator(".hosted-runtime-panel");
+// A ready hosted runtime is silent. There is no footer strip, no permanent
+// status text, and nothing between the reader and the page's own action.
+async function assertRuntimeStatusIsSilentWhenReady(page, label) {
   const action = page.getByRole("button", { name: "New Watchlist" }).last();
-  await panel.waitFor({ state: "visible", timeout: 30_000 });
   await action.waitFor({ state: "visible", timeout: 30_000 });
-  const panelBox = await panel.boundingBox();
-  const actionBox = await action.boundingBox();
-  assert(panelBox && actionBox, `${label} status and action geometry`);
-  const overlaps =
-    panelBox.x < actionBox.x + actionBox.width &&
-    actionBox.x < panelBox.x + panelBox.width &&
-    panelBox.y < actionBox.y + actionBox.height &&
-    actionBox.y < panelBox.y + panelBox.height;
-  assert(!overlaps, `${label} status clear of the page action`);
-  const viewport = page.viewportSize();
   assert(
-    panelBox.height > 0 &&
-      panelBox.width > 0 &&
-      panelBox.y >= 0 &&
-      panelBox.y + panelBox.height <= viewport.height + 1,
-    `${label} status inside the viewport`,
+    (await page.locator(".hosted-runtime-panel").count()) === 0,
+    `${label} carries no hosted footer strip`,
   );
-  // The element under the action's centre is the action, not hosted chrome.
+  for (const text of ["Running on this device", "Ready through the active tab", "Manage data"]) {
+    assert(
+      (await page.getByText(text, { exact: false }).count()) === 0,
+      `${label} carries no permanent "${text}" status`,
+    );
+  }
+  const actionBox = await action.boundingBox();
+  assert(actionBox, `${label} page action geometry`);
   const actionOwnsItsPoint = await page.evaluate(
-    (point) => {
-      const target = document.elementFromPoint(point.x, point.y);
-      return Boolean(target) && !target.closest(".hosted-runtime-panel");
-    },
+    (point) => document.elementFromPoint(point.x, point.y)?.closest("button")?.textContent ?? "",
     { x: actionBox.x + actionBox.width / 2, y: actionBox.y + actionBox.height / 2 },
   );
-  assert(actionOwnsItsPoint, `${label} page action receives its own pointer events`);
+  assert(
+    actionOwnsItsPoint.includes("New Watchlist"),
+    `${label} page action receives its own pointer events`,
+  );
 }
 
 async function assertNoHorizontalOverflow(page, label) {
   const sizes = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
   assert(sizes.scrollWidth <= sizes.width + 1, `${label} horizontal overflow`);
+}
+
+// A ready hosted runtime says nothing, so readiness is proved by the app's own
+// connection state rather than by a permanent status label.
+async function waitForRuntimeReady(page, timeoutMs) {
+  await waitFor(
+    async () =>
+      (await page.getByText("Connecting to the GUI session", { exact: false }).count()) === 0 &&
+      (await page.getByText("Reconnecting to the GUI session", { exact: false }).count()) === 0 &&
+      (await page.getByText("Starting browser runtime", { exact: false }).count()) === 0 &&
+      (await page.getByText("Preparing browser runtime", { exact: false }).count()) === 0,
+    timeoutMs,
+    "hosted runtime ready",
+  );
 }
 
 async function waitForText(page, text, timeoutMs) {

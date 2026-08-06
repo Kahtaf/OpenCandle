@@ -16,6 +16,7 @@ import { HistoryItem } from "../../components/chat/history-item.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
+import { AppStatusSlot } from "../../runtime/app-status-slot.jsx";
 import { filterSessions } from "./session-search.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,6 +85,7 @@ function SidebarBody({
             <OpenCandleLogo />
             <span className="truncate">OpenCandle</span>
           </button>
+          <AppStatusSlot />
           {onClose ? (
             <Button
               variant="ghost"
