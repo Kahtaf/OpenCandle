@@ -47,6 +47,12 @@ import {
   searchInstrumentCandidates,
 } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
+import {
+  deleteStoredPreference,
+  deleteStoredToolDefault,
+  getPreferencesSnapshot,
+  type PreferencesSnapshot,
+} from "./preferences-api.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
@@ -211,6 +217,28 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         );
         options.wsHub.broadcast({ type: "catalog", catalog: buildCatalog() });
       });
+      return;
+    }
+
+    if (url.pathname === "/api/preferences" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Preferences API", options)) return;
+      writeJson(res, getPreferencesSnapshot());
+      return;
+    }
+
+    if (url.pathname === "/api/preferences/delete" && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Preferences API", options)) return;
+      await handleTrustedPreferencesMutation(req, res, options, (body) =>
+        deleteStoredPreference(String(body.namespace ?? ""), String(body.key ?? "")),
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/tool-defaults/delete" && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Preferences API", options)) return;
+      await handleTrustedPreferencesMutation(req, res, options, (body) =>
+        deleteStoredToolDefault(String(body.toolName ?? ""), String(body.paramPath ?? "")),
+      );
       return;
     }
 
@@ -1094,6 +1122,30 @@ function shouldBlockFailedCoordinatorAction(
   body: Record<string, unknown>,
 ): boolean {
   return hasClientActionId(body) && shouldBlockFailedCoordinatorLockAction(runSessionManager);
+}
+
+/**
+ * Socket-unavailable fallback for the preference deletes. It mirrors the WS
+ * commands: writer-only, and it answers with the refreshed list rather than a
+ * bootstrap payload, so the caller renders the result of its own mutation.
+ */
+async function handleTrustedPreferencesMutation(
+  req: IncomingMessage,
+  res: ServerResponse,
+  options: GuiHttpRouteOptions,
+  mutate: (body: Record<string, unknown>) => PreferencesSnapshot,
+): Promise<void> {
+  if (options.role !== "writer") {
+    writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+    return;
+  }
+  try {
+    const snapshot = mutate(asRecord(await readJsonBody(req)));
+    options.wsHub.broadcast({ type: "preferences", ...snapshot });
+    writeJson(res, snapshot);
+  } catch (error) {
+    writeJson(res, { error: error instanceof Error ? error.message : String(error) }, 400);
+  }
 }
 
 async function handleTrustedGuiMutation(

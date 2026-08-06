@@ -134,6 +134,18 @@ export function createLoopbackRuntimeTransport(options = {}) {
       );
     },
 
+    getPreferences(signal) {
+      return this.getJson("/api/preferences", signal);
+    },
+
+    deletePreference({ namespace, key }) {
+      return postJson("/api/preferences/delete", { namespace, key });
+    },
+
+    deleteToolDefault({ toolName, paramPath }) {
+      return postJson("/api/tool-defaults/delete", { toolName, paramPath });
+    },
+
     getDiagnostics({ sessions = false } = {}, signal) {
       return this.getJson(sessions ? "/api/doctor?sessions=1" : "/api/doctor", signal);
     },

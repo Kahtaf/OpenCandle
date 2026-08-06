@@ -235,6 +235,26 @@ class BrowserRuntimeHost {
       }
       case "provider.status.check":
         return this.request("gui", { action: "diagnostics" });
+      case "preferences.list":
+        return this.request("gui", { action: "preferences_list" });
+      case "preferences.delete": {
+        // A delete replies with the mutation bootstrap that carries the durable
+        // checkpoint; the caller only wants the refreshed list back.
+        const result = await this.request("gui", {
+          action: "preferences_delete",
+          namespace: String(command.namespace ?? ""),
+          key: String(command.key ?? ""),
+        });
+        return result?.preferences ?? { preferences: [], toolDefaults: [] };
+      }
+      case "tool_defaults.delete": {
+        const result = await this.request("gui", {
+          action: "tool_defaults_delete",
+          toolName: String(command.toolName ?? ""),
+          paramPath: String(command.paramPath ?? ""),
+        });
+        return result?.preferences ?? { preferences: [], toolDefaults: [] };
+      }
       case "hosted.data.export":
         return { archive: await this.dataStore.exportAll() };
       case "hosted.data.import": {

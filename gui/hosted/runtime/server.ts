@@ -169,6 +169,12 @@ async function runGuiRequest(request: GuiRequest): Promise<unknown> {
       );
     case "market_state":
       return runtime.marketState();
+    case "preferences_list":
+      return runtime.listPreferences();
+    case "preferences_delete":
+      return runtime.deletePreference(request.namespace, request.key);
+    case "tool_defaults_delete":
+      return runtime.deleteToolDefault(request.toolName, request.paramPath);
     case "diagnostics":
       return buildHostedDiagnostics();
     case "market_quotes":

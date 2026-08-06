@@ -15,6 +15,11 @@ import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import { getSavedMarketStateSymbols } from "./market-state-api.js";
 import type { ModelSetupController } from "./model-setup.js";
+import {
+  deleteStoredPreference,
+  deleteStoredToolDefault,
+  getPreferencesSnapshot,
+} from "./preferences-api.js";
 import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
 import { listDisplaySessions } from "./session-list.js";
@@ -177,6 +182,30 @@ export function createWsHub({
           }
           const status = await probeProviderStatus(providerId, { mode, force: true });
           client.send({ type: "provider.status", providerId, status });
+          break;
+        }
+        case "preferences.list":
+          // A read: every window may list what the agent has saved, including a
+          // follower that cannot change it.
+          client.send({ type: "preferences", ...getPreferencesSnapshot() });
+          break;
+        case "preferences.delete": {
+          if (role !== "writer") throw new Error("Read-only follower mode");
+          const snapshot = deleteStoredPreference(
+            String(data.namespace ?? ""),
+            String(data.key ?? ""),
+          );
+          // Broadcast, not reply: another open window is showing the same list.
+          broadcast({ type: "preferences", ...snapshot });
+          break;
+        }
+        case "tool_defaults.delete": {
+          if (role !== "writer") throw new Error("Read-only follower mode");
+          const snapshot = deleteStoredToolDefault(
+            String(data.toolName ?? ""),
+            String(data.paramPath ?? ""),
+          );
+          broadcast({ type: "preferences", ...snapshot });
           break;
         }
         case "session.new":
