@@ -73,6 +73,24 @@ must be verified live (1440px and 390px), including a crypto and an FX symbol.
       same `max-w-[1240px]` canvas as the other market pages rather than no cap at all.
       Skeletons come from the shared `Skeleton`, which already carries
       `motion-reduce:animate-none`.
+      2026-08-05: `vercel-react-best-practices` and `impeccable` passes ran after
+      implementation. Addressed: the chart series is memoized so a quote poll no longer
+      reloads it and refits its time scale; the 52-week range is stated once, in key levels,
+      instead of contradicting the provider figures the profile card used to print; key
+      levels names its columns so its distance is not read as disagreeing with the trend
+      card, and both share one number gutter; the hero placeholder keeps the real hero's
+      panel header and the trend card reserves its space, so nothing shifts as data lands;
+      the stat strip is a grid at every width; a declared section whose data is unavailable
+      says so instead of leaving a gap; a page-level failure is stated above the cards; the
+      position card leads with market value, states its share of a single portfolio only,
+      and keeps unknown valuations and exclusions explicit; read-only copy is one sentence
+      everywhere. Not addressed, with reasons: the key-levels and trend distance conventions
+      differ because 1.3 and 1.4 fixed them (mitigated with column names rather than by
+      changing settled view models); merging those two cards would contradict D4; the
+      not-found heuristic, the `value !== 0` key-stat filter, the add-to-watchlist disabled
+      state and the chart's own attribution are pre-existing and outside this change; the
+      `fieldset` grouping wrapper is kept because the repo's lint rule steers `role="group"`
+      back to `fieldset`.
 - [x] 3.2 Hero + stat strip component with descriptor vocabulary; extended-hours chip and
       quote flash preserved.
       2026-08-05: `SymbolHero` in `symbol-sections.jsx`. The strip is built from
