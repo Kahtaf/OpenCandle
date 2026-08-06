@@ -121,12 +121,23 @@ must be verified live (1440px and 390px), including a crypto and an FX symbol.
 
 ## 4. Verification and evidence
 
-- [ ] 4.1 Update `tests/unit/gui-web/symbol-page-render.test.ts` and add view-model test
+- [x] 4.1 Update `tests/unit/gui-web/symbol-page-render.test.ts` and add view-model test
       files; full `npm run gates` green.
       2026-08-05: PARTIAL. `symbol-page-render.test.ts` was rewritten for the new
       composition and `symbol-view-model.test.ts` / the descriptor tests landed with
       sections 1-2. `npm run gates` has NOT been run by the section-3 agent; the
       verification agent owns closing this box.
+      2026-08-06: `npm run gates` green, `exit=0`, at 2db3669e (this change's tip; all
+      live verification below ran against that same tree).
+      That run is `typecheck` + `relay:typecheck` + `biome ci .` + `gui:hosted:build` +
+      `vitest run` (326 files, 3539 passed, 1 skipped) + `relay:test` (76) +
+      `test:agent-tools` (27); biome reported 0 errors with 8 pre-existing CSS
+      descending-specificity warnings. No test was weakened or edited to get there.
+      NOTE for whoever wrote the handoff brief: `gates` builds the hosted PWA but does not
+      run the hosted browser smoke. `npm run test:gui:hosted` is a separate CI step
+      (`.github/workflows/ci.yml`), and it needs real model keys, StackBlitz WebContainer
+      boot and the production relay, so it was deliberately not run from this machine. See
+      the hosted note under 4.3 for what was proved instead.
 - [x] 4.2 Screenshot harness phases for the new layout (desktop + mobile).
       2026-08-05: `29-symbol-detail-equity`, `30-symbol-detail-scrolled` and
       `31-symbol-detail-crypto` in `tests/screenshots/capture.ts`. A capture may now declare
@@ -135,8 +146,67 @@ must be verified live (1440px and 390px), including a crypto and an FX symbol.
       The scrolled phase scrolls the app's own container instead of using `fullPage`, which
       cannot see past the shell's scroll region. Captured at 1440px and 390px into
       `tests/screenshots/out/symbol-detail-redesign/`.
-- [ ] 4.3 Live browser click-through both surfaces at 1440px/390px: equity, crypto, FX;
+- [x] 4.3 Live browser click-through both surfaces at 1440px/390px: equity, crypto, FX;
       prove section omission, alert prefill, chip prefill, follower read-only.
+      2026-08-06: driven with Playwright against a real GUI server on an isolated port and
+      an isolated `HOME`, with live keyless Yahoo data and no model key configured. Scripts
+      and screenshots are machine-local under `tmp/symbol-verify/` (`tmp/` is gitignored).
+      LOCAL, 80/80 checks at 1440x900 and 390x844 (`verify-local.mjs`): every section
+      visible exactly once at both widths (the doubled rail markup never shows twice);
+      AAPL strip renders 5D/1M/YTD/1Y/from-52-week-high as signed percents plus day range
+      and "44.3M · 0.7× avg"; key levels shows all four rows with signed distances under
+      "Calculated from recent price action."; trend shows three rows and the mixed-signals
+      sentence; key stats and about render; not-held is one line; chips render; at 1440 the
+      rail (360px) sits right of a 760px primary column, at 390 the rail slot is hidden and
+      the order is hero, chart, position, key levels, stats, about, trend, alerts,
+      membership, analyze; `documentElement.scrollWidth <= innerWidth` at both widths and
+      additionally at 768/1024/1279/1280/1281/1400 with no duplicated card at any of them.
+      BTC-USD uses 1W and 24h range, says "Trades 24/7", omits key stats and about entirely
+      and keeps position/alerts/membership. EURUSD=X resolves to the fx descriptor from
+      instrument metadata, drops volume and fundamentals. First load renders
+      `symbol-hero-skeleton`, `symbol-stats-strip-skeleton`, `symbol-chart-skeleton`,
+      `symbol-stats-skeleton`, `symbol-levels-skeleton` and `symbol-trend-skeleton`, all
+      carrying `motion-reduce:animate-none`. The after-hours chip rendered live on AAPL.
+      ACTIONS, live: the 50-day row's create-alert opens `/alerts` with the sheet prefilled
+      to AAPL and 309.65 and the preview reading "Price crosses above $309.65"; saving from
+      that sheet puts the alert on the symbol page's Alerts card ("Alerts 1 ... Armed").
+      A seeded lot renders "Market value 10 shares @ $180.50 $3,110.00", "+$1,305.00
+      (+72.3%)", "Share of portfolio 100.0%", identical at 390px, and Add to watchlist
+      disables once the symbol is a member. The Options chain chip fills the composer with
+      "Show options chain for AAPL" and focuses `TEXTAREA#chat-composer` with no run started.
+      FOLLOWER, 6/6 (`verify-follower.mjs`): read-only band plus disabled create-alert,
+      chips, Create alert and Add to watchlist, each with "Available in the writer window.",
+      while the data sections still render. DEVIATION: two local GUI processes each create
+      their own Pi session and each take that session's writer lock, so a second process
+      cannot be made a follower from outside (tried: second and third servers on the same
+      `HOME` both booted as writer, and selecting the first server's session in the second
+      server's browser does not move the server's session). What a follower window actually
+      differs by is the boot payload, so the `role`/`supportsSessionActions` fields were
+      rewritten on the socket and the app's own follower path then ran for real in the
+      browser. SSR coverage of the same states already exists in
+      `tests/unit/gui-web/symbol-page-render.test.ts`.
+      HOSTED, 24/24 (`verify-hosted.mjs`): `npm run gui:hosted:build` green, served with
+      `vite preview` over `gui/hosted/dist` the same way `gui/hosted/tests/hosted-pwa.e2e.mjs`
+      serves it, AAPL and BTC-USD at both widths. With no relay negotiated the page states
+      "Instrument quotes requires the audited provider relay, which is unavailable or
+      incompatible." and "Further detail is not available for this instrument.", renders
+      quote, chart, position, alerts and membership, and omits key stats, about, key levels
+      and trend entirely rather than rendering them broken or empty. No uncaught page
+      errors, no horizontal overflow at 390px. DEVIATION: same-data hosted parity was not
+      re-measured live, because hosted market data only reaches the page through the
+      WebContainer runtime and the production relay (model keys plus Turnstile), which this
+      run deliberately did not touch. Parity rests on `gui/hosted/src/main.jsx` mounting
+      `gui/web/src/router.jsx`, so both surfaces render the same `SymbolPage` module, plus
+      the shared render tests.
+      OBSERVED, not defects of this change: a bogus ticker reaches the page as quote reason
+      "HTTP 404 Not Found" and a transient Yahoo crumb 429 on the profile, neither of which
+      matches the pre-existing `INVALID_SYMBOL_REASON` heuristic, so the page falls through
+      to the unknown descriptor. That is honest and satisfies the "unknown type stays
+      minimal and honest" scenario, and the not-found panel itself still renders when the
+      reasons do match (proved by stubbing both endpoints). `/favicon.ico` 404s on every
+      route of the app, unrelated to this page. FX prices print at
+      `financial-format.js`'s fixed two decimals ("$1.16"), which is the rounding rule D3
+      pins and what the watchlist already does.
 - [ ] 4.4 Autoreview (`npm run review:pr` range mode over the change commits); fix findings.
 - [x] 4.5 CHANGELOG entry; `graphify update .`.
       2026-08-05: sections 1 and 2 landed with no CHANGELOG entry on purpose. The view
