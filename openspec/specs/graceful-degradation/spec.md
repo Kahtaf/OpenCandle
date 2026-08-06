@@ -109,4 +109,3 @@ session, state, or credentials.
 - **WHEN** browser-hosted Node fails to boot
 - **THEN** the PWA offers retry and export
 - **AND** existing durable data remains unchanged
-
