@@ -238,8 +238,12 @@ export function deriveKeyLevels(bars, options = {}) {
 
   const window = window52Weeks(normalized);
   if (window && window.length > 0) {
-    push("week52High", "52-week high", Math.max(...window.map(highOf)));
-    push("week52Low", "52-week low", Math.min(...window.map(lowOf)));
+    // The live price is itself part of the last 52 weeks, and the daily bars
+    // behind these levels are fetched separately from the quote. Leaving the
+    // price out would let the hero strip report a new high while this card
+    // offered an alert at a level the price has already passed.
+    push("week52High", "52-week high", Math.max(current, ...window.map(highOf)));
+    push("week52Low", "52-week low", Math.min(current, ...window.map(lowOf)));
   }
   push("sma20", "20-day average", movingAverage(normalized, 20));
   push("sma50", "50-day average", movingAverage(normalized, 50));

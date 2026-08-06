@@ -270,6 +270,69 @@ describe("create alert sheet", () => {
     expect(container.querySelector('[data-slot="threshold-hint"]')).toBeNull();
   });
 
+  it("keeps a level handed over by a link through its own symbol's quote", async () => {
+    const transport = {
+      kind: "loopback",
+      getInstrumentQuote: async () => ({ status: "ok", price: 204.25, currency: "USD" }),
+      searchInstruments: async () => ({ candidates: [] }),
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(AlertCreateForm, {
+            disabled: false,
+            invokeTool: () => true,
+            symbol: "NVDA",
+            threshold: "401.15",
+          }),
+        ),
+      );
+    });
+
+    expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("401.15");
+  });
+
+  it("drops a level handed over by a link once its symbol is replaced", async () => {
+    const transport = {
+      kind: "loopback",
+      getInstrumentQuote: async () => ({ status: "ok", price: 204.25, currency: "USD" }),
+      searchInstruments: async () => ({ candidates: [] }),
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(AlertCreateForm, {
+            disabled: false,
+            invokeTool: () => true,
+            symbol: "NVDA",
+            threshold: "401.15",
+          }),
+        ),
+      );
+    });
+
+    const search = container.querySelector<HTMLInputElement>('input[role="combobox"]');
+    if (!search) throw new Error("symbol search input not rendered");
+    const setValue = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    await act(async () => {
+      setValue?.call(search, "MS");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // NVDA's 50-day average must not become a level saved against whatever is
+    // picked next.
+    expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("");
+  });
+
   it("keeps a sub-cent quote out of a zero threshold", () => {
     expect(alertThresholdPrefill(204.25)).toBe("204.25");
     expect(alertThresholdPrefill(1)).toBe("1.00");

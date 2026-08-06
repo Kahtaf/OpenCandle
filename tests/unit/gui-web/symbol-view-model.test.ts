@@ -151,6 +151,28 @@ describe("deriveKeyLevels", () => {
     expect(levels[3].value).toBeCloseTo(474.5, 6);
   });
 
+  it("counts the live price inside the 52-week range", () => {
+    // A price above every fetched bar is the new high, exactly as the hero
+    // strip already reports it. Leaving it out would offer an alert at a level
+    // the price has already passed.
+    const high = deriveKeyLevels(FULL_YEAR, { currentPrice: 600 }).find(
+      (level) => level.key === "week52High",
+    );
+    expect(high?.value).toBe(600);
+    expect(high?.distancePercent).toBeCloseTo(0, 6);
+    expect(
+      deriveHorizonReturns(FULL_YEAR, { currentPrice: 600 }).find(
+        (entry) => entry.key === "fromHigh52w",
+      )?.percent,
+    ).toBeCloseTo(0, 6);
+
+    const low = deriveKeyLevels(FULL_YEAR, { currentPrice: 50 }).find(
+      (level) => level.key === "week52Low",
+    );
+    expect(low?.value).toBe(50);
+    expect(low?.distancePercent).toBeCloseTo(0, 6);
+  });
+
   it("omits levels the history cannot support", () => {
     expect(deriveKeyLevels(PARTIAL_YEAR, { currentPrice: 219 }).map((level) => level.key)).toEqual([
       "sma20",

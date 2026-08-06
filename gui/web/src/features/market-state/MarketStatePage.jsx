@@ -1388,6 +1388,12 @@ export function AlertCreateForm({
   const [pending, setPending] = useState(false);
   const unverifiedExactRef = useRef(false);
   const prefilledThresholdRef = useRef("");
+  // A level handed over by a link belongs to the symbol it was read from. It is
+  // not a quote prefill, so the quote arriving moments later leaves it alone,
+  // but it still has to leave when that symbol is replaced.
+  const linkedThresholdRef = useRef(
+    alert || !initialThreshold ? null : { symbol: symbol ?? "", threshold: initialThreshold },
+  );
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
     draft;
@@ -1416,8 +1422,13 @@ export function AlertCreateForm({
     // would otherwise compare against the value this effect just cleared.
     const prefilled = prefilledThresholdRef.current;
     prefilledThresholdRef.current = "";
+    const linked = linkedThresholdRef.current;
+    const linkedLeft = linked !== null && linked.symbol !== resolvedSymbol;
+    if (linkedLeft) linkedThresholdRef.current = null;
     setDraft((current) =>
-      current.threshold === prefilled ? { ...current, threshold: "" } : current,
+      current.threshold === prefilled || (linkedLeft && current.threshold === linked.threshold)
+        ? { ...current, threshold: "" }
+        : current,
     );
     if (!resolvedSymbol) return undefined;
     let disposed = false;
