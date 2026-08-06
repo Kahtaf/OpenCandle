@@ -25,6 +25,7 @@ import {
   TrendSkeleton,
   WatchlistMembership,
 } from "./symbol-sections.jsx";
+import { historyBasisNote } from "./symbol-view-model.js";
 import { useSymbolData } from "./use-symbol-data.js";
 
 const LazyMarketChart = lazy(() =>
@@ -123,6 +124,10 @@ export function SymbolPageView({
   );
   const has = (section) => descriptorHasSection(descriptor, section);
   const levelsLoading = data.viewModelLoading && (data.viewModel?.keyLevels ?? []).length === 0;
+  // Every derived figure on the page comes from one daily series. When that
+  // series is a retained copy, each card that prints its numbers says so
+  // rather than letting them read as current market context.
+  const basisNote = historyBasisNote(data.viewModel);
 
   // The rail is a desktop region; below its breakpoint the same cards join the
   // single column in reading order. `DetailRailLayout` hides its rail slot at
@@ -136,9 +141,10 @@ export function SymbolPageView({
       <KeyLevelsCard
         key="key-levels"
         ticker={ticker}
-        levels={data.viewModel?.keyLevels ?? []}
+        levels={data.viewModel?.keyLevels}
         currency={currency}
         role={role}
+        basisNote={basisNote}
       />
     )
   ) : null;
@@ -146,7 +152,7 @@ export function SymbolPageView({
     (data.viewModel?.trend?.rows ?? []).length === 0 && data.viewModelLoading ? (
       <TrendSkeleton key="trend" />
     ) : (
-      <TrendCard key="trend" trend={data.viewModel?.trend} />
+      <TrendCard key="trend" trend={data.viewModel?.trend} basisNote={basisNote} />
     )
   ) : null;
   const position = has("position") ? (
@@ -218,6 +224,7 @@ export function SymbolPageView({
                     overview={data.overview}
                     descriptor={descriptor}
                     viewModel={data.viewModel}
+                    basisNote={basisNote}
                     flashClass={flashClass}
                     quoteLoading={data.quoteLoading}
                     statsLoading={data.viewModelLoading && !data.viewModel?.hasDailyHistory}

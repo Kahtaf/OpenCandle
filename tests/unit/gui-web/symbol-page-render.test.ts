@@ -443,6 +443,71 @@ describe("symbol page", () => {
     ).toBe("");
   });
 
+  it("states on every derived card that the history behind it is not current", () => {
+    const note = "Price history as of Aug 1";
+    const levels = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "MSFT",
+        currency: "USD",
+        levels: EQUITY_VIEW_MODEL.keyLevels,
+        basisNote: note,
+      }),
+    );
+    const trend = renderToStaticMarkup(
+      React.createElement(TrendCard, { trend: EQUITY_VIEW_MODEL.trend, basisNote: note }),
+    );
+    const hero = renderToStaticMarkup(
+      React.createElement(SymbolHero, {
+        ticker: "MSFT",
+        descriptor: assetDescriptor("stock"),
+        viewModel: EQUITY_VIEW_MODEL,
+        overview: { status: "ok", name: "Microsoft Corporation" },
+        quote: okQuote("MSFT"),
+        basisNote: note,
+      }),
+    );
+
+    for (const html of [levels, trend, hero]) {
+      expect(html).toContain('data-slot="symbol-history-basis-note"');
+      expect(html).toContain(note);
+    }
+    // The card still says where its levels come from; the freshness line is
+    // added to that, not swapped in for it.
+    expect(levels).toContain("Calculated from recent price action.");
+  });
+
+  it("says nothing about history freshness while the history is current", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(KeyLevelsCard, {
+        ticker: "MSFT",
+        currency: "USD",
+        levels: EQUITY_VIEW_MODEL.keyLevels,
+      }),
+    );
+    expect(html).not.toContain('data-slot="symbol-history-basis-note"');
+  });
+
+  it("discloses stale derived history across the page's derived surfaces", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolPageView, {
+        ticker: "MSFT",
+        data: okSymbolData("MSFT", {
+          viewModel: {
+            ...EQUITY_VIEW_MODEL,
+            historyStale: true,
+            historyAsOf: new Date().toISOString(),
+          },
+        }),
+        range: "1M",
+        onRangeChange: vi.fn(),
+        ChartComponent: () => null,
+      }),
+    );
+
+    expect(html).toContain('data-slot="symbol-history-basis-note"');
+    expect(html).toContain("Price history as of");
+  });
+
   it("renders available key stats as a divided definition list and omits provider placeholders", () => {
     const html = renderToStaticMarkup(
       React.createElement(KeyStats, {

@@ -1,4 +1,5 @@
 import { formatCompactNumber, formatNumber } from "../../lib/financial-format.js";
+import { shortDateLabel } from "../market-state/format.js";
 
 // Every derivation below reads daily price history the page already fetched.
 // Nothing here estimates, extrapolates or invents a level: a stat that the
@@ -303,7 +304,7 @@ export function deriveTrendSummary(bars, options = {}) {
  * One assembled view model for the symbol page, derived from the daily history
  * and the quote the page already holds.
  */
-export function buildSymbolViewModel({ bars, quote } = {}) {
+export function buildSymbolViewModel({ bars, quote, historyStale, historyAsOf } = {}) {
   const normalized = normalizeBars(bars);
   const daily = isDailySeries(normalized);
   const quoteOk = quote?.status === "ok";
@@ -329,5 +330,22 @@ export function buildSymbolViewModel({ bars, quote } = {}) {
     volume,
     volumeLabel: formatVolumeContext(volume),
     hasDailyHistory: daily,
+    // Everything above is derived from the fetched series, so the page has to
+    // be able to say when that series is a retained copy served after the
+    // provider stopped answering.
+    historyStale: historyStale === true,
+    historyAsOf: typeof historyAsOf === "string" && historyAsOf ? historyAsOf : null,
   };
+}
+
+/**
+ * One line naming the freshness of the history every derived figure on the page
+ * is calculated from, or null while that history is current.
+ *
+ * @returns {string | null}
+ */
+export function historyBasisNote(viewModel, nowMs = Date.now()) {
+  if (!viewModel?.historyStale) return null;
+  const label = shortDateLabel(viewModel.historyAsOf, nowMs);
+  return label ? `Price history as of ${label}` : "Price history is not current";
 }

@@ -16,6 +16,8 @@ interface SymbolData {
     trend: { sentence: string | null; rows: unknown[] };
     keyLevels: Array<{ key: string }>;
     horizonReturns: unknown[];
+    historyStale: boolean;
+    historyAsOf: string | null;
   };
   quote: Record<string, unknown> | null;
   overview: Record<string, unknown> | null;
@@ -151,6 +153,23 @@ describe("useSymbolData derived view model", () => {
     expect(latest?.descriptor.type).toBe("unknown");
     expect(latest?.error).toBeFalsy();
     expect(latest?.viewModel.keyLevels).toHaveLength(4);
+  });
+
+  it("carries the derived history's staleness into the view model", async () => {
+    const transport = stubTransport({
+      getInstrumentHistory: vi.fn(async (symbol: string, range: string) => ({
+        status: "ok",
+        symbol,
+        range,
+        stale: true,
+        dataAsOf: "2026-08-01",
+        bars: dailyBars(400),
+      })),
+    });
+    await render("AAPL", transport);
+
+    expect(latest?.viewModel.historyStale).toBe(true);
+    expect(latest?.viewModel.historyAsOf).toBe("2026-08-01");
   });
 
   it("still derives stats when the runtime has no instrument search at all", async () => {

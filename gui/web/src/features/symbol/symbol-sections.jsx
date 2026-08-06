@@ -37,12 +37,30 @@ const READ_ONLY_NOTE = "Available in the writer window.";
 // the key-levels and trend cards line up with each other in the rail.
 const LEVEL_ROW_GUTTER = "pr-12 md:pr-10";
 
+// Shared empty defaults: a fresh array literal per render would make every
+// memo comparison downstream miss.
+const NO_LEVELS = [];
+
+/**
+ * Freshness of the price history a card's figures are calculated from, stated
+ * on the card itself so a retained series is never read as today's market.
+ */
+function HistoryBasisNote({ note, className }) {
+  if (!note) return null;
+  return (
+    <div data-slot="symbol-history-basis-note" className={cn("px-4 pb-3", className)}>
+      <Badge tone="warn">{note}</Badge>
+    </div>
+  );
+}
+
 export function SymbolHero({
   ticker,
   quote,
   overview,
   descriptor,
   viewModel,
+  basisNote,
   flashClass,
   quoteLoading = false,
   statsLoading = false,
@@ -128,6 +146,7 @@ export function SymbolHero({
           descriptor={descriptor}
           viewModel={viewModel}
           currency={currency}
+          basisNote={basisNote}
           loading={statsLoading}
         />
       </Panel>
@@ -140,7 +159,7 @@ export function SymbolHero({
  * view model; a stat the fetched data cannot support is left out of the strip
  * rather than printed as a zero or a dash.
  */
-function HeroStatStrip({ descriptor, viewModel, currency, loading }) {
+function HeroStatStrip({ descriptor, viewModel, currency, basisNote, loading }) {
   const keys = descriptor?.stats ?? [];
   if (keys.length === 0) return null;
   if (loading) return <StatStripSkeleton count={keys.length} />;
@@ -175,16 +194,21 @@ function HeroStatStrip({ descriptor, viewModel, currency, loading }) {
   if (stats.length === 0) return null;
 
   return (
-    <dl data-slot="symbol-hero-stats" className={STAT_STRIP_CLASS}>
-      {stats.map((stat) => (
-        <div data-slot="symbol-stat" className="min-w-0" key={stat.key}>
-          <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {stat.label}
-          </dt>
-          <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{stat.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl data-slot="symbol-hero-stats" className={STAT_STRIP_CLASS}>
+        {stats.map((stat) => (
+          <div data-slot="symbol-stat" className="min-w-0" key={stat.key}>
+            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {stat.label}
+            </dt>
+            <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">{stat.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {/* The horizon returns and the volume multiple above are history, not
+          quote, so their freshness is stated with them. */}
+      <HistoryBasisNote note={basisNote} className="-mt-1 pb-4 sm:px-5" />
+    </>
   );
 }
 
@@ -246,7 +270,13 @@ function HeroSkeleton({ ticker, descriptor }) {
  * the distance from the current price and a way to watch it. The alert sheet
  * stays authoritative: the row only hands it the symbol and the level.
  */
-export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "writer" }) {
+export function KeyLevelsCard({
+  ticker,
+  levels = NO_LEVELS,
+  currency = "USD",
+  role = "writer",
+  basisNote,
+}) {
   if (levels.length === 0) return null;
   const readOnly = role !== "writer";
 
@@ -314,6 +344,7 @@ export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "w
             );
           })}
         </ul>
+        <HistoryBasisNote note={basisNote} className="pt-3" />
         {readOnly ? (
           <p className="px-4 pb-4 text-xs text-muted-foreground">{READ_ONLY_NOTE}</p>
         ) : null}
@@ -364,7 +395,7 @@ export function TrendSkeleton() {
 }
 
 /** Price against its moving averages, in plain English, with one sentence. */
-export function TrendCard({ trend }) {
+export function TrendCard({ trend, basisNote }) {
   const rows = trend?.rows ?? [];
   if (rows.length === 0) return null;
 
@@ -396,6 +427,7 @@ export function TrendCard({ trend }) {
             {trend.sentence}
           </p>
         ) : null}
+        <HistoryBasisNote note={basisNote} className={trend?.sentence ? undefined : "pt-3"} />
       </Panel>
     </fieldset>
   );

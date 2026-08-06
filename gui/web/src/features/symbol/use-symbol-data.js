@@ -80,6 +80,11 @@ export function useSymbolData(ticker, range = "1M") {
       buildSymbolViewModel({
         bars: derivedHistory.snapshot?.status === "ok" ? derivedHistory.snapshot.bars : [],
         quote: resolvedQuote,
+        // A retained copy served while the provider is unreachable still
+        // produces levels and averages; the page has to say so rather than
+        // presenting them as today's market context.
+        historyStale: derivedHistory.snapshot?.stale === true,
+        historyAsOf: derivedHistory.snapshot?.dataAsOf,
       }),
     [derivedHistory.snapshot, resolvedQuote],
   );

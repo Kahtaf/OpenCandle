@@ -6,6 +6,7 @@ import {
   deriveTrendSummary,
   deriveVolumeContext,
   formatVolumeContext,
+  historyBasisNote,
 } from "../../../gui/web/src/features/symbol/symbol-view-model.js";
 
 const DAY_SECONDS = 86_400;
@@ -242,6 +243,23 @@ describe("buildSymbolViewModel", () => {
     expect(view.trend).toEqual({ rows: [], sentence: null });
   });
 
+  it("carries the history freshness the page has to disclose", () => {
+    const view = buildSymbolViewModel({
+      bars: FULL_YEAR,
+      quote: { status: "ok", price: 400 },
+      historyStale: true,
+      historyAsOf: "2026-08-01",
+    });
+    expect(view.historyStale).toBe(true);
+    expect(view.historyAsOf).toBe("2026-08-01");
+  });
+
+  it("reports current history as current", () => {
+    const view = buildSymbolViewModel({ bars: FULL_YEAR, quote: { status: "ok", price: 400 } });
+    expect(view.historyStale).toBe(false);
+    expect(view.historyAsOf).toBeNull();
+  });
+
   it("ignores intraday bars so daily averages are never faked", () => {
     const intraday = Array.from({ length: 300 }, (_, index) => ({
       time: LAST_BAR_SECONDS - (299 - index) * 3600,
@@ -256,5 +274,33 @@ describe("buildSymbolViewModel", () => {
     expect(view.keyLevels).toEqual([]);
     expect(view.trend.rows).toEqual([]);
     expect(view.horizonReturns).toEqual([]);
+  });
+});
+
+describe("historyBasisNote", () => {
+  const NOW_MS = Date.UTC(2026, 7, 6);
+
+  it("says nothing while the history behind the derived stats is current", () => {
+    const view = buildSymbolViewModel({ bars: FULL_YEAR, quote: { status: "ok", price: 400 } });
+    expect(historyBasisNote(view, NOW_MS)).toBeNull();
+  });
+
+  it("names the date the stale history stops at", () => {
+    const view = buildSymbolViewModel({
+      bars: FULL_YEAR,
+      quote: { status: "ok", price: 400 },
+      historyStale: true,
+      historyAsOf: "2026-08-01",
+    });
+    expect(historyBasisNote(view, NOW_MS)).toBe("Price history as of Aug 1");
+  });
+
+  it("still discloses stale history that carries no date", () => {
+    const view = buildSymbolViewModel({
+      bars: FULL_YEAR,
+      quote: { status: "ok", price: 400 },
+      historyStale: true,
+    });
+    expect(historyBasisNote(view, NOW_MS)).toBe("Price history is not current");
   });
 });
