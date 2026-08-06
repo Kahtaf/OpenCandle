@@ -5,7 +5,7 @@ description: Install OpenCandle, connect a model, and get a first market answer 
 
 # Getting Started
 
-OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime, which handles model sign-in, model keys, sessions, and the terminal shell. The GUI is the primary path: chat, visual tool results, workflows, provider status, charts, watchlists, portfolios, alerts, and reports in one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
+OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime, which handles model sign-in, model keys, sessions, and the terminal shell. The GUI is the primary path: chat, visual tool results, workflows, charts, watchlists, portfolios, alerts, reports, and a settings page in one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
@@ -49,7 +49,7 @@ A good first answer shows that OpenCandle gathered evidence before synthesizing:
 
 ## Add Provider Keys When Needed
 
-If an answer says a provider is missing or degraded, open Providers in the GUI, or run the suggested `/connect ...` command in the terminal:
+If an answer says a provider is missing or degraded, open Settings, then Data providers, in the GUI, or run the suggested `/connect ...` command in the terminal:
 
 ```text
 /connect financials   # Alpha Vantage: fundamentals, earnings, statements

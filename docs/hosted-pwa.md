@@ -37,7 +37,7 @@ CoinGecko, Alpha Vantage, and Polymarket run directly from the browser after pas
 During model setup, choose whether each model-provider key remains on the device
 or only for the current browser session. Credentials are stored independently,
 so switching Pi models does not erase another provider's key. Provider keys
-saved through the provider catalog stay in browser storage. Restored keys are
+saved in Settings, then Data providers, stay in browser storage. Restored keys are
 never filled back into password fields and all keys are excluded from
 OpenCandle exports, Pi sessions, and SQLite state.
 
@@ -51,12 +51,13 @@ The relay has no KV, D1, R2, Durable Object, queue, analytics, cache, applicatio
 
 ## Data control and recovery
 
-Open the hosted status menu in the lower-right corner:
+Open Settings, then Data & privacy. The runtime status strip under the app links to the same place with Manage data.
 
 - **Export data** downloads one versioned JSON archive containing Pi sessions and SQLite state, but no model key.
 - **Import data** validates archive version, filenames, session identities, parent relationships, sizes, SQLite integrity, and supported schema version before stopping the runtime or replacing device data.
+- **Install update** appears only while a downloaded update is waiting.
 - **Clear secrets** removes model and provider credentials, tears down the in-browser runtime so the old process cannot retain them, and restarts without deleting research.
-- **Clear all** removes credentials, sessions, market state, runtime snapshots, and cached application data for this origin.
+- **Clear all** removes credentials, sessions, market state, runtime snapshots, and cached application data for this origin. It asks you to type `DELETE` before it runs.
 
 Imports and installed updates preserve a recovery backup before replacing or migrating durable state. An older OpenCandle build refuses to open a database written by a newer schema instead of resetting it. An installed update waits while any runtime request is active, checkpoints the current session, writes a recovery backup, and only then activates the waiting service worker.
 

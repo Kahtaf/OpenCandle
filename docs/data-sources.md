@@ -36,8 +36,8 @@ Keyless by default:
 
 External local tools:
 
-- Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
-- Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics section under Settings explicitly checks browser-session readiness.
+- Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the same Diagnostics section explicitly checks browser-session readiness.
 
 Optional keys (see [configuration.md](./configuration.md) for env var names and setup):
 
@@ -59,7 +59,7 @@ External provider calls go through OpenCandle's shared cache and rate limiter. W
 
 TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens; single-security quotes, history, options, and company analysis use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
 
-London Strategic Edge usage is metered against its free-tier allowance: OpenCandle persists a monthly byte budget and stops using LSE once 80% of the monthly free allowance is used, and notes this in `opencandle doctor`. Doctor and the GUI Diagnostics page report LSE readiness automatically when a key is configured.
+London Strategic Edge usage is metered against its free-tier allowance: OpenCandle persists a monthly byte budget and stops using LSE once 80% of the monthly free allowance is used, and notes this in `opencandle doctor`. Doctor and the GUI Diagnostics section report LSE readiness automatically when a key is configured.
 
 Polymarket probabilities are market-implied prices from a crypto-settled venue, not calibrated forecasts. `get_event_probabilities` reports the market question, per-outcome probability, volume/liquidity, close date, and the market's resolution criteria so the model can compare the market wording with the user's question.
 

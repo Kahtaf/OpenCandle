@@ -48,7 +48,7 @@ OpenCandle has two main surfaces.
 
 The terminal UI is the fastest way to work from the keyboard. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
-The local GUI is a browser workbench at `http://127.0.0.1:14567`. Its home is a market dashboard (an indices strip, watchlist movers, a portfolio summary, and alerts status), and it adds per-symbol pages with interactive charts, chat answers rendered as chart cards, session history, provider setup, and a tool/workflow catalog and diagnostics.
+The local GUI is a browser workbench at `http://127.0.0.1:14567`. Its home is a market dashboard (an indices strip, watchlist movers, a portfolio summary, and alerts status), and it adds per-symbol pages with interactive charts, chat answers rendered as chart cards, session history, a tool/workflow catalog, and a settings page covering model, data providers, saved preferences, notifications and automation, diagnostics, and data and privacy.
 
 Both surfaces use the same OpenCandle session and finance tools. The GUI adds richer rendering and easier discovery; it is not a separate agent.
 

@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  ClipboardCheck,
   ClipboardList,
   Clock3,
   Code2,
@@ -1165,7 +1164,10 @@ function OpenCandleComparisonUi() {
           <MockNavItem icon={BriefcaseBusiness}>Portfolios</MockNavItem>
           <MockNavItem icon={Bell}>Alerts</MockNavItem>
           <MockNavItem icon={ClipboardList}>Reports</MockNavItem>
-          <MockNavItem icon={ClipboardCheck}>Diagnostics</MockNavItem>
+        </div>
+        <div className="mock-recents opencandle-market-state">
+          <small>App</small>
+          <MockNavItem icon={SlidersHorizontal}>Settings</MockNavItem>
         </div>
         <div className="mock-recents opencandle-history">
           <small>Today</small>

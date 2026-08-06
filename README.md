@@ -54,7 +54,7 @@ npx opencandle
 
 On first run, OpenCandle walks you through model setup — use Pi sign-in when offered, or provide a model API key (in the GUI, use the API-key setup panel). Data-provider keys are separate and optional. For the five-minute path from install to a first answer, see [Getting Started](https://opencandle.app/docs/getting-started.html).
 
-Check your setup anytime with `npx opencandle doctor` (or the GUI's `/diagnostics` page).
+Check your setup anytime with `npx opencandle doctor` (or Settings, then Diagnostics, in the GUI).
 
 ## Example Prompts
 
@@ -74,7 +74,7 @@ Quotes, history, screeners, options chains, crypto, SEC filings, macro series, e
 
 ## Configuration
 
-Model access is configured through Pi on first run (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or Pi sign-in). Data-provider keys are optional and can be set in the environment, through `/connect`, through the GUI provider setup flow, or in `~/.opencandle/config.json`; environment variables override the config file. See [Configuration](https://opencandle.app/docs/configuration.html) for the full key reference and advanced switches.
+Model access is configured through Pi on first run (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or Pi sign-in). Data-provider keys are optional and can be set in the environment, through `/connect`, through Settings, then Data providers, in the GUI, or in `~/.opencandle/config.json`; environment variables override the config file. See [Configuration](https://opencandle.app/docs/configuration.html) for the full key reference and advanced switches.
 
 ## How It Fits Together
 
