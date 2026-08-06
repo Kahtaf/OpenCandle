@@ -33,6 +33,10 @@ const ROW_ACTION_CLASS =
 
 const READ_ONLY_NOTE = "Available in the writer window.";
 
+// Trailing space for a row's hover-revealed action, so the number columns in
+// the key-levels and trend cards line up with each other in the rail.
+const LEVEL_ROW_GUTTER = "pr-12 md:pr-10";
+
 export function SymbolHero({
   ticker,
   quote,
@@ -171,12 +175,9 @@ function HeroStatStrip({ descriptor, viewModel, currency, loading }) {
   if (stats.length === 0) return null;
 
   return (
-    <dl
-      data-slot="symbol-hero-stats"
-      className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border px-4 py-4 sm:px-5"
-    >
+    <dl data-slot="symbol-hero-stats" className={STAT_STRIP_CLASS}>
       {stats.map((stat) => (
-        <div data-slot="symbol-stat" className="min-w-[84px]" key={stat.key}>
+        <div data-slot="symbol-stat" className="min-w-0" key={stat.key}>
           <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {stat.label}
           </dt>
@@ -187,17 +188,23 @@ function HeroStatStrip({ descriptor, viewModel, currency, loading }) {
   );
 }
 
+// One grid so the stats line up in columns instead of drifting with each
+// value's width. Column counts are chosen so the widest stat, a price range,
+// still fits on one line at every width.
+const STAT_STRIP_CLASS =
+  "grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border px-4 py-4 sm:grid-cols-4 sm:px-5 xl:grid-cols-5";
+
 function StatStripSkeleton({ count }) {
   return (
     <div
       data-slot="symbol-stats-strip-skeleton"
       role="status"
       aria-label="Loading price context"
-      className="flex flex-wrap gap-x-8 gap-y-4 border-t border-border px-4 py-4 sm:px-5"
+      className={STAT_STRIP_CLASS}
     >
       {Array.from({ length: count }, (_, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder row
-        <div className="min-w-[84px]" key={index}>
+        <div className="min-w-0" key={index}>
           <Skeleton className="h-3 w-12" />
           <Skeleton className="mt-2 h-4 w-16" />
         </div>
@@ -209,15 +216,25 @@ function StatStripSkeleton({ count }) {
 function HeroSkeleton({ ticker, descriptor }) {
   return (
     <fieldset aria-label="Symbol quote" className="m-0 min-w-0 border-0 p-0">
-      <Panel>
+      {/* The name sits in the panel header on the real hero, so the placeholder
+          keeps that header rather than letting the page shift when it arrives. */}
+      <Panel
+        headingLevel="h1"
+        headingClassName="grid gap-1 text-xl sm:text-2xl"
+        title={
+          <>
+            <span className="sr-only">Loading {ticker}</span>
+            <Skeleton aria-hidden="true" className="h-6 w-56 max-w-full" />
+            <Skeleton aria-hidden="true" className="h-3 w-32" />
+          </>
+        }
+      >
         <div data-slot="symbol-hero-skeleton" role="status" aria-label="Loading symbol quote">
-          <h1 className="sr-only">Loading {ticker}</h1>
           <div className="p-4 sm:p-5">
-            <Skeleton className="h-7 w-56 max-w-full" />
-            <Skeleton className="mt-4 h-12 w-72 max-w-full" />
+            <Skeleton className="h-12 w-72 max-w-full" />
             <Skeleton className="mt-3 h-[22px] w-32" />
           </div>
-          <StatStripSkeleton count={Math.max(descriptor?.stats?.length ?? 0, 4)} />
+          <StatStripSkeleton count={Math.max(descriptor?.stats?.length ?? 0, 5)} />
         </div>
       </Panel>
     </fieldset>
@@ -236,6 +253,21 @@ export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "w
   return (
     <fieldset aria-label="Key levels" className="m-0 min-w-0 border-0 p-0">
       <Panel title="Key levels" meta="Calculated from recent price action.">
+        {/* The percent says where the level sits relative to the current price,
+            which is the opposite reading to the trend card's. Naming the column
+            keeps the two cards from looking like they disagree. */}
+        {/* Not hidden from assistive technology: read once before the rows, it
+            gives them the same column context a sighted reader gets. */}
+        <div
+          className={cn(
+            "flex items-center gap-2 px-4 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+            LEVEL_ROW_GUTTER,
+          )}
+        >
+          <span className="min-w-0 flex-1">Level</span>
+          <span className="w-[86px] shrink-0 text-right">Price</span>
+          <span className="w-[74px] shrink-0 text-right">From price</span>
+        </div>
         <ul className="divide-y divide-border/70 px-4">
           {levels.map((level) => {
             const href = levelAlertHref(ticker, level.value);
@@ -245,13 +277,13 @@ export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "w
                 <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
                   {level.label}
                 </span>
-                <span className="text-[13px] tabular-nums text-foreground">
+                <span className="w-[86px] shrink-0 text-right text-[13px] tabular-nums text-foreground">
                   {formatMoney(level.value, currency)}
                 </span>
                 <SignedPercent
                   value={level.distancePercent}
                   decimals={1}
-                  className="w-[62px] shrink-0 text-right text-[13px]"
+                  className="w-[74px] shrink-0 text-right text-[13px]"
                 />
                 {!readOnly && href ? (
                   <a
@@ -290,18 +322,15 @@ export function KeyLevelsCard({ ticker, levels = [], currency = "USD", role = "w
   );
 }
 
-export function KeyLevelsSkeleton() {
+/** Placeholder shaped like a rail card of `rows` label-and-value lines. */
+function RailCardSkeleton({ title, slot, label, rows }) {
   return (
-    <fieldset aria-label="Key levels" className="m-0 min-w-0 border-0 p-0">
-      <Panel title="Key levels">
-        <div
-          data-slot="symbol-levels-skeleton"
-          role="status"
-          aria-label="Loading key levels"
-          className="space-y-3 p-4"
-        >
-          {[0, 1, 2, 3].map((row) => (
-            <div className="flex items-center justify-between gap-3" key={row}>
+    <fieldset aria-label={title} className="m-0 min-w-0 border-0 p-0">
+      <Panel title={title}>
+        <div data-slot={slot} role="status" aria-label={label} className="space-y-4 p-4">
+          {Array.from({ length: rows }, (_, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder row
+            <div className="flex items-center justify-between gap-3" key={index}>
               <Skeleton className="h-3.5 w-24" />
               <Skeleton className="h-3.5 w-16" />
             </div>
@@ -309,6 +338,28 @@ export function KeyLevelsSkeleton() {
         </div>
       </Panel>
     </fieldset>
+  );
+}
+
+export function KeyLevelsSkeleton() {
+  return (
+    <RailCardSkeleton
+      title="Key levels"
+      slot="symbol-levels-skeleton"
+      label="Loading key levels"
+      rows={4}
+    />
+  );
+}
+
+export function TrendSkeleton() {
+  return (
+    <RailCardSkeleton
+      title="Trend summary"
+      slot="symbol-trend-skeleton"
+      label="Loading trend summary"
+      rows={3}
+    />
   );
 }
 
@@ -322,7 +373,10 @@ export function TrendCard({ trend }) {
       <Panel title="Trend summary">
         <ul className="divide-y divide-border/70 px-4">
           {rows.map((row) => (
-            <li className="flex items-center justify-between gap-3 py-2" key={row.key}>
+            <li
+              className={cn("flex items-center justify-between gap-3 py-2", LEVEL_ROW_GUTTER)}
+              key={row.key}
+            >
               <span className="min-w-0 truncate text-[13px] text-muted-foreground">
                 {row.label}
               </span>
@@ -331,7 +385,7 @@ export function TrendCard({ trend }) {
                 <SignedPercent
                   value={row.distancePercent}
                   decimals={1}
-                  className="w-[62px] text-right text-[13px]"
+                  className="w-[74px] text-right text-[13px]"
                 />
               </span>
             </li>
@@ -359,19 +413,22 @@ export function KeyStats({ overview, currency = "USD" }) {
     ["Average volume", overview.avgVolume, formatCompactNumber],
     ["Profit margin", overview.profitMargin, formatRatioPercent],
     ["Revenue growth", overview.revenueGrowth, formatRatioPercent],
-    ["52-week high", overview.week52High, (value) => formatMoney(value, currency)],
-    ["52-week low", overview.week52Low, (value) => formatMoney(value, currency)],
+    // The 52-week range belongs to the key levels card, which derives it from
+    // the same daily bars every other level on the page comes from. Printing a
+    // second figure under the same label here would contradict it.
   ].filter(([, value]) => Number.isFinite(value) && value !== 0);
   if (stats.length === 0) return null;
 
   return (
     <fieldset aria-label="Key stats" className="m-0 min-w-0 border-0 p-0">
       <Panel title="Key stats">
-        <dl className="grid grid-cols-1 px-4 sm:grid-cols-2 xl:grid-cols-3">
+        {/* Labels line up with the panel title, and the bottom row's hairline
+            sits under the card's own border instead of doubling it. */}
+        <dl className="-mb-px grid grid-cols-1 gap-x-8 px-4 sm:grid-cols-2 xl:grid-cols-3">
           {stats.map(([label, value, formatter]) => (
             <div
               key={label}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border/70 py-3 sm:px-4"
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border/70 py-3"
             >
               <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
               <dd className="text-right tabular-nums text-sm text-foreground">
@@ -427,11 +484,13 @@ export function AboutCard({ overview }) {
   );
 }
 
-/** What this instrument type cannot show, stated once instead of left blank. */
+/** What this page cannot show, stated once instead of left blank. */
 export function AvailabilityNote({ note }) {
   if (!note) return null;
   return (
-    <p data-slot="symbol-availability-note" className="px-1 text-xs text-muted-foreground">
+    // Aligned to the card edge rather than inset, so it reads as a note about
+    // the column and not as a card with nothing in it.
+    <p data-slot="symbol-availability-note" className="text-xs text-muted-foreground">
       {note}
     </p>
   );
@@ -439,27 +498,61 @@ export function AvailabilityNote({ note }) {
 
 export function PositionCard({ ticker, positionRows = [] }) {
   const row = positionRows[0];
+  // A share of a portfolio only means something inside one portfolio. The same
+  // symbol held in two portfolios has two shares that cannot be added, so the
+  // line is left out rather than printing their sum.
+  const portfolioIds = new Set((row?.lots ?? []).map((lot) => lot?.portfolioId));
+  const showAllocation =
+    portfolioIds.size === 1 &&
+    !row?.excludedFromTotals &&
+    Number.isFinite(row?.allocationPercent) &&
+    row.allocationPercent > 0;
+
   return (
     <fieldset aria-label="Position" className="m-0 min-w-0 border-0 p-0">
       <Panel title="Position">
         {row ? (
-          <dl className="divide-y divide-border/70 px-4 text-sm">
-            <ContextMetric
-              label={`${formatQuantity(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
-              value={formatMoney(row.marketValue, row.currency)}
-            />
-            <ContextMetric
-              label="Unrealized gain/loss"
-              value={
-                <SignedMoney value={row.pnl} percent={row.pnlPercent} currency={row.currency} />
-              }
-            />
-          </dl>
+          <>
+            <dl className="divide-y divide-border/70 px-4 text-sm">
+              <ContextMetric
+                label="Market value"
+                detail={`${formatQuantity(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
+                value={moneyOrUnknown(row.marketValue, row.currency)}
+              />
+              <ContextMetric
+                label="Unrealized gain/loss"
+                value={
+                  Number.isFinite(row.pnl) ? (
+                    <SignedMoney value={row.pnl} percent={row.pnlPercent} currency={row.currency} />
+                  ) : (
+                    <span className="text-muted-foreground">Unknown</span>
+                  )
+                }
+              />
+              {showAllocation ? (
+                <ContextMetric
+                  label="Share of portfolio"
+                  value={formatPercent(row.allocationPercent, { decimals: 1 })}
+                />
+              ) : null}
+            </dl>
+            {row.excludedFromTotals && row.exclusionReason ? (
+              <p className="px-4 pb-4 text-xs text-muted-foreground">{row.exclusionReason}</p>
+            ) : null}
+          </>
         ) : (
           <p className="p-4 text-sm text-muted-foreground">{ticker} is not held.</p>
         )}
       </Panel>
     </fieldset>
+  );
+}
+
+function moneyOrUnknown(value, currency) {
+  return Number.isFinite(value) ? (
+    formatMoney(value, currency)
+  ) : (
+    <span className="text-muted-foreground">Unknown</span>
   );
 }
 
@@ -570,19 +663,20 @@ export function AnalyzePanel({ ticker, role = "writer", fillComposer }) {
           ))}
         </div>
         {readOnly ? (
-          <p className="px-4 pb-4 text-xs text-muted-foreground">
-            Analysis is available in the writer window.
-          </p>
+          <p className="px-4 pb-4 text-xs text-muted-foreground">{READ_ONLY_NOTE}</p>
         ) : null}
       </Panel>
     </fieldset>
   );
 }
 
-function ContextMetric({ label, value }) {
+function ContextMetric({ label, detail, value }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-3">
-      <dt className="text-muted-foreground">{label}</dt>
+      <dt className="min-w-0 text-muted-foreground">
+        {label}
+        {detail ? <span className="block text-xs text-muted-foreground">{detail}</span> : null}
+      </dt>
       <dd className="text-right tabular-nums text-foreground">{value}</dd>
     </div>
   );

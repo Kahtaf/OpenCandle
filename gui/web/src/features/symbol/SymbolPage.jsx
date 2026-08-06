@@ -22,6 +22,7 @@ import {
   PositionCard,
   SymbolHero,
   TrendCard,
+  TrendSkeleton,
   WatchlistMembership,
 } from "./symbol-sections.jsx";
 import { useSymbolData } from "./use-symbol-data.js";
@@ -141,7 +142,13 @@ export function SymbolPageView({
       />
     )
   ) : null;
-  const trend = has("trend") ? <TrendCard key="trend" trend={data.viewModel?.trend} /> : null;
+  const trend = has("trend") ? (
+    (data.viewModel?.trend?.rows ?? []).length === 0 && data.viewModelLoading ? (
+      <TrendSkeleton key="trend" />
+    ) : (
+      <TrendCard key="trend" trend={data.viewModel?.trend} />
+    )
+  ) : null;
   const position = has("position") ? (
     <PositionCard key="position" ticker={ticker} positionRows={data.positionRows} />
   ) : null;
@@ -183,6 +190,9 @@ export function SymbolPageView({
             </Panel>
           ) : (
             <>
+              {/* Above the layout: a failure the reader needs before they start
+                  reading numbers, not after every card. */}
+              {data.error ? <StatusBand tone="error">{data.error}</StatusBand> : null}
               <DetailRailLayout
                 // React Doctor's `jsx-no-jsx-as-prop` fires on this slot. It is
                 // accepted here for the same reason the watchlist accepts it:
@@ -246,8 +256,15 @@ export function SymbolPageView({
                   {has("keyStats") ? (
                     data.overviewLoading && !data.overview ? (
                       <StatsSkeleton />
-                    ) : (
+                    ) : data.overview?.status === "ok" ? (
                       <KeyStats overview={data.overview} currency={currency} />
+                    ) : (
+                      // A section the descriptor declares but the data cannot
+                      // fill says so, instead of leaving a gap between the
+                      // chart and whatever comes next.
+                      <AvailabilityNote
+                        note={`Company fundamentals are not available for ${ticker} right now.`}
+                      />
                     )
                   ) : (
                     <AvailabilityNote note={descriptor?.availabilityNote} />
@@ -267,7 +284,6 @@ export function SymbolPageView({
                 </div>
               </DetailRailLayout>
 
-              {data.error ? <StatusBand tone="error">{data.error}</StatusBand> : null}
               {role !== "writer" ? (
                 <StatusBand>
                   Viewing read-only. Actions are available in the writer window.

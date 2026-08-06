@@ -350,7 +350,7 @@ describe("symbol page", () => {
     );
 
     expect(html).toContain('data-slot="symbol-hero-skeleton"');
-    expect(html).toContain("Loading MSFT</h1>");
+    expect(html).toContain("Loading MSFT</span>");
     expect(html).toContain("motion-reduce:animate-none");
     expect(html.match(/data-slot="skeleton"/g)?.length).toBeGreaterThan(3);
   });
@@ -474,6 +474,11 @@ describe("symbol page", () => {
     expect(html).not.toContain("Market cap");
     expect(html).not.toContain("Trailing P/E");
     expect(html).not.toContain("$0.00");
+    // Key levels owns the 52-week range and derives it from fetched bars, so
+    // repeating a second figure under the same label here would contradict it.
+    expect(html).not.toContain("52-week high");
+    expect(html).not.toContain("52-week low");
+    expect(html).not.toContain("468.35");
   });
 
   it("omits the key-stats grid when overview data is unavailable", () => {
@@ -542,12 +547,67 @@ describe("symbol page", () => {
       ),
     );
 
+    expect(html).toContain("Market value");
     expect(html).toContain("4 shares");
     expect(html).toContain("$1,680.00");
     expect(html).toContain("+$480.00 (+40.0%)");
+    expect(html).toContain("Share of portfolio");
+    expect(html).toContain("75.0%");
     expect(html).toContain("tabular-nums");
     expect(html).toContain("Price crosses above $450.00");
     expect(html).toContain("Default");
+  });
+
+  it("keeps an unconvertible holding honest instead of implying a share of a total", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PositionCard, {
+        ticker: "SAP.DE",
+        positionRows: [
+          {
+            symbol: "SAP.DE",
+            currency: "EUR",
+            totalQuantity: 10,
+            blendedCost: 150,
+            marketValue: 1686.4,
+            pnl: 186.4,
+            pnlPercent: 12.4,
+            allocationPercent: null,
+            excludedFromTotals: true,
+            exclusionReason: "Kept out of the portfolio total: EUR is not the base currency.",
+            lots: [{ portfolioId: 2 }],
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain("EUR 1,686.40");
+    expect(html).toContain("Kept out of the portfolio total");
+    expect(html).not.toContain("Share of portfolio");
+  });
+
+  it("does not add up one symbol's share across two portfolios", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PositionCard, {
+        ticker: "MSFT",
+        positionRows: [
+          {
+            symbol: "MSFT",
+            currency: "USD",
+            totalQuantity: 6,
+            blendedCost: 300,
+            marketValue: 2520,
+            pnl: 720,
+            pnlPercent: 40,
+            allocationPercent: 120,
+            lots: [{ portfolioId: 2 }, { portfolioId: 3 }],
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain("$2,520.00");
+    expect(html).not.toContain("Share of portfolio");
+    expect(html).not.toContain("120.0%");
   });
 
   it("links alert creation to the threshold form and disables it without a quote", () => {
@@ -593,6 +653,7 @@ describe("symbol page", () => {
 
     expect(html).toContain("MSFT is not held.");
     expect(html).not.toContain("<table");
+    expect(html).not.toContain("Market value");
     expect(html).toContain("No alerts for MSFT yet");
     expect(html).toContain("Add to watchlist");
     expect(html).not.toContain('disabled=""');
@@ -733,6 +794,21 @@ describe("symbol page", () => {
     expect(html).toContain('aria-label="Key levels"');
   });
 
+  it("says so when a stock's fundamentals are unavailable instead of dropping the sections", () => {
+    const html = renderSymbolPage({
+      ticker: "MSFT",
+      data: {
+        ...okSymbolData("MSFT", {
+          overview: { symbol: "MSFT", status: "unavailable", reason: "provider rate limited" },
+        }),
+      },
+    });
+
+    expect(html).not.toContain('aria-label="Key stats"');
+    expect(html).not.toContain('aria-label="About"');
+    expect(html).toContain("Company fundamentals are not available for MSFT right now.");
+  });
+
   it("keeps an unresolved instrument to quote, chart, and saved context", () => {
     const html = renderSymbolPage({
       ticker: "ZZ=F",
@@ -823,10 +899,13 @@ describe("symbol page", () => {
 
     expect(html).toContain('data-slot="symbol-hero-skeleton"');
     expect(html.match(/<h1\b/g)).toHaveLength(1);
-    expect(html).toContain("Loading MSFT</h1>");
+    expect(html).toContain("Loading MSFT</span>");
     expect(html).toContain('data-slot="symbol-chart-skeleton"');
     expect(html).toContain('data-slot="symbol-stats-skeleton"');
     expect(html).toContain('data-slot="symbol-levels-skeleton"');
+    // Every rail card that will appear reserves its space, so the rail does not
+    // jump when the derived math lands.
+    expect(html).toContain('data-slot="symbol-trend-skeleton"');
     expect(html).toContain("motion-reduce:animate-none");
     expect(html).not.toContain("animate-in");
     expect(html).not.toContain("fade-in");
