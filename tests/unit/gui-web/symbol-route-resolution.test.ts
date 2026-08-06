@@ -81,14 +81,14 @@ describe("history route", () => {
 });
 
 describe("AppShell page precedence", () => {
-  it("selects diagnostics, symbol, market-state, then chat fallthrough", () => {
+  it("selects settings, symbol, market-state, then chat fallthrough", () => {
     expect([
       appPageFromPath("/diagnostics"),
       appPageFromPath("/symbol/aapl"),
       appPageFromPath("/watchlists"),
       appPageFromPath("/sessions/abc"),
     ]).toEqual([
-      { page: "diagnostics" },
+      { page: "settings", section: "diagnostics" },
       { page: "symbol", ticker: "AAPL" },
       { page: "market-state", domain: "watchlists" },
       { page: "chat" },

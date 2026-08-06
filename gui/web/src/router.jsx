@@ -32,6 +32,12 @@ const settingsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
+const settingsSectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/$section",
+  validateSearch: validateGuiSearch,
+});
+
 const diagnosticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/diagnostics",
@@ -73,6 +79,7 @@ const routeTree = rootRoute.addChildren([
   sessionRoute,
   historyRoute,
   settingsRoute,
+  settingsSectionRoute,
   diagnosticsRoute,
   symbolRoute,
   watchlistsRoute,

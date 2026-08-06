@@ -2,12 +2,12 @@ import { Link } from "@tanstack/react-router";
 import {
   Bell,
   BriefcaseBusiness,
-  ClipboardCheck,
   FileText,
   ListPlus,
   PanelLeft,
   Plus,
   Search,
+  Settings,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -111,6 +111,7 @@ function SidebarBody({
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
         <MarketStateNav currentPath={currentPath} />
+        <AppNav currentPath={currentPath} />
         <ThreadGroup
           label="Today"
           sessions={groups.today}
@@ -152,30 +153,44 @@ function MarketStateNav({ currentPath }) {
     { to: "/portfolios", label: "Portfolios", icon: BriefcaseBusiness },
     { to: "/alerts", label: "Alerts", icon: Bell },
     { to: "/reports", label: "Reports", icon: FileText },
-    { to: "/diagnostics", label: "Diagnostics", icon: ClipboardCheck },
   ];
   return (
-    <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+    <div data-slot="market-state-nav" className="flex flex-col gap-0.5 border-b border-border pb-2">
       <SectionLabel>Market State</SectionLabel>
-      {items.map((item) => {
-        const active = currentPath === item.to;
-        const Icon = item.icon;
-        return (
-          <Button
-            key={item.to}
-            asChild
-            variant={active ? "default" : "ghost"}
-            size="sm"
-            className="w-full justify-start"
-          >
-            <Link to={item.to}>
-              <Icon className="button-icon" aria-hidden="true" />
-              {item.label}
-            </Link>
-          </Button>
-        );
-      })}
+      {items.map((item) => (
+        <NavItem key={item.to} item={item} active={currentPath === item.to} />
+      ))}
     </div>
+  );
+}
+
+// Settings sits in its own group: it is not saved market state, and Diagnostics
+// reads as one of its sections rather than a watchlist sibling.
+function AppNav({ currentPath }) {
+  const path = String(currentPath || "");
+  const active = path.startsWith("/settings") || path === "/diagnostics";
+  return (
+    <div data-slot="app-nav" className="flex flex-col gap-0.5 border-b border-border pb-2">
+      <SectionLabel>App</SectionLabel>
+      <NavItem item={{ to: "/settings", label: "Settings", icon: Settings }} active={active} />
+    </div>
+  );
+}
+
+function NavItem({ item, active }) {
+  const Icon = item.icon;
+  return (
+    <Button
+      asChild
+      variant={active ? "default" : "ghost"}
+      size="sm"
+      className="w-full justify-start"
+    >
+      <Link to={item.to} aria-current={active ? "page" : undefined}>
+        <Icon className="button-icon" aria-hidden="true" />
+        {item.label}
+      </Link>
+    </Button>
   );
 }
 

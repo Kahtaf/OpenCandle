@@ -5,7 +5,6 @@ import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
-import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
 import { useForgetFirstRunSetupDismissalWhenSatisfied } from "./features/onboarding/setup-dismissal.js";
@@ -17,10 +16,11 @@ import {
   shouldStartFreshHomeSession,
 } from "./features/sessions/route-session-state.js";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
+import { SettingsPage } from "./features/settings/SettingsPage.jsx";
 import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
-import { domainFromPath, tickerFromPath } from "./route-resolution.js";
+import { appPageFromPath, domainFromPath, tickerFromPath } from "./route-resolution.js";
 import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
@@ -217,6 +217,19 @@ export function AppShell() {
     if (!routeSessionId || visibleSessionSnapshot) return;
     void gui.loadSession(routeSessionId);
   }, [gui.loadSession, routeSessionId, visibleSessionSnapshot]);
+
+  // Diagnostics now lives inside Settings. The old path keeps working and
+  // rewrites itself to the canonical one, so a bookmark lands on the same
+  // content and back does not bounce between the two URLs.
+  useEffect(() => {
+    if (pathname !== "/diagnostics") return;
+    void navigate({
+      to: "/settings/$section",
+      params: { section: "diagnostics" },
+      search: (current) => ({ ...current }),
+      replace: true,
+    });
+  }, [navigate, pathname]);
 
   useEffect(() => {
     if (pathname !== "/") {
@@ -417,6 +430,7 @@ export function AppShell() {
         : activeDrawer === "workflows"
           ? "workflows"
           : "workflows";
+  const appPage = appPageFromPath(pathname);
   const ticker = tickerFromPath(pathname);
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
@@ -494,17 +508,15 @@ export function AppShell() {
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ConnectionStatusBanner role={gui.role} />
-        {pathname === "/diagnostics" ? (
-          <DiagnosticsPage
+        {appPage.page === "settings" ? (
+          <SettingsPage
+            section={appPage.section}
             role={gui.role}
             onOpenSidebar={() => openDrawer("history")}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
-            onOpenProviders={(providerId) => openCatalog("providers", providerId)}
-            onOpenModelSetup={() => setModelSetupOpen(true)}
             onOpenHome={openHome}
             setToast={gui.setToast}
-            dataQuality={visibleDashboard?.dataQuality}
           />
         ) : ticker ? (
           <SymbolPage
