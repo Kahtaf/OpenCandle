@@ -695,6 +695,183 @@ interface Capture {
   overrides?: Record<string, unknown>;
   // When true, capture the full scrollable page (useful for tall tool cards).
   fullPage?: boolean;
+  // Route to open instead of the app root, e.g. "/symbol/MSFT".
+  path?: string;
+  // Runs before the first navigation, for pages that read private HTTP APIs
+  // the WebSocket mock does not cover.
+  prepare?: (page: Page) => Promise<void>;
+}
+
+// Symbol pages read their quote, company profile, price history and instrument
+// type over the private HTTP API rather than the WebSocket, so those routes are
+// answered from a fixed dataset. The history is a deterministic year of daily
+// bars, which is what the page's derived stats need: a 52-week range, 20/50/200
+// day averages, a year-to-date baseline and a 30-day volume average.
+const SYMBOL_PRICE = 421.32;
+
+function fixtureDailyBars(tradingDays: number): Array<Record<string, number>> {
+  const bars: Array<Record<string, number>> = [];
+  const day = new Date(Date.UTC(2026, 7, 4));
+  const closes: number[] = [];
+  for (let index = 0; index < tradingDays; index += 1) {
+    const progress = index / (tradingDays - 1);
+    closes.push(0.84 + 0.2 * progress + 0.03 * Math.sin(index / 6.5) + 0.02 * Math.sin(index / 23));
+  }
+  const scale = SYMBOL_PRICE / closes[closes.length - 1];
+  for (let index = tradingDays - 1; index >= 0; index -= 1) {
+    const close = Number((closes[index] * scale).toFixed(2));
+    bars.unshift({
+      time: Math.floor(day.getTime() / 1000),
+      open: Number((close * 0.997).toFixed(2)),
+      high: Number((close * 1.008).toFixed(2)),
+      low: Number((close * 0.991).toFixed(2)),
+      close,
+      volume: 12_000_000 + ((index * 613_000) % 7_000_000),
+    });
+    do {
+      day.setUTCDate(day.getUTCDate() - 1);
+    } while (day.getUTCDay() === 0 || day.getUTCDay() === 6);
+  }
+  return bars;
+}
+
+// Enough trading days to cover a full 52 weeks of calendar time, so the page's
+// 52-week range, one-year return and 200-day average are all computable.
+const SYMBOL_BARS = fixtureDailyBars(285);
+
+const SYMBOL_QUOTE = {
+  symbol: "MSFT",
+  status: "ok",
+  name: "Microsoft Corporation",
+  price: SYMBOL_PRICE,
+  change: 3.18,
+  changePercent: 0.76,
+  previousClose: 418.14,
+  open: 418.9,
+  high: 423.8,
+  low: 417.2,
+  volume: 12_430_000,
+  currency: "USD",
+  marketState: "REGULAR",
+  fetchedAt: new Date().toISOString(),
+};
+
+const SYMBOL_OVERVIEW = {
+  symbol: "MSFT",
+  status: "ok",
+  name: "Microsoft Corporation",
+  description:
+    "Microsoft Corporation develops and supports software, services, devices and solutions worldwide. It operates through productivity and business processes, intelligent cloud, and more personal computing segments.",
+  exchange: "NasdaqGS",
+  sector: "Technology",
+  industry: "Software - Infrastructure",
+  marketCap: 3_130_000_000_000,
+  pe: 36.5,
+  forwardPe: 28.4,
+  eps: 12.34,
+  dividendYield: 0.0072,
+  beta: 0.91,
+  avgVolume: 21_800_000,
+  profitMargin: 0.36,
+  revenueGrowth: 0.15,
+  week52High: 468.35,
+  week52Low: 344.77,
+  stale: false,
+};
+
+const SYMBOL_MARKET_STATE = {
+  instruments: [{ id: 7, symbol: "MSFT", name: "Microsoft Corporation", assetType: "equity" }],
+  watchlists: [{ id: 1, name: "Core holdings" }],
+  watchlist: [{ id: 11, watchlistId: 1, instrumentId: 7, symbol: "MSFT" }],
+  portfolios: [{ id: 2, name: "Long term", baseCurrency: "USD" }],
+  portfolio: [
+    {
+      id: 21,
+      portfolioId: 2,
+      instrumentId: 7,
+      symbol: "MSFT",
+      quantity: 12,
+      avgCost: 331.4,
+      currency: "USD",
+    },
+  ],
+  alerts: [
+    {
+      id: 31,
+      instrumentId: 7,
+      conditionType: "price_crosses_above",
+      conditionJson: { threshold: 450 },
+      enabled: true,
+      cooldownSeconds: 3600,
+    },
+  ],
+  alertEvents: [],
+  quoteSnapshot: {
+    generatedAt: new Date().toISOString(),
+    watchlistQuotes: [{ itemId: 11, instrumentId: 7, ...SYMBOL_QUOTE }],
+    portfolioQuotes: [
+      {
+        lotId: 21,
+        portfolioId: 2,
+        status: "ok",
+        includedInTotals: true,
+        currency: "USD",
+        currentPrice: SYMBOL_PRICE,
+        totalCost: 3976.8,
+        marketValue: 5055.84,
+        pnl: 1079.04,
+        allocationPercent: 100,
+      },
+    ],
+  },
+};
+
+async function installSymbolRoutes(page: Page, crypto = false): Promise<void> {
+  await page.route(/\/api\/(instruments|market-state)/, async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+
+    if (url.pathname === "/api/market-state") return json(SYMBOL_MARKET_STATE);
+    if (url.pathname === "/api/market-state/quotes") return json(SYMBOL_MARKET_STATE.quoteSnapshot);
+    if (url.pathname === "/api/instruments/search") {
+      return json({
+        candidates: [
+          crypto
+            ? { symbol: "BTC-USD", name: "Bitcoin USD", quoteType: "CRYPTOCURRENCY" }
+            : { symbol: "MSFT", name: "Microsoft Corporation", quoteType: "EQUITY" },
+        ],
+      });
+    }
+    if (url.pathname === "/api/instruments/quote") {
+      return json(
+        crypto ? { ...SYMBOL_QUOTE, symbol: "BTC-USD", name: "Bitcoin USD" } : SYMBOL_QUOTE,
+      );
+    }
+    if (url.pathname === "/api/instruments/overview") {
+      return json(
+        crypto
+          ? { symbol: "BTC-USD", status: "unavailable", reason: "no company fundamentals" }
+          : SYMBOL_OVERVIEW,
+      );
+    }
+    if (url.pathname === "/api/instruments/history") {
+      const range = url.searchParams.get("range") ?? "1M";
+      const bars = range === "1M" ? SYMBOL_BARS.slice(-22) : SYMBOL_BARS;
+      return json({
+        status: "ok",
+        symbol: url.searchParams.get("symbol"),
+        range,
+        interval: "1d",
+        source: "fixture",
+        fetchedAt: new Date().toISOString(),
+        stale: false,
+        prevClose: SYMBOL_BARS[SYMBOL_BARS.length - 2].close,
+        bars,
+      });
+    }
+    return json({});
+  });
 }
 
 // First-run model setup: the only state that renders the onboarding carousel.
@@ -970,6 +1147,42 @@ const CAPTURES: Capture[] = [
       await page.waitForTimeout(400);
     },
   },
+  {
+    name: "29-symbol-detail-equity",
+    path: "/symbol/MSFT",
+    prepare: (page) => installSymbolRoutes(page),
+    setup: async (page) => {
+      await page.getByRole("heading", { level: 1, name: /Microsoft Corporation/ }).waitFor();
+      await page.locator('[data-slot="symbol-hero-stats"]').waitFor();
+      // The rail cards render twice, once for the rail and once for the
+      // narrow-width stack; only one of the two is ever displayed.
+      await page.locator('fieldset[aria-label="Key levels"]:visible').first().waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // Scrolled rather than full-page: the app shell keeps its own scroll
+    // container, so a full-page shot would repeat the first screen.
+    name: "30-symbol-detail-scrolled",
+    path: "/symbol/MSFT",
+    prepare: (page) => installSymbolRoutes(page),
+    setup: async (page) => {
+      await page.locator('[data-slot="symbol-hero-stats"]').waitFor();
+      await page.locator('fieldset[aria-label="Trend summary"]:visible').first().waitFor();
+      await page.locator('fieldset[aria-label="Key stats"]').first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    name: "31-symbol-detail-crypto",
+    path: "/symbol/BTC-USD",
+    prepare: (page) => installSymbolRoutes(page, true),
+    setup: async (page) => {
+      await page.locator('[data-slot="symbol-hero-stats"]').waitFor();
+      await page.getByText("Fundamental stats are not available for crypto assets.").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
 ];
 
 // Pin the chat scroll container to the bottom so tall tool cards are
@@ -1025,7 +1238,8 @@ async function captureViewport(
     const page = await context.newPage();
     try {
       await installMocks(page, capture.overrides ?? {});
-      await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+      await capture.prepare?.(page);
+      await page.goto(`${baseUrl}${capture.path ?? ""}`, { waitUntil: "domcontentloaded" });
       await page.waitForFunction(
         () => Boolean((window as unknown as { __mockReady?: boolean }).__mockReady),
         undefined,
