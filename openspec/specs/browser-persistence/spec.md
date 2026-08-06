@@ -110,7 +110,11 @@ MUST NOT erase credentials for other configured providers.
 
 The PWA SHALL provide validated export/import for Pi sessions and OpenCandle
 state, a clear action covering sessions, state, secrets, caches, and runtime
-snapshots, and explicit recovery for unsupported or corrupt data.
+snapshots, and explicit recovery for unsupported or corrupt data. These
+controls SHALL be presented in the Settings page's Data & privacy section
+(the hosted runtime footer strip carries status only and links there), and
+the full clear action SHALL require typed confirmation in an app dialog
+rather than a native browser confirm.
 
 #### Scenario: Export clear import round trip
 
@@ -133,6 +137,13 @@ snapshots, and explicit recovery for unsupported or corrupt data.
   supports
 - **THEN** it refuses to open the state without resetting or overwriting it
 - **AND** a recovery backup remains available for export or a newer build
+
+#### Scenario: Full clear requires typed confirmation
+
+- **WHEN** the user activates the full clear action from Settings → Data & privacy
+- **THEN** an app dialog states what will be deleted and requires typing the
+  confirmation word before the destructive control enables
+- **AND** cancelling leaves all hosted data unchanged
 
 ### Requirement: Bootstrap and updates converge on durable browser state
 
