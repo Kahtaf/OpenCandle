@@ -235,6 +235,20 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(dialog()).toBe(null);
   });
 
+  it("stays closed when setup regresses after being completed from the open dialog", () => {
+    // The dialog closes by prop when setup completes, so Radix never fires
+    // onOpenChange. The mounted panel must still count that as seen: a later
+    // key clearing in the same mount must not reopen the dialog.
+    renderPanel();
+    expect(dialog()).toBeTruthy();
+
+    renderPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
+    expect(dialog()).toBeNull();
+
+    renderPanel({ modelSetup: NEEDS_SETUP });
+    expect(dialog()).toBeNull();
+  });
+
   it("keeps the seen record while the connection is still being established", () => {
     renderPanel();
     closeDialog();

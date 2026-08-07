@@ -238,6 +238,20 @@ describe("PublicHttpProviderBuilder", () => {
 
     expect(send).toHaveBeenCalledWith("provider.status.check", { providerId: "yahoo" });
   });
+
+  it("offers no reachability check in the hosted app, where the runtime cannot probe", () => {
+    const send = vi.fn();
+    mount(
+      React.createElement(PublicHttpProviderBuilder, {
+        provider: { ...PUBLIC_HTTP_PROVIDER, hosted: true },
+        send,
+        setToast: vi.fn(),
+      }),
+    );
+
+    expect(buttonNamed("Check reachability")).toBeUndefined();
+    expect(container.textContent).toContain("negotiated with the relay");
+  });
 });
 
 describe("ProviderBuilder dispatcher", () => {

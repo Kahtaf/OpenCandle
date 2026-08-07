@@ -48,11 +48,21 @@ export function PublicHttpProviderBuilder({ provider, send, setToast }) {
         ) : null}
       </div>
 
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="brand" size="sm" prefixIcon={RefreshCw} onClick={checkReachability}>
-          Check reachability
-        </Button>
-      </div>
+      {provider.hosted ? (
+        // The hosted runtime cannot run this probe: its status.check command
+        // only refreshes diagnostics, so a check button here would do
+        // nothing. Availability is settled at boot instead.
+        <p className="text-xs leading-5 text-muted-foreground">
+          In the hosted app this source's availability is negotiated with the relay when the runtime
+          starts.
+        </p>
+      ) : (
+        <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
+          <Button variant="brand" size="sm" prefixIcon={RefreshCw} onClick={checkReachability}>
+            Check reachability
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

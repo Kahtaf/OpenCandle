@@ -211,11 +211,21 @@ export function ChatPanel({
   // setup" never reopen it. Reaching setup afterwards is done through the
   // composer's model control or Settings.
   const setupDialogOpen = Boolean(needsSetup) && !firstRunSeen;
+  const setupDialogOpenedRef = useRef(false);
   useEffect(() => {
     // Guarded on the dialog actually being open: a boot that never showed it
-    // must not spend a first-timer's one automatic opening.
-    if (setupDialogOpen) markFirstRunOnboardingSeen();
-  }, [setupDialogOpen]);
+    // must not spend a first-timer's one automatic opening. The in-memory
+    // flag flips only after the dialog closes, because flipping it while
+    // open would close the dialog a frame after it appeared. A prop-driven
+    // close (setup completed from the dialog) never fires onOpenChange, so
+    // this is also where that path is counted as seen.
+    if (setupDialogOpen) {
+      setupDialogOpenedRef.current = true;
+      markFirstRunOnboardingSeen();
+    } else if (setupDialogOpenedRef.current && !firstRunSeen) {
+      setFirstRunSeen(true);
+    }
+  }, [setupDialogOpen, firstRunSeen]);
   // The composer is never disabled by setup: needsSetup blocks only sending,
   // via chatDisabled and submit. The first-run dialog is modal, so drafting
   // resumes as soon as it is dismissed (Escape, the close control, or a click
