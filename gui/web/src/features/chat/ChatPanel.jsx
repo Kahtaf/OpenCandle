@@ -196,8 +196,15 @@ export function ChatPanel({
   // setup while they wait for the writer's canonical bootstrap. Do not present
   // that placeholder as a first-run credential flow: the shared connection
   // state already disables actions and shows its reconnecting status.
+  // The boot placeholder carries requirement "unknown" while the role can
+  // already read "writer"; that proves nothing about setup and must not flash
+  // the dialog open. Only a positive non-ready requirement from a real setup
+  // broadcast counts.
   const needsSetup =
-    role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
+    role !== "connecting" &&
+    modelSetup?.requirement &&
+    modelSetup.requirement !== "ready" &&
+    modelSetup.requirement !== "unknown";
   // Auto-open rule: the first-run setup dialog opens whenever setup is
   // required and the user has not dismissed it. Dismissal is remembered for as
   // long as setup stays required, so later modelSetup broadcasts, re-renders,

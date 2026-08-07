@@ -141,6 +141,18 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(container.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("does not open on the boot placeholder before a real setup broadcast arrives", () => {
+    // During boot the connection state carries requirement "unknown" while the
+    // role can already read "writer". That proves nothing about setup and must
+    // not flash the dialog open, which also left a stuck Radix exit zombie
+    // when the real "ready" broadcast closed it a frame later.
+    renderPanel({
+      modelSetup: { requirement: "unknown", providers: [], availableModels: [] },
+    });
+
+    expect(dialog()).toBeNull();
+  });
+
   it("frees the composer for drafting as soon as the dialog is dismissed", () => {
     renderPanel();
     // The invariant is "setup does not strand you", not "the composer works
