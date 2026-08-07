@@ -14,6 +14,13 @@ export function useSettingsToolInvoker() {
       const bootstrap = await transport.bootstrap();
       const sessionId = String(bootstrap?.sessionId ?? bootstrap?.snapshot?.sessionId ?? "").trim();
       if (!sessionId) throw new Error("OpenCandle could not open a session for this change.");
+      // Match the chat shell's non-chat action guard: a session the TUI owns,
+      // or one coordination reports as not writable, must not be mutated from
+      // a settings section either.
+      const coordination = bootstrap?.coordination;
+      if (coordination?.ownerKind === "tui" || coordination?.writable === false) {
+        throw new Error("OpenCandle is reconnecting to this session.");
+      }
       const request = buildToolInvokeHttpFallbackRequest(toolName, args, sessionId, sessionId, {
         recordTranscript: false,
       });
