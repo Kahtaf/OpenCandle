@@ -417,7 +417,9 @@ function preferenceMutationLockBlocked(getSessionManager: () => SessionManager):
   try {
     return shouldBlockFailedCoordinatorAction(getSessionManager());
   } catch {
-    return false;
+    // Fail closed: an unresolvable session lock state is not permission to
+    // delete durable prompt-context data.
+    return true;
   }
 }
 

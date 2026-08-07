@@ -1133,8 +1133,9 @@ function preferenceMutationLockBlocked(options: GuiHttpRouteOptions): boolean {
   try {
     return shouldBlockFailedCoordinatorLockAction(options.getSessionManager());
   } catch {
-    // No resolvable session means there is no live session lock to protect.
-    return false;
+    // Fail closed: an unresolvable session lock state is not permission to
+    // delete durable prompt-context data.
+    return true;
   }
 }
 

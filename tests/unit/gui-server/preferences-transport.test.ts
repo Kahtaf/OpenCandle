@@ -57,10 +57,11 @@ const SNAPSHOT = {
   ],
 };
 
-let lockSessionManager: SessionManager | null = null;
+// The lock guard is module-mocked, so the manager only needs to be callable.
+let lockSessionManager: SessionManager | null = {} as SessionManager;
 
 beforeEach(() => {
-  lockSessionManager = null;
+  lockSessionManager = {} as SessionManager;
   shouldBlockCoordinatorActionMock.mockReset().mockReturnValue(false);
   getPreferencesSnapshotMock.mockReset().mockReturnValue(SNAPSHOT);
   deleteStoredPreferenceMock.mockReset().mockReturnValue({ ...SNAPSHOT, preferences: [] });
@@ -307,7 +308,6 @@ describe("preferences HTTP fallback routes", () => {
   });
 
   it("refuses deletes while the session lock belongs to another live process", async () => {
-    lockSessionManager = {} as SessionManager;
     shouldBlockCoordinatorActionMock.mockReturnValue(true);
 
     const response = await fetch(`${endpoint}/api/preferences/delete`, {

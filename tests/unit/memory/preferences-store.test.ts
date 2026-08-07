@@ -141,6 +141,16 @@ describe("preference transparency accessors", () => {
       ]);
     });
 
+    it("refuses to treat the __enabled control row as a deletable default", async () => {
+      const { assertUserDeletableToolDefaultPath } = await import(
+        "../../../src/memory/tool-defaults.js"
+      );
+      expect(() => assertUserDeletableToolDefaultPath("__enabled")).toThrow(
+        "cannot be deleted here",
+      );
+      expect(() => assertUserDeletableToolDefaultPath("range")).not.toThrow();
+    });
+
     it("hides the __enabled bookkeeping rows written by tool toggles", () => {
       setDefault("get_stock_history", "range", "6mo", db);
       setDefault("backtest_strategy", "__enabled", false, db);

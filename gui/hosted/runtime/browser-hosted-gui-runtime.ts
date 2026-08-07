@@ -42,7 +42,8 @@ import {
   type PreferencesSnapshot,
 } from "../../../src/memory/preferences-view.js";
 import { MemoryStorage } from "../../../src/memory/storage.js";
-import { deleteDefault } from "../../../src/memory/tool-defaults.js";
+import { assertUserDeletableToolDefaultPath,
+  deleteDefault } from "../../../src/memory/tool-defaults.js";
 import {
   clearPendingSessionAction,
   deleteSessionActionStore,
@@ -673,6 +674,7 @@ export class BrowserHostedGuiRuntime {
     toolName: string,
     paramPath: string,
   ): Promise<BrowserHostedBootstrap & { preferences: PreferencesSnapshot }> {
+    assertUserDeletableToolDefaultPath(paramPath);
     deleteDefault(toolName, paramPath, this.stateDatabase);
     return this.buildPreferencesMutation();
   }

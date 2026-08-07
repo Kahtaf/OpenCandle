@@ -5,7 +5,10 @@ import {
 } from "../../src/memory/preferences-view.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { MemoryStorage } from "../../src/memory/storage.js";
-import { deleteDefault } from "../../src/memory/tool-defaults.js";
+import {
+  assertUserDeletableToolDefaultPath,
+  deleteDefault,
+} from "../../src/memory/tool-defaults.js";
 
 export type { PreferencesSnapshot };
 
@@ -37,6 +40,7 @@ export function deleteStoredToolDefault(
 ): PreferencesSnapshot {
   const storedToolName = requireIdentifier(toolName, "Tool name");
   const storedParamPath = requireIdentifier(paramPath, "Parameter path");
+  assertUserDeletableToolDefaultPath(storedParamPath);
   return withDatabase(db, (connection) => {
     deleteDefault(storedToolName, storedParamPath, connection);
     return buildPreferencesSnapshot(connection);

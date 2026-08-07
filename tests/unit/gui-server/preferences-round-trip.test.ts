@@ -173,6 +173,10 @@ describe("local preferences round trip", () => {
           getSessionId: () => "session-1",
           getSessionName: () => "Macro session",
           getEntries: () => [],
+          // The delete guard resolves the real writer-lock scope; an
+          // unlocked path means no live lock and the delete proceeds.
+          getSessionFile: () => join(sessionDir, "session-1.jsonl"),
+          getSessionDir: () => sessionDir,
         }) as unknown as SessionManager,
       backgroundQuoteRefreshes: new BackgroundQuoteRefreshes(),
       askUserBridge: { getPrompts: () => [] },

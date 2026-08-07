@@ -15,6 +15,15 @@ export interface StoredToolDefault {
   setAt: string;
 }
 
+// User-facing delete surfaces call this before removing a row. The __enabled
+// rows are tool on/off bookkeeping: deleting a false row would silently
+// re-enable a disabled tool, so they are not deletable as defaults.
+export function assertUserDeletableToolDefaultPath(paramPath: string): void {
+  if (paramPath === "__enabled") {
+    throw new Error("This row controls whether a tool is enabled and cannot be deleted here.");
+  }
+}
+
 export function listAllToolDefaults(db?: StateDatabase): StoredToolDefault[] {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
