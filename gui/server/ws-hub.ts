@@ -25,7 +25,11 @@ import type { SessionActionsController } from "./session-actions.js";
 import { listDisplaySessions } from "./session-list.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
-import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
+import {
+  readWriterLock,
+  shouldBlockFailedCoordinatorAction,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 
 interface AskUserBridge {
   getPrompts(): unknown[];
@@ -191,6 +195,9 @@ export function createWsHub({
           break;
         case "preferences.delete": {
           if (role !== "writer") throw new Error("Read-only follower mode");
+          if (preferenceMutationLockBlocked(getSessionManager)) {
+            throw new Error("OpenCandle is reconnecting to this session.");
+          }
           const snapshot = deleteStoredPreference(
             String(data.namespace ?? ""),
             String(data.key ?? ""),
@@ -201,6 +208,9 @@ export function createWsHub({
         }
         case "tool_defaults.delete": {
           if (role !== "writer") throw new Error("Read-only follower mode");
+          if (preferenceMutationLockBlocked(getSessionManager)) {
+            throw new Error("OpenCandle is reconnecting to this session.");
+          }
           const snapshot = deleteStoredToolDefault(
             String(data.toolName ?? ""),
             String(data.paramPath ?? ""),
@@ -398,6 +408,17 @@ export function createWsHub({
     currentChatEvents,
     subscribeToSessionEvents,
   };
+}
+
+// A stale hub role is not enough to authorize deleting durable prompt-context
+// data: the current session's live writer lock can belong to a TUI. A session
+// whose lock scope cannot be resolved has no live lock to protect.
+function preferenceMutationLockBlocked(getSessionManager: () => SessionManager): boolean {
+  try {
+    return shouldBlockFailedCoordinatorAction(getSessionManager());
+  } catch {
+    return false;
+  }
 }
 
 function coordinationStateForSession(

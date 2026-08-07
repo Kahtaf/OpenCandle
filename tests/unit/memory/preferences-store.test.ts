@@ -141,6 +141,16 @@ describe("preference transparency accessors", () => {
       ]);
     });
 
+    it("hides the __enabled bookkeeping rows written by tool toggles", () => {
+      setDefault("get_stock_history", "range", "6mo", db);
+      setDefault("backtest_strategy", "__enabled", false, db);
+
+      const rows = listAllToolDefaults(db);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.paramPath).toBe("range");
+    });
+
     it("deletes one parameter path and reports the removal", () => {
       setDefault("get_stock_history", "range", "6mo", db);
       setDefault("get_stock_history", "interval", "1d", db);

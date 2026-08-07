@@ -297,6 +297,29 @@ describe("hosted runtime transport", () => {
     expect(host.request).toHaveBeenCalledWith("gui", { action: "bootstrap" }, undefined);
   });
 
+  it("publishes the refreshed preferences snapshot after a hosted delete", async () => {
+    const host = createHost();
+    const snapshot = { preferences: [], toolDefaults: [] };
+    host.handleCommand = vi.fn(async () => snapshot);
+    const transport = createHostedRuntimeTransport({ host });
+    const messages: Array<Record<string, unknown>> = [];
+    transport.openEventChannel({
+      onMessage: (message: string) => messages.push(JSON.parse(message)),
+      onClose: vi.fn(),
+    });
+
+    await transport.deletePreference({ namespace: "workflow", key: "risk_profile" });
+
+    await vi.waitFor(() =>
+      expect(messages.some((message) => message.type === "preferences")).toBe(true),
+    );
+    expect(host.handleCommand).toHaveBeenCalledWith({
+      type: "preferences.delete",
+      namespace: "workflow",
+      key: "risk_profile",
+    });
+  });
+
   it("emulates the GUI event channel and refreshes snapshots after a run", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

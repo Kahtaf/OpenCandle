@@ -21,7 +21,11 @@ export function listAllToolDefaults(db?: StateDatabase): StoredToolDefault[] {
   try {
     const rows = connection
       .prepare(
-        `SELECT tool_name, param_path, value_json, set_at FROM tool_defaults ORDER BY tool_name, param_path`,
+        // The __enabled rows are tool on/off bookkeeping written by
+        // setToolEnabled, not user-facing defaults; listing them would let a
+        // preferences delete silently re-enable a disabled tool.
+        `SELECT tool_name, param_path, value_json, set_at FROM tool_defaults
+         WHERE param_path != '__enabled' ORDER BY tool_name, param_path`,
       )
       .all() as Array<{
       tool_name: string;

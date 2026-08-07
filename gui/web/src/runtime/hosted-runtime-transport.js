@@ -93,7 +93,18 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     // A late online bootstrap must not overwrite a newer offline (or
     // replacement-writer) projection and make saved-state controls writable.
     if (generation !== refreshGeneration) return withBrowserState(bootstrap);
-    return publishBootstrap(bootstrap);
+    const result = publishBootstrap(bootstrap);
+    // A coordinator invalidation can be another tab's preference mutation and
+    // the bootstrap payload carries no preferences, so refresh them alongside;
+    // an offline or superseded read just keeps the current view.
+    void requestGui({ action: "preferences_list" })
+      .then((snapshot) => {
+        if (generation === refreshGeneration && snapshot) {
+          publish({ type: "preferences", ...snapshot });
+        }
+      })
+      .catch(() => {});
+    return result;
   };
 
   const transport = {
@@ -399,13 +410,23 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     },
 
     // Deletes go through the command path so a follower tab follows the same
-    // writer coordination every other hosted mutation follows.
-    deletePreference({ namespace, key }) {
-      return host.handleCommand({ type: "preferences.delete", namespace, key });
+    // writer coordination every other hosted mutation follows. The refreshed
+    // snapshot is published as a preferences event so this tab's shared state
+    // view updates without waiting for a refetch.
+    async deletePreference({ namespace, key }) {
+      const snapshot = await host.handleCommand({ type: "preferences.delete", namespace, key });
+      if (snapshot) publish({ type: "preferences", ...snapshot });
+      return snapshot;
     },
 
-    deleteToolDefault({ toolName, paramPath }) {
-      return host.handleCommand({ type: "tool_defaults.delete", toolName, paramPath });
+    async deleteToolDefault({ toolName, paramPath }) {
+      const snapshot = await host.handleCommand({
+        type: "tool_defaults.delete",
+        toolName,
+        paramPath,
+      });
+      if (snapshot) publish({ type: "preferences", ...snapshot });
+      return snapshot;
     },
 
     getDiagnostics(options = {}, signal) {

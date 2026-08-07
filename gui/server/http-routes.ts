@@ -1129,13 +1129,25 @@ function shouldBlockFailedCoordinatorAction(
  * commands: writer-only, and it answers with the refreshed list rather than a
  * bootstrap payload, so the caller renders the result of its own mutation.
  */
+function preferenceMutationLockBlocked(options: GuiHttpRouteOptions): boolean {
+  try {
+    return shouldBlockFailedCoordinatorLockAction(options.getSessionManager());
+  } catch {
+    // No resolvable session means there is no live session lock to protect.
+    return false;
+  }
+}
+
 async function handleTrustedPreferencesMutation(
   req: IncomingMessage,
   res: ServerResponse,
   options: GuiHttpRouteOptions,
   mutate: (body: Record<string, unknown>) => PreferencesSnapshot,
 ): Promise<void> {
-  if (options.role !== "writer") {
+  // A stale server role is not enough: the current session's live writer
+  // lock can belong to a TUI, and durable prompt-context data must not be
+  // deleted out from under it.
+  if (options.role !== "writer" || preferenceMutationLockBlocked(options)) {
     writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
     return;
   }

@@ -226,6 +226,10 @@ export function ChatPanel({
   useEffect(() => {
     // Persist only after the dialog has actually been shown: a boot that
     // never opened it must not spend a first-timer's one automatic opening.
+    // React Doctor prefers event handlers for this write, but the opening is
+    // not a user event: it is the render-derived idle-to-open transition
+    // above, and localStorage writes are not allowed during render, so a
+    // phase-keyed effect is the narrowest correct home for it.
     if (onboardingPhase !== "idle") markFirstRunOnboardingSeen();
   }, [onboardingPhase]);
   // The composer is never disabled by setup: needsSetup blocks only sending,

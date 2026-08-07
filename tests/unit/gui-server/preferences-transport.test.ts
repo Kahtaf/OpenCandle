@@ -27,6 +27,15 @@ vi.mock("../../../gui/server/preferences-api.js", () => ({
   deleteStoredToolDefault: deleteStoredToolDefaultMock,
 }));
 
+const { shouldBlockCoordinatorActionMock } = vi.hoisted(() => ({
+  shouldBlockCoordinatorActionMock: vi.fn(() => false),
+}));
+
+vi.mock("../../../gui/server/writer-lock.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  shouldBlockFailedCoordinatorAction: shouldBlockCoordinatorActionMock,
+}));
+
 const SNAPSHOT = {
   preferences: [
     {
@@ -48,7 +57,11 @@ const SNAPSHOT = {
   ],
 };
 
+let lockSessionManager: SessionManager | null = null;
+
 beforeEach(() => {
+  lockSessionManager = null;
+  shouldBlockCoordinatorActionMock.mockReset().mockReturnValue(false);
   getPreferencesSnapshotMock.mockReset().mockReturnValue(SNAPSHOT);
   deleteStoredPreferenceMock.mockReset().mockReturnValue({ ...SNAPSHOT, preferences: [] });
   deleteStoredToolDefaultMock.mockReset().mockReturnValue({ ...SNAPSHOT, toolDefaults: [] });
@@ -130,6 +143,34 @@ describe("preferences WS commands", () => {
     );
   });
 
+  it("refuses deletes while another live process owns the session lock", async () => {
+    shouldBlockCoordinatorActionMock.mockReturnValue(true);
+    const client = connect();
+
+    client.messageHandlers[0]?.({
+      type: "preferences.delete",
+      namespace: "global",
+      key: "risk_profile",
+    });
+    await vi.waitFor(() =>
+      expect(client.messages).toContainEqual({
+        type: "error",
+        message: "OpenCandle is reconnecting to this session.",
+      }),
+    );
+    expect(deleteStoredPreferenceMock).not.toHaveBeenCalled();
+
+    client.messageHandlers[0]?.({
+      type: "tool_defaults.delete",
+      toolName: "get_stock_history",
+      paramPath: "range",
+    });
+    await vi.waitFor(() =>
+      expect(client.messages.filter((m) => m.type === "error").length).toBe(2),
+    );
+    expect(deleteStoredToolDefaultMock).not.toHaveBeenCalled();
+  });
+
   function connect(role = "writer") {
     const client = createFakeClient();
     const hub = createWsHub({
@@ -194,7 +235,7 @@ describe("preferences HTTP fallback routes", () => {
       localCoordinatorSecret: "coordinator-secret",
       allowRemotePrivateApi: false,
       getSession: unavailable,
-      getSessionManager: unavailable,
+      getSessionManager: () => lockSessionManager ?? unavailable(),
       createSessionForManager: async () => unavailable(),
       wsHub: { broadcast: vi.fn() } as unknown as WsHub,
       modelSetupController: {} as ModelSetupController,
@@ -263,6 +304,21 @@ describe("preferences HTTP fallback routes", () => {
     });
     expect(toolDefault.status).toBe(200);
     expect(await toolDefault.json()).toEqual({ ...SNAPSHOT, toolDefaults: [] });
+  });
+
+  it("refuses deletes while the session lock belongs to another live process", async () => {
+    lockSessionManager = {} as SessionManager;
+    shouldBlockCoordinatorActionMock.mockReturnValue(true);
+
+    const response = await fetch(`${endpoint}/api/preferences/delete`, {
+      method: "POST",
+      headers: { ...trustedHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ namespace: "global", key: "risk_profile" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "syncing" });
+    expect(deleteStoredPreferenceMock).not.toHaveBeenCalled();
   });
 
   it("refuses deletes from a follower window", async () => {
