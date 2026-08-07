@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TYPED_CONFIRM_WORD } from "../../../gui/web/src/components/ui/typed-confirm-dialog.jsx";
+import { TYPED_CONFIRM_WORD } from "../../../gui/web/src/components/ui/typed-confirm-word.js";
 import { DataSection } from "../../../gui/web/src/features/settings/sections/DataSection.jsx";
 import { RuntimeTransportProvider } from "../../../gui/web/src/runtime/runtime-transport-provider.jsx";
 

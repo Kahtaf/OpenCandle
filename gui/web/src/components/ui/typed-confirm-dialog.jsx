@@ -10,10 +10,7 @@ import {
   AlertDialogTitle,
 } from "./alert-dialog.jsx";
 import { Input } from "./input.jsx";
-
-// A fixed, locale independent word so the confirmation reads the same for
-// everyone and cannot be satisfied by a translated phrase.
-export const TYPED_CONFIRM_WORD = "DELETE";
+import { TYPED_CONFIRM_WORD } from "./typed-confirm-word.js";
 
 const NO_ITEMS = Object.freeze([]);
 

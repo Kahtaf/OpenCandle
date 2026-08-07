@@ -3,10 +3,8 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  TYPED_CONFIRM_WORD,
-  TypedConfirmDialog,
-} from "../../../gui/web/src/components/ui/typed-confirm-dialog.jsx";
+import { TypedConfirmDialog } from "../../../gui/web/src/components/ui/typed-confirm-dialog.jsx";
+import { TYPED_CONFIRM_WORD } from "../../../gui/web/src/components/ui/typed-confirm-word.js";
 
 function setValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
