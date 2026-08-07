@@ -16,6 +16,11 @@
 // makes a wiped profile a first-timer again.
 export const FIRST_RUN_ONBOARDING_SEEN_KEY = "opencandle.onboarding.first-run-seen.v1";
 
+// Earlier builds stored a dismissal under this key. A profile that dismissed
+// onboarding then has seen it, so the record migrates forward on first read
+// rather than treating an upgraded browser as a first-timer.
+const LEGACY_DISMISSED_KEY = "opencandle.onboarding.first-run-dismissed.v1";
+
 function onboardingStorage() {
   try {
     return globalThis.localStorage ?? null;
@@ -28,7 +33,15 @@ function onboardingStorage() {
 
 export function readFirstRunOnboardingSeen() {
   try {
-    return onboardingStorage()?.getItem(FIRST_RUN_ONBOARDING_SEEN_KEY) === "true";
+    const storage = onboardingStorage();
+    if (!storage) return false;
+    if (storage.getItem(FIRST_RUN_ONBOARDING_SEEN_KEY) === "true") return true;
+    if (storage.getItem(LEGACY_DISMISSED_KEY) === "true") {
+      storage.setItem(FIRST_RUN_ONBOARDING_SEEN_KEY, "true");
+      storage.removeItem(LEGACY_DISMISSED_KEY);
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }

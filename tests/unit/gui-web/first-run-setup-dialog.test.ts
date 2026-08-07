@@ -196,6 +196,17 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(seenRecord()).toBe(null);
   });
 
+  it("treats the legacy dismissal record as already seen and migrates it", () => {
+    localStorage.removeItem("opencandle.onboarding.first-run-seen.v1");
+    localStorage.setItem("opencandle.onboarding.first-run-dismissed.v1", "true");
+
+    renderPanel();
+
+    expect(dialog()).toBeNull();
+    expect(localStorage.getItem("opencandle.onboarding.first-run-seen.v1")).toBe("true");
+    expect(localStorage.getItem("opencandle.onboarding.first-run-dismissed.v1")).toBeNull();
+  });
+
   it("stays closed on a mount where setup is required but onboarding was already seen", () => {
     // A returning browser profile: a reload lands on a real non-ready
     // requirement for a frame before stored keys resolve, which must not flash
