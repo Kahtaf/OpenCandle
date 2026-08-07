@@ -11,6 +11,7 @@ import {
 } from "../../../components/ui/alert-dialog.jsx";
 import { Button } from "../../../components/ui/button.jsx";
 import { TypedConfirmDialog } from "../../../components/ui/typed-confirm-dialog.jsx";
+import { useWaitingServiceWorker } from "../../../hooks/use-waiting-service-worker.js";
 import { useRuntimeTransport } from "../../../runtime/runtime-transport-context.js";
 import { SettingsCard, SettingsNote, SettingsRow } from "../settings-rows.jsx";
 
@@ -28,7 +29,7 @@ export function DataSection({ role, setToast }) {
 
 function HostedData({ actions, role, setToast }) {
   const importRef = useRef(null);
-  const [waitingWorker, setWaitingWorker] = useState(null);
+  const waitingWorker = useWaitingServiceWorker();
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState("");
   // A hosted follower forwards data commands to the elected writer through
@@ -39,12 +40,6 @@ function HostedData({ actions, role, setToast }) {
   // Export only reads what this browser already holds, so it stays available
   // offline and in a follower tab. Everything that writes does not.
   const exportDisabled = !actions || Boolean(busy);
-
-  useEffect(() => {
-    const onUpdateReady = (event) => setWaitingWorker(event.detail?.registration?.waiting ?? null);
-    addEventListener("opencandle:update-ready", onUpdateReady);
-    return () => removeEventListener("opencandle:update-ready", onUpdateReady);
-  }, []);
 
   const run = async (name, action, { reads = false } = {}) => {
     if (readOnly && !reads) {

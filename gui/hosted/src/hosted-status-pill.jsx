@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useWaitingServiceWorker } from "../../web/src/hooks/use-waiting-service-worker.js";
 import { Badge } from "../../web/src/components/ui/badge.jsx";
 import { Button } from "../../web/src/components/ui/button.jsx";
 import { cn } from "../../web/src/lib/utils.js";
@@ -17,7 +18,7 @@ export function HostedStatusPill({ host, actions }) {
     message: initialProgress?.message || "Starting browser runtime…",
     actionError: "",
   });
-  const [waitingWorker, setWaitingWorker] = useState(null);
+  const waitingWorker = useWaitingServiceWorker();
 
   useEffect(() => {
     let disposed = false;
@@ -39,14 +40,11 @@ export function HostedStatusPill({ host, actions }) {
     const unsubscribe = host.subscribe?.(refresh);
     addEventListener("online", refresh);
     addEventListener("offline", refresh);
-    const updateReady = (event) => setWaitingWorker(event.detail?.registration?.waiting ?? null);
-    addEventListener("opencandle:update-ready", updateReady);
     return () => {
       disposed = true;
       unsubscribe?.();
       removeEventListener("online", refresh);
       removeEventListener("offline", refresh);
-      removeEventListener("opencandle:update-ready", updateReady);
     };
   }, [host]);
 

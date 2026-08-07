@@ -11,9 +11,10 @@ export function AutomationSection({ role, setToast }) {
   const transport = useRuntimeTransport();
   const hosted = transport.kind === "hosted";
   const invokeTool = useSettingsToolInvoker();
-  // Only a local follower is read-only. A hosted follower forwards mutations
-  // to the elected writer, exactly as saved market state and preferences do.
-  const readOnly = role !== "writer" && !hosted;
+  // An offline tab and a local follower are read-only. An online hosted
+  // follower forwards mutations to the elected writer, exactly as saved
+  // market state and preferences do.
+  const readOnly = role === "offline" || (role !== "writer" && !hosted);
   const [saved, setSaved] = useState(false);
   const [webhook, setWebhook] = useState("unknown");
 

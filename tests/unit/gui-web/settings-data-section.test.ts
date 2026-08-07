@@ -122,6 +122,24 @@ describe("DataSection", () => {
     expect(actions.installUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the install row for an update discovered before the section mounted", async () => {
+    const waiting = { postMessage: vi.fn() };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { getRegistration: vi.fn(async () => ({ waiting })) },
+    });
+    try {
+      const actions = hostedActions();
+      await render({ kind: "hosted", hostedData: actions }, { role: "writer" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(buttonByText(container, "Install update")).toBeDefined();
+    } finally {
+      Reflect.deleteProperty(navigator, "serviceWorker");
+    }
+  });
+
   it("requires the typed word before clearing everything", async () => {
     const { actions } = hostedActions();
     await render({ kind: "hosted", hostedData: actions });
