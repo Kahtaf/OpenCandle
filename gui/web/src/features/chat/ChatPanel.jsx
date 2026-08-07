@@ -75,7 +75,12 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
-  const [firstRunSeen, setFirstRunSeen] = useState(readFirstRunOnboardingSeen);
+  // "idle" until the one automatic opening, "open" while the dialog is up,
+  // "done" forever after it closes for any reason. Storage seeds the machine
+  // so a profile that has seen onboarding starts at "done".
+  const [onboardingPhase, setOnboardingPhase] = useState(() =>
+    readFirstRunOnboardingSeen() ? "done" : "idle",
+  );
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -210,22 +215,19 @@ export function ChatPanel({
   // route changes, reloads, new tabs, and a later regression back to "needs
   // setup" never reopen it. Reaching setup afterwards is done through the
   // composer's model control or Settings.
-  const setupDialogOpen = Boolean(needsSetup) && !firstRunSeen;
-  const setupDialogOpenedRef = useRef(false);
+  // The phase advances during render, the sanctioned way to derive state
+  // from changing inputs. A prop-driven close (setup completed from the open
+  // dialog) never fires onOpenChange, so the open-to-done transition lives
+  // here too: once done, a later regression back to "needs setup" cannot
+  // reopen the dialog in this or any future mount.
+  if (onboardingPhase === "idle" && needsSetup) setOnboardingPhase("open");
+  if (onboardingPhase === "open" && !needsSetup) setOnboardingPhase("done");
+  const setupDialogOpen = onboardingPhase === "open";
   useEffect(() => {
-    // Guarded on the dialog actually being open: a boot that never showed it
-    // must not spend a first-timer's one automatic opening. The in-memory
-    // flag flips only after the dialog closes, because flipping it while
-    // open would close the dialog a frame after it appeared. A prop-driven
-    // close (setup completed from the dialog) never fires onOpenChange, so
-    // this is also where that path is counted as seen.
-    if (setupDialogOpen) {
-      setupDialogOpenedRef.current = true;
-      markFirstRunOnboardingSeen();
-    } else if (setupDialogOpenedRef.current && !firstRunSeen) {
-      setFirstRunSeen(true);
-    }
-  }, [setupDialogOpen, firstRunSeen]);
+    // Persist only after the dialog has actually been shown: a boot that
+    // never opened it must not spend a first-timer's one automatic opening.
+    if (onboardingPhase !== "idle") markFirstRunOnboardingSeen();
+  }, [onboardingPhase]);
   // The composer is never disabled by setup: needsSetup blocks only sending,
   // via chatDisabled and submit. The first-run dialog is modal, so drafting
   // resumes as soon as it is dismissed (Escape, the close control, or a click
@@ -437,8 +439,7 @@ export function ChatPanel({
         open={setupDialogOpen}
         onOpenChange={(next) => {
           if (next) return;
-          markFirstRunOnboardingSeen();
-          setFirstRunSeen(true);
+          setOnboardingPhase("done");
         }}
         variant="first-run"
         modelSetup={modelSetup}
