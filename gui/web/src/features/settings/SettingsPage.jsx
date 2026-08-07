@@ -11,6 +11,7 @@ export function SettingsPage({
   catalog,
   focusProvider,
   preferencesSnapshot,
+  dataQuality,
   send,
   setToast,
   onOpenProviders,
@@ -55,6 +56,7 @@ export function SettingsPage({
                   catalog={catalog}
                   focusProvider={focusProvider}
                   preferencesSnapshot={preferencesSnapshot}
+                  dataQuality={dataQuality}
                   send={send}
                   setToast={setToast}
                   onOpenProviders={onOpenProviders}

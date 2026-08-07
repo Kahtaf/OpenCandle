@@ -17,11 +17,7 @@ function Probe() {
 function renderWithTransport(transport: Record<string, unknown>) {
   act(() => {
     root.render(
-      React.createElement(
-        RuntimeTransportProvider,
-        { transport },
-        React.createElement(Probe),
-      ),
+      React.createElement(RuntimeTransportProvider, { transport }, React.createElement(Probe)),
     );
   });
 }
@@ -54,9 +50,9 @@ describe("useSettingsToolInvoker", () => {
   it("invokes the tool for a writable session without recording a transcript", async () => {
     const transport = makeTransport({ sessionId: "session-1", ownerKind: "gui", writable: true });
     renderWithTransport(transport);
-    await expect(latestInvoker?.("daily_watchlist_report", { action: "configure" })).resolves.toEqual(
-      { ok: true },
-    );
+    await expect(
+      latestInvoker?.("daily_watchlist_report", { action: "configure" }),
+    ).resolves.toEqual({ ok: true });
     expect(transport.invokeTool).toHaveBeenCalledTimes(1);
     const body = (transport.invokeTool as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
       string,

@@ -549,6 +549,7 @@ export function AppShell() {
               catalog={gui.catalog}
               focusProvider={search?.provider}
               preferencesSnapshot={gui.preferencesSnapshot}
+              dataQuality={visibleDashboard?.dataQuality}
               send={gui.send}
               onOpenProviders={openProviderSettings}
               onOpenModelSetup={openModelSettings}

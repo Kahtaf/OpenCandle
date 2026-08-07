@@ -85,6 +85,29 @@ describe("SettingsPage", () => {
     expect(html).not.toContain("overflow-x-visible w-screen");
   });
 
+  it("forwards data quality state to the section body", () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const Section = (props: Record<string, unknown>) => {
+      seen.push(props);
+      return null;
+    };
+    const sections = [
+      {
+        slug: "diagnostics",
+        label: "Diagnostics",
+        icon: null,
+        description: "",
+        Component: Section,
+      },
+    ];
+    render({
+      section: "diagnostics",
+      sections,
+      dataQuality: { hardSkips: ["alpha_vantage"], softGaps: [] },
+    });
+    expect(seen.at(-1)?.dataQuality).toEqual({ hardSkips: ["alpha_vantage"], softGaps: [] });
+  });
+
   it("renders every section body without throwing", () => {
     for (const slug of SETTINGS_SECTIONS) {
       const html = render({ section: slug });
