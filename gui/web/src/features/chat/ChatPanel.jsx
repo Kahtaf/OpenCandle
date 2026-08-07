@@ -385,25 +385,26 @@ export function ChatPanel({
             </div>
           )}
         </section>
-      </div>
-      {transcript.showJumpToLatest ? (
-        <div
-          data-slot="jump-to-latest"
-          className="z-10 flex h-12 shrink-0 items-center justify-center"
-        >
-          <Button
-            type="button"
-            size="sm"
-            rounded="full"
-            className="min-h-10 gap-1.5 shadow-md"
-            onClick={transcript.jumpToLatest}
-            aria-label="Jump to latest"
+        {transcript.showJumpToLatest ? (
+          <div
+            data-slot="jump-to-latest"
+            className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3"
           >
-            <ArrowDown className="h-4 w-4" />
-            Latest
-          </Button>
-        </div>
-      ) : null}
+            <Button
+              type="button"
+              variant="bordered"
+              size="xs"
+              rounded="full"
+              className="pointer-events-auto relative h-7 min-h-7 shrink-0 gap-1 px-3 text-xs shadow-subtle-sm before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={transcript.jumpToLatest}
+              aria-label="Jump to latest"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+              Latest
+            </Button>
+          </div>
+        ) : null}
+      </div>
       <EntityPopover
         open={Boolean(selectedSymbol)}
         onOpenChange={(open) => {

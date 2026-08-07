@@ -34,17 +34,22 @@ describe("transcript scroller anchoring", () => {
     ).toBe("message-user-33");
   });
 
-  it("reserves a bottom-center slot above the composer for the Latest control", () => {
+  it("floats the Latest control over the transcript as a pill with no reserved row", () => {
     const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
     const latestStart = source.indexOf('data-slot="jump-to-latest"');
     const latestSource = source.slice(latestStart, source.indexOf("</Button>", latestStart));
 
     expect(latestStart).toBeGreaterThan(-1);
-    expect(latestSource).toContain("h-12 shrink-0");
+    // Floats over the scroll viewport instead of reserving a layout row, and
+    // only the pill itself takes pointer events.
+    expect(latestSource).toContain("pointer-events-none absolute");
     expect(latestSource).toContain("justify-center");
-    expect(latestSource).toContain("shadow-md");
-    expect(latestSource).toContain("min-h-10");
-    expect(latestSource).not.toContain("absolute");
+    expect(latestSource).toContain("pointer-events-auto");
+    // Same pill geometry as the hosted status pill: 28px chrome with a
+    // pseudo-expanded 40px pointer target.
+    expect(latestSource).toContain("h-7 min-h-7");
+    expect(latestSource).toContain("before:-inset-y-1.5");
+    expect(latestSource).not.toContain("h-12 shrink-0");
     expect(source).toContain("transcript.showJumpToLatest ? (");
     expect(source).toContain("setShowJumpToLatest(false)");
   });
