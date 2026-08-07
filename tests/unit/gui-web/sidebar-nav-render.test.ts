@@ -40,6 +40,32 @@ function group(html: string, slot: string) {
   return html.slice(start, next < 0 ? undefined : next);
 }
 
+describe("sidebar header row", () => {
+  it("keeps new chat and collapse as icon controls beside the wordmark", () => {
+    const html = renderSidebar();
+
+    expect(html).toContain('aria-label="New chat"');
+    expect(html).toContain('aria-label="Collapse sidebar"');
+    expect(html.indexOf("OpenCandle</span>")).toBeLessThan(html.indexOf('aria-label="New chat"'));
+    expect(html.indexOf('aria-label="New chat"')).toBeLessThan(
+      html.indexOf('aria-label="Collapse sidebar"'),
+    );
+  });
+
+  it("drops the full-width New chat button row", () => {
+    const html = renderSidebar();
+
+    expect(html).not.toContain("New chat</button>");
+  });
+
+  it("never truncates the wordmark", () => {
+    const html = renderSidebar();
+    const wordmark = html.slice(0, html.indexOf("OpenCandle</span>"));
+
+    expect(wordmark).toContain("whitespace-nowrap");
+  });
+});
+
 describe("sidebar navigation groups", () => {
   it("keeps Diagnostics out of the Market State group", () => {
     const marketState = group(renderSidebar(), "market-state-nav");

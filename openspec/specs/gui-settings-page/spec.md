@@ -143,7 +143,7 @@ Settings → Data & privacy SHALL host data-management controls. In the hosted G
 
 ### Requirement: Hosted runtime status is a transient pill
 
-The hosted app SHALL render no footer strip and no permanent runtime status text. Runtime state SHALL appear only as a transient status pill beside the OpenCandle logo, carrying the preparing, offline, and error states while they persist and an install-update action while a service-worker update is waiting. When the runtime is ready and no update is waiting, the pill SHALL NOT be present in the DOM. Data management SHALL be reached through Settings → Data & privacy, not through runtime chrome. The shared app shell SHALL expose the pill through a host-neutral slot so the local GUI renders nothing there.
+The hosted app SHALL render no footer strip and no permanent runtime status text. Runtime state SHALL appear only as a transient status pill floating at the top centre of the content column, carrying the preparing, offline, and error states while they persist and an install-update action while a service-worker update is waiting. The pill SHALL take no layout space and SHALL receive pointer events only on itself, so a page's own primary action underneath keeps receiving its clicks. When the runtime is ready and no update is waiting, the pill SHALL NOT be present in the DOM. Data management SHALL be reached through Settings → Data & privacy, not through runtime chrome. The shared app shell SHALL mount the pill once, through a host-neutral slot, so the local GUI renders nothing there.
 
 #### Scenario: Ready runtime is silent
 
@@ -152,22 +152,40 @@ The hosted app SHALL render no footer strip and no permanent runtime status text
 - **AND** no status pill is present in the DOM
 - **AND** no runtime chrome offers a data-management link
 
-#### Scenario: Transient states appear beside the logo
+#### Scenario: Transient states float over the content
 
 - **WHEN** the hosted runtime is preparing, offline, or has failed
-- **THEN** a status pill renders beside the OpenCandle logo in the sidebar header and in the mobile header
+- **THEN** one status pill renders at the top centre of the content column, in the sidebar-open, sidebar-collapsed, and mobile chrome alike
+- **AND** it renders nothing in the sidebar header or the mobile header
+- **AND** the page's primary action underneath still receives its own pointer events
 - **AND** it exposes the state as a status region to assistive technology
 
 #### Scenario: Waiting update offers an install action
 
 - **WHEN** a downloaded service-worker update is waiting
-- **THEN** the pill renders a focusable button offering to install the update
+- **THEN** the pill renders a focusable button offering to install the update, in the pill's own shape
 - **AND** activating it runs the existing prepare-update and activate flow
 
 #### Scenario: Local GUI renders no hosted chrome
 
-- **WHEN** the local GUI renders its sidebar and mobile header
-- **THEN** the status slot renders nothing and no hosted-only module is imported
+- **WHEN** the local GUI renders its app shell
+- **THEN** the status slot renders nothing, leaves no wrapper behind, and no hosted-only module is imported
+
+### Requirement: Sidebar header is one row
+
+The session sidebar SHALL carry one header row: the OpenCandle wordmark, which opens a new chat, on the left, and a right-aligned cluster of a new-chat control and a collapse control. The wordmark SHALL NOT truncate at the sidebar's width. The new-chat control SHALL keep the accessible name "New chat" and SHALL be reachable from the mobile session drawer as well as the desktop sidebar. The search field SHALL remain below the header row.
+
+#### Scenario: Desktop sidebar header
+
+- **WHEN** the local or hosted GUI renders the desktop session sidebar
+- **THEN** the header row shows the wordmark, then a "New chat" control, then a "Collapse sidebar" control
+- **AND** no full-width New chat button renders below it
+- **AND** the wordmark renders in full
+
+#### Scenario: Mobile session drawer
+
+- **WHEN** a reader opens the session drawer on a phone
+- **THEN** the drawer carries the same header row, so "New chat" is one tap away
 
 ### Requirement: Catalog keeps run surfaces only
 

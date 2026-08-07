@@ -5,6 +5,7 @@ import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
+import { AppContentArea } from "./features/layout/AppShellChrome.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { useForgetFirstRunSetupDismissalWhenSatisfied } from "./features/onboarding/setup-dismissal.js";
 import {
@@ -539,81 +540,83 @@ export function AppShell() {
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ConnectionStatusBanner role={gui.role} />
-        {appPage.page === "settings" ? (
-          <SettingsPage
-            section={appPage.section}
-            role={gui.role}
-            modelSetup={gui.modelSetup}
-            catalog={gui.catalog}
-            focusProvider={search?.provider}
-            preferencesSnapshot={gui.preferencesSnapshot}
-            send={gui.send}
-            onOpenProviders={openProviderSettings}
-            onOpenModelSetup={openModelSettings}
-            onOpenSidebar={() => openDrawer("history")}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-            onOpenHome={openHome}
-            setToast={gui.setToast}
-          />
-        ) : ticker ? (
-          <SymbolPage
-            ticker={ticker}
-            fillComposer={prefillComposerFromPage}
-            invokeTool={invokeToolForVisibleSession}
-            role={actionRole}
-            setToast={gui.setToast}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-          />
-        ) : marketDomain ? (
-          <MarketStatePage
-            domain={marketDomain}
-            alertSymbol={search?.alertSymbol}
-            alertThreshold={search?.alertThreshold}
-            role={actionRole}
-            send={gui.send}
-            invokeTool={invokeToolForVisibleSession}
-            navigate={navigate}
-            setToast={gui.setToast}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-          />
-        ) : (
-          <ChatPanel
-            events={sessionView.events}
-            liveEvents={liveEvents}
-            askUserPrompts={visibleAskUserPrompts}
-            modelSetup={gui.modelSetup}
-            role={gui.role}
-            inputDisabled={inputDisabled}
-            sessionLoading={sessionView.pendingSessionSwitch}
-            runState={chatRun.runState}
-            lastPrompt={chatRun.lastPrompt}
-            catalog={gui.catalog}
-            send={gui.send}
-            startChatRun={startRoutedChatRun}
-            stopRun={chatRun.stopRun}
-            invokeTool={invokeToolForVisibleSession}
-            setToast={gui.setToast}
-            draft={draft}
-            setDraft={setDraft}
-            onOpenCommandPalette={openCatalog}
-            onOpenModelSetup={openModelSettings}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-            sessionId={sessionView.activeSessionId}
-            scrollAnchorId={scrollAnchorId}
-            dashboard={visibleDashboard}
-            navigate={navigate}
-          />
-        )}
+        <AppContentArea>
+          {appPage.page === "settings" ? (
+            <SettingsPage
+              section={appPage.section}
+              role={gui.role}
+              modelSetup={gui.modelSetup}
+              catalog={gui.catalog}
+              focusProvider={search?.provider}
+              preferencesSnapshot={gui.preferencesSnapshot}
+              send={gui.send}
+              onOpenProviders={openProviderSettings}
+              onOpenModelSetup={openModelSettings}
+              onOpenSidebar={() => openDrawer("history")}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+              onOpenHome={openHome}
+              setToast={gui.setToast}
+            />
+          ) : ticker ? (
+            <SymbolPage
+              ticker={ticker}
+              fillComposer={prefillComposerFromPage}
+              invokeTool={invokeToolForVisibleSession}
+              role={actionRole}
+              setToast={gui.setToast}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+            />
+          ) : marketDomain ? (
+            <MarketStatePage
+              domain={marketDomain}
+              alertSymbol={search?.alertSymbol}
+              alertThreshold={search?.alertThreshold}
+              role={actionRole}
+              send={gui.send}
+              invokeTool={invokeToolForVisibleSession}
+              navigate={navigate}
+              setToast={gui.setToast}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+            />
+          ) : (
+            <ChatPanel
+              events={sessionView.events}
+              liveEvents={liveEvents}
+              askUserPrompts={visibleAskUserPrompts}
+              modelSetup={gui.modelSetup}
+              role={gui.role}
+              inputDisabled={inputDisabled}
+              sessionLoading={sessionView.pendingSessionSwitch}
+              runState={chatRun.runState}
+              lastPrompt={chatRun.lastPrompt}
+              catalog={gui.catalog}
+              send={gui.send}
+              startChatRun={startRoutedChatRun}
+              stopRun={chatRun.stopRun}
+              invokeTool={invokeToolForVisibleSession}
+              setToast={gui.setToast}
+              draft={draft}
+              setDraft={setDraft}
+              onOpenCommandPalette={openCatalog}
+              onOpenModelSetup={openModelSettings}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+              sessionId={sessionView.activeSessionId}
+              scrollAnchorId={scrollAnchorId}
+              dashboard={visibleDashboard}
+              navigate={navigate}
+            />
+          )}
+        </AppContentArea>
         <ToolDrawerInline />
       </div>
       <ToolDrawerOverlay />

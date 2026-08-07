@@ -5,9 +5,9 @@ import {
   FileText,
   ListPlus,
   PanelLeft,
-  Plus,
   Search,
   Settings,
+  SquarePen,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -16,7 +16,6 @@ import { HistoryItem } from "../../components/chat/history-item.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
-import { AppStatusSlot } from "../../runtime/app-status-slot.jsx";
 import { filterSessions } from "./session-search.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,7 +45,9 @@ export function SessionDrawer({ open, onClose, ...rest }) {
     >
       <SheetContent width="sm" handleLabel="Sessions" className="p-0">
         <div className="flex h-full min-h-0 flex-col">
-          <SidebarBody {...rest} showHeader={false} />
+          {/* The drawer keeps the sidebar's header grammar so New chat stays one
+              tap away on a phone; the sheet supplies its own dismiss. */}
+          <SidebarBody {...rest} />
         </div>
       </SheetContent>
     </Sheet>
@@ -63,7 +64,6 @@ function SidebarBody({
   onNewSession,
   onOpenHome,
   onClose,
-  showHeader = true,
   closeLabel = "Close sidebar",
   closeIcon: CloseIcon = X,
 }) {
@@ -74,40 +74,29 @@ function SidebarBody({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
-      {showHeader ? (
-        <div className="flex items-center gap-2 px-1">
-          <button
-            type="button"
-            aria-label="Go to new chat"
-            onClick={onOpenHome}
-            className="flex min-h-10 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-background active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <OpenCandleLogo />
-            <span className="truncate">OpenCandle</span>
-          </button>
-          <AppStatusSlot />
+      {/* One header row: the wordmark keeps its width and the two controls that
+          act on the sidebar itself sit together on the right. */}
+      <div className="flex items-center gap-1 px-1">
+        <button
+          type="button"
+          aria-label="Go to new chat"
+          onClick={onOpenHome}
+          className="flex min-h-10 shrink-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-background active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <OpenCandleLogo />
+          <span className="whitespace-nowrap">OpenCandle</span>
+        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <Button variant="ghost" size="icon-sm" aria-label="New chat" onClick={onNewSession}>
+            <SquarePen />
+          </Button>
           {onClose ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label={closeLabel}
-              onClick={onClose}
-            >
+            <Button variant="ghost" size="icon-sm" aria-label={closeLabel} onClick={onClose}>
               <CloseIcon />
             </Button>
-          ) : (
-            <PanelLeft
-              className="ml-auto h-4 w-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-          )}
+          ) : null}
         </div>
-      ) : null}
-
-      <Button variant="bordered" className="w-full justify-center gap-2" onClick={onNewSession}>
-        <Plus /> New chat
-      </Button>
+      </div>
 
       <SearchField value={query} onChange={setQuery} />
 

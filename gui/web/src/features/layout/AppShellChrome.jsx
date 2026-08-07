@@ -1,7 +1,34 @@
 import { Menu, PanelLeftOpen } from "lucide-react";
 import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { Button } from "../../components/ui/button.jsx";
-import { AppStatusSlot } from "../../runtime/app-status-slot.jsx";
+import { useAppStatusSlot } from "../../runtime/app-status-slot-context.js";
+
+// The content column, plus the single floating mount for host runtime status.
+// The status element hovers top-center over the page rather than sitting in the
+// sidebar header, where a 260px column truncated it. It carries no layout
+// footprint and no pointer events, so a page's own primary action underneath
+// keeps receiving its clicks.
+export function AppContentArea({ children }) {
+  return (
+    <div className="relative flex min-h-0 min-w-0 flex-1">
+      {children}
+      <AppStatusOverlay />
+    </div>
+  );
+}
+
+export function AppStatusOverlay() {
+  const slot = useAppStatusSlot();
+  if (!slot) return null;
+  return (
+    <div
+      data-slot="app-status-overlay"
+      className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center px-3 md:top-3"
+    >
+      <div className="pointer-events-auto min-w-0 max-w-full">{slot}</div>
+    </div>
+  );
+}
 
 export function DesktopSidebarRestore({ onExpandSidebar }) {
   return (
@@ -9,7 +36,6 @@ export function DesktopSidebarRestore({ onExpandSidebar }) {
       <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={onExpandSidebar}>
         <PanelLeftOpen />
       </Button>
-      <AppStatusSlot />
     </div>
   );
 }
@@ -29,7 +55,6 @@ export function MobileHeader({ onOpenSidebar, onOpenHome }) {
         <OpenCandleLogo />
         <span className="truncate">OpenCandle</span>
       </button>
-      <AppStatusSlot />
     </header>
   );
 }

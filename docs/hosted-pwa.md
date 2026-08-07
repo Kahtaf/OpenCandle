@@ -55,7 +55,7 @@ Open Settings from the sidebar, then Data & privacy.
 
 - **Export data** downloads one versioned JSON archive containing Pi sessions and SQLite state, but no model key.
 - **Import data** validates archive version, filenames, session identities, parent relationships, sizes, SQLite integrity, and supported schema version before stopping the runtime or replacing device data.
-- **Install update** appears only while a downloaded update is waiting. A status pill beside the OpenCandle logo offers the same install while an update waits.
+- **Install update** appears only while a downloaded update is waiting. A status pill floating at the top of the page offers the same install while an update waits.
 - **Clear secrets** removes model and provider credentials, tears down the in-browser runtime so the old process cannot retain them, and restarts without deleting research.
 - **Clear all** removes credentials, sessions, market state, runtime snapshots, and cached application data for this origin. It asks you to type `DELETE` before it runs.
 

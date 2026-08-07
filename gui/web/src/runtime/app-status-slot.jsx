@@ -1,11 +1,8 @@
-import { AppStatusSlotContext, useAppStatusSlot } from "./app-status-slot-context.js";
+import { AppStatusSlotContext } from "./app-status-slot-context.js";
 
+// The host supplies one status element; the app shell floats it over the content
+// column. A host with nothing to say supplies nothing, and the shell then leaves
+// no wrapper behind in the DOM.
 export function AppStatusSlotProvider({ slot = null, children }) {
   return <AppStatusSlotContext value={slot}>{children}</AppStatusSlotContext>;
-}
-
-// Renders the host's status element verbatim. The element owns its own markup so
-// a host with nothing to say leaves no wrapper behind in the DOM.
-export function AppStatusSlot() {
-  return useAppStatusSlot();
 }

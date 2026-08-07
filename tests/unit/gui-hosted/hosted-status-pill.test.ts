@@ -118,11 +118,15 @@ describe("HostedStatusPill", () => {
     });
   }
 
-  it("shows the boot message beside the logo while the runtime prepares", async () => {
+  it("floats the boot message as a pill while the runtime prepares", async () => {
     await render(createHost({ phase: "booting", message: "Preparing browser runtime…" }));
 
+    const pill = container.querySelector('[role="status"]');
     expect(container.textContent).toContain("Preparing browser runtime…");
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(pill).not.toBeNull();
+    expect(pill?.className).toContain("rounded-full");
+    expect(pill?.getAttribute("title")).toBe("Preparing browser runtime…");
+    expect(pill?.querySelector(".truncate")).not.toBeNull();
   });
 
   it("renders nothing at all once the runtime is ready", async () => {
@@ -156,6 +160,9 @@ describe("HostedStatusPill", () => {
 
     const button = container.querySelector("button");
     expect(button?.textContent).toContain("Install update?");
+    // The offer keeps the pill's geometry instead of reading as a bordered
+    // rectangle dropped into the chrome.
+    expect(button?.className).toContain("rounded-full");
 
     await act(async () => button?.click());
     expect(installUpdate).toHaveBeenCalledWith(waiting);

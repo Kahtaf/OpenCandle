@@ -525,6 +525,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("button", { name: "Open sidebar" }));
     await mocked.getByRole("button", { name: "Open sidebar" }).click();
     await expectVisible(mocked.getByRole("dialog", { name: "Sessions" }));
+    await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("link", { name: "Reports" }));
     await mocked.goto(`${guiUrl}/portfolios`, { waitUntil: "networkidle" });
     await mocked.getByRole("button", { name: "Add holding" }).click();
