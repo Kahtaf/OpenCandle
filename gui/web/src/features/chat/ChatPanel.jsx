@@ -19,9 +19,8 @@ import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
 import {
-  isFirstRunSetupSatisfied,
-  readFirstRunSetupDismissed,
-  writeFirstRunSetupDismissed,
+  markFirstRunOnboardingSeen,
+  readFirstRunOnboardingSeen,
 } from "../onboarding/setup-dismissal.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
@@ -76,7 +75,7 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
-  const [setupDismissed, setSetupDismissed] = useState(readFirstRunSetupDismissed);
+  const [firstRunSeen, setFirstRunSeen] = useState(readFirstRunOnboardingSeen);
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -205,26 +204,18 @@ export function ChatPanel({
     modelSetup?.requirement &&
     modelSetup.requirement !== "ready" &&
     modelSetup.requirement !== "unknown";
-  // Auto-open rule: the first-run setup dialog opens whenever setup is
-  // required and the user has not dismissed it. Dismissal is remembered for as
-  // long as setup stays required, so later modelSetup broadcasts, re-renders,
-  // new chats, route changes, reloads, and new tabs never reopen it. The
-  // dismissal is forgotten only on positive proof that setup is satisfied, so a
-  // later regression back to "needs setup" opens it once more. A reconnecting
-  // or not-yet-broadcast setup state proves nothing and must not re-arm it.
-  // App.jsx forgets the persisted record on every route, including the ones
-  // that replace this panel; this clears the panel's own state while it stays
-  // mounted. Reaching setup again after dismissing is done through the
-  // composer's model control.
-  const setupSatisfied = isFirstRunSetupSatisfied({
-    role,
-    requirement: modelSetup?.requirement,
-  });
-  if (setupSatisfied && setupDismissed) setSetupDismissed(false);
-  const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
+  // Auto-open rule: the first-run onboarding dialog opens when setup is
+  // positively required and this browser profile has never seen it. Opening is
+  // what marks it seen, so later modelSetup broadcasts, re-renders, new chats,
+  // route changes, reloads, new tabs, and a later regression back to "needs
+  // setup" never reopen it. Reaching setup afterwards is done through the
+  // composer's model control or Settings.
+  const setupDialogOpen = Boolean(needsSetup) && !firstRunSeen;
   useEffect(() => {
-    writeFirstRunSetupDismissed(setupDismissed);
-  }, [setupDismissed]);
+    // Guarded on the dialog actually being open: a boot that never showed it
+    // must not spend a first-timer's one automatic opening.
+    if (setupDialogOpen) markFirstRunOnboardingSeen();
+  }, [setupDialogOpen]);
   // The composer is never disabled by setup: needsSetup blocks only sending,
   // via chatDisabled and submit. The first-run dialog is modal, so drafting
   // resumes as soon as it is dismissed (Escape, the close control, or a click
@@ -435,7 +426,9 @@ export function ChatPanel({
       <ModelSetupDialog
         open={setupDialogOpen}
         onOpenChange={(next) => {
-          if (!next) setSetupDismissed(true);
+          if (next) return;
+          markFirstRunOnboardingSeen();
+          setFirstRunSeen(true);
         }}
         variant="first-run"
         modelSetup={modelSetup}

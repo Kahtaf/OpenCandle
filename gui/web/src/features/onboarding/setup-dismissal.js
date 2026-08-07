@@ -1,18 +1,22 @@
-import { useEffect } from "react";
-
-// Remembers that the user dismissed the first-run onboarding dialog.
+// Remembers that the first-run onboarding dialog has already been shown in this
+// browser profile.
 //
-// The dialog auto-opens while model setup is required. Without a durable
-// record, every fresh mount of the chat panel counts as a first run, so a new
-// chat, a route change, a reload, or a second tab reopens a dialog the user
-// already closed. The record is per browser profile, which is the same scope as
-// the local GUI and the hosted PWA share for their other browser-local state.
+// The dialog is a first-run introduction, not a recurring prompt. It auto-opens
+// exactly once per browser profile, so it must be able to tell a genuine first
+// time apart from every later visit. Without a durable record, a new chat, a
+// route change, a reload, or a second tab each look like a first run, and a
+// reload lands on a real non-ready requirement for a frame before stored keys
+// resolve, which flashes the dialog open and closed again.
 //
-// It is cleared as soon as setup is satisfied, so a later regression back to
-// "needs setup" (keys cleared) still earns one automatic opening.
-export const FIRST_RUN_SETUP_DISMISSED_KEY = "opencandle.onboarding.first-run-dismissed.v1";
+// The record is written the moment the dialog opens, so reading it and
+// navigating away counts as having seen it. Once it exists the dialog never
+// auto-opens again, including after keys are cleared: setup stays reachable
+// from the composer's model control and from Settings. Hosted "clear all"
+// removes the record along with the rest of the browser state, which is what
+// makes a wiped profile a first-timer again.
+export const FIRST_RUN_ONBOARDING_SEEN_KEY = "opencandle.onboarding.first-run-seen.v1";
 
-function dismissalStorage() {
+function onboardingStorage() {
   try {
     return globalThis.localStorage ?? null;
   } catch {
@@ -22,40 +26,20 @@ function dismissalStorage() {
   }
 }
 
-export function readFirstRunSetupDismissed() {
+export function readFirstRunOnboardingSeen() {
   try {
-    return dismissalStorage()?.getItem(FIRST_RUN_SETUP_DISMISSED_KEY) === "true";
+    return onboardingStorage()?.getItem(FIRST_RUN_ONBOARDING_SEEN_KEY) === "true";
   } catch {
     return false;
   }
 }
 
-export function writeFirstRunSetupDismissed(dismissed) {
-  const storage = dismissalStorage();
+export function markFirstRunOnboardingSeen() {
+  const storage = onboardingStorage();
   if (!storage) return;
   try {
-    if (dismissed) storage.setItem(FIRST_RUN_SETUP_DISMISSED_KEY, "true");
-    else storage.removeItem(FIRST_RUN_SETUP_DISMISSED_KEY);
+    storage.setItem(FIRST_RUN_ONBOARDING_SEEN_KEY, "true");
   } catch {
     // A full or blocked store must never break model setup.
   }
-}
-
-// Setup counts as satisfied only on a connected, positive "ready" broadcast. A
-// reconnecting tab, or one that has not received a setup broadcast yet, proves
-// nothing and must not re-arm the automatic opening.
-export function isFirstRunSetupSatisfied({ role, requirement }) {
-  return role !== "connecting" && requirement === "ready";
-}
-
-// Setup can become satisfied on any route: the app-level model setup dialog is
-// reachable from Diagnostics and the dashboard while the chat panel is
-// unmounted, so the chat panel alone cannot observe every ready transition.
-// App.jsx mounts this on every route so the record is forgotten wherever the
-// key was saved.
-export function useForgetFirstRunSetupDismissalWhenSatisfied({ role, requirement }) {
-  const satisfied = isFirstRunSetupSatisfied({ role, requirement });
-  useEffect(() => {
-    if (satisfied) writeFirstRunSetupDismissed(false);
-  }, [satisfied]);
 }

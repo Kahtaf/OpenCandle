@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { type Browser, chromium, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ModelSetupRequirement } from "../../gui/server/model-setup.js";
-import { FIRST_RUN_SETUP_DISMISSED_KEY } from "../../gui/web/src/features/onboarding/setup-dismissal.js";
+import { FIRST_RUN_ONBOARDING_SEEN_KEY } from "../../gui/web/src/features/onboarding/setup-dismissal.js";
 
 const runGuiReleaseSmoke = process.env.OPENCANDLE_GUI_RELEASE_SMOKE === "1";
 const releaseStatusValues = new Set<ModelSetupRequirement>([
@@ -67,20 +67,20 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     });
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     // Every test below is written as a first run: it navigates to the home
-    // route and expects the setup dialog to auto-open. The product remembers a
-    // dismissed dialog per browser profile, and this suite shares one profile
-    // across tests, so one test's dismissal would otherwise suppress the dialog
-    // for all the tests after it. Forget the record on every navigation, which
-    // is what a genuinely fresh profile would look like. Do not do this by
-    // weakening the product: the persistence itself is covered by
-    // tests/unit/gui-web/first-run-setup-dialog.test.ts.
+    // route and expects the setup dialog to auto-open. The product remembers
+    // per browser profile that onboarding has been seen, and this suite shares
+    // one profile across tests, so the first test's opening would otherwise
+    // suppress the dialog for all the tests after it. Forget the record on
+    // every navigation, which is what a genuinely fresh profile would look
+    // like. Do not do this by weakening the product: the persistence itself is
+    // covered by tests/unit/gui-web/first-run-setup-dialog.test.ts.
     await page.addInitScript((key: string) => {
       try {
         localStorage.removeItem(key);
       } catch {
         // A profile without storage access is already a fresh first run.
       }
-    }, FIRST_RUN_SETUP_DISMISSED_KEY);
+    }, FIRST_RUN_ONBOARDING_SEEN_KEY);
   });
 
   afterAll(async () => {
