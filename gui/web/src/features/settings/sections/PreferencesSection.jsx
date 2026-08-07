@@ -33,9 +33,10 @@ function normalizeSnapshot(value) {
 export function PreferencesSection({ role = "writer", setToast, preferencesSnapshot }) {
   const transport = useRuntimeTransport();
   const hosted = transport?.kind === "hosted";
-  // Only a local follower is read-only. A hosted follower forwards mutations to
-  // the elected writer, exactly as it does for saved market state.
-  const readOnly = role !== "writer" && !hosted;
+  // An offline tab and a local follower are read-only. An online hosted
+  // follower forwards mutations to the elected writer, exactly as it does for
+  // saved market state.
+  const readOnly = role === "offline" || (role !== "writer" && !hosted);
 
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState("");

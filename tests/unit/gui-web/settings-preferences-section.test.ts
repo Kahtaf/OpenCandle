@@ -222,6 +222,16 @@ describe("Settings preferences section", () => {
     expect(document.body.textContent).toContain("unavailable in this window");
   });
 
+  it("keeps an offline hosted tab read-only for deletes", async () => {
+    const transport = makeTransport({ kind: "hosted" });
+    renderSection(transport, { role: "offline" });
+    await settle();
+
+    expect(query('[data-slot="preferences-read-only"]')).toBeTruthy();
+    const deleteButton = queryAll<HTMLButtonElement>('[data-slot="preference-delete"]')[0];
+    expect(deleteButton?.disabled).toBe(true);
+  });
+
   it("keeps a hosted follower able to delete", async () => {
     const transport = makeTransport({ kind: "hosted" });
     renderSection(transport, { role: "follower" });

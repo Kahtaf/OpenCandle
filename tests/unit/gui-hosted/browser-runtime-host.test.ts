@@ -559,7 +559,10 @@ describe("browser runtime host", () => {
       "opencandle.hosted.relay-client.v1",
       // Clearing everything leaves a first-time browser profile behind, so the
       // first-run onboarding dialog is owed its one automatic opening again.
+      // The legacy dismissal goes too, or migration would resurrect the seen
+      // state on the next read.
       "opencandle.onboarding.first-run-seen.v1",
+      "opencandle.onboarding.first-run-dismissed.v1",
     ];
     for (const key of appKeys) storage.setItem(key, "retained-device-data");
     const host = createBrowserRuntimeHost({
