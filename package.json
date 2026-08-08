@@ -139,9 +139,9 @@
     "node": "^22.19.0 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.82.1",
-    "@earendil-works/pi-ai": "^0.82.1",
-    "@earendil-works/pi-coding-agent": "0.82.1",
+    "@earendil-works/pi-agent-core": "^0.83.0",
+    "@earendil-works/pi-ai": "^0.83.0",
+    "@earendil-works/pi-coding-agent": "0.83.0",
     "better-sqlite3": "^13.0.1",
     "ddg-kit": "0.1.0",
     "yahoo-finance2": "^4.0.0"
