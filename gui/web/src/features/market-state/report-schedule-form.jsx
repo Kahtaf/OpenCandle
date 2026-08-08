@@ -11,8 +11,18 @@ export function ReportScheduleForm({ disabled, invokeTool, onSaved }) {
   const [localTime, setLocalTime] = useState("08:00");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   // The hosted runtime has no scheduler, and hosted state does not sync to a
-  // local install, so the web app must not promise any automatic run.
+  // local install, so the web app offers no schedule controls at all: saving
+  // a time there would persist a value nothing ever consumes.
   const hosted = useRuntimeTransport().kind === "hosted";
+
+  if (hosted) {
+    return (
+      <p data-slot="report-schedule-form" className="text-sm text-muted-foreground">
+        In the web app, reports run when you ask for one. Nothing runs on a schedule or after you
+        close the tab.
+      </p>
+    );
+  }
 
   return (
     <form
@@ -29,10 +39,8 @@ export function ReportScheduleForm({ disabled, invokeTool, onSaved }) {
       }}
     >
       <p className="text-sm text-muted-foreground">
-        {hosted
-          ? "In the web app, reports run when you ask for one. A saved schedule does not run reports automatically here."
-          : "The morning report runs daily while OpenCandle is open."}{" "}
-        Times use your timezone ({timezone}).
+        The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
+        ).
       </p>
       <label
         htmlFor={reportTimeId}

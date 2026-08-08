@@ -58,7 +58,11 @@ export function AutomationSection({ role, setToast }) {
     <div className="flex flex-col gap-4">
       <SettingsCard
         title="Daily report"
-        description="The morning watchlist report and the time it runs at."
+        description={
+          hosted
+            ? "The morning watchlist report."
+            : "The morning watchlist report and the time it runs at."
+        }
       >
         <SettingsBody>
           <ReportScheduleForm

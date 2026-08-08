@@ -57,18 +57,15 @@ describe("Settings automation section gating", () => {
     vi.restoreAllMocks();
   });
 
-  it("disables schedule changes in an offline hosted tab", async () => {
-    await render("hosted", "offline");
-    const save = saveButton();
-    expect(save).toBeTruthy();
-    expect(save?.disabled).toBe(true);
+  it("offers no schedule controls in the web app", async () => {
+    await render("hosted", "writer");
+    expect(saveButton()).toBeUndefined();
+    expect(document.body.querySelector('input[type="time"]')).toBeNull();
   });
 
-  it("keeps schedule changes available for an online hosted follower", async () => {
-    await render("hosted", "follower");
-    const save = saveButton();
-    expect(save).toBeTruthy();
-    expect(save?.disabled).toBe(false);
+  it("offers no schedule controls in an offline hosted tab either", async () => {
+    await render("hosted", "offline");
+    expect(saveButton()).toBeUndefined();
   });
 
   it("keeps a local follower read-only", async () => {
@@ -97,11 +94,11 @@ describe("Settings automation section gating", () => {
     expect(text).not.toContain("—");
   });
 
-  it("tells web app users the saved schedule does not run itself", async () => {
+  it("tells web app users reports run on demand", async () => {
     await render("hosted", "writer");
     const text = document.body.textContent ?? "";
     expect(text).toContain(
-      "In the web app, reports run when you ask for one. A saved schedule does not run reports automatically here.",
+      "In the web app, reports run when you ask for one. Nothing runs on a schedule or after you close the tab.",
     );
     expect(text).not.toContain("runs daily while OpenCandle is open");
     expect(text).not.toContain("local app's daily schedule");
