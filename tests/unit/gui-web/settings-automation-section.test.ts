@@ -101,9 +101,10 @@ describe("Settings automation section gating", () => {
     await render("hosted", "writer");
     const text = document.body.textContent ?? "";
     expect(text).toContain(
-      "In the web app, reports run when you ask for one. The saved time is used by the local app's daily schedule.",
+      "In the web app, reports run when you ask for one. A saved schedule does not run reports automatically here.",
     );
     expect(text).not.toContain("runs daily while OpenCandle is open");
+    expect(text).not.toContain("local app's daily schedule");
   });
 
   it("keeps the local schedule copy in the local app", async () => {
