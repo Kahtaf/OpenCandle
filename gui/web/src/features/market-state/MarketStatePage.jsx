@@ -159,8 +159,14 @@ export function MarketStatePage({
 }) {
   const { state, loading, error, refresh, refreshQuotes } = useMarketState();
   const readOnly = role !== "writer";
-  const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
+  // The hosted runtime has no scheduler, so the reports page's primary action
+  // generates today's report instead of opening a schedule panel whose saved
+  // time nothing would ever consume.
+  const hostedReports = useRuntimeTransport().kind === "hosted" && activeId === "reports";
+  const active = hostedReports
+    ? { ...PAGE_META.reports, primaryLabel: "Run report", primaryIcon: RefreshCw }
+    : (PAGE_META[domain] ?? PAGE_META.watchlists);
   // Pages whose primary table plus detail rail should fill the desktop canvas
   // instead of floating as short cards over dead white space.
   const fillsHeight = FILL_HEIGHT_DOMAINS.has(activeId);
@@ -212,6 +218,10 @@ export function MarketStatePage({
   };
 
   const primaryAction = () => {
+    if (hostedReports) {
+      invokeTool("daily_watchlist_report", { action: "run" });
+      return;
+    }
     openPanel(active.primaryPanel);
   };
   const secondaryAction = () => {
