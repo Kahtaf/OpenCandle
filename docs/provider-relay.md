@@ -24,7 +24,7 @@ The handshake does not turn the public relay into user authentication: a non-bro
 - Exact provider host, path, method, and header policies; HTTPS on port 443 only.
 - No redirects, URL credentials, fragments, arbitrary destinations, or arbitrary headers.
 - Market-data requests are capped at 256 KiB, upstream responses at 4 MiB, and upstream time at 15 seconds.
-- Pi model requests use a separate raw transport capped at 32 MiB in each direction and five minutes to receive upstream headers. Responses stream through unchanged so Pi retains its native streaming, retry, error, and cancellation behavior.
+- Pi model requests use a separate raw transport capped at 32 MiB in each direction, with five minutes to receive upstream headers and the same five minutes as a rolling inactivity deadline between streamed chunks. Responses stream through unchanged so Pi retains its native streaming, retry, error, and cancellation behavior.
 - A 120-request-per-minute Workers Rate Limiting binding keyed by a SHA-256 digest of Cloudflare's server-observed client IP. The raw address is not logged, persisted by OpenCandle, or passed to the binding.
 - Browser requests are accepted from `https://web.opencandle.app` or with a valid client-bound short-lived token. Same-origin responses echo the hosted origin; authorized runtime responses and candidate preflights use wildcard CORS with credentials omitted. Unsigned browser requests receive no CORS access. Originless non-browser requests are public and receive the same allowlist and abuse controls.
 - `Cache-Control: no-store` on every Worker response.
