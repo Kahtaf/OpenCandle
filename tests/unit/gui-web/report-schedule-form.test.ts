@@ -164,12 +164,13 @@ describe("AutomationSection", () => {
     expect(text).not.toContain("Not configured");
   });
 
-  it("describes local automation as a monitor process and hosted automation as open tab work", async () => {
+  it("describes local automation as a monitor process and hosted automation as on demand", async () => {
     const localText = await renderSection(stubTransport([]));
     expect(localText).toContain("opencandle monitor");
 
     const hostedText = await renderSection(stubTransport([], { kind: "hosted" }));
-    expect(hostedText).toContain("while this app is open");
+    expect(hostedText).toContain("Nothing runs in the background or after you close the tab.");
+    expect(hostedText).not.toContain("while this app is open");
     expect(hostedText).not.toContain("OPENCANDLE_NOTIFICATION_WEBHOOK_URL");
   });
 
