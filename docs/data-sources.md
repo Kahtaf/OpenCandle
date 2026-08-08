@@ -7,6 +7,8 @@ description: Provider coverage, credentials, and data boundaries in OpenCandle.
 
 OpenCandle combines free public sources, optional keyed APIs, and local state. Tools gather the data; the model writes the analysis. Tools never invent numbers.
 
+In the web app at web.opencandle.app, most sources work the same. SEC EDGAR filings and X/Reddit sentiment need the local app, and Alpha Vantage, FRED, Finnhub, London Strategic Edge, and Brave need your own key there just like locally. See the [Web App Quickstart](./hosted-pwa.md).
+
 ## Provider Coverage
 
 | Domain | Tools | Providers |
@@ -67,7 +69,7 @@ Kalshi is intentionally deferred. Its market-data API has attractive macro contr
 
 ## Local State
 
-OpenCandle user state defaults to `~/.opencandle/`. Pi configuration is separate and stays in `.pi/` or `~/.pi/agent/`.
+OpenCandle user state defaults to `~/.opencandle/` for the local GUI and terminal; the web app keeps its state in your browser. Pi configuration is separate and stays in `.pi/` or `~/.pi/agent/`.
 
 ## Safety Boundary
 

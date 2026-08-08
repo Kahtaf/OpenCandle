@@ -62,7 +62,7 @@ Expected evidence:
 
 ## SEC Filing Trail
 
-Use this when you need primary-source company disclosure context.
+Use this when you need primary-source company disclosure context. SEC filings need the local app; they are not available in the web app.
 
 ```text
 Find recent SEC filings for AAPL and summarize what each filing type is for.
@@ -90,7 +90,7 @@ Expected evidence:
 
 ## Sentiment Triangulation
 
-Use this when market narrative matters and you want cross-source evidence.
+Use this when market narrative matters and you want cross-source evidence. X and Reddit sentiment need the local app; they are not available in the web app.
 
 ```text
 Give me a sentiment read on AMD across Reddit, Twitter/X, and web results.

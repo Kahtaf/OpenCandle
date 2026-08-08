@@ -21,7 +21,7 @@ OpenCandle runs blind head-to-head comparisons against generic frontier-model ag
 
 **They lose track of position math.** Options prompts exposed recurring slips: quoting per-contract premiums as per-share, and dropping a stated share count or cost basis when sizing a hedge or covered call. OpenCandle reads the option chain and carries the stated position through the answer.
 
-**They cannot review your portfolio.** Whether your holdings are overexposed to interest rates depends on your actual lots and watchlist. OpenCandle stores that state locally and reuses it; a chatbot needs it re-pasted every conversation.
+**They cannot review your portfolio.** Whether your holdings are overexposed to interest rates depends on your actual lots and watchlist. OpenCandle stores that state on your device and reuses it; a chatbot needs it re-pasted every conversation.
 
 ### Where chatbots win
 
@@ -36,8 +36,8 @@ Both prompt classes stay in the benchmark set so the comparison stays honest.
 | --- | --- | --- |
 | Finance tools | Built in: market, macro, options, filings, sentiment, fundamentals, crypto, portfolio | Depends on plan, connectors, or custom setup |
 | Missing or stale data | Disclosed in the answer | Usually silent, sometimes covered by fabrication |
-| Local portfolio state | Stored locally, reused across sessions | Re-pasted every conversation |
-| Local browser GUI and terminal TUI | Yes | No |
+| Local portfolio state | Stored on your device, reused across sessions | Re-pasted every conversation |
+| Web app (no install), local GUI, and terminal | Yes | No |
 
 ## OpenCandle vs Finance Websites
 

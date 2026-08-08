@@ -5,13 +5,13 @@ description: Documentation for the open source financial investigator.
 
 # OpenCandle Docs
 
-OpenCandle is an open source financial investigator with a local browser GUI and an equally complete terminal interface. Both fetch real market data before the model writes an answer.
+OpenCandle is an open source financial investigator that runs three ways: the web app at web.opencandle.app, the local GUI, and the terminal (TUI). All three fetch real market data before the model writes an answer.
 
 It is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## How OpenCandle Works
 
-1. You ask a financial question in the GUI or terminal.
+1. You ask a financial question in the web app, the local GUI, or the terminal.
 2. OpenCandle classifies the investigation and asks a follow-up only if a missing detail changes the answer.
 3. Tools fetch quotes, filings, options, macro data, and sentiment. Gaps and stale data are surfaced.
 4. The model writes an answer that separates facts from judgment and names the risks.
@@ -23,9 +23,11 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 ## Start here
 
 - [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
+- [Ways to Run OpenCandle](./ways-to-run.md): the web app, the local GUI, and the terminal compared.
 - [Getting Started](./getting-started.md): install to a first market answer in five minutes, plus troubleshooting.
 - [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
-- [Hosted PWA](./hosted-pwa.md): install and use OpenCandle without keeping a local server running.
+- [Web App Quickstart](./hosted-pwa.md): use OpenCandle at web.opencandle.app with nothing to install.
+- [How the Web App Works](./how-the-web-app-works.md): what runs in your browser and where your data lives.
 
 ## Guides and reference
 
@@ -45,6 +47,6 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 - Evidence first. Show the data used; avoid unsupported conclusions.
 - Tools fetch and format. The model synthesizes.
 - Provider gaps stay visible: missing keys, stale data, degraded sources.
-- Local state stays local, under `~/.opencandle/`.
+- Your data stays on your device: under `~/.opencandle/` for the local GUI and terminal, in your browser for the web app.
 
 OpenCandle gathers and organizes evidence. Judgment and risk stay with you.
