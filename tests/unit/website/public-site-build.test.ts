@@ -189,8 +189,10 @@ describe("public site build contract", () => {
     const firstRunHtml = await readFile(join(root, "website/dist/docs/first-run.html"), "utf8");
     const tuiHtml = await readFile(join(root, "website/dist/docs/tui.html"), "utf8");
 
-    expect(overviewHtml).toContain("local browser GUI and an equally complete terminal interface");
-    expect(gettingStartedHtml).toContain("The GUI is the primary path");
+    expect(overviewHtml).toContain(
+      "runs three ways: the web app at web.opencandle.app, the local GUI, and the terminal (TUI)",
+    );
+    expect(gettingStartedHtml).toContain("The local GUI is its primary interface");
     expect(gettingStartedHtml).not.toContain("The CLI is the primary entry point");
     expect(gettingStartedHtml.indexOf("opencandle gui")).toBeLessThan(
       gettingStartedHtml.indexOf("# terminal (TUI)"),
@@ -231,7 +233,9 @@ describe("public site build contract", () => {
     expect(hero?.textContent).toContain(
       "OpenCandle is an open source financial investigator. It fetches live quotes, filings, options, and macro data before answering, then shows where the result came from.",
     );
-    expect(hero?.textContent).toContain("Free and open source · runs locally · bring your own AI");
+    expect(hero?.textContent).toContain(
+      "Free and open source · your data stays on your device · bring your own AI",
+    );
     expect(hero?.textContent).not.toContain("core market data needs no key");
     expect(hero?.textContent).not.toContain("no account");
     expect(homeHtml).not.toContain("local-first financial research workspace");
@@ -267,7 +271,7 @@ describe("public site build contract", () => {
     expect(homeHtml).toContain('data-surface-video="gui"');
     expect(homeHtml.match(/controls=""/g)).toHaveLength(2);
     expect(homeHtml).toContain('data-legacy-cli-demo=""');
-    expect(homeHtml).toContain("It runs locally in a browser or terminal");
+    expect(homeHtml).toContain("It runs in your browser at web.opencandle.app");
     expect(homeHtml.indexOf('data-surface-tab="gui"')).toBeLessThan(
       homeHtml.indexOf('data-surface-tab="tui"'),
     );
@@ -363,10 +367,13 @@ describe("public site build contract", () => {
 
     expect(faq?.textContent).toContain("What do I need to get started?");
     expect(faq?.textContent).toContain("Node.js");
+    expect(faq?.textContent).toContain("Do I have to install anything?");
+    expect(faq?.textContent).toContain("web.opencandle.app runs the full agent in your browser");
     expect(faq?.textContent).toContain("Where is my data stored?");
     expect(faq?.textContent).toContain(
-      "Watchlists, portfolios, alerts, and sessions are stored on your machine.",
+      "in your browser for the web app and under ~/.opencandle for local installs",
     );
+    expect(faq?.textContent).toContain("never on an OpenCandle server");
     expect(faq?.textContent).toContain(
       "Questions and research context are sent to the model provider you choose.",
     );
@@ -520,6 +527,52 @@ describe("public site build contract", () => {
     ).toHaveLength(4);
     expect(comparison?.textContent).not.toMatch(/[□▥▱◷♧▣☷⌕▤]/);
     expect(siteCss).toMatch(/\.answer-surface \.product-mobile-header\s*\{\s*display:\s*none;/);
+  });
+
+  it("publishes the web launch docs pages with navigation labels", async () => {
+    for (const file of [
+      "website/dist/docs/ways-to-run.html",
+      "website/dist/docs/ways-to-run.md",
+      "website/dist/docs/how-the-web-app-works.html",
+      "website/dist/docs/how-the-web-app-works.md",
+    ]) {
+      await expect(
+        access(join(root, file)),
+        `${file} should be generated`,
+      ).resolves.toBeUndefined();
+    }
+
+    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
+    const docsDocument = new JSDOM(docsHtml, {
+      url: "https://opencandle.app/docs/index.html",
+    }).window.document;
+    const sidebarNav = docsDocument.querySelector('nav[aria-label="Documentation"]');
+
+    expect(sidebarNav?.textContent).toContain("Ways to Run");
+    expect(sidebarNav?.textContent).toContain("Web App Quickstart");
+    expect(sidebarNav?.textContent).toContain("How the Web App Works");
+
+    const waysToRunHtml = await readFile(join(root, "website/dist/docs/ways-to-run.html"), "utf8");
+    expect(waysToRunHtml).toContain("<table>");
+
+    const llmsTxt = await readFile(join(root, "website/dist/llms.txt"), "utf8");
+    expect(llmsTxt).toContain("https://opencandle.app/docs/ways-to-run.html");
+    expect(llmsTxt).toContain("https://opencandle.app/docs/hosted-pwa.html");
+    expect(llmsTxt).toContain("https://opencandle.app/docs/how-the-web-app-works.html");
+  });
+
+  it("offers the hosted web app from the homepage hero", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const hero = homeDocument.querySelector(".landing-hero");
+    const heroWebAppLink = hero?.querySelector('a[href="https://web.opencandle.app"]');
+
+    expect(heroWebAppLink).not.toBeNull();
+    expect(heroWebAppLink?.textContent).toContain("Try it in your browser");
+    // The npx path stays alongside the browser path.
+    expect(hero?.querySelector("[data-surface-command]")?.textContent).toContain(
+      "npx opencandle@latest gui",
+    );
   });
 
   it("uses direct punctuation instead of em dashes across the public site", async () => {

@@ -79,9 +79,26 @@ const sourcePages = [
     section: "Start here",
     navLabel: "Why OpenCandle",
   },
+  {
+    source: "docs/ways-to-run.md",
+    output: "docs/ways-to-run.html",
+    section: "Start here",
+    navLabel: "Ways to Run",
+  },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
+  {
+    source: "docs/hosted-pwa.md",
+    output: "docs/hosted-pwa.html",
+    section: "Start here",
+    navLabel: "Web App Quickstart",
+  },
+  {
+    source: "docs/how-the-web-app-works.md",
+    output: "docs/how-the-web-app-works.html",
+    section: "Start here",
+    navLabel: "How the Web App Works",
+  },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
-  { source: "docs/hosted-pwa.md", output: "docs/hosted-pwa.html", section: "Guides" },
   { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
@@ -89,11 +106,6 @@ const sourcePages = [
     section: "Guides",
   },
   { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Reference" },
-  {
-    source: "docs/provider-relay.md",
-    output: "docs/provider-relay.html",
-    section: "Reference",
-  },
   { source: "docs/configuration.md", output: "docs/configuration.html", section: "Reference" },
   {
     source: "docs/system-architecture.md",
@@ -101,6 +113,11 @@ const sourcePages = [
     section: "Build",
   },
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
+  {
+    source: "docs/provider-relay.md",
+    output: "docs/provider-relay.html",
+    section: "Build",
+  },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
   {
     source: "CONTRIBUTING.md",
@@ -389,6 +406,9 @@ function SiteHeader({ output = "index.html" }) {
           </Button>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+            <a href="https://web.opencandle.app">Open Web App</a>
           </Button>
           <Button asChild variant="brand" size="sm" rounded="full">
             <a href={`${prefix}docs/getting-started.html`}>Install</a>
@@ -1343,12 +1363,17 @@ function HomePage({ buildDate, version }) {
     {
       question: "What is OpenCandle?",
       answer:
-        "OpenCandle is an open source AI research app for stocks, portfolios, and markets. It runs locally in a browser or terminal and checks current financial data before it answers.",
+        "OpenCandle is an open source AI research app for stocks, portfolios, and markets. It runs in your browser at web.opencandle.app, as a local app, or in the terminal, and it checks current financial data before it answers.",
     },
     {
       question: "Is it free?",
       answer:
         "OpenCandle is free and MIT licensed, with no OpenCandle account or subscription. You pay your AI model provider for usage. Core market data does not require paid data APIs.",
+    },
+    {
+      question: "Do I have to install anything?",
+      answer:
+        "No. web.opencandle.app runs the full agent in your browser. Installing locally adds SEC filings, X and Reddit sentiment, and background alert monitoring.",
     },
     {
       question: "How is this different from asking ChatGPT?",
@@ -1358,7 +1383,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "What do I need to get started?",
       answer:
-        "You need Node.js and access to an Anthropic, OpenAI, or Google model through an API key or supported sign-in. OpenCandle provides the app and core market-data connections, with no OpenCandle account or subscription.",
+        "A model API key from OpenAI, Anthropic, or Google. You only need Node.js if you install OpenCandle locally; the web app needs nothing beyond your browser.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -1368,7 +1393,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "Where is my data stored?",
       answer:
-        "Watchlists, portfolios, alerts, and sessions are stored on your machine. Questions and research context are sent to the model provider you choose.",
+        "On your device: in your browser for the web app and under ~/.opencandle for local installs, never on an OpenCandle server. Questions and research context are sent to the model provider you choose.",
     },
   ];
   const dataSources = [
@@ -1457,7 +1482,7 @@ function HomePage({ buildDate, version }) {
             "@type": "SoftwareApplication",
             name: brandName,
             applicationCategory: "FinanceApplication",
-            operatingSystem: "macOS, Windows, Linux",
+            operatingSystem: "Web, macOS, Windows, Linux",
             softwareVersion: version,
             url: siteUrl,
             codeRepository: "https://github.com/Kahtaf/OpenCandle",
@@ -1494,8 +1519,13 @@ function HomePage({ buildDate, version }) {
                 <CopyIcon />
               </button>
             </div>
+            <div className="mt-4">
+              <Button asChild variant="brand" rounded="full">
+                <a href="https://web.opencandle.app">Try it in your browser</a>
+              </Button>
+            </div>
             <p className="landing-hero-proof">
-              Free and open source · runs locally · bring your own AI
+              Free and open source · your data stays on your device · bring your own AI
             </p>
           </div>
           <div className="landing-hero-media">
@@ -1783,7 +1813,10 @@ Last updated: ${buildDate}
 ## Start here
 
 - [Overview](${siteUrl}/docs/index.html)
+- [Ways to run](${siteUrl}/docs/ways-to-run.html)
 - [Getting started](${siteUrl}/docs/getting-started.html)
+- [Web app quickstart](${siteUrl}/docs/hosted-pwa.html)
+- [How the web app works](${siteUrl}/docs/how-the-web-app-works.html)
 - [GUI quickstart](${siteUrl}/docs/gui-quickstart.html)
 - [Data sources](${siteUrl}/docs/data-sources.html)
 - [Build a tool](${siteUrl}/docs/build-a-tool.html)

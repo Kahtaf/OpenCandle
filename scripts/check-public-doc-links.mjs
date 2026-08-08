@@ -10,7 +10,13 @@ const docsDir = join(root, "website/dist");
 const timeoutMs = Number(process.env.OPENCANDLE_LINK_CHECK_TIMEOUT_MS ?? 10_000);
 const attempts = Number(process.env.OPENCANDLE_LINK_CHECK_ATTEMPTS ?? 3);
 const retryDelayMs = Number(process.env.OPENCANDLE_LINK_CHECK_RETRY_DELAY_MS ?? 1_000);
-const skippedHosts = new Set(["opencandle.app", "127.0.0.1", "localhost", "::1"]);
+const skippedHosts = new Set([
+  "opencandle.app",
+  "web.opencandle.app",
+  "127.0.0.1",
+  "localhost",
+  "::1",
+]);
 
 function walk(dir) {
   const files = [];
