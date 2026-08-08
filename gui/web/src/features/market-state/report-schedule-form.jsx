@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 
 // One schedule form for both callers: the Reports slide-over and the
 // Notifications & automation settings section. Both dispatch the same
@@ -9,6 +10,9 @@ export function ReportScheduleForm({ disabled, invokeTool, onSaved }) {
   const reportTimeId = useId();
   const [localTime, setLocalTime] = useState("08:00");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // The hosted runtime has no scheduler: a saved schedule only fires in the
+  // local app, so the web app must not promise a daily run.
+  const hosted = useRuntimeTransport().kind === "hosted";
 
   return (
     <form
@@ -25,8 +29,10 @@ export function ReportScheduleForm({ disabled, invokeTool, onSaved }) {
       }}
     >
       <p className="text-sm text-muted-foreground">
-        The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
-        ).
+        {hosted
+          ? "In the web app, reports run when you ask for one. The saved time is used by the local app's daily schedule."
+          : "The morning report runs daily while OpenCandle is open."}{" "}
+        Times use your timezone ({timezone}).
       </p>
       <label
         htmlFor={reportTimeId}

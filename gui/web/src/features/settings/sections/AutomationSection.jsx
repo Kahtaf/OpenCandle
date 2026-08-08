@@ -96,7 +96,7 @@ export function AutomationSection({ role, setToast }) {
 
       <SettingsNote>
         {hosted
-          ? "Alert checks and the daily report run while this app is open in this browser. Nothing runs after you close the tab."
+          ? "Alert checks and reports run when you ask for them, with a manual check or by running a report. Nothing runs in the background or after you close the tab."
           : "Alert checks and the daily report run while OpenCandle is open. Run opencandle monitor to keep them running without the app in front of you."}
       </SettingsNote>
     </div>

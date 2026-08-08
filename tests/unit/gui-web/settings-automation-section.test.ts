@@ -77,4 +77,39 @@ describe("Settings automation section gating", () => {
     expect(save).toBeTruthy();
     expect(save?.disabled).toBe(true);
   });
+
+  it("tells hosted users automation is on-demand only", async () => {
+    await render("hosted", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "Alert checks and reports run when you ask for them, with a manual check or by running a report. Nothing runs in the background or after you close the tab.",
+    );
+    expect(text).not.toContain("run while this app is open");
+    expect(text).not.toContain("—");
+  });
+
+  it("keeps the local copy about the open app and opencandle monitor", async () => {
+    await render("loopback", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "Alert checks and the daily report run while OpenCandle is open. Run opencandle monitor to keep them running without the app in front of you.",
+    );
+    expect(text).not.toContain("—");
+  });
+
+  it("tells web app users the saved schedule does not run itself", async () => {
+    await render("hosted", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "In the web app, reports run when you ask for one. The saved time is used by the local app's daily schedule.",
+    );
+    expect(text).not.toContain("runs daily while OpenCandle is open");
+  });
+
+  it("keeps the local schedule copy in the local app", async () => {
+    await render("loopback", "writer");
+    expect(document.body.textContent).toContain(
+      "The morning report runs daily while OpenCandle is open.",
+    );
+  });
 });
