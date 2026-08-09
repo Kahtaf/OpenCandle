@@ -136,7 +136,7 @@
     "release:major": "node scripts/release.mjs major"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0 <27"
+    "node": "^22.22.2 || >=24.0.0 <27"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.82.1",

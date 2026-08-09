@@ -11,7 +11,7 @@ OpenCandle is an open source financial investigator built with [TypeScript](http
 
 ## Local Setup
 
-Requires Node.js `^22.19.0 || >=24.0.0 <27` (see `engines` in `package.json`). `npm install`, `npm test`, and `npm start` all run a `check:node` guard first, so an unsupported Node version fails fast with a clear message instead of a confusing downstream error.
+Requires Node.js `^22.22.2 || >=24.0.0 <27` (see `engines` in `package.json`). `npm install`, `npm test`, and `npm start` all run a `check:node` guard first, so an unsupported Node version fails fast with a clear message instead of a confusing downstream error.
 
 ```bash
 npm install

@@ -42,7 +42,8 @@ describe("CLI front-door options", () => {
       "Open source financial investigator: evidence-first market research agent for your terminal and local GUI",
     );
     expect(packageJson.keywords).not.toContain("trading");
-    expect(semver.satisfies("22.19.0", packageJson.engines.node)).toBe(true);
+    expect(semver.satisfies("22.22.2", packageJson.engines.node)).toBe(true);
+    expect(semver.satisfies("22.19.0", packageJson.engines.node)).toBe(false);
     expect(semver.satisfies("23.0.0", packageJson.engines.node)).toBe(false);
     expect(semver.satisfies("24.0.0", packageJson.engines.node)).toBe(true);
     expect(semver.satisfies("26.0.0", packageJson.engines.node)).toBe(true);

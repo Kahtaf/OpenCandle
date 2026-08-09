@@ -170,7 +170,7 @@ describe("release readiness automation", () => {
     const ciWorkflow = read(".github/workflows/ci.yml");
 
     expect(ciWorkflow).toContain("permissions:\n  contents: read");
-    expect(ciWorkflow).toContain('node-version: ["22.19.0", "24.x", "26.x"]');
+    expect(ciWorkflow).toContain('node-version: ["22.22.2", "24.x", "26.x"]');
     expect(ciWorkflow).toContain("npm run docs:site:build");
     expect(ciWorkflow).toContain("npm run package:contents:check");
     expect(ciWorkflow).toContain("npm run relay:typecheck");
