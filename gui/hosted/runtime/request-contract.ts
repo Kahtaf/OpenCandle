@@ -35,7 +35,23 @@ export function parseGuiRequest(value: unknown): GuiRequest {
     case "market_quotes":
     case "market_indices":
     case "diagnostics":
+    case "preferences_list":
       return { action: request.action };
+    case "preferences_delete":
+      return {
+        action: request.action,
+        namespace: parseBoundedString(request.namespace, "preference namespace", 200),
+        key: parseBoundedString(request.key, "preference key", 200),
+      };
+    case "tool_defaults_delete": {
+      const toolName = typeof request.toolName === "string" ? request.toolName.trim() : "";
+      if (!/^[a-z][a-z0-9_]{0,79}$/.test(toolName)) throw new Error("Invalid toolName");
+      return {
+        action: request.action,
+        toolName,
+        paramPath: parseBoundedString(request.paramPath, "parameter path", 200),
+      };
+    }
     case "configure_model": {
       if (!isFirstClassModelProvider(request.provider) || !resolveFirstClassModelEntry(request.provider, request.modelId)) {
         throw new Error("Unsupported provider or model");

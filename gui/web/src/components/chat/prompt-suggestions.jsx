@@ -27,7 +27,7 @@ export function EmptyThread({
           className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-[color,transform,scale] duration-150 ease-out hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
-          Browse workflows, tools, and providers
+          Browse workflows and tools
           <Kbd className="hidden sm:inline-flex">⌘K / Ctrl+K</Kbd>
         </button>
       ) : null}

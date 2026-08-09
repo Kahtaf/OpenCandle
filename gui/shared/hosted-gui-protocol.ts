@@ -13,6 +13,7 @@ export const HOSTED_GUI_READ_ACTIONS = [
   "instrument_quote",
   "instrument_endpoint",
   "diagnostics",
+  "preferences_list",
   "validate_model_key",
   "validate_provider_key",
 ] as const;
@@ -35,8 +36,11 @@ export type GuiRequest =
         | "market_state"
         | "market_quotes"
         | "market_indices"
-        | "diagnostics";
+        | "diagnostics"
+        | "preferences_list";
     }
+  | { action: "preferences_delete"; namespace: string; key: string }
+  | { action: "tool_defaults_delete"; toolName: string; paramPath: string }
   | { action: "instrument_search"; query: string }
   | { action: "instrument_quote"; symbol: string }
   | { action: "instrument_history"; symbol: string; range: string }

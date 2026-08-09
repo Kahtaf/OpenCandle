@@ -38,6 +38,13 @@ import {
 } from "../../../gui/shared/catalog-metadata.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import {
+  buildPreferencesSnapshot,
+  type PreferencesSnapshot,
+} from "../../../src/memory/preferences-view.js";
+import { MemoryStorage } from "../../../src/memory/storage.js";
+import { assertUserDeletableToolDefaultPath,
+  deleteDefault } from "../../../src/memory/tool-defaults.js";
+import {
   clearPendingSessionAction,
   deleteSessionActionStore,
   hasAcceptedSessionAction,
@@ -176,7 +183,7 @@ export interface BrowserHostedBootstrap {
       fallbackDescription: string | null;
       instructionsHint: string;
       status: "file" | "absent" | "reachable";
-      browserTransport: "direct" | "relayed";
+      browserTransport: "direct" | "relayed" | "blocked";
       hosted: true;
       configured?: boolean;
       source?: "file" | "absent";
@@ -650,6 +657,40 @@ export class BrowserHostedGuiRuntime {
     return this.buildBootstrap(await this.resolveManager(sessionId));
   }
 
+  /** The two silently written stores behind Settings -> Preferences. */
+  listPreferences(): PreferencesSnapshot {
+    return buildPreferencesSnapshot(this.stateDatabase);
+  }
+
+  async deletePreference(
+    namespace: string,
+    key: string,
+  ): Promise<BrowserHostedBootstrap & { preferences: PreferencesSnapshot }> {
+    new MemoryStorage(this.stateDatabase).deletePreference(namespace, key);
+    return this.buildPreferencesMutation();
+  }
+
+  async deleteToolDefault(
+    toolName: string,
+    paramPath: string,
+  ): Promise<BrowserHostedBootstrap & { preferences: PreferencesSnapshot }> {
+    assertUserDeletableToolDefaultPath(paramPath);
+    deleteDefault(toolName, paramPath, this.stateDatabase);
+    return this.buildPreferencesMutation();
+  }
+
+  /**
+   * A preference delete is a state mutation, so it answers with the same
+   * bootstrap the other mutations return. That is what carries the changed
+   * SQLite into the browser checkpoint, making the deletion survive a reload.
+   */
+  private async buildPreferencesMutation(): Promise<
+    BrowserHostedBootstrap & { preferences: PreferencesSnapshot }
+  > {
+    const bootstrap = await this.buildBootstrap(await this.resolveCurrentManager());
+    return { ...bootstrap, preferences: this.listPreferences() };
+  }
+
   marketState(): Record<string, unknown> {
     const service = new MarketStateService(this.stateDatabase);
     const alerts = service.listAlertRules();
@@ -989,7 +1030,10 @@ export class BrowserHostedGuiRuntime {
           defaults: {},
         })),
         workflows: OPENCANDLE_WORKFLOWS,
-        providers: providerReport.available.map(serializeHostedProvider),
+        providers: [
+          ...providerReport.available.map(serializeHostedProvider),
+          ...providerReport.unavailable.map(serializeHostedBlockedProvider),
+        ],
       },
       askUserPrompts: this.askUserBridge.getPrompts(),
       thinking,
@@ -1110,6 +1154,20 @@ function serializeHostedProvider(
     ...shared,
     status: isApiKeyProvider(provider) ? (credential ? "file" : "absent") : "reachable",
     browserTransport: provider.browserTransport.mode === "direct" ? "direct" : "relayed",
+    hosted: true,
+  };
+}
+
+// A provider with no hosted transport still gets a catalog row so the
+// settings page can say it is available only in the local app, instead of
+// silently omitting it.
+export function serializeHostedBlockedProvider(
+  provider: ProviderDescriptor,
+): BrowserHostedBootstrap["catalog"]["providers"][number] {
+  return {
+    ...providerCatalogBase(provider),
+    status: "absent",
+    browserTransport: "blocked",
     hosted: true,
   };
 }

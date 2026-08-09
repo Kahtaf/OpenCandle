@@ -7,7 +7,10 @@ import { firstClassModelCatalog } from "../../../../src/pi/model-catalog.generat
 import { resolveFirstClassModelEntry } from "../../../../src/pi/model-catalog-lookup.js";
 import { listApiKeyProviders } from "../../../../src/onboarding/providers.js";
 import { hostedGuiActionBlocksUpdate } from "../../../shared/hosted-gui-protocol.js";
-import { FIRST_RUN_SETUP_DISMISSED_KEY } from "../../../web/src/features/onboarding/setup-dismissal.js";
+import {
+  FIRST_RUN_ONBOARDING_SEEN_KEY,
+  LEGACY_FIRST_RUN_DISMISSED_KEY,
+} from "../../../web/src/features/onboarding/setup-dismissal.js";
 import { fetchHostedRuntimeAuthorization } from "../../runtime/provider-relay-fetch.ts";
 import {
   MODEL_RELAY_HEADERS,
@@ -235,6 +238,26 @@ class BrowserRuntimeHost {
       }
       case "provider.status.check":
         return this.request("gui", { action: "diagnostics" });
+      case "preferences.list":
+        return this.request("gui", { action: "preferences_list" });
+      case "preferences.delete": {
+        // A delete replies with the mutation bootstrap that carries the durable
+        // checkpoint; the caller only wants the refreshed list back.
+        const result = await this.request("gui", {
+          action: "preferences_delete",
+          namespace: String(command.namespace ?? ""),
+          key: String(command.key ?? ""),
+        });
+        return result?.preferences ?? { preferences: [], toolDefaults: [] };
+      }
+      case "tool_defaults.delete": {
+        const result = await this.request("gui", {
+          action: "tool_defaults_delete",
+          toolName: String(command.toolName ?? ""),
+          paramPath: String(command.paramPath ?? ""),
+        });
+        return result?.preferences ?? { preferences: [], toolDefaults: [] };
+      }
       case "hosted.data.export":
         return { archive: await this.dataStore.exportAll() };
       case "hosted.data.import": {
@@ -1176,7 +1199,8 @@ class BrowserRuntimeHost {
     this.storage.removeItem(RELAY_CLIENT_KEY);
     // Clearing everything leaves a fresh install behind, so onboarding is owed
     // its automatic first opening again.
-    this.storage.removeItem(FIRST_RUN_SETUP_DISMISSED_KEY);
+    this.storage.removeItem(FIRST_RUN_ONBOARDING_SEEN_KEY);
+    this.storage.removeItem(LEGACY_FIRST_RUN_DISMISSED_KEY);
     if (globalThis.caches) {
       await Promise.all((await caches.keys()).map((name) => caches.delete(name)));
       await repopulateServiceWorkerShell();

@@ -7,7 +7,7 @@ const EMPTY_MODEL_SETUP = {
   providers: [],
   availableModels: [],
 };
-export function createHostedRuntimeTransport({ host }) {
+export function createHostedRuntimeTransport({ host, hostedData = null }) {
   if (!host || typeof host.request !== "function") {
     throw new Error("Hosted runtime transport requires a browser runtime host");
   }
@@ -93,13 +93,27 @@ export function createHostedRuntimeTransport({ host }) {
     // A late online bootstrap must not overwrite a newer offline (or
     // replacement-writer) projection and make saved-state controls writable.
     if (generation !== refreshGeneration) return withBrowserState(bootstrap);
-    return publishBootstrap(bootstrap);
+    const result = publishBootstrap(bootstrap);
+    // A coordinator invalidation can be another tab's preference mutation and
+    // the bootstrap payload carries no preferences, so refresh them alongside;
+    // an offline or superseded read just keeps the current view.
+    void requestGui({ action: "preferences_list" })
+      .then((snapshot) => {
+        if (generation === refreshGeneration && snapshot) {
+          publish({ type: "preferences", ...snapshot });
+        }
+      })
+      .catch(() => {});
+    return result;
   };
 
   const transport = {
     kind: "hosted",
     contractVersion: runtimeTransportContractVersion,
     initialModelSetup: host.getModelSetup?.() || EMPTY_MODEL_SETUP,
+    // Export, import, clear, and update flows, bound to this browser runtime by
+    // the hosted entrypoint so Settings and the status strip run the same ones.
+    hostedData,
 
     async bootstrap() {
       const bootstrap = withBrowserState(await requestGui({ action: "bootstrap" }));
@@ -389,6 +403,30 @@ export function createHostedRuntimeTransport({ host }) {
 
     getInstrumentEndpoint(endpoint, symbol, signal) {
       return requestGui({ action: "instrument_endpoint", endpoint, symbol }, { signal });
+    },
+
+    getPreferences(signal) {
+      return requestGui({ action: "preferences_list" }, { signal });
+    },
+
+    // Deletes go through the command path so a follower tab follows the same
+    // writer coordination every other hosted mutation follows. The refreshed
+    // snapshot is published as a preferences event so this tab's shared state
+    // view updates without waiting for a refetch.
+    async deletePreference({ namespace, key }) {
+      const snapshot = await host.handleCommand({ type: "preferences.delete", namespace, key });
+      if (snapshot) publish({ type: "preferences", ...snapshot });
+      return snapshot;
+    },
+
+    async deleteToolDefault({ toolName, paramPath }) {
+      const snapshot = await host.handleCommand({
+        type: "tool_defaults.delete",
+        toolName,
+        paramPath,
+      });
+      if (snapshot) publish({ type: "preferences", ...snapshot });
+      return snapshot;
     },
 
     getDiagnostics(options = {}, signal) {

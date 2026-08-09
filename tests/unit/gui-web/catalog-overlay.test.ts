@@ -29,6 +29,28 @@ describe("CatalogOverlay helpers", () => {
     );
   });
 
+  it("offers run surfaces only: workflows and tools, never providers", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(CatalogList, {
+        tab: "workflows",
+        query: "",
+        catalog: {
+          workflows: [{ id: "compare_assets", name: "Compare Assets", description: "Compare." }],
+          tools: [],
+          providers: [
+            { id: "alpha_vantage", kind: "api-key", displayName: "Alpha Vantage", unlocks: [] },
+          ],
+        },
+        onSelect: () => {},
+      }),
+    );
+
+    expect(html).toContain("Workflows");
+    expect(html).toContain("Tools");
+    expect(html).not.toContain("Providers");
+    expect(html).not.toContain("Alpha Vantage");
+  });
+
   it("renders grouped cmdk options inside an internal scroll region", () => {
     const html = renderToStaticMarkup(
       React.createElement(CatalogList, {

@@ -155,6 +155,26 @@ describe("doctor report", () => {
     expect(deriveDoctorStatus([check({ status: "skip", capability: "optional" })])).toBe("ready");
   });
 
+  it("reports whether notification webhook delivery is configured without exposing the URL", async () => {
+    useTempOpenCandleHome();
+
+    const offlineOptions = {
+      cwd: process.cwd(),
+      commandRunner: (async () => ({ code: 1, stdout: "", stderr: "" })) as CommandRunner,
+      fetchImpl: async () => new Response("ok", { status: 200 }),
+      modelSetup: { requirement: "ready" as const, currentModel: "google/gemini-2.5-flash" },
+    };
+
+    vi.stubEnv("OPENCANDLE_NOTIFICATION_WEBHOOK_URL", "");
+    const unset = await buildDoctorReport(offlineOptions);
+    expect(unset.metadata.notificationWebhookConfigured).toBe(false);
+
+    vi.stubEnv("OPENCANDLE_NOTIFICATION_WEBHOOK_URL", "https://hooks.example.com/opencandle");
+    const configured = await buildDoctorReport(offlineOptions);
+    expect(configured.metadata.notificationWebhookConfigured).toBe(true);
+    expect(JSON.stringify(configured)).not.toContain("hooks.example.com");
+  });
+
   it("does not run browser-session probes unless sessions are requested", async () => {
     useTempOpenCandleHome();
     const calls: Array<{ command: string; args: readonly string[] }> = [];

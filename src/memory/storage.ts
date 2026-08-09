@@ -8,6 +8,16 @@ interface PreferenceInput {
   source?: string;
 }
 
+/** One `user_preferences` row, shaped for display rather than for the agent. */
+export interface StoredPreference {
+  namespace: string;
+  key: string;
+  value: unknown;
+  source: string;
+  confidence: string;
+  updatedAt: string;
+}
+
 export interface WorkflowPreferences {
   riskProfile?: string;
   timeHorizon?: string;
@@ -79,6 +89,38 @@ export class MemoryStorage {
     return this.db
       .prepare("SELECT * FROM user_preferences WHERE namespace = ?")
       .all(namespace) as Array<Record<string, string | number | null>>;
+  }
+
+  /**
+   * Every stored preference across every namespace, parsed for display.
+   * Backs the Settings preference list; the agent keeps using the
+   * namespace-scoped and workflow-shaped readers above.
+   */
+  listAllPreferences(): StoredPreference[] {
+    const rows = this.db
+      .prepare(
+        `SELECT namespace, key, value_json, confidence, source, updated_at
+           FROM user_preferences
+          ORDER BY namespace, key`,
+      )
+      .all() as Array<Record<string, string | number | null>>;
+
+    return rows.map((row) => ({
+      namespace: String(row.namespace ?? ""),
+      key: String(row.key ?? ""),
+      value: row.value_json == null ? null : safeParseJson(String(row.value_json)),
+      source: String(row.source ?? ""),
+      confidence: String(row.confidence ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+    }));
+  }
+
+  /** Removes one stored preference. Returns whether a row was actually removed. */
+  deletePreference(namespace: string, key: string): boolean {
+    const result = this.db
+      .prepare("DELETE FROM user_preferences WHERE namespace = ? AND key = ?")
+      .run(namespace, key);
+    return result.changes > 0;
   }
 
   getWorkflowPreferences(namespace: string = "global"): WorkflowPreferences {

@@ -36,8 +36,24 @@ export function buildCatalog() {
   };
 }
 
+// A provider the user snoozed or dismissed is not simply unconfigured: the
+// settings row says which of the two it is, and until when.
+function serializeOnboarding(provider: ProviderDescriptor, onboardingState: OnboardingState) {
+  const entry = onboardingState.providers[provider.id];
+  if (!entry || entry.status === "completed") return {};
+  return {
+    onboarding:
+      entry.status === "snoozed"
+        ? { status: entry.status, snoozeUntil: entry.snoozeUntil }
+        : { status: entry.status },
+  };
+}
+
 function serializeProvider(provider: ProviderDescriptor, onboardingState: OnboardingState) {
-  const common = providerCatalogBase(provider);
+  const common = {
+    ...providerCatalogBase(provider),
+    ...serializeOnboarding(provider, onboardingState),
+  };
 
   if (isApiKeyProvider(provider)) {
     // Never serialize the credential value: this payload reaches the browser DOM.
@@ -48,6 +64,7 @@ function serializeProvider(provider: ProviderDescriptor, onboardingState: Onboar
         source,
         credential: credential.value,
       }),
+      ...serializeOnboarding(provider, onboardingState),
       status: source,
     };
   }

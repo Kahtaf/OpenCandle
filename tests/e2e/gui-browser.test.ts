@@ -29,9 +29,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
-    await expectVisible(
-      page.getByRole("button", { name: /Browse workflows, tools, and providers/ }).first(),
-    );
+    await expectVisible(page.getByRole("button", { name: /Browse workflows and tools/ }).first());
   });
 
   it("renders a stock quote prompt and updates context", async () => {
@@ -187,7 +185,11 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "gpt-4.1-mini" }).click();
     await expectVisible(manageModelKeys);
     await manageModelKeys.click();
-    await expectVisible(mocked.getByRole("dialog", { name: "Connect a model" }));
+    // Key management is a settings page now, not a dialog over the chat.
+    await mocked.waitForURL(/\/settings\/model$/);
+    await expectVisible(mocked.locator('[data-slot="model-section"]'));
+    await expectVisible(mocked.getByRole("heading", { name: "Connect a model" }));
+    await expect(mocked.getByRole("dialog").count()).resolves.toBe(0);
     await mocked.close();
   });
 
@@ -523,6 +525,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("button", { name: "Open sidebar" }));
     await mocked.getByRole("button", { name: "Open sidebar" }).click();
     await expectVisible(mocked.getByRole("dialog", { name: "Sessions" }));
+    await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("link", { name: "Reports" }));
     await mocked.goto(`${guiUrl}/portfolios`, { waitUntil: "networkidle" });
     await mocked.getByRole("button", { name: "Add holding" }).click();
@@ -756,10 +759,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       },
     });
 
-    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    await mocked.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
-    await mocked.getByRole("button", { name: /Providers/ }).click();
-    await mocked.getByRole("option", { name: /FRED/ }).click();
+    // Providers live in Settings now; the catalog keeps run surfaces only.
+    await mocked.goto(`${guiUrl}/settings/providers`, { waitUntil: "networkidle" });
+    await mocked.getByRole("button", { name: /FRED/ }).click();
 
     // The saved secret never reaches the DOM: the input starts empty and the
     // configured state is communicated with a masked hint instead.

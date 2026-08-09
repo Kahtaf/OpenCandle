@@ -557,6 +557,12 @@ describe("browser runtime host", () => {
       "opencandle.hosted.provider-credentials.v1",
       "opencandle.hosted.current-session.v1",
       "opencandle.hosted.relay-client.v1",
+      // Clearing everything leaves a first-time browser profile behind, so the
+      // first-run onboarding dialog is owed its one automatic opening again.
+      // The legacy dismissal goes too, or migration would resurrect the seen
+      // state on the next read.
+      "opencandle.onboarding.first-run-seen.v1",
+      "opencandle.onboarding.first-run-dismissed.v1",
     ];
     for (const key of appKeys) storage.setItem(key, "retained-device-data");
     const host = createBrowserRuntimeHost({
@@ -571,7 +577,7 @@ describe("browser runtime host", () => {
       { type: "REPOPULATE_SHELL" },
       expect.any(Array),
     );
-    expect(appKeys.map((key) => storage.getItem(key))).toEqual([null, null, null, null, null]);
+    expect(appKeys.map((key) => storage.getItem(key))).toEqual(appKeys.map(() => null));
   });
 
   it("keeps an inherited session credential through a reload of the promoted tab", () => {

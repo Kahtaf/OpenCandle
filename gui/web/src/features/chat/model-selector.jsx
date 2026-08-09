@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover.jsx";
 import { cn } from "../../lib/utils.js";
-import { ModelSetupDialog } from "../onboarding/ModelSetupDialog.jsx";
 
 const PROVIDER_LABEL = {
   google: "Google",
@@ -11,9 +10,8 @@ const PROVIDER_LABEL = {
   anthropic: "Anthropic",
 };
 
-export function ModelSelector({ modelSetup, role = "writer", send, setToast, disabled }) {
+export function ModelSelector({ modelSetup, send, disabled, onManageKeys }) {
   const [open, setOpen] = useState(false);
-  const [setupOpen, setSetupOpen] = useState(false);
   const availableModels = modelSetup?.availableModels || [];
   const currentModel = modelSetup?.currentModel || "";
   const availableThinkingLevels = modelSetup?.availableThinkingLevels || [];
@@ -25,9 +23,10 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
     setOpen(false);
   };
 
+  // Key management is a settings page now, not a second dialog over the chat.
   const openSetup = () => {
     setOpen(false);
-    setSetupOpen(true);
+    onManageKeys?.();
   };
 
   return (
@@ -128,13 +127,6 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
           </div>
         </PopoverContent>
       </Popover>
-      <ModelSetupDialog
-        open={setupOpen}
-        onOpenChange={setSetupOpen}
-        modelSetup={modelSetup}
-        role={role}
-        send={send}
-      />
     </div>
   );
 }

@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCatalog } from "../../../gui/server/tool-metadata.js";
 import * as configModule from "../../../src/config.js";
-import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
+import {
+  markProviderNeverAsk,
+  markProviderSnoozed,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 
 describe("GUI tool metadata catalog", () => {
   const originalOpenCandleHome = process.env.OPENCANDLE_HOME;
@@ -73,6 +77,27 @@ describe("GUI tool metadata catalog", () => {
       status: "unknown",
       probeUrl: expect.stringMatching(/^https:\/\//),
     });
+  });
+
+  it("carries the onboarding skip state so a settings row can say which it is", () => {
+    saveOnboardingState(
+      markProviderNeverAsk(
+        markProviderSnoozed({ version: 2, providers: {} }, "brave", 7),
+        "reddit",
+      ),
+    );
+
+    const providers = buildCatalog().providers;
+    const brave = providers.find((provider) => provider.id === "brave");
+    const reddit = providers.find((provider) => provider.id === "reddit");
+    const fred = providers.find((provider) => provider.id === "fred");
+
+    expect(brave?.onboarding).toMatchObject({
+      status: "snoozed",
+      snoozeUntil: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(reddit?.onboarding).toEqual({ status: "never_ask" });
+    expect(fred?.onboarding).toBeUndefined();
   });
 
   it("surfaces skipped external-tool providers from onboarding preferences", () => {

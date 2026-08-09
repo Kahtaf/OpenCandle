@@ -15,12 +15,21 @@ import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import { getSavedMarketStateSymbols } from "./market-state-api.js";
 import type { ModelSetupController } from "./model-setup.js";
+import {
+  deleteStoredPreference,
+  deleteStoredToolDefault,
+  getPreferencesSnapshot,
+} from "./preferences-api.js";
 import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
 import { listDisplaySessions } from "./session-list.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
-import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
+import {
+  readWriterLock,
+  shouldBlockFailedCoordinatorAction,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 
 interface AskUserBridge {
   getPrompts(): unknown[];
@@ -177,6 +186,36 @@ export function createWsHub({
           }
           const status = await probeProviderStatus(providerId, { mode, force: true });
           client.send({ type: "provider.status", providerId, status });
+          break;
+        }
+        case "preferences.list":
+          // A read: every window may list what the agent has saved, including a
+          // follower that cannot change it.
+          client.send({ type: "preferences", ...getPreferencesSnapshot() });
+          break;
+        case "preferences.delete": {
+          if (role !== "writer") throw new Error("Read-only follower mode");
+          if (preferenceMutationLockBlocked(getSessionManager)) {
+            throw new Error("OpenCandle is reconnecting to this session.");
+          }
+          const snapshot = deleteStoredPreference(
+            String(data.namespace ?? ""),
+            String(data.key ?? ""),
+          );
+          // Broadcast, not reply: another open window is showing the same list.
+          broadcast({ type: "preferences", ...snapshot });
+          break;
+        }
+        case "tool_defaults.delete": {
+          if (role !== "writer") throw new Error("Read-only follower mode");
+          if (preferenceMutationLockBlocked(getSessionManager)) {
+            throw new Error("OpenCandle is reconnecting to this session.");
+          }
+          const snapshot = deleteStoredToolDefault(
+            String(data.toolName ?? ""),
+            String(data.paramPath ?? ""),
+          );
+          broadcast({ type: "preferences", ...snapshot });
           break;
         }
         case "session.new":
@@ -369,6 +408,19 @@ export function createWsHub({
     currentChatEvents,
     subscribeToSessionEvents,
   };
+}
+
+// A stale hub role is not enough to authorize deleting durable prompt-context
+// data: the current session's live writer lock can belong to a TUI. A session
+// whose lock scope cannot be resolved has no live lock to protect.
+function preferenceMutationLockBlocked(getSessionManager: () => SessionManager): boolean {
+  try {
+    return shouldBlockFailedCoordinatorAction(getSessionManager());
+  } catch {
+    // Fail closed: an unresolvable session lock state is not permission to
+    // delete durable prompt-context data.
+    return true;
+  }
 }
 
 function coordinationStateForSession(

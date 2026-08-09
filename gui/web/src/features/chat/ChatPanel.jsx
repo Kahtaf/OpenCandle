@@ -19,9 +19,8 @@ import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupDialog } from "../onboarding/ModelSetupCard.jsx";
 import {
-  isFirstRunSetupSatisfied,
-  readFirstRunSetupDismissed,
-  writeFirstRunSetupDismissed,
+  markFirstRunOnboardingSeen,
+  readFirstRunOnboardingSeen,
 } from "../onboarding/setup-dismissal.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
@@ -76,7 +75,12 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
-  const [setupDismissed, setSetupDismissed] = useState(readFirstRunSetupDismissed);
+  // "idle" until the one automatic opening, "open" while the dialog is up,
+  // "done" forever after it closes for any reason. Storage seeds the machine
+  // so a profile that has seen onboarding starts at "done".
+  const [onboardingPhase, setOnboardingPhase] = useState(() =>
+    readFirstRunOnboardingSeen() ? "done" : "idle",
+  );
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
@@ -196,28 +200,38 @@ export function ChatPanel({
   // setup while they wait for the writer's canonical bootstrap. Do not present
   // that placeholder as a first-run credential flow: the shared connection
   // state already disables actions and shows its reconnecting status.
+  // The boot placeholder carries requirement "unknown" while the role can
+  // already read "writer"; that proves nothing about setup and must not flash
+  // the dialog open. Only a positive non-ready requirement from a real setup
+  // broadcast counts.
   const needsSetup =
-    role !== "connecting" && modelSetup?.requirement && modelSetup.requirement !== "ready";
-  // Auto-open rule: the first-run setup dialog opens whenever setup is
-  // required and the user has not dismissed it. Dismissal is remembered for as
-  // long as setup stays required, so later modelSetup broadcasts, re-renders,
-  // new chats, route changes, reloads, and new tabs never reopen it. The
-  // dismissal is forgotten only on positive proof that setup is satisfied, so a
-  // later regression back to "needs setup" opens it once more. A reconnecting
-  // or not-yet-broadcast setup state proves nothing and must not re-arm it.
-  // App.jsx forgets the persisted record on every route, including the ones
-  // that replace this panel; this clears the panel's own state while it stays
-  // mounted. Reaching setup again after dismissing is done through the
-  // composer's model control.
-  const setupSatisfied = isFirstRunSetupSatisfied({
-    role,
-    requirement: modelSetup?.requirement,
-  });
-  if (setupSatisfied && setupDismissed) setSetupDismissed(false);
-  const setupDialogOpen = Boolean(needsSetup) && !setupDismissed;
+    role !== "connecting" &&
+    modelSetup?.requirement &&
+    modelSetup.requirement !== "ready" &&
+    modelSetup.requirement !== "unknown";
+  // Auto-open rule: the first-run onboarding dialog opens when setup is
+  // positively required and this browser profile has never seen it. Opening is
+  // what marks it seen, so later modelSetup broadcasts, re-renders, new chats,
+  // route changes, reloads, new tabs, and a later regression back to "needs
+  // setup" never reopen it. Reaching setup afterwards is done through the
+  // composer's model control or Settings.
+  // The phase advances during render, the sanctioned way to derive state
+  // from changing inputs. A prop-driven close (setup completed from the open
+  // dialog) never fires onOpenChange, so the open-to-done transition lives
+  // here too: once done, a later regression back to "needs setup" cannot
+  // reopen the dialog in this or any future mount.
+  if (onboardingPhase === "idle" && needsSetup) setOnboardingPhase("open");
+  if (onboardingPhase === "open" && !needsSetup) setOnboardingPhase("done");
+  const setupDialogOpen = onboardingPhase === "open";
   useEffect(() => {
-    writeFirstRunSetupDismissed(setupDismissed);
-  }, [setupDismissed]);
+    // Persist only after the dialog has actually been shown: a boot that
+    // never opened it must not spend a first-timer's one automatic opening.
+    // React Doctor prefers event handlers for this write, but the opening is
+    // not a user event: it is the render-derived idle-to-open transition
+    // above, and localStorage writes are not allowed during render, so a
+    // phase-keyed effect is the narrowest correct home for it.
+    if (onboardingPhase !== "idle") markFirstRunOnboardingSeen();
+  }, [onboardingPhase]);
   // The composer is never disabled by setup: needsSetup blocks only sending,
   // via chatDisabled and submit. The first-run dialog is modal, so drafting
   // resumes as soon as it is dismissed (Escape, the close control, or a click
@@ -309,7 +323,6 @@ export function ChatPanel({
       onStop={stop}
       onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
       modelSetup={modelSetup}
-      role={role}
       send={send}
       setToast={setToast}
       pendingAttachments={pendingAttachments}
@@ -318,6 +331,7 @@ export function ChatPanel({
       watchlists={marketState.state?.watchlists}
       onAddAttachment={addAttachment}
       onRemoveAttachment={removeAttachment}
+      onManageModelKeys={onOpenModelSetup}
     />
   );
 
@@ -385,25 +399,26 @@ export function ChatPanel({
             </div>
           )}
         </section>
-      </div>
-      {transcript.showJumpToLatest ? (
-        <div
-          data-slot="jump-to-latest"
-          className="z-10 flex h-12 shrink-0 items-center justify-center"
-        >
-          <Button
-            type="button"
-            size="sm"
-            rounded="full"
-            className="min-h-10 gap-1.5 shadow-md"
-            onClick={transcript.jumpToLatest}
-            aria-label="Jump to latest"
+        {transcript.showJumpToLatest ? (
+          <div
+            data-slot="jump-to-latest"
+            className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3"
           >
-            <ArrowDown className="h-4 w-4" />
-            Latest
-          </Button>
-        </div>
-      ) : null}
+            <Button
+              type="button"
+              variant="bordered"
+              size="xs"
+              rounded="full"
+              className="pointer-events-auto relative h-7 min-h-7 shrink-0 gap-1 px-3 text-xs shadow-subtle-sm before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={transcript.jumpToLatest}
+              aria-label="Jump to latest"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+              Latest
+            </Button>
+          </div>
+        ) : null}
+      </div>
       <EntityPopover
         open={Boolean(selectedSymbol)}
         onOpenChange={(open) => {
@@ -427,7 +442,8 @@ export function ChatPanel({
       <ModelSetupDialog
         open={setupDialogOpen}
         onOpenChange={(next) => {
-          if (!next) setSetupDismissed(true);
+          if (next) return;
+          setOnboardingPhase("done");
         }}
         variant="first-run"
         modelSetup={modelSetup}

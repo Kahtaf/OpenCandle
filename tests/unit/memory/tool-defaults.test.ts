@@ -33,7 +33,7 @@ describe("tool defaults storage", () => {
   it("closes internally opened databases after each operation", async () => {
     vi.resetModules();
     const close = vi.fn();
-    const run = vi.fn();
+    const run = vi.fn().mockReturnValue({ changes: 0, lastInsertRowid: 0 });
     const all = vi.fn().mockReturnValue([]);
     const prepare = vi.fn().mockReturnValue({ all, run });
 

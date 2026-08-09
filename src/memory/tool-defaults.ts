@@ -3,6 +3,57 @@ import { initDefaultDatabase } from "./sqlite.js";
 
 export type ToolDefaults = Record<string, unknown>;
 
+/**
+ * One `tool_defaults` row. `getAllDefaults` folds parameter paths into nested
+ * objects for tool execution; the settings list needs the stored path and time
+ * back, so it reads flat rows instead.
+ */
+export interface StoredToolDefault {
+  toolName: string;
+  paramPath: string;
+  value: unknown;
+  setAt: string;
+}
+
+// User-facing delete surfaces call this before removing a row. The __enabled
+// rows are tool on/off bookkeeping: deleting a false row would silently
+// re-enable a disabled tool, so they are not deletable as defaults.
+export function assertUserDeletableToolDefaultPath(paramPath: string): void {
+  if (paramPath === "__enabled") {
+    throw new Error("This row controls whether a tool is enabled and cannot be deleted here.");
+  }
+}
+
+export function listAllToolDefaults(db?: StateDatabase): StoredToolDefault[] {
+  const ownedDb = db == null;
+  const connection = db ?? initDefaultDatabase();
+  try {
+    const rows = connection
+      .prepare(
+        // The __enabled rows are tool on/off bookkeeping written by
+        // setToolEnabled, not user-facing defaults; listing them would let a
+        // preferences delete silently re-enable a disabled tool.
+        `SELECT tool_name, param_path, value_json, set_at FROM tool_defaults
+         WHERE param_path != '__enabled' ORDER BY tool_name, param_path`,
+      )
+      .all() as Array<{
+      tool_name: string;
+      param_path: string;
+      value_json: string;
+      set_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      toolName: row.tool_name,
+      paramPath: row.param_path,
+      value: parseStoredValue(row.value_json),
+      setAt: String(row.set_at ?? ""),
+    }));
+  } finally {
+    if (ownedDb) connection.close();
+  }
+}
+
 export function getDefaults(toolName: string, db?: StateDatabase): ToolDefaults {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
@@ -68,16 +119,22 @@ export function setDefault(
   }
 }
 
-export function clearDefault(toolName: string, paramPath: string, db?: StateDatabase): void {
+/** Removes one stored default. Returns whether a row was actually removed. */
+export function deleteDefault(toolName: string, paramPath: string, db?: StateDatabase): boolean {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {
-    connection
+    const result = connection
       .prepare(`DELETE FROM tool_defaults WHERE tool_name = ? AND param_path = ?`)
       .run(toolName, paramPath);
+    return result.changes > 0;
   } finally {
     if (ownedDb) connection.close();
   }
+}
+
+export function clearDefault(toolName: string, paramPath: string, db?: StateDatabase): void {
+  deleteDefault(toolName, paramPath, db);
 }
 
 function parseStoredValue(valueJson: string): unknown {

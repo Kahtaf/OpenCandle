@@ -28,7 +28,6 @@ import {
 } from "../../components/ui/table.jsx";
 import { cn } from "../../lib/utils.js";
 import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
-import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { Badge, StatusBand } from "../market-state/shared.jsx";
 
 const STATUS_META = {
@@ -70,12 +69,14 @@ export function SessionCheckDialogContent({ onConfirm }) {
   );
 }
 
-export function DiagnosticsPage({
+/**
+ * The health report itself, with no page frame: Settings mounts it as its
+ * Diagnostics section. Everything below the report title, including the report
+ * fetch, the refresh and session-check actions, and the session-check dialog,
+ * belongs to this component.
+ */
+export function DiagnosticsContent({
   role,
-  onOpenSidebar,
-  onOpenHome,
-  sidebarCollapsed = false,
-  onExpandSidebar,
   onOpenProviders,
   onOpenModelSetup,
   setToast,
@@ -135,130 +136,119 @@ export function DiagnosticsPage({
   }, [dataQuality]);
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
-      {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
-          <header className="flex flex-wrap items-center justify-between gap-3 px-1">
-            <div className="min-w-0">
-              <h1 className="m-0 text-balance text-[17px] font-semibold text-foreground">
-                Diagnostics
-              </h1>
-              <p className="m-0 mt-1 text-pretty text-xs text-muted-foreground">
-                {report?.summary || "Checking OpenCandle health..."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {report?.status ? (
-                <Badge tone={badgeTone(STATUS_META[report.status]?.tone)}>
-                  {STATUS_META[report.status]?.label}
-                </Badge>
-              ) : null}
-              <Button
-                type="button"
-                variant="bordered"
-                size="sm"
-                prefixIcon={RefreshCw}
-                disabled={loading || checkingSessions}
-                onClick={() => loadReport()}
-              >
-                Refresh
-              </Button>
-              {!hosted ? (
-                <Button
-                  type="button"
-                  variant="brand"
-                  size="sm"
-                  prefixIcon={ShieldCheck}
-                  disabled={loading || checkingSessions}
-                  onClick={checkSessions}
-                >
-                  {checkingSessions ? "Checking..." : "Check sessions"}
-                </Button>
-              ) : null}
-            </div>
-          </header>
-
-          {error ? <StatusBand tone="error">{error}</StatusBand> : null}
-          {role === "follower" && !hosted ? (
-            <StatusBand>
-              Some setup changes are unavailable while OpenCandle reconnects local access.
-            </StatusBand>
+    <div className="flex min-w-0 flex-col gap-3" data-slot="diagnostics-content">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <p className="m-0 min-w-0 text-pretty text-xs text-muted-foreground">
+          {report?.summary || "Checking OpenCandle health..."}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {report?.status ? (
+            <Badge tone={badgeTone(STATUS_META[report.status]?.tone)}>
+              {STATUS_META[report.status]?.label}
+            </Badge>
           ) : null}
-          {dataQualityMessage ? <StatusBand tone="warn">{dataQualityMessage}</StatusBand> : null}
-
-          <div className="grid gap-3 md:grid-cols-4">
-            <Metric label="Passed" value={counts.pass} tone="success" />
-            <Metric label="Warnings" value={counts.warn} tone="warn" />
-            <Metric label="Failures" value={counts.fail} tone="error" />
-            <Metric label="Unchecked" value={counts.unknown + counts.skip} tone="muted" />
-          </div>
-
-          {loading && !report ? (
-            <StatusBand>Loading diagnostics...</StatusBand>
-          ) : (
-            <div className="grid gap-3">
-              {(report?.sections || []).map((section) => (
-                <section
-                  key={section.id}
-                  className="overflow-hidden rounded-xl border border-border bg-card shadow-subtle-xs"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3">
-                    <h2 className="m-0 text-balance text-sm font-semibold text-foreground">
-                      {section.label}
-                    </h2>
-                    <Badge tone={badgeTone(STATUS_META[section.status]?.tone)}>
-                      {STATUS_META[section.status]?.label}
-                    </Badge>
-                  </div>
-                  <Table>
-                    <TableHeader className="sr-only">
-                      <TableRow>
-                        <TableHead>Check</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {section.checks.map((check) => (
-                        <DiagnosticCheck
-                          key={check.id}
-                          check={check}
-                          onOpenProviders={onOpenProviders}
-                          onOpenModelSetup={onOpenModelSetup}
-                          onCheckSessions={checkSessions}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </section>
-              ))}
-            </div>
-          )}
-
-          <footer className="border-t border-border px-1 pt-3 text-xs leading-5 text-muted-foreground">
-            <p className="m-0">TradingView Lightweight Charts™</p>
-            <p className="m-0">
-              Copyright (c) 2025 TradingView, Inc.{" "}
-              <a
-                className="underline underline-offset-2 hover:text-foreground"
-                href="https://www.tradingview.com/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                https://www.tradingview.com/
-              </a>
-            </p>
-          </footer>
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            prefixIcon={RefreshCw}
+            disabled={loading || checkingSessions}
+            onClick={() => loadReport()}
+          >
+            Refresh
+          </Button>
+          {!hosted ? (
+            <Button
+              type="button"
+              variant="brand"
+              size="sm"
+              prefixIcon={ShieldCheck}
+              disabled={loading || checkingSessions}
+              onClick={checkSessions}
+            >
+              {checkingSessions ? "Checking..." : "Check sessions"}
+            </Button>
+          ) : null}
         </div>
-      </main>
+      </header>
+
+      {error ? <StatusBand tone="error">{error}</StatusBand> : null}
+      {role === "follower" && !hosted ? (
+        <StatusBand>
+          Some setup changes are unavailable while OpenCandle reconnects local access.
+        </StatusBand>
+      ) : null}
+      {dataQualityMessage ? <StatusBand tone="warn">{dataQualityMessage}</StatusBand> : null}
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="Passed" value={counts.pass} tone="success" />
+        <Metric label="Warnings" value={counts.warn} tone="warn" />
+        <Metric label="Failures" value={counts.fail} tone="error" />
+        <Metric label="Unchecked" value={counts.unknown + counts.skip} tone="muted" />
+      </div>
+
+      {loading && !report ? (
+        <StatusBand>Loading diagnostics...</StatusBand>
+      ) : (
+        <div className="grid gap-3">
+          {(report?.sections || []).map((section) => (
+            <section
+              key={section.id}
+              className="overflow-hidden rounded-xl border border-border bg-card shadow-subtle-xs"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3">
+                <h2 className="m-0 text-balance text-sm font-semibold text-foreground">
+                  {section.label}
+                </h2>
+                <Badge tone={badgeTone(STATUS_META[section.status]?.tone)}>
+                  {STATUS_META[section.status]?.label}
+                </Badge>
+              </div>
+              <Table>
+                <TableHeader className="sr-only">
+                  <TableRow>
+                    <TableHead>Check</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {section.checks.map((check) => (
+                    <DiagnosticCheck
+                      key={check.id}
+                      check={check}
+                      onOpenProviders={onOpenProviders}
+                      onOpenModelSetup={onOpenModelSetup}
+                      onCheckSessions={checkSessions}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </section>
+          ))}
+        </div>
+      )}
+
+      <footer className="border-t border-border px-1 pt-3 text-xs leading-5 text-muted-foreground">
+        <p className="m-0">TradingView Lightweight Charts™</p>
+        <p className="m-0">
+          Copyright (c) 2025 TradingView, Inc.{" "}
+          <a
+            className="underline underline-offset-2 hover:text-foreground"
+            href="https://www.tradingview.com/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            https://www.tradingview.com/
+          </a>
+        </p>
+      </footer>
       <SessionCheckDialog
         open={sessionCheckDialogOpen}
         onOpenChange={setSessionCheckDialogOpen}
         onConfirm={confirmSessionCheck}
       />
-    </section>
+    </div>
   );
 }
 

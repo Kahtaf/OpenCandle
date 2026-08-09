@@ -9,8 +9,10 @@ import {
   MAX_COMPLETED_CHAT_RESULTS,
   MAX_PI_SESSION_CACHE_SIZE,
   selectSessionCheckpoints,
+  serializeHostedBlockedProvider,
 } from "../../../gui/hosted/runtime/browser-hosted-gui-runtime.js";
 import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
+import { resolveHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
 import {
   hasPendingSessionAction,
   recordPendingSessionAction,
@@ -189,6 +191,19 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     } finally {
       list.mockRestore();
       create.mockRestore();
+    }
+  });
+
+  it("serializes blocked providers as local-only catalog rows instead of omitting them", () => {
+    const report = resolveHostedBrowserCapabilityReport(["yahoo"]);
+    const blockedIds = report.unavailable.map((provider) => provider.id);
+    expect(blockedIds).toContain("reddit");
+    expect(blockedIds).toContain("twitter");
+    const rows = report.unavailable.map(serializeHostedBlockedProvider);
+    for (const row of rows) {
+      expect(row.browserTransport).toBe("blocked");
+      expect(row.hosted).toBe(true);
+      expect(row.id).toBeTruthy();
     }
   });
 

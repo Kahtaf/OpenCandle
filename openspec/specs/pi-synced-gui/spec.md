@@ -141,11 +141,11 @@ The GUI SHALL make primary shell interactions keyboard accessible and screen-rea
 
 ### Requirement: GUI mirrors provider setup and degradation state
 
-The GUI SHALL render provider setup and degradation state using the shared provider registry/status probes. After the Reddit `rdt-cli` migration, the GUI SHALL treat Reddit as an external-tool provider with separate install and session checks.
+The GUI SHALL render provider setup and degradation state using the shared provider registry/status probes. The provider setup surface SHALL be the Data providers section of the Settings page (the ⌘K catalog no longer carries a Providers tab). After the Reddit `rdt-cli` migration, the GUI SHALL treat Reddit as an external-tool provider with separate install and session checks.
 
 #### Scenario: Reddit provider row shows external-tool setup
 
-- **WHEN** the user opens the GUI catalog/provider setup surface
+- **WHEN** the user opens Settings → Data providers
 - **THEN** the Reddit row shows the `rdt-cli` install command `uv tool install rdt-cli`
 - **AND** it does not render an API-key input
 - **AND** it explains that Reddit uses the user's supported browser session through `rdt-cli`
@@ -164,7 +164,7 @@ The GUI SHALL render provider setup and degradation state using the shared provi
 
 #### Scenario: Passive GUI polling does not read Reddit cookies
 
-- **WHEN** the Reddit setup drawer is open
+- **WHEN** the Reddit provider row's setup surface is open
 - **THEN** passive polling may run `rdt --version`
 - **AND** it SHALL NOT run `rdt status`, `rdt login`, `rdt search`, `rdt sub`, or `rdt read`
 

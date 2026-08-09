@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  ClipboardCheck,
   ClipboardList,
   Clock3,
   Code2,
@@ -80,26 +79,38 @@ const sourcePages = [
     section: "Start here",
     navLabel: "Why OpenCandle",
   },
+  {
+    source: "docs/ways-to-run.md",
+    output: "docs/ways-to-run.html",
+    section: "Start here",
+    navLabel: "Ways to Run",
+  },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
-  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
-  { source: "docs/hosted-pwa.md", output: "docs/hosted-pwa.html", section: "Guides" },
-  { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
+  {
+    source: "docs/hosted-pwa.md",
+    output: "docs/hosted-pwa.html",
+    section: "Guides",
+    navLabel: "Web App Quickstart",
+  },
+  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Guides" },
+  { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "TUI Quickstart" },
   {
     source: "docs/investigation-recipes.md",
     output: "docs/investigation-recipes.html",
     section: "Guides",
   },
   { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Reference" },
-  {
-    source: "docs/provider-relay.md",
-    output: "docs/provider-relay.html",
-    section: "Reference",
-  },
   { source: "docs/configuration.md", output: "docs/configuration.html", section: "Reference" },
   {
     source: "docs/system-architecture.md",
     output: "docs/system-architecture.html",
     section: "Build",
+  },
+  {
+    source: "docs/how-the-web-app-works.md",
+    output: "docs/how-the-web-app-works.html",
+    section: "Build",
+    navLabel: "How the Web App Works",
   },
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
@@ -256,6 +267,17 @@ function collectHeadingsPlugin(headings) {
   };
 }
 
+function enableTaskListCheckboxes() {
+  return (tree) => {
+    visit(tree, "element", (node) => {
+      if (node.tagName !== "input" || node.properties?.type !== "checkbox") return;
+
+      delete node.properties.disabled;
+      node.properties["aria-label"] = "Mark checklist item complete";
+    });
+  };
+}
+
 async function renderMarkdown(body, page) {
   const headings = [];
   const file = await unified()
@@ -264,6 +286,7 @@ async function renderMarkdown(body, page) {
     .use(rewriteLinksPlugin, page)
     .use(collectHeadingsPlugin, headings)
     .use(remarkRehype)
+    .use(enableTaskListCheckboxes)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, { behavior: "wrap" })
     .use(rehypeStringify)
@@ -390,6 +413,9 @@ function SiteHeader({ output = "index.html" }) {
           </Button>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+            <a href="https://web.opencandle.app">Open Web App</a>
           </Button>
           <Button asChild variant="brand" size="sm" rounded="full">
             <a href={`${prefix}docs/getting-started.html`}>Install</a>
@@ -1165,7 +1191,10 @@ function OpenCandleComparisonUi() {
           <MockNavItem icon={BriefcaseBusiness}>Portfolios</MockNavItem>
           <MockNavItem icon={Bell}>Alerts</MockNavItem>
           <MockNavItem icon={ClipboardList}>Reports</MockNavItem>
-          <MockNavItem icon={ClipboardCheck}>Diagnostics</MockNavItem>
+        </div>
+        <div className="mock-recents opencandle-market-state">
+          <small>App</small>
+          <MockNavItem icon={SlidersHorizontal}>Settings</MockNavItem>
         </div>
         <div className="mock-recents opencandle-history">
           <small>Today</small>
@@ -1341,12 +1370,22 @@ function HomePage({ buildDate, version }) {
     {
       question: "What is OpenCandle?",
       answer:
-        "OpenCandle is an open source AI research app for stocks, portfolios, and markets. It runs locally in a browser or terminal and checks current financial data before it answers.",
+        "OpenCandle is an open source AI research app for stocks, portfolios, and markets. It runs in your browser at web.opencandle.app, as a local app, or in the terminal, and it checks current financial data before it answers.",
     },
     {
       question: "Is it free?",
       answer:
         "OpenCandle is free and MIT licensed, with no OpenCandle account or subscription. You pay your AI model provider for usage. Core market data does not require paid data APIs.",
+    },
+    {
+      question: "Do I have to install anything?",
+      answer:
+        "No. web.opencandle.app runs the full agent in your browser. Installing locally adds SEC filings, X and Reddit sentiment, and background alert monitoring.",
+    },
+    {
+      question: "What is the difference between the web and local versions?",
+      answer:
+        "The web app runs in your browser with no install. The local version adds the GUI, terminal, and local-only tools such as SEC filings, sentiment, and background alerts.",
     },
     {
       question: "How is this different from asking ChatGPT?",
@@ -1356,7 +1395,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "What do I need to get started?",
       answer:
-        "You need Node.js and access to an Anthropic, OpenAI, or Google model through an API key or supported sign-in. OpenCandle provides the app and core market-data connections, with no OpenCandle account or subscription.",
+        "A model API key from OpenAI, Anthropic, or Google. You only need Node.js if you install OpenCandle locally; the web app needs nothing beyond your browser.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -1366,7 +1405,7 @@ function HomePage({ buildDate, version }) {
     {
       question: "Where is my data stored?",
       answer:
-        "Watchlists, portfolios, alerts, and sessions are stored on your machine. Questions and research context are sent to the model provider you choose.",
+        "On your device: in your browser for the web app and under ~/.opencandle for local installs, never on an OpenCandle server. Questions and research context are sent to the model provider you choose.",
     },
   ];
   const dataSources = [
@@ -1455,7 +1494,7 @@ function HomePage({ buildDate, version }) {
             "@type": "SoftwareApplication",
             name: brandName,
             applicationCategory: "FinanceApplication",
-            operatingSystem: "macOS, Windows, Linux",
+            operatingSystem: "Web, macOS, Windows, Linux",
             softwareVersion: version,
             url: siteUrl,
             codeRepository: "https://github.com/Kahtaf/OpenCandle",
@@ -1485,15 +1524,25 @@ function HomePage({ buildDate, version }) {
               OpenCandle is an open source financial investigator. It fetches live quotes, filings,
               options, and macro data before answering, then shows where the result came from.
             </p>
-            <div className="landing-command" data-surface-command="">
-              <span aria-hidden="true">$</span>
-              <code data-surface-command-text="">npx opencandle@latest gui</code>
-              <button type="button" aria-label="Copy install command" data-command-copy="">
-                <CopyIcon />
-              </button>
+            <div className="landing-hero-actions" data-hero-actions="">
+              <div className="landing-command" data-surface-command="">
+                <span aria-hidden="true">$</span>
+                <code data-surface-command-text="">npx opencandle@latest gui</code>
+                <button type="button" aria-label="Copy install command" data-command-copy="">
+                  <CopyIcon />
+                </button>
+              </div>
+              <Button
+                asChild
+                variant="bordered"
+                rounded="lg"
+                className="hero-try-cta !h-14 !min-h-14"
+              >
+                <a href="https://web.opencandle.app">Try the web app</a>
+              </Button>
             </div>
             <p className="landing-hero-proof">
-              Free and open source · runs locally · bring your own AI
+              Free and open source · your data stays on your device · bring your own AI
             </p>
           </div>
           <div className="landing-hero-media">
@@ -1781,10 +1830,27 @@ Last updated: ${buildDate}
 ## Start here
 
 - [Overview](${siteUrl}/docs/index.html)
+- [Ways to run](${siteUrl}/docs/ways-to-run.html)
 - [Getting started](${siteUrl}/docs/getting-started.html)
+
+## Guides
+
+- [Web app quickstart](${siteUrl}/docs/hosted-pwa.html)
 - [GUI quickstart](${siteUrl}/docs/gui-quickstart.html)
+- [TUI quickstart](${siteUrl}/docs/tui.html)
+- [Investigation recipes](${siteUrl}/docs/investigation-recipes.html)
+
+## Reference
+
 - [Data sources](${siteUrl}/docs/data-sources.html)
+- [Configuration](${siteUrl}/docs/configuration.html)
+
+## Build
+
+- [How the web app works](${siteUrl}/docs/how-the-web-app-works.html)
+- [System architecture](${siteUrl}/docs/system-architecture.html)
 - [Build a tool](${siteUrl}/docs/build-a-tool.html)
+- [Testing and evals](${siteUrl}/docs/testing-and-evals.html)
 
 ## Public documentation
 

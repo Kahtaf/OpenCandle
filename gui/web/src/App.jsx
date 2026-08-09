@@ -5,10 +5,8 @@ import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
-import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
+import { AppContentArea } from "./features/layout/AppShellChrome.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
-import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
-import { useForgetFirstRunSetupDismissalWhenSatisfied } from "./features/onboarding/setup-dismissal.js";
 import {
   chatRunSessionTarget,
   hasSessionContent,
@@ -17,10 +15,11 @@ import {
   shouldStartFreshHomeSession,
 } from "./features/sessions/route-session-state.js";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
+import { SettingsPage } from "./features/settings/SettingsPage.jsx";
 import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
-import { domainFromPath, tickerFromPath } from "./route-resolution.js";
+import { appPageFromPath, domainFromPath, tickerFromPath } from "./route-resolution.js";
 import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
@@ -28,7 +27,9 @@ const CatalogOverlay = lazy(() =>
   loadCatalogOverlay().then((module) => ({ default: module.CatalogOverlay })),
 );
 
-const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows", "providers"]);
+// The catalog is a run surface: workflows and tools. `providers` stays an
+// accepted drawer value so old links resolve, but it now redirects to Settings.
+const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows"]);
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -107,16 +108,6 @@ export function AppShell() {
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [modelSetupOpen, setModelSetupOpen] = useState(false);
-  // The remembered first-run onboarding dismissal is forgotten wherever setup
-  // becomes satisfied, not only on the chat route: the dialog above is opened
-  // from Diagnostics and the dashboard too, and the chat panel is unmounted
-  // there. Without this, a key saved off the chat route would leave the record
-  // behind and suppress the automatic opening after keys are cleared again.
-  useForgetFirstRunSetupDismissalWhenSatisfied({
-    role: gui.role,
-    requirement: gui.modelSetup?.requirement,
-  });
   const homeResetSessionRef = useRef("");
   const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);
@@ -176,6 +167,33 @@ export function AppShell() {
     [navigate],
   );
 
+  // Every deliberate route into key management lands on the same page: the
+  // composer chip's manage item and the transcript's "Fix model key" CTA. The
+  // first-run onboarding dialog is separate and stays a dialog.
+  const openModelSettings = useCallback(() => {
+    void navigate({
+      to: "/settings/$section",
+      params: { section: "model" },
+      search: (current) => ({ ...current, drawer: undefined }),
+    });
+  }, [navigate]);
+
+  const openProviderSettings = useCallback(
+    (providerId, options = {}) => {
+      void navigate({
+        to: "/settings/$section",
+        params: { section: "providers" },
+        search: (current) => ({
+          ...current,
+          drawer: undefined,
+          provider: providerId || undefined,
+        }),
+        ...options,
+      });
+    },
+    [navigate],
+  );
+
   const clearLiveEventsForSession = useCallback((sessionId) => {
     if (!sessionId) return;
     setLiveEventsBySession((current) => {
@@ -217,6 +235,30 @@ export function AppShell() {
     if (!routeSessionId || visibleSessionSnapshot) return;
     void gui.loadSession(routeSessionId);
   }, [gui.loadSession, routeSessionId, visibleSessionSnapshot]);
+
+  // Data providers left the catalog for Settings. Links written against the old
+  // drawer grammar, including the catalog links that named a provider, land on
+  // the provider row itself instead of a sheet that no longer has that tab.
+  useEffect(() => {
+    const providerId = search?.provider;
+    const wantsProviders =
+      activeDrawer === "providers" || (activeDrawer === "catalog" && Boolean(providerId));
+    if (!wantsProviders) return;
+    openProviderSettings(providerId, { replace: true });
+  }, [activeDrawer, search?.provider, openProviderSettings]);
+
+  // Diagnostics now lives inside Settings. The old path keeps working and
+  // rewrites itself to the canonical one, so a bookmark lands on the same
+  // content and back does not bounce between the two URLs.
+  useEffect(() => {
+    if (pathname !== "/diagnostics") return;
+    void navigate({
+      to: "/settings/$section",
+      params: { section: "diagnostics" },
+      search: (current) => ({ ...current }),
+      replace: true,
+    });
+  }, [navigate, pathname]);
 
   useEffect(() => {
     if (pathname !== "/") {
@@ -409,14 +451,8 @@ export function AppShell() {
     onOpenHome: openHome,
   };
 
-  const initialCatalogTab =
-    activeDrawer === "tools"
-      ? "tools"
-      : activeDrawer === "providers"
-        ? "providers"
-        : activeDrawer === "workflows"
-          ? "workflows"
-          : "workflows";
+  const initialCatalogTab = activeDrawer === "tools" ? "tools" : "workflows";
+  const appPage = appPageFromPath(pathname);
   const ticker = tickerFromPath(pathname);
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
@@ -494,76 +530,84 @@ export function AppShell() {
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ConnectionStatusBanner role={gui.role} />
-        {pathname === "/diagnostics" ? (
-          <DiagnosticsPage
-            role={gui.role}
-            onOpenSidebar={() => openDrawer("history")}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-            onOpenProviders={(providerId) => openCatalog("providers", providerId)}
-            onOpenModelSetup={() => setModelSetupOpen(true)}
-            onOpenHome={openHome}
-            setToast={gui.setToast}
-            dataQuality={visibleDashboard?.dataQuality}
-          />
-        ) : ticker ? (
-          <SymbolPage
-            ticker={ticker}
-            fillComposer={prefillComposerFromPage}
-            invokeTool={invokeToolForVisibleSession}
-            role={actionRole}
-            setToast={gui.setToast}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-          />
-        ) : marketDomain ? (
-          <MarketStatePage
-            domain={marketDomain}
-            alertSymbol={search?.alertSymbol}
-            alertThreshold={search?.alertThreshold}
-            role={actionRole}
-            send={gui.send}
-            invokeTool={invokeToolForVisibleSession}
-            navigate={navigate}
-            setToast={gui.setToast}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-          />
-        ) : (
-          <ChatPanel
-            events={sessionView.events}
-            liveEvents={liveEvents}
-            askUserPrompts={visibleAskUserPrompts}
-            modelSetup={gui.modelSetup}
-            role={gui.role}
-            inputDisabled={inputDisabled}
-            sessionLoading={sessionView.pendingSessionSwitch}
-            runState={chatRun.runState}
-            lastPrompt={chatRun.lastPrompt}
-            catalog={gui.catalog}
-            send={gui.send}
-            startChatRun={startRoutedChatRun}
-            stopRun={chatRun.stopRun}
-            invokeTool={invokeToolForVisibleSession}
-            setToast={gui.setToast}
-            draft={draft}
-            setDraft={setDraft}
-            onOpenCommandPalette={openCatalog}
-            onOpenModelSetup={() => setModelSetupOpen(true)}
-            onOpenSidebar={() => openDrawer("history")}
-            onOpenHome={openHome}
-            sidebarCollapsed={sidebarCollapsed}
-            onExpandSidebar={() => setSidebarCollapsed(false)}
-            sessionId={sessionView.activeSessionId}
-            scrollAnchorId={scrollAnchorId}
-            dashboard={visibleDashboard}
-            navigate={navigate}
-          />
-        )}
+        <AppContentArea>
+          {appPage.page === "settings" ? (
+            <SettingsPage
+              section={appPage.section}
+              role={gui.role}
+              modelSetup={gui.modelSetup}
+              catalog={gui.catalog}
+              focusProvider={search?.provider}
+              preferencesSnapshot={gui.preferencesSnapshot}
+              dataQuality={visibleDashboard?.dataQuality}
+              send={gui.send}
+              onOpenProviders={openProviderSettings}
+              onOpenModelSetup={openModelSettings}
+              onOpenSidebar={() => openDrawer("history")}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+              onOpenHome={openHome}
+              setToast={gui.setToast}
+            />
+          ) : ticker ? (
+            <SymbolPage
+              ticker={ticker}
+              fillComposer={prefillComposerFromPage}
+              invokeTool={invokeToolForVisibleSession}
+              role={actionRole}
+              setToast={gui.setToast}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+            />
+          ) : marketDomain ? (
+            <MarketStatePage
+              domain={marketDomain}
+              alertSymbol={search?.alertSymbol}
+              alertThreshold={search?.alertThreshold}
+              role={actionRole}
+              send={gui.send}
+              invokeTool={invokeToolForVisibleSession}
+              navigate={navigate}
+              setToast={gui.setToast}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+            />
+          ) : (
+            <ChatPanel
+              events={sessionView.events}
+              liveEvents={liveEvents}
+              askUserPrompts={visibleAskUserPrompts}
+              modelSetup={gui.modelSetup}
+              role={gui.role}
+              inputDisabled={inputDisabled}
+              sessionLoading={sessionView.pendingSessionSwitch}
+              runState={chatRun.runState}
+              lastPrompt={chatRun.lastPrompt}
+              catalog={gui.catalog}
+              send={gui.send}
+              startChatRun={startRoutedChatRun}
+              stopRun={chatRun.stopRun}
+              invokeTool={invokeToolForVisibleSession}
+              setToast={gui.setToast}
+              draft={draft}
+              setDraft={setDraft}
+              onOpenCommandPalette={openCatalog}
+              onOpenModelSetup={openModelSettings}
+              onOpenSidebar={() => openDrawer("history")}
+              onOpenHome={openHome}
+              sidebarCollapsed={sidebarCollapsed}
+              onExpandSidebar={() => setSidebarCollapsed(false)}
+              sessionId={sessionView.activeSessionId}
+              scrollAnchorId={scrollAnchorId}
+              dashboard={visibleDashboard}
+              navigate={navigate}
+            />
+          )}
+        </AppContentArea>
         <ToolDrawerInline />
       </div>
       <ToolDrawerOverlay />
@@ -573,10 +617,8 @@ export function AppShell() {
           <CatalogOverlay
             open={catalogOpen}
             initialTab={initialCatalogTab}
-            initialProviderId={search?.provider}
             catalog={gui.catalog}
             onClose={closeDrawer}
-            send={gui.send}
             setToast={gui.setToast}
             startChatRun={startRoutedChatRun}
             invokeTool={runCatalogTool}
@@ -585,13 +627,6 @@ export function AppShell() {
           />
         ) : null}
       </Suspense>
-      <ModelSetupDialog
-        open={modelSetupOpen}
-        onOpenChange={setModelSetupOpen}
-        modelSetup={gui.modelSetup}
-        role={gui.role}
-        send={gui.send}
-      />
       <Toaster />
     </ToolDrawerProvider>
   );

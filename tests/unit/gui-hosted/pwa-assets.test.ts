@@ -83,6 +83,11 @@ describe("hosted PWA assets", () => {
     expect(headers).toContain("default-src 'self'");
     expect(headers).toContain("'wasm-unsafe-eval'");
     expect(headers).not.toContain("script-src 'self' 'unsafe-eval'");
+    expect(headers).not.toContain("challenges.cloudflare.com");
+    expect(viteConfig).not.toContain("challenges.cloudflare.com");
+    expect(headers).toMatch(
+      /frame-src https:\/\/stackblitz\.com https:\/\/\*\.webcontainer-api\.io/,
+    );
     expect(headers).toContain("connect-src 'self'");
     expect(headers).toContain("https://api.coingecko.com");
     expect(headers).toContain("https://www.alphavantage.co");

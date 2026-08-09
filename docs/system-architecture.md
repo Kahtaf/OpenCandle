@@ -5,7 +5,7 @@ description: How OpenCandle turns a financial question into evidence, tool outpu
 
 # System Architecture
 
-OpenCandle is an open source financial investigator. You ask a question in the primary browser GUI or the equally complete terminal interface; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
+OpenCandle is an open source financial investigator. You ask a question in the web app at web.opencandle.app, the local GUI, or the terminal (TUI); OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
 
 It is not an automated trading system and it is not a financial advisor. It is research software built to make the evidence path inspectable.
 
@@ -44,13 +44,15 @@ Produce the answer
 
 ## User Interfaces
 
-OpenCandle has two main surfaces.
+OpenCandle has three surfaces.
 
 The terminal UI is the fastest way to work from the keyboard. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
-The local GUI is a browser workbench at `http://127.0.0.1:14567`. Its home is a market dashboard (an indices strip, watchlist movers, a portfolio summary, and alerts status), and it adds per-symbol pages with interactive charts, chat answers rendered as chart cards, session history, provider setup, and a tool/workflow catalog and diagnostics.
+The local GUI is a browser workbench at `http://127.0.0.1:14567`. Its home is a market dashboard (an indices strip, watchlist movers, a portfolio summary, and alerts status), and it adds per-symbol pages with interactive charts, chat answers rendered as chart cards, session history, a tool/workflow catalog, and a settings page covering model, data providers, saved preferences, notifications and automation, diagnostics, and data and privacy.
 
-Both surfaces use the same OpenCandle session and finance tools. The GUI adds richer rendering and easier discovery; it is not a separate agent.
+The web app at web.opencandle.app is the same agent and tools running entirely in your browser via an in-browser Node runtime, with nothing to install and your data kept in the browser. See [How the Web App Works](./how-the-web-app-works.md) for details.
+
+All three surfaces use the same OpenCandle session and finance tools. The GUIs add richer rendering and easier discovery; neither is a separate agent.
 
 ## Workflows And Regular Questions
 
@@ -105,9 +107,9 @@ Expected behavior:
 
 ## GUI Runtime
 
-The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal windows coordinate through the local server, so the same session can be open in several places without conflicting writes. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal windows coordinate through the local server, so the same session can be open in several places without conflicting writes. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access. The hosted web app has no local server; its runtime is described in [How the Web App Works](./how-the-web-app-works.md).
 
-Useful local endpoints:
+Useful local GUI endpoints:
 
 - `GET /health` returns whether the process is alive plus diagnostic coordination metadata.
 - `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
@@ -122,7 +124,7 @@ Useful local endpoints:
 
 ## Local State
 
-OpenCandle state defaults to `~/.opencandle/`; the state files and env overrides are documented in [Configuration](./configuration.md).
+OpenCandle state defaults to `~/.opencandle/` for the local GUI and terminal; the state files and env overrides are documented in [Configuration](./configuration.md). The web app keeps its state in your browser instead.
 
 Common files:
 

@@ -2,12 +2,12 @@ import { Link } from "@tanstack/react-router";
 import {
   Bell,
   BriefcaseBusiness,
-  ClipboardCheck,
   FileText,
   ListPlus,
   PanelLeft,
-  Plus,
   Search,
+  Settings,
+  SquarePen,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -45,7 +45,9 @@ export function SessionDrawer({ open, onClose, ...rest }) {
     >
       <SheetContent width="sm" handleLabel="Sessions" className="p-0">
         <div className="flex h-full min-h-0 flex-col">
-          <SidebarBody {...rest} showHeader={false} />
+          {/* The drawer keeps the sidebar's header grammar so New chat stays one
+              tap away on a phone; the sheet supplies its own dismiss. */}
+          <SidebarBody {...rest} />
         </div>
       </SheetContent>
     </Sheet>
@@ -62,7 +64,6 @@ function SidebarBody({
   onNewSession,
   onOpenHome,
   onClose,
-  showHeader = true,
   closeLabel = "Close sidebar",
   closeIcon: CloseIcon = X,
 }) {
@@ -73,44 +74,35 @@ function SidebarBody({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
-      {showHeader ? (
-        <div className="flex items-center gap-2 px-1">
-          <button
-            type="button"
-            aria-label="Go to new chat"
-            onClick={onOpenHome}
-            className="flex min-h-10 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-background active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <OpenCandleLogo />
-            <span className="truncate">OpenCandle</span>
-          </button>
+      {/* One header row: the wordmark keeps its width and the two controls that
+          act on the sidebar itself sit together on the right. */}
+      <div className="flex items-center gap-1 px-1">
+        <button
+          type="button"
+          aria-label="Go to new chat"
+          onClick={onOpenHome}
+          className="flex min-h-10 shrink-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-[background-color,color,transform,scale] duration-150 ease-out hover:bg-background active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <OpenCandleLogo />
+          <span className="whitespace-nowrap">OpenCandle</span>
+        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <Button variant="ghost" size="icon-sm" aria-label="New chat" onClick={onNewSession}>
+            <SquarePen />
+          </Button>
           {onClose ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label={closeLabel}
-              onClick={onClose}
-            >
+            <Button variant="ghost" size="icon-sm" aria-label={closeLabel} onClick={onClose}>
               <CloseIcon />
             </Button>
-          ) : (
-            <PanelLeft
-              className="ml-auto h-4 w-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-          )}
+          ) : null}
         </div>
-      ) : null}
-
-      <Button variant="bordered" className="w-full justify-center gap-2" onClick={onNewSession}>
-        <Plus /> New chat
-      </Button>
+      </div>
 
       <SearchField value={query} onChange={setQuery} />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
         <MarketStateNav currentPath={currentPath} />
+        <AppNav currentPath={currentPath} />
         <ThreadGroup
           label="Today"
           sessions={groups.today}
@@ -152,30 +144,44 @@ function MarketStateNav({ currentPath }) {
     { to: "/portfolios", label: "Portfolios", icon: BriefcaseBusiness },
     { to: "/alerts", label: "Alerts", icon: Bell },
     { to: "/reports", label: "Reports", icon: FileText },
-    { to: "/diagnostics", label: "Diagnostics", icon: ClipboardCheck },
   ];
   return (
-    <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+    <div data-slot="market-state-nav" className="flex flex-col gap-0.5 border-b border-border pb-2">
       <SectionLabel>Market State</SectionLabel>
-      {items.map((item) => {
-        const active = currentPath === item.to;
-        const Icon = item.icon;
-        return (
-          <Button
-            key={item.to}
-            asChild
-            variant={active ? "default" : "ghost"}
-            size="sm"
-            className="w-full justify-start"
-          >
-            <Link to={item.to}>
-              <Icon className="button-icon" aria-hidden="true" />
-              {item.label}
-            </Link>
-          </Button>
-        );
-      })}
+      {items.map((item) => (
+        <NavItem key={item.to} item={item} active={currentPath === item.to} />
+      ))}
     </div>
+  );
+}
+
+// Settings sits in its own group: it is not saved market state, and Diagnostics
+// reads as one of its sections rather than a watchlist sibling.
+function AppNav({ currentPath }) {
+  const path = String(currentPath || "");
+  const active = path.startsWith("/settings") || path === "/diagnostics";
+  return (
+    <div data-slot="app-nav" className="flex flex-col gap-0.5 border-b border-border pb-2">
+      <SectionLabel>App</SectionLabel>
+      <NavItem item={{ to: "/settings", label: "Settings", icon: Settings }} active={active} />
+    </div>
+  );
+}
+
+function NavItem({ item, active }) {
+  const Icon = item.icon;
+  return (
+    <Button
+      asChild
+      variant={active ? "default" : "ghost"}
+      size="sm"
+      className="w-full justify-start"
+    >
+      <Link to={item.to} aria-current={active ? "page" : undefined}>
+        <Icon className="button-icon" aria-hidden="true" />
+        {item.label}
+      </Link>
+    </Button>
   );
 }
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../gui/web/src/components/ui/tooltip.jsx";
 import { ChatPanel } from "../../../gui/web/src/features/chat/ChatPanel.jsx";
 import { ToolDrawerProvider } from "../../../gui/web/src/features/chat/tool-drawer-context.jsx";
-import { useForgetFirstRunSetupDismissalWhenSatisfied } from "../../../gui/web/src/features/onboarding/setup-dismissal.js";
+import { FIRST_RUN_ONBOARDING_SEEN_KEY } from "../../../gui/web/src/features/onboarding/setup-dismissal.js";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -92,25 +92,8 @@ function remountPanel(props: Record<string, unknown> = {}) {
   renderPanel(props);
 }
 
-// Diagnostics, the dashboard, and the symbol and market-state pages replace the
-// chat panel and can all open the app-level model setup dialog. Standing in for
-// those routes means unmounting the panel and leaving only the app-level
-// observer that App.jsx mounts on every route.
-function renderOffChatRoute(setup: { role?: string; requirement?: string }) {
-  act(() => root.unmount());
-  container.remove();
-  document.body.replaceChildren();
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  act(() => {
-    root.render(
-      React.createElement(function AppLevelSetupObserver() {
-        useForgetFirstRunSetupDismissalWhenSatisfied(setup);
-        return null;
-      }),
-    );
-  });
+function seenRecord() {
+  return localStorage.getItem(FIRST_RUN_ONBOARDING_SEEN_KEY);
 }
 
 function dialog() {
@@ -139,6 +122,18 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(container.querySelector('[data-slot="home-dashboard"]')).toBeTruthy();
     // A standard modal dialog: the surface behind it is inert while it is up.
     expect(container.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("does not open on the boot placeholder before a real setup broadcast arrives", () => {
+    // During boot the connection state carries requirement "unknown" while the
+    // role can already read "writer". That proves nothing about setup and must
+    // not flash the dialog open, which also left a stuck Radix exit zombie
+    // when the real "ready" broadcast closed it a frame later.
+    renderPanel({
+      modelSetup: { requirement: "unknown", providers: [], availableModels: [] },
+    });
+
+    expect(dialog()).toBeNull();
   });
 
   it("frees the composer for drafting as soon as the dialog is dismissed", () => {
@@ -175,19 +170,55 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(dialog()).toBe(null);
   });
 
-  it("reopens only after setup is satisfied and later becomes required again", () => {
+  it("records that onboarding was seen as soon as the dialog opens", () => {
+    expect(seenRecord()).toBe(null);
+
     renderPanel();
-    closeDialog();
-    expect(dialog()).toBe(null);
 
-    renderPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
-    expect(dialog()).toBe(null);
-
-    renderPanel({ modelSetup: { ...NEEDS_SETUP } });
+    // Opening is what the record is about. A user who read the dialog and
+    // navigated away without an explicit dismissal has still seen it.
     expect(dialog()).toBeTruthy();
+    expect(seenRecord()).toBe("true");
   });
 
-  it("stays dismissed across a fresh mount while setup stays required", () => {
+  it("does not record onboarding as seen on a boot where the dialog never opened", () => {
+    // The boot placeholder and a reconnecting tab both keep the dialog closed.
+    // Neither may burn a first-timer's one automatic opening.
+    renderPanel({
+      modelSetup: { requirement: "unknown", providers: [], availableModels: [] },
+    });
+    expect(seenRecord()).toBe(null);
+
+    remountPanel({ role: "connecting" });
+    expect(seenRecord()).toBe(null);
+
+    remountPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
+    expect(seenRecord()).toBe(null);
+  });
+
+  it("treats the legacy dismissal record as already seen and migrates it", () => {
+    localStorage.removeItem("opencandle.onboarding.first-run-seen.v1");
+    localStorage.setItem("opencandle.onboarding.first-run-dismissed.v1", "true");
+
+    renderPanel();
+
+    expect(dialog()).toBeNull();
+    expect(localStorage.getItem("opencandle.onboarding.first-run-seen.v1")).toBe("true");
+    expect(localStorage.getItem("opencandle.onboarding.first-run-dismissed.v1")).toBeNull();
+  });
+
+  it("stays closed on a mount where setup is required but onboarding was already seen", () => {
+    // A returning browser profile: a reload lands on a real non-ready
+    // requirement for a frame before stored keys resolve, which must not flash
+    // the dialog open again.
+    localStorage.setItem(FIRST_RUN_ONBOARDING_SEEN_KEY, "true");
+
+    renderPanel();
+
+    expect(dialog()).toBe(null);
+  });
+
+  it("stays closed across fresh mounts once onboarding has been seen", () => {
     renderPanel();
     closeDialog();
     expect(dialog()).toBe(null);
@@ -199,56 +230,45 @@ describe("first-run model setup dialog in ChatPanel", () => {
     expect(dialog()).toBe(null);
   });
 
-  it("auto-opens on a fresh mount after setup was satisfied and became required again", () => {
+  it("never auto-opens again after setup is satisfied and later regresses", () => {
     renderPanel();
     closeDialog();
-    remountPanel();
+
+    // A saved key satisfies setup.
+    remountPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
     expect(dialog()).toBe(null);
 
-    // A saved key satisfies setup, so the remembered dismissal is forgotten.
-    renderPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
-    expect(dialog()).toBe(null);
-
-    // Keys cleared later: onboarding is owed one more automatic opening.
+    // Keys cleared later: onboarding is a first-run introduction, not a nag.
+    // Setup is reached from the composer's model control or Settings instead.
     remountPanel({ modelSetup: { ...NEEDS_SETUP } });
-    expect(dialog()).toBeTruthy();
+    expect(dialog()).toBe(null);
+    remountPanel({ modelSetup: { ...NEEDS_SETUP, requirement: "api_key" } });
+    expect(dialog()).toBe(null);
   });
 
-  it("keeps a remembered dismissal while the connection is still being established", () => {
+  it("stays closed when setup regresses after being completed from the open dialog", () => {
+    // The dialog closes by prop when setup completes, so Radix never fires
+    // onOpenChange. The mounted panel must still count that as seen: a later
+    // key clearing in the same mount must not reopen the dialog.
+    renderPanel();
+    expect(dialog()).toBeTruthy();
+
+    renderPanel({ modelSetup: { requirement: "ready", providers: [], availableModels: [] } });
+    expect(dialog()).toBeNull();
+
+    renderPanel({ modelSetup: NEEDS_SETUP });
+    expect(dialog()).toBeNull();
+  });
+
+  it("keeps the seen record while the connection is still being established", () => {
     renderPanel();
     closeDialog();
 
-    // A reconnecting mount reports no requirement yet. That is not proof that
-    // setup was satisfied, so it must not re-arm the automatic opening.
+    // A reconnecting mount reports no requirement yet, and a later ready
+    // broadcast is no longer a reason to forget anything either.
     remountPanel({ role: "connecting", modelSetup: undefined });
     expect(dialog()).toBe(null);
-    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
-    expect(dialog()).toBe(null);
-  });
-
-  it("forgets a remembered dismissal when setup is satisfied away from the chat route", () => {
-    renderPanel();
-    closeDialog();
-
-    // A key saved from the app-level dialog on Diagnostics: no chat panel is
-    // mounted to see the ready state, so only the app-level observer can forget
-    // the dismissal.
-    renderOffChatRoute({ role: "writer", requirement: "ready" });
-
-    // Keys cleared later: onboarding is owed one more automatic opening.
-    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
-    expect(dialog()).toBeTruthy();
-  });
-
-  it("keeps a remembered dismissal on a route that never sees a ready setup", () => {
-    renderPanel();
-    closeDialog();
-
-    renderOffChatRoute({ role: "connecting", requirement: "ready" });
-    remountPanel({ modelSetup: { ...NEEDS_SETUP } });
-    expect(dialog()).toBe(null);
-
-    renderOffChatRoute({ role: "writer", requirement: "connect_auth" });
+    expect(seenRecord()).toBe("true");
     remountPanel({ modelSetup: { ...NEEDS_SETUP } });
     expect(dialog()).toBe(null);
   });

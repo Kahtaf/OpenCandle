@@ -39,6 +39,7 @@ import {
 } from "./alert-view-model.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
+import { ReportScheduleForm } from "./report-schedule-form.jsx";
 import { StatusBand } from "./shared.jsx";
 import { WatchlistPage } from "./WatchlistPage.jsx";
 
@@ -158,8 +159,14 @@ export function MarketStatePage({
 }) {
   const { state, loading, error, refresh, refreshQuotes } = useMarketState();
   const readOnly = role !== "writer";
-  const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
+  // The hosted runtime has no scheduler, so the reports page's primary action
+  // generates today's report instead of opening a schedule panel whose saved
+  // time nothing would ever consume.
+  const hostedReports = useRuntimeTransport().kind === "hosted" && activeId === "reports";
+  const active = hostedReports
+    ? { ...PAGE_META.reports, primaryLabel: "Run report", primaryIcon: RefreshCw }
+    : (PAGE_META[domain] ?? PAGE_META.watchlists);
   // Pages whose primary table plus detail rail should fill the desktop canvas
   // instead of floating as short cards over dead white space.
   const fillsHeight = FILL_HEIGHT_DOMAINS.has(activeId);
@@ -211,6 +218,10 @@ export function MarketStatePage({
   };
 
   const primaryAction = () => {
+    if (hostedReports) {
+      invokeTool("daily_watchlist_report", { action: "run" });
+      return;
+    }
     openPanel(active.primaryPanel);
   };
   const secondaryAction = () => {
@@ -369,7 +380,7 @@ function PageHeader({ meta, loading, readOnly, onPrimary, onSecondary, tabs }) {
   );
 }
 
-function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate }) {
+export function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate }) {
   const lot = panel.data?.lot;
   const alert = panel.data?.alert;
   const watchlist = panel.data?.watchlist;
@@ -538,55 +549,10 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel, navigate
   }
 
   if (panel.type === "report-configure") {
-    return (
-      <ReportScheduleForm disabled={readOnly} invokeTool={invokeTool} closePanel={closePanel} />
-    );
+    return <ReportScheduleForm disabled={readOnly} invokeTool={invokeTool} onSaved={closePanel} />;
   }
 
   return <p className="text-sm text-muted-foreground">Select an action to continue.</p>;
-}
-
-function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
-  const reportTimeId = useId();
-  const [localTime, setLocalTime] = useState("08:00");
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  return (
-    <form
-      className="space-y-3"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        const saved = await invokeTool("daily_watchlist_report", {
-          action: "configure",
-          timezone,
-          local_time: localTime,
-        });
-        if (saved) closePanel();
-      }}
-    >
-      <p className="text-sm text-muted-foreground">
-        The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
-        ).
-      </p>
-      <label
-        htmlFor={reportTimeId}
-        className="grid gap-1 text-xs font-medium text-muted-foreground"
-      >
-        Run at
-        <Input
-          id={reportTimeId}
-          type="time"
-          value={localTime}
-          disabled={disabled}
-          required
-          onChange={(event) => setLocalTime(event.target.value)}
-        />
-      </label>
-      <Button type="submit" variant="brand" size="sm" disabled={disabled || !localTime}>
-        Save schedule
-      </Button>
-    </form>
-  );
 }
 
 export function ContextPanel({ title, onClose, children }) {
