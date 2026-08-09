@@ -7,15 +7,16 @@ import { getUnsupportedNodeVersionMessage } from "../../../src/infra/node-versio
 
 describe("node version guard", () => {
   it("allows the supported Node range", () => {
-    expect(getUnsupportedNodeVersionMessage("22.19.0")).toBeNull();
+    expect(getUnsupportedNodeVersionMessage("22.22.2")).toBeNull();
+    expect(getUnsupportedNodeVersionMessage("22.22.1")).toContain("Use Node 22.22.2+ or 24.x-26.x");
     expect(getUnsupportedNodeVersionMessage("24.11.1")).toBeNull();
     expect(getUnsupportedNodeVersionMessage("25.9.0")).toBeNull();
   });
 
   it("rejects unsupported Node versions with an actionable install and rebuild message", () => {
-    expect(getUnsupportedNodeVersionMessage("20.19.0")).toContain("Use Node 22.19+ or 24.x-26.x");
-    expect(getUnsupportedNodeVersionMessage("22.18.0")).toContain("Use Node 22.19+ or 24.x-26.x");
-    expect(getUnsupportedNodeVersionMessage("23.11.1")).toContain("Use Node 22.19+ or 24.x-26.x");
+    expect(getUnsupportedNodeVersionMessage("20.19.0")).toContain("Use Node 22.22.2+ or 24.x-26.x");
+    expect(getUnsupportedNodeVersionMessage("22.21.0")).toContain("Use Node 22.22.2+ or 24.x-26.x");
+    expect(getUnsupportedNodeVersionMessage("23.11.1")).toContain("Use Node 22.22.2+ or 24.x-26.x");
     expect(getUnsupportedNodeVersionMessage("27.0.0")).toContain(
       "reinstall dependencies under the active Node",
     );
