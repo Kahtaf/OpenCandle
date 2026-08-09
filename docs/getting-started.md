@@ -69,7 +69,7 @@ The full `/connect` target list is in [TUI](./tui.md#connect-targets). Env var n
 
 ## Choose Your Interface
 
-Start with the local GUI for the visual investigation workspace. Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same tools, workflows, saved session state, and provider-backed evidence, and you can move between both interfaces during the same investigation. The web app at web.opencandle.app is a third option when you want nothing installed. See [Ways to Run OpenCandle](./ways-to-run.md) for the comparison, plus [GUI Quickstart](./gui-quickstart.md) and [TUI](./tui.md).
+Start with the local GUI for the visual investigation workspace. Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same tools, workflows, saved session state, and provider-backed evidence, and you can move between both interfaces during the same investigation. The web app at web.opencandle.app is a third option when you want nothing installed. See [Ways to Run OpenCandle](./ways-to-run.md) for the comparison, plus [GUI Quickstart](./gui-quickstart.md) and [TUI Quickstart](./tui.md).
 
 ## Troubleshooting
 

@@ -113,7 +113,7 @@ Contributor conventions live in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CON
 - [Ways to Run OpenCandle](https://opencandle.app/docs/ways-to-run.html)
 - [Web App Quickstart](https://opencandle.app/docs/hosted-pwa.html)
 - [How the Web App Works](https://opencandle.app/docs/how-the-web-app-works.html)
-- [TUI](https://opencandle.app/docs/tui.html)
+- [TUI Quickstart](https://opencandle.app/docs/tui.html)
 - [GUI Quickstart](https://opencandle.app/docs/gui-quickstart.html)
 - [Investigation Recipes](https://opencandle.app/docs/investigation-recipes.html)
 - [Data Sources](https://opencandle.app/docs/data-sources.html)

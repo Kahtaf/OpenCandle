@@ -1,9 +1,9 @@
 ---
-title: TUI
+title: TUI Quickstart
 description: Use the OpenCandle terminal interface, slash commands, sessions, and the local GUI together.
 ---
 
-# Terminal (TUI)
+# TUI Quickstart
 
 The TUI is OpenCandle's equally complete terminal interface for users who prefer a keyboard-first workflow. It runs the same finance tools and workflows as the local GUI, with the same saved sessions, provider-backed evidence, setup, tool calls, and local market state.
 

@@ -19,9 +19,15 @@ One honest caveat: browser storage is not a secure vault. A malicious extension 
 
 ## The relay, and why it exists
 
-Browsers block direct requests to some data and model APIs (a browser rule called CORS). A small Cloudflare Worker relays exactly those requests and nothing else. It forwards a fixed list of endpoints: the three model providers plus Yahoo Finance, TradingView, DuckDuckGo, FRED, Brave, Exa, Finnhub, London Strategic Edge, and the Fear and Greed index, with strict size and time limits.
+Browsers block direct requests to some data and model APIs (a browser rule called CORS). A small Cloudflare Worker relays the few requests that need it.
 
-The relay has no database, no cache, and no logging. Requests pass through in memory and are gone. Your key rides through it to the provider the same way it would through any HTTPS hop, and is never stored. The relay's full source code is in the OpenCandle repository, and its guarantees are enforced by an automated audit test. For the exact policies, see [Provider relay operations](./provider-relay.md).
+The relay is deliberately narrow:
+
+- It forwards only the supported model and data-provider endpoints, with strict request shape, size, and time limits. It is not a general-purpose proxy.
+- It has no OpenCandle database, cache, account system, or application logs. Requests pass through in memory and are not retained by OpenCandle.
+- Your key passes through Cloudflare in transit on its way to the provider, as it would through any HTTPS intermediary. Cloudflare may retain its own platform-level security or operational metadata under its policies; OpenCandle does not claim otherwise.
+
+The relay source is open, and an automated audit test enforces its privacy and routing guarantees.
 
 ## Who is involved
 

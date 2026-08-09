@@ -82,4 +82,4 @@ Settings lives in the sidebar and covers everything outside the chat timeline:
 - **Diagnostics** is the same health report `opencandle doctor` prints.
 - **Data & privacy** shows where OpenCandle keeps your local state.
 
-Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state. See [Terminal (TUI)](./tui.md). For GUI internals, see [System Architecture](./system-architecture.md).
+Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state. See [TUI Quickstart](./tui.md). For GUI internals, see [System Architecture](./system-architecture.md).

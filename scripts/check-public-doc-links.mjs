@@ -35,7 +35,7 @@ function extractUrls(path) {
   const extension = extname(path);
   if (![".html", ".md", ".txt", ".xml"].includes(extension)) return [];
   const content = readFileSync(path, "utf8");
-  return [...content.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)].map((match) =>
+  return [...content.matchAll(/https?:\/\/[^\s"'<>\\)\](]+/g)].map((match) =>
     match[0].replace(/(&quot;|[`.,;:])+$/g, ""),
   );
 }

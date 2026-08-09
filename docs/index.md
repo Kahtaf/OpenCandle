@@ -22,22 +22,25 @@ For a quick feel of the product, watch the [launch video](https://github.com/use
 
 ## Start here
 
-- [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
+- [Why OpenCandle](./comparisons.md): how it compares to general chatbots.
 - [Ways to Run OpenCandle](./ways-to-run.md): the web app, the local GUI, and the terminal compared.
 - [Getting Started](./getting-started.md): install to a first market answer in five minutes, plus troubleshooting.
-- [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
+
+## Guides
+
 - [Web App Quickstart](./hosted-pwa.md): use OpenCandle at web.opencandle.app with nothing to install.
-- [How the Web App Works](./how-the-web-app-works.md): what runs in your browser and where your data lives.
-
-## Guides and reference
-
-- [Terminal (TUI)](./tui.md): terminal usage, slash commands, sessions.
+- [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
+- [TUI Quickstart](./tui.md): terminal usage, slash commands, sessions.
 - [Investigation Recipes](./investigation-recipes.md): repeatable research paths.
+
+## Reference
+
 - [Data Sources](./data-sources.md): provider coverage and optional keys.
 - [Configuration](./configuration.md): env vars, file config, state files.
 
 ## Build on it
 
+- [How the Web App Works](./how-the-web-app-works.md): what runs in your browser and where your data lives.
 - [System Architecture](./system-architecture.md): how questions become investigations and answers.
 - [Build a Tool](./build-a-tool.md): first-party tools and add-on npm packages.
 - [Testing and Evals](./testing-and-evals.md): tests, session quality, benchmarking.

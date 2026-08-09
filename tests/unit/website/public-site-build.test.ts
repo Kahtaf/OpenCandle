@@ -356,8 +356,19 @@ describe("public site build contract", () => {
   it("keeps the desktop hero heading clear of the product demo", async () => {
     const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
     const heroHeadingRule = siteCss.match(/\.landing-hero-copy h1\s*\{([\s\S]*?)\}/)?.[1];
+    const desktopHeroRule = siteCss.match(
+      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero\s*\{([\s\S]*?)\}/,
+    )?.[1];
+    const desktopHeroMediaRule = siteCss.match(
+      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero-media\s*\{([\s\S]*?)\}/,
+    )?.[1];
 
     expect(heroHeadingRule?.replace(/\s+/g, " ")).toContain("font-size: clamp(2.75rem, 4vw, 4rem)");
+    expect(desktopHeroRule?.replace(/\s+/g, " ")).toContain(
+      "grid-template-columns: minmax(460px, 0.75fr) minmax(0, 1.25fr)",
+    );
+    expect(desktopHeroRule?.replace(/\s+/g, " ")).toContain("gap: clamp(4rem, 6vw, 6rem)");
+    expect(desktopHeroMediaRule?.replace(/\s+/g, " ")).toContain("transform: translateX(-2rem)");
   });
 
   it("answers first-run and privacy questions without implementation jargon", async () => {
@@ -551,6 +562,33 @@ describe("public site build contract", () => {
     expect(sidebarNav?.textContent).toContain("Ways to Run");
     expect(sidebarNav?.textContent).toContain("Web App Quickstart");
     expect(sidebarNav?.textContent).toContain("How the Web App Works");
+    expect(sidebarNav?.textContent).toContain("TUI Quickstart");
+
+    const sectionForLink = (label: string) => {
+      const link = [...(sidebarNav?.querySelectorAll("a") ?? [])].find(
+        (item) => item.textContent?.trim() === label,
+      );
+      return link?.parentElement?.querySelector("p")?.textContent?.trim();
+    };
+
+    expect(sectionForLink("Web App Quickstart")).toBe("Guides");
+    expect(sectionForLink("GUI Quickstart")).toBe("Guides");
+    expect(sectionForLink("TUI Quickstart")).toBe("Guides");
+    expect(sectionForLink("How the Web App Works")).toBe("Build");
+
+    const buildLinks = [...(sidebarNav?.querySelectorAll("div") ?? [])]
+      .find((group) => group.querySelector("p")?.textContent?.trim() === "Build")
+      ?.querySelectorAll("a");
+    expect(
+      [...((buildLinks as NodeListOf<HTMLAnchorElement> | undefined) ?? [])].map((link) =>
+        link.textContent?.trim(),
+      ),
+    ).toEqual([
+      "System Architecture",
+      "How the Web App Works",
+      "Build a Tool",
+      "Testing and Evals",
+    ]);
 
     const waysToRunHtml = await readFile(join(root, "website/dist/docs/ways-to-run.html"), "utf8");
     expect(waysToRunHtml).toContain("<table>");
@@ -565,13 +603,80 @@ describe("public site build contract", () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
     const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
     const hero = homeDocument.querySelector(".landing-hero");
-    const heroWebAppLink = hero?.querySelector('a[href="https://web.opencandle.app"]');
+    const heroActions = hero?.querySelector("[data-hero-actions]");
+    const heroWebAppLink = heroActions?.querySelector('a[href="https://web.opencandle.app"]');
+    const actionChildren = [...(heroActions?.children ?? [])];
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
 
+    expect(heroActions).not.toBeNull();
+    expect(actionChildren[0]?.hasAttribute("data-surface-command")).toBe(true);
+    expect(actionChildren[1]).toBe(heroWebAppLink);
     expect(heroWebAppLink).not.toBeNull();
-    expect(heroWebAppLink?.textContent).toContain("Try it in your browser");
-    // The npx path stays alongside the browser path.
-    expect(hero?.querySelector("[data-surface-command]")?.textContent).toContain(
+    expect(heroWebAppLink?.textContent?.trim()).toBe("Try the web app");
+    expect(heroWebAppLink?.classList.contains("hero-try-cta")).toBe(true);
+    expect(heroWebAppLink?.classList.contains("!h-14")).toBe(true);
+    expect(heroWebAppLink?.classList.contains("rounded-lg")).toBe(true);
+    expect(heroActions?.querySelector("[data-surface-command]")?.textContent).toContain(
       "npx opencandle@latest gui",
+    );
+    expect(siteCss).toMatch(
+      /\.landing-hero-actions\s*\{[\s\S]*?width:\s*min\(100%, 460px\)[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
+    expect(siteCss).toMatch(/\.landing-hero-actions \.landing-command\s*\{[\s\S]*?width:\s*100%/);
+    expect(siteCss).toMatch(
+      /\.landing-hero-actions \.hero-try-cta\s*\{[\s\S]*?width:\s*100%[\s\S]*?\n\s*height:\s*56px/,
+    );
+  });
+
+  it("explains the web and local versions in the homepage FAQ", async () => {
+    const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
+    const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;
+    const faq = [...homeDocument.querySelectorAll(".faq-list details")].find((item) =>
+      item.textContent?.includes("What is the difference between the web and local versions?"),
+    );
+
+    expect(faq).toBeDefined();
+    expect(faq?.textContent).toContain("The web app runs in your browser with no install.");
+    expect(faq?.textContent).toContain(
+      "The local version adds the GUI, terminal, and local-only tools",
+    );
+  });
+
+  it("keeps the comparisons guide focused on general chatbots", async () => {
+    const comparisons = await readFile(join(root, "docs/comparisons.md"), "utf8");
+
+    expect(comparisons).toContain("## OpenCandle vs General Chatbots");
+    expect(comparisons).not.toContain("Finance Websites");
+    expect(comparisons).not.toContain("Spreadsheets");
+    expect(comparisons).not.toContain("Custom Scripts");
+  });
+
+  it("folds the public relay explanation into the web app guide", async () => {
+    const websiteBuilder = await readFile(join(root, "website/scripts/prerender.jsx"), "utf8");
+    const webAppGuide = await readFile(join(root, "docs/how-the-web-app-works.md"), "utf8");
+
+    expect(websiteBuilder).not.toContain('source: "docs/provider-relay.md"');
+    expect(webAppGuide).toContain("## The relay, and why it exists");
+    expect(webAppGuide).toContain("The relay is deliberately narrow");
+    expect(webAppGuide).not.toContain("Provider relay operations");
+    await expect(access(join(root, "docs/provider-relay.md"))).rejects.toThrow();
+  });
+
+  it("renders the build-a-tool checklist as usable checkboxes", async () => {
+    const buildToolHtml = await readFile(join(root, "website/dist/docs/build-a-tool.html"), "utf8");
+    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
+    const document = new JSDOM(buildToolHtml, {
+      url: "https://opencandle.app/docs/build-a-tool.html",
+    }).window.document;
+    const checkboxes = [
+      ...document.querySelectorAll(".docs-content .task-list-item input[type='checkbox']"),
+    ];
+
+    expect(checkboxes.length).toBeGreaterThan(0);
+    expect(checkboxes.every((checkbox) => !checkbox.disabled)).toBe(true);
+    expect(checkboxes.every((checkbox) => checkbox.hasAttribute("aria-label"))).toBe(true);
+    expect(siteCss).toMatch(
+      /\.docs-content li\.task-list-item input\[type="checkbox"\]\s*\{[\s\S]*?appearance:\s*auto/,
     );
   });
 

@@ -89,17 +89,11 @@ const sourcePages = [
   {
     source: "docs/hosted-pwa.md",
     output: "docs/hosted-pwa.html",
-    section: "Start here",
+    section: "Guides",
     navLabel: "Web App Quickstart",
   },
-  {
-    source: "docs/how-the-web-app-works.md",
-    output: "docs/how-the-web-app-works.html",
-    section: "Start here",
-    navLabel: "How the Web App Works",
-  },
-  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
-  { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
+  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Guides" },
+  { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "TUI Quickstart" },
   {
     source: "docs/investigation-recipes.md",
     output: "docs/investigation-recipes.html",
@@ -112,12 +106,13 @@ const sourcePages = [
     output: "docs/system-architecture.html",
     section: "Build",
   },
-  { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   {
-    source: "docs/provider-relay.md",
-    output: "docs/provider-relay.html",
+    source: "docs/how-the-web-app-works.md",
+    output: "docs/how-the-web-app-works.html",
     section: "Build",
+    navLabel: "How the Web App Works",
   },
+  { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
   {
     source: "CONTRIBUTING.md",
@@ -272,6 +267,17 @@ function collectHeadingsPlugin(headings) {
   };
 }
 
+function enableTaskListCheckboxes() {
+  return (tree) => {
+    visit(tree, "element", (node) => {
+      if (node.tagName !== "input" || node.properties?.type !== "checkbox") return;
+
+      delete node.properties.disabled;
+      node.properties["aria-label"] = "Mark checklist item complete";
+    });
+  };
+}
+
 async function renderMarkdown(body, page) {
   const headings = [];
   const file = await unified()
@@ -280,6 +286,7 @@ async function renderMarkdown(body, page) {
     .use(rewriteLinksPlugin, page)
     .use(collectHeadingsPlugin, headings)
     .use(remarkRehype)
+    .use(enableTaskListCheckboxes)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, { behavior: "wrap" })
     .use(rehypeStringify)
@@ -1376,6 +1383,11 @@ function HomePage({ buildDate, version }) {
         "No. web.opencandle.app runs the full agent in your browser. Installing locally adds SEC filings, X and Reddit sentiment, and background alert monitoring.",
     },
     {
+      question: "What is the difference between the web and local versions?",
+      answer:
+        "The web app runs in your browser with no install. The local version adds the GUI, terminal, and local-only tools such as SEC filings, sentiment, and background alerts.",
+    },
+    {
       question: "How is this different from asking ChatGPT?",
       answer:
         "OpenCandle gathers quotes, filings, option chains, macro data, and portfolio context before answering. It then shows the source and timestamp behind the result, including anything it could not verify.",
@@ -1512,16 +1524,21 @@ function HomePage({ buildDate, version }) {
               OpenCandle is an open source financial investigator. It fetches live quotes, filings,
               options, and macro data before answering, then shows where the result came from.
             </p>
-            <div className="landing-command" data-surface-command="">
-              <span aria-hidden="true">$</span>
-              <code data-surface-command-text="">npx opencandle@latest gui</code>
-              <button type="button" aria-label="Copy install command" data-command-copy="">
-                <CopyIcon />
-              </button>
-            </div>
-            <div className="mt-4">
-              <Button asChild variant="brand" rounded="full">
-                <a href="https://web.opencandle.app">Try it in your browser</a>
+            <div className="landing-hero-actions" data-hero-actions="">
+              <div className="landing-command" data-surface-command="">
+                <span aria-hidden="true">$</span>
+                <code data-surface-command-text="">npx opencandle@latest gui</code>
+                <button type="button" aria-label="Copy install command" data-command-copy="">
+                  <CopyIcon />
+                </button>
+              </div>
+              <Button
+                asChild
+                variant="bordered"
+                rounded="lg"
+                className="hero-try-cta !h-14 !min-h-14"
+              >
+                <a href="https://web.opencandle.app">Try the web app</a>
               </Button>
             </div>
             <p className="landing-hero-proof">
@@ -1815,11 +1832,25 @@ Last updated: ${buildDate}
 - [Overview](${siteUrl}/docs/index.html)
 - [Ways to run](${siteUrl}/docs/ways-to-run.html)
 - [Getting started](${siteUrl}/docs/getting-started.html)
+
+## Guides
+
 - [Web app quickstart](${siteUrl}/docs/hosted-pwa.html)
-- [How the web app works](${siteUrl}/docs/how-the-web-app-works.html)
 - [GUI quickstart](${siteUrl}/docs/gui-quickstart.html)
+- [TUI quickstart](${siteUrl}/docs/tui.html)
+- [Investigation recipes](${siteUrl}/docs/investigation-recipes.html)
+
+## Reference
+
 - [Data sources](${siteUrl}/docs/data-sources.html)
+- [Configuration](${siteUrl}/docs/configuration.html)
+
+## Build
+
+- [How the web app works](${siteUrl}/docs/how-the-web-app-works.html)
+- [System architecture](${siteUrl}/docs/system-architecture.html)
 - [Build a tool](${siteUrl}/docs/build-a-tool.html)
+- [Testing and evals](${siteUrl}/docs/testing-and-evals.html)
 
 ## Public documentation
 
