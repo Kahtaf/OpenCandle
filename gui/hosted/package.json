@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@opencandle/gui-web": "*",
+    "@tanstack/react-router": "^1.170.19",
     "@webcontainer/api": "1.6.4",
-    "@tanstack/react-router": "^1.170.18",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sql.js": "^1.13.0"
