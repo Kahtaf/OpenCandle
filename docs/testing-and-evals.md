@@ -180,6 +180,8 @@ npm run test:gui:browser
 
 Set `OPENCANDLE_GUI_URL` to target a non-default local URL. GUI smoke testing should cover desktop and mobile widths when UI behavior changes.
 
+For the hosted web app and its provider relay, `npm run test:gui:hosted` runs the hosted browser tests and `npm run relay:test` runs the relay tests.
+
 For visual or GUI behavior changes, also build the web bundle:
 
 ```bash

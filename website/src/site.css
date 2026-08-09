@@ -2195,6 +2195,27 @@
     margin-inline: 0;
   }
 
+  .landing-hero-actions {
+    display: grid;
+    width: min(100%, 460px);
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  .landing-hero-actions .landing-command {
+    width: 100%;
+    margin: 0;
+  }
+
+  .landing-hero-actions .hero-try-cta {
+    width: 100%;
+    min-height: 56px;
+    height: 56px;
+    border-radius: var(--radius);
+  }
+
   .faq-section {
     padding-block: clamp(5rem, 9vw, 7.5rem);
   }
@@ -2295,12 +2316,13 @@
 
   @media (min-width: 60rem) {
     .landing-hero {
-      grid-template-columns: minmax(320px, 0.68fr) minmax(0, 1.45fr);
-      gap: clamp(2.5rem, 4vw, 4.5rem);
+      grid-template-columns: minmax(460px, 0.75fr) minmax(0, 1.25fr);
+      gap: clamp(4rem, 6vw, 6rem);
       padding-inline: 1.5rem;
     }
 
     .landing-hero-media {
+      transform: translateX(-2rem);
       width: min(
         calc(100% + min(7vw, 6rem)),
         calc(100% + max(1.5rem, (100vw - 1320px) / 2 + 1.5rem))
@@ -2534,6 +2556,24 @@
   .docs-content ul.contains-task-list {
     list-style: none;
     padding-left: 0.25rem;
+  }
+
+  .docs-content li.task-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .docs-content li.task-list-item input[type="checkbox"] {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex: 0 0 auto;
+    margin: 0.2rem 0 0;
+    appearance: auto;
+    border: initial;
+    background: initial;
+    accent-color: hsl(var(--tw-foreground));
+    cursor: pointer;
   }
 
   .docs-content li + li {

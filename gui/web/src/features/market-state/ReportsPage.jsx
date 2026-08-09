@@ -1,5 +1,6 @@
 import { FileText } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 import { NotificationsPanel } from "./AlertsPage.jsx";
 import { formatHumanDateTime, shortDateLabel } from "./format.js";
 import { humanizeReportMarkdown, reportRunTitle, reportStatusLabel } from "./report-format.js";
@@ -19,9 +20,14 @@ export function ReportsPage({ state, readOnly, invokeTool, timeZone }) {
     (notification) => notification.sourceType === "report_run",
   );
 
-  const scheduleMeta = template
-    ? `Daily at ${template.localTime} (${template.timezone})${template.nextRunAt ? ` · next run ${shortDateLabel(template.nextRunAt)}` : ""}`
-    : "No schedule configured";
+  // The web app has no scheduler, so a stored template time would read as a
+  // promise nothing keeps; state the on-demand behavior instead.
+  const hosted = useRuntimeTransport().kind === "hosted";
+  const scheduleMeta = hosted
+    ? "Reports run when you ask for one"
+    : template
+      ? `Daily at ${template.localTime} (${template.timezone})${template.nextRunAt ? ` · next run ${shortDateLabel(template.nextRunAt)}` : ""}`
+      : "No schedule configured";
 
   return (
     <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">

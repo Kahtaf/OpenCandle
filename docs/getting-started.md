@@ -5,15 +5,23 @@ description: Install OpenCandle, connect a model, and get a first market answer 
 
 # Getting Started
 
-OpenCandle runs primarily as a local browser GUI, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime, which handles model sign-in, model keys, sessions, and the terminal shell. The GUI is the primary path: chat, visual tool results, workflows, charts, watchlists, portfolios, alerts, reports, and a settings page in one workspace. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
+OpenCandle runs three ways: the web app at web.opencandle.app, the local GUI, and the terminal (TUI). The fastest start is the web app, with nothing to install. Installing locally unlocks everything, including the SEC filings tool, X/Reddit sentiment, and background alert monitoring. See [Ways to Run OpenCandle](./ways-to-run.md) for the comparison.
+
+This page covers the local install path. The local GUI is its primary interface: chat, visual tool results, workflows, charts, watchlists, portfolios, alerts, reports, and a settings page in one workspace, backed by the bundled [Pi](https://github.com/earendil-works/pi) agent runtime, which handles model sign-in, model keys, sessions, and the terminal shell. Users who prefer the terminal get an equally complete TUI over the same tools, workflows, saved state, and evidence trail.
+
+> **No install needed?** To use OpenCandle in your browser right now, see the [Web App Quickstart](./hosted-pwa.md).
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## Requirements
 
+To run locally:
+
 - [Node.js](https://nodejs.org) 22.19+ (22.x) or 24–26
 - One model provider: an OpenAI, Anthropic, or Google API key, or Pi sign-in
 - Optional market-data provider keys for expanded coverage
+
+The web app needs only a current Chromium-based desktop browser and a model API key.
 
 OpenCandle is free and open source, and its core data sources need no keys. Model usage is billed by the model provider whose key or account you connect; OpenCandle adds no charge on top.
 
@@ -61,7 +69,7 @@ The full `/connect` target list is in [TUI](./tui.md#connect-targets). Env var n
 
 ## Choose Your Interface
 
-Start with the GUI for the visual investigation workspace. Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same tools, workflows, saved session state, and provider-backed evidence, and you can move between both interfaces during the same investigation. See [GUI Quickstart](./gui-quickstart.md) and [TUI](./tui.md).
+Start with the local GUI for the visual investigation workspace. Choose the TUI when you prefer a keyboard-first loop, slash commands, or a plain terminal transcript. It is not a reduced mode: it uses the same tools, workflows, saved session state, and provider-backed evidence, and you can move between both interfaces during the same investigation. The web app at web.opencandle.app is a third option when you want nothing installed. See [Ways to Run OpenCandle](./ways-to-run.md) for the comparison, plus [GUI Quickstart](./gui-quickstart.md) and [TUI Quickstart](./tui.md).
 
 ## Troubleshooting
 

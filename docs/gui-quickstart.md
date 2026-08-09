@@ -5,6 +5,8 @@ description: Run the local OpenCandle browser GUI and take your first steps.
 
 # OpenCandle GUI Quickstart
 
+This page covers the local GUI: the local OpenCandle app in your browser at `127.0.0.1`. For the hosted web app at web.opencandle.app, see the [Web App Quickstart](./hosted-pwa.md).
+
 ![The OpenCandle GUI answering a market question with a quote table, cited sources, and the research steps panel](./images/gui-chat-research.png)
 
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
@@ -80,4 +82,4 @@ Settings lives in the sidebar and covers everything outside the chat timeline:
 - **Diagnostics** is the same health report `opencandle doctor` prints.
 - **Data & privacy** shows where OpenCandle keeps your local state.
 
-Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state. See [Terminal (TUI)](./tui.md). For GUI internals, see [System Architecture](./system-architecture.md).
+Prefer a keyboard-first workflow? The TUI is an equally complete path through the same tools, workflows, evidence, and saved state. See [TUI Quickstart](./tui.md). For GUI internals, see [System Architecture](./system-architecture.md).

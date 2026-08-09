@@ -5,6 +5,8 @@ description: Environment variables, file config, state paths, and GUI runtime se
 
 # Configuration
 
+This page applies to the local GUI and terminal; the web app keeps its settings in the browser (see [How the Web App Works](./how-the-web-app-works.md)).
+
 OpenCandle reads configuration from three places:
 
 1. A `.env` file in the current working directory loaded at startup.

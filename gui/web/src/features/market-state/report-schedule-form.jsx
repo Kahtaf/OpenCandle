@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { useRuntimeTransport } from "../../runtime/runtime-transport-context.js";
 
 // One schedule form for both callers: the Reports slide-over and the
 // Notifications & automation settings section. Both dispatch the same
@@ -9,6 +10,19 @@ export function ReportScheduleForm({ disabled, invokeTool, onSaved }) {
   const reportTimeId = useId();
   const [localTime, setLocalTime] = useState("08:00");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // The hosted runtime has no scheduler, and hosted state does not sync to a
+  // local install, so the web app offers no schedule controls at all: saving
+  // a time there would persist a value nothing ever consumes.
+  const hosted = useRuntimeTransport().kind === "hosted";
+
+  if (hosted) {
+    return (
+      <p data-slot="report-schedule-form" className="text-sm text-muted-foreground">
+        In the web app, reports run when you ask for one. Nothing runs on a schedule or after you
+        close the tab.
+      </p>
+    );
+  }
 
   return (
     <form

@@ -29,6 +29,7 @@ import {
 import { PortfolioPage } from "../../../gui/web/src/features/market-state/PortfolioPage.jsx";
 import { ReportsPage } from "../../../gui/web/src/features/market-state/ReportsPage.jsx";
 import { WatchlistPage } from "../../../gui/web/src/features/market-state/WatchlistPage.jsx";
+import { RuntimeTransportProvider } from "../../../gui/web/src/runtime/runtime-transport-provider.jsx";
 
 vi.mock("vaul", async () => {
   const ReactModule = await import("react");
@@ -1129,6 +1130,47 @@ describe("MarketStatePage rendering", () => {
     expect(reportHtml).toContain("Configure report");
     expect(reportHtml).toContain("lucide-settings");
     expect(reportHtml).not.toContain("lucide-plus");
+  });
+
+  it("runs the report directly from the hosted reports header instead of configuring", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        RuntimeTransportProvider,
+        { transport: { kind: "hosted" } as never },
+        React.createElement(MarketStatePage, {
+          domain: "reports",
+          role: "writer",
+          navigate: () => undefined,
+          setToast: () => undefined,
+        }),
+      ),
+    );
+
+    expect(html).toContain("Run report");
+    expect(html).not.toContain("Configure report");
+  });
+
+  it("replaces the hosted schedule line with the on-demand truth", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        RuntimeTransportProvider,
+        { transport: { kind: "hosted" } as never },
+        React.createElement(ReportsPage, {
+          state: {
+            reportTemplates: [],
+            reportRuns: [],
+            notifications: [],
+            notificationDeliveryAttempts: [],
+          },
+          readOnly: false,
+          invokeTool: () => undefined,
+          timeZone: "UTC",
+        }),
+      ),
+    );
+
+    expect(html).toContain("Reports run when you ask for one");
+    expect(html).not.toContain("No schedule configured");
   });
 
   it("renders reports as humanized rich text with collision-safe notifications", () => {

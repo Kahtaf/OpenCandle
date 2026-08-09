@@ -57,18 +57,15 @@ describe("Settings automation section gating", () => {
     vi.restoreAllMocks();
   });
 
-  it("disables schedule changes in an offline hosted tab", async () => {
-    await render("hosted", "offline");
-    const save = saveButton();
-    expect(save).toBeTruthy();
-    expect(save?.disabled).toBe(true);
+  it("offers no schedule controls in the web app", async () => {
+    await render("hosted", "writer");
+    expect(saveButton()).toBeUndefined();
+    expect(document.body.querySelector('input[type="time"]')).toBeNull();
   });
 
-  it("keeps schedule changes available for an online hosted follower", async () => {
-    await render("hosted", "follower");
-    const save = saveButton();
-    expect(save).toBeTruthy();
-    expect(save?.disabled).toBe(false);
+  it("offers no schedule controls in an offline hosted tab either", async () => {
+    await render("hosted", "offline");
+    expect(saveButton()).toBeUndefined();
   });
 
   it("keeps a local follower read-only", async () => {
@@ -76,5 +73,41 @@ describe("Settings automation section gating", () => {
     const save = saveButton();
     expect(save).toBeTruthy();
     expect(save?.disabled).toBe(true);
+  });
+
+  it("tells hosted users automation is on-demand only", async () => {
+    await render("hosted", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "Alert checks and reports run when you ask for them, with a manual check or by running a report. Nothing runs in the background or after you close the tab.",
+    );
+    expect(text).not.toContain("run while this app is open");
+    expect(text).not.toContain("—");
+  });
+
+  it("keeps the local copy about the open app and opencandle monitor", async () => {
+    await render("loopback", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "Alert checks and the daily report run while OpenCandle is open. Run opencandle monitor to keep them running without the app in front of you.",
+    );
+    expect(text).not.toContain("—");
+  });
+
+  it("tells web app users reports run on demand", async () => {
+    await render("hosted", "writer");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(
+      "In the web app, reports run when you ask for one. Nothing runs on a schedule or after you close the tab.",
+    );
+    expect(text).not.toContain("runs daily while OpenCandle is open");
+    expect(text).not.toContain("local app's daily schedule");
+  });
+
+  it("keeps the local schedule copy in the local app", async () => {
+    await render("loopback", "writer");
+    expect(document.body.textContent).toContain(
+      "The morning report runs daily while OpenCandle is open.",
+    );
   });
 });

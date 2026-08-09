@@ -71,6 +71,20 @@ describe("ReportScheduleForm", () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it("offers no schedule controls in the web app", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        RuntimeTransportProvider,
+        { transport: stubTransport([], { kind: "hosted" }) },
+        React.createElement(ReportScheduleForm, { disabled: false, invokeTool: vi.fn() }),
+      ),
+    );
+
+    expect(html).toContain("reports run when you ask for one");
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("<button");
+  });
+
   it("keeps the save action inert while the surface is read only", () => {
     const html = renderToStaticMarkup(
       React.createElement(ReportScheduleForm, { disabled: true, invokeTool: vi.fn() }),
@@ -164,12 +178,13 @@ describe("AutomationSection", () => {
     expect(text).not.toContain("Not configured");
   });
 
-  it("describes local automation as a monitor process and hosted automation as open tab work", async () => {
+  it("describes local automation as a monitor process and hosted automation as on demand", async () => {
     const localText = await renderSection(stubTransport([]));
     expect(localText).toContain("opencandle monitor");
 
     const hostedText = await renderSection(stubTransport([], { kind: "hosted" }));
-    expect(hostedText).toContain("while this app is open");
+    expect(hostedText).toContain("Nothing runs in the background or after you close the tab.");
+    expect(hostedText).not.toContain("while this app is open");
     expect(hostedText).not.toContain("OPENCANDLE_NOTIFICATION_WEBHOOK_URL");
   });
 
