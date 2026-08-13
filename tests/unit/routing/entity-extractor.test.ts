@@ -275,6 +275,14 @@ describe("extractEntities", () => {
       expect(result.dteHint).toBe("0-14 days");
     });
 
+    it("does not treat a capped price-history lookback as DTE", () => {
+      const result = extractEntities(
+        "Screen monthly AAPL calls using at most two weeks of price history.",
+      );
+
+      expect(result.dteHint).toBe("month");
+    });
+
     it("detects month out", () => {
       const result = extractEntities("calls a month out");
       expect(result.dteHint).toBe("month");

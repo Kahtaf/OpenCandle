@@ -500,13 +500,23 @@ function isNegatedDteQualifier(input: string, qualifierIndex: number): boolean {
   );
 }
 
+function isLookbackQualifier(input: string, qualifierEnd: number): boolean {
+  const suffix = input.slice(qualifierEnd);
+  return /^\s+of\s+(?:price|market|trading|historical|return|volatility|volume|data|history)\b/.test(
+    suffix,
+  );
+}
+
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
   const withinDaysMatches = lower.matchAll(
     /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+)\s*(?:dte|days?)\b/g,
   );
   for (const withinDays of withinDaysMatches) {
-    if (!isNegatedDteQualifier(lower, withinDays.index)) {
+    if (
+      !isNegatedDteQualifier(lower, withinDays.index) &&
+      !isLookbackQualifier(lower, withinDays.index + withinDays[0].length)
+    ) {
       return `0-${withinDays[1]} days`;
     }
   }
@@ -514,7 +524,10 @@ function extractDteHint(input: string): string | undefined {
     /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+|one|two|three|four)\s*weeks?\b/g,
   );
   for (const withinWeeks of withinWeeksMatches) {
-    if (!isNegatedDteQualifier(lower, withinWeeks.index)) {
+    if (
+      !isNegatedDteQualifier(lower, withinWeeks.index) &&
+      !isLookbackQualifier(lower, withinWeeks.index + withinWeeks[0].length)
+    ) {
       const namedWeekCounts: Record<string, number> = { one: 1, two: 2, three: 3, four: 4 };
       const weekCount = namedWeekCounts[withinWeeks[1]] ?? Number(withinWeeks[1]);
       return `0-${weekCount * 7} days`;
@@ -530,7 +543,7 @@ function extractDteHint(input: string): string | undefined {
     /\b(\d+|one|two|three|four)\s*(?:[-–]|to|or)\s*(\d+|one|two|three|four)\s*weeks?\b/,
   );
   if (explicitWeeks) return `${explicitWeeks[1]}-${explicitWeeks[2]} weeks`;
-  if (/\bmonth\b/.test(lower)) return "month";
+  if (/\bmonth(?:ly)?\b/.test(lower)) return "month";
   if (
     /\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(
       lower,
