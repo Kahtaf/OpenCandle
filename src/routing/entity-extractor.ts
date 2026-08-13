@@ -485,12 +485,41 @@ function extractRiskProfile(input: string): string | undefined {
   return undefined;
 }
 
+function isNegatedDteQualifier(input: string, qualifierIndex: number): boolean {
+  const clauseBoundary = Math.max(
+    input.lastIndexOf(";", qualifierIndex - 1),
+    input.lastIndexOf(",", qualifierIndex - 1),
+    input.lastIndexOf(".", qualifierIndex - 1),
+    input.lastIndexOf("!", qualifierIndex - 1),
+    input.lastIndexOf("?", qualifierIndex - 1),
+  );
+  const prefix = input.slice(clauseBoundary + 1, qualifierIndex);
+  const qualifierScope = prefix.split(/\b(?:and|but|then)\b/).at(-1) ?? prefix;
+  return /\b(?:don't|don’t|do\s+not|not|never|avoid|exclude|excluding|without)\b/.test(
+    qualifierScope,
+  );
+}
+
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
-  const withinDays = lower.match(
-    /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+)\s*(?:dte|days?)\b/,
+  const withinDaysMatches = lower.matchAll(
+    /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+)\s*(?:dte|days?)\b/g,
   );
-  if (withinDays) return `0-${withinDays[1]} days`;
+  for (const withinDays of withinDaysMatches) {
+    if (!isNegatedDteQualifier(lower, withinDays.index)) {
+      return `0-${withinDays[1]} days`;
+    }
+  }
+  const withinWeeksMatches = lower.matchAll(
+    /\b(?:within|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s+(\d+|one|two|three|four)\s*weeks?\b/g,
+  );
+  for (const withinWeeks of withinWeeksMatches) {
+    if (!isNegatedDteQualifier(lower, withinWeeks.index)) {
+      const namedWeekCounts: Record<string, number> = { one: 1, two: 2, three: 3, four: 4 };
+      const weekCount = namedWeekCounts[withinWeeks[1]] ?? Number(withinWeeks[1]);
+      return `0-${weekCount * 7} days`;
+    }
+  }
   const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
   if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
   // An explicit user week range ("1-2 weeks out") must outrank the

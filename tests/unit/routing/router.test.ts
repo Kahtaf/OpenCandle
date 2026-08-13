@@ -942,6 +942,198 @@ describe("route()", () => {
     expect(result.diagnostics.map((d) => d.code)).toContain("dte_slot_filled_from_extraction");
   });
 
+  it("overrides a conflicting default DTE slot with the user's explicit maximum horizon", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Sell an AAPL covered call max 2 weeks out.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], dteHint: "month" },
+          slots: {
+            symbol: { value: "AAPL", source: "user", confidence: "high" },
+            dte_target: { value: "25_to_45_days", source: "default", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "covered-call screen with a default monthly horizon",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("0-14 days");
+    expect(result.slots.dte_target).toEqual({
+      value: "0_to_14_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
+  it("overrides a conflicting model slot that claims user provenance with the explicit maximum", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Sell an AAPL covered call max 2 weeks out.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], dteHint: "month" },
+          slots: {
+            symbol: { value: "AAPL", source: "user", confidence: "high" },
+            dte_target: { value: "25_to_45_days", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "covered-call screen with a conflicting monthly horizon",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("0-14 days");
+    expect(result.slots.dte_target).toEqual({
+      value: "0_to_14_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
+  it("repairs a model DTE range that drops the user's day unit", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Screen bullish AAPL calls 30-45 DTE.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "30-45" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "options screen with a unitless model DTE range",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("30-45 days");
+    expect(result.slots.dte_target).toEqual({
+      value: "30_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
+  it("does not replace a requested monthly horizon with a negated short horizon", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I don't want AAPL options within 14 days; screen calls a month out.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
+          slots: {
+            dte_target: { value: "25_to_45_days", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "the user rejected short-dated options and requested a monthly horizon",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("month");
+    expect(result.slots.dte_target).toEqual({
+      value: "25_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
+  it("preserves a user-sourced DTE slot when deterministic cap parsing sees curly negation", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I don’t want AAPL options within 14 days; screen calls a month out.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
+          slots: {
+            dte_target: { value: "25_to_45_days", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "the user rejected short-dated options and requested a monthly horizon",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("month");
+    expect(result.slots.dte_target).toEqual({
+      value: "25_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
+  it("keeps the requested month when the live router emits only a DTE hint", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I don’t want AAPL options within 14 days; screen calls a month out.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
+          slots: {
+            dte_hint: { value: "month", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["options"],
+          diagnostics: [],
+          reasoning: "the user rejected short-dated options and requested a monthly horizon",
+        }),
+      ),
+    );
+
+    expect(result.entities.dteHint).toBe("month");
+    expect(result.slots.dte_target).toEqual({
+      value: "25_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+  });
+
   it("canonicalizes asset_scope vocabulary synonyms in slots and preference updates", async () => {
     const result = await route(
       {

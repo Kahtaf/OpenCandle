@@ -39,7 +39,7 @@ describe("public site build contract", () => {
     expect(docsHtml).toContain("application/ld+json");
   });
 
-  it("preserves static metadata, assets, and markdown alternates", async () => {
+  it("preserves static metadata and assets without publishing raw Markdown source", async () => {
     for (const file of [
       "website/dist/robots.txt",
       "website/dist/sitemap.xml",
@@ -62,7 +62,6 @@ describe("public site build contract", () => {
       "website/dist/assets/source-icons/brave.svg",
       "website/dist/assets/source-icons/alpha-vantage.ico",
       "website/dist/favicon.ico",
-      "website/dist/docs/index.md",
     ]) {
       await expect(
         access(join(root, file)),
@@ -71,8 +70,11 @@ describe("public site build contract", () => {
     }
 
     const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
-    expect(docsHtml).toContain('rel="alternate"');
-    expect(docsHtml).toContain("docs/index.md");
+    const sitemap = await readFile(join(root, "website/dist/sitemap.xml"), "utf8");
+
+    expect(docsHtml).not.toContain('type="text/markdown"');
+    expect(sitemap).not.toContain(".md");
+    await expect(access(join(root, "website/dist/docs/index.md"))).rejects.toThrow();
   });
 
   it("publishes a readable social preview with concise landing metadata", async () => {
@@ -114,12 +116,6 @@ describe("public site build contract", () => {
       "utf8",
     );
     expect(guiQuickstartHtml).toContain("images/gui-chat-research.png");
-
-    const guiQuickstartMd = await readFile(
-      join(root, "website/dist/docs/gui-quickstart.md"),
-      "utf8",
-    );
-    expect(guiQuickstartMd).toContain("https://opencandle.app/docs/images/gui-chat-research.png");
   });
 
   it("renders GitHub-flavored Markdown features through the parser pipeline", async () => {
@@ -130,6 +126,45 @@ describe("public site build contract", () => {
     expect(tuiHtml).toContain("<thead>");
     expect(buildToolHtml).toContain("<pre><code");
     expect(buildToolHtml).toContain("contains-task-list");
+  });
+
+  it("connects each rendered document to related documentation", async () => {
+    const gettingStartedHtml = await readFile(
+      join(root, "website/dist/docs/getting-started.html"),
+      "utf8",
+    );
+    const document = new JSDOM(gettingStartedHtml, {
+      url: "https://opencandle.app/docs/getting-started.html",
+    }).window.document;
+    const related = document.querySelector('nav[aria-label="Related documentation"]');
+
+    expect(related?.textContent).toContain("Ways to Run");
+    expect(related?.querySelector('a[href="ways-to-run.html"]')).not.toBeNull();
+  });
+
+  it("gives short and duplicate documentation summaries distinct search snippets", async () => {
+    const pages = [
+      "index",
+      "gui-quickstart",
+      "hosted-pwa",
+      "data-sources",
+      "contributing",
+      "security",
+    ];
+    const descriptions = await Promise.all(
+      pages.map(async (page) => {
+        const html = await readFile(join(root, `website/dist/docs/${page}.html`), "utf8");
+        return new JSDOM(html).window.document
+          .querySelector('meta[name="description"]')
+          ?.getAttribute("content");
+      }),
+    );
+
+    for (const description of descriptions) {
+      expect(description?.length).toBeGreaterThanOrEqual(70);
+      expect(description?.length).toBeLessThanOrEqual(160);
+    }
+    expect(new Set(descriptions).size).toBe(descriptions.length);
   });
 
   it("keeps public output decoupled from local GUI runtime routes", async () => {
@@ -543,9 +578,7 @@ describe("public site build contract", () => {
   it("publishes the web launch docs pages with navigation labels", async () => {
     for (const file of [
       "website/dist/docs/ways-to-run.html",
-      "website/dist/docs/ways-to-run.md",
       "website/dist/docs/how-the-web-app-works.html",
-      "website/dist/docs/how-the-web-app-works.md",
     ]) {
       await expect(
         access(join(root, file)),

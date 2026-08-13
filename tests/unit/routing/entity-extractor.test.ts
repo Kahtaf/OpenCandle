@@ -239,6 +239,42 @@ describe("extractEntities", () => {
   });
 
   describe("DTE hint extraction", () => {
+    it("preserves a maximum horizon expressed in weeks", () => {
+      const result = extractEntities("Sell an AAPL covered call max 2 weeks out.");
+
+      expect(result.dteHint).toBe("0-14 days");
+    });
+
+    it("preserves a spelled-out maximum week horizon", () => {
+      const result = extractEntities("Sell an AAPL covered call at most two weeks out.");
+
+      expect(result.dteHint).toBe("0-14 days");
+    });
+
+    it("does not treat an unrelated avoidance instruction as DTE negation", () => {
+      const result = extractEntities(
+        "Avoid illiquid options and sell an AAPL call max 2 weeks out.",
+      );
+
+      expect(result.dteHint).toBe("0-14 days");
+    });
+
+    it("uses a later positive day cap after a negated day cap", () => {
+      const result = extractEntities(
+        "Don't use options within 7 days; screen AAPL calls at most 30 days out.",
+      );
+
+      expect(result.dteHint).toBe("0-30 days");
+    });
+
+    it("uses a later positive week cap after a negated week cap", () => {
+      const result = extractEntities(
+        "Don't use options within one week; screen AAPL calls at most two weeks out.",
+      );
+
+      expect(result.dteHint).toBe("0-14 days");
+    });
+
     it("detects month out", () => {
       const result = extractEntities("calls a month out");
       expect(result.dteHint).toBe("month");

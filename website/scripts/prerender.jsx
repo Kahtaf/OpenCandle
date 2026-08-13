@@ -147,10 +147,6 @@ const basenameToOutput = new Map(
 let sitePages = sourcePages;
 let manifestEntry = null;
 
-function markdownOutput(output) {
-  return output.replace(/\.html$/, ".md");
-}
-
 function absoluteUrl(path) {
   return `${siteUrl}/${path.replace(/^index\.html$/, "").replace(/^\//, "")}`;
 }
@@ -314,7 +310,7 @@ function assetTags(output) {
   return [...cssTags, <script key="entry" type="module" src={`${prefix}${manifestEntry.file}`} />];
 }
 
-function sharedHeadTags({ title, description, canonicalUrl, image = socialImage, markdownUrl }) {
+function sharedHeadTags({ title, description, canonicalUrl, image = socialImage }) {
   return (
     <>
       <link rel="canonical" href={canonicalUrl} />
@@ -338,20 +334,11 @@ function sharedHeadTags({ title, description, canonicalUrl, image = socialImage,
         href={`${siteUrl}/llms.txt`}
         title="OpenCandle AI guide"
       />
-      <link rel="alternate" type="text/markdown" href={markdownUrl} title="Markdown version" />
     </>
   );
 }
 
-function HtmlDocument({
-  title,
-  description,
-  canonicalUrl,
-  markdownUrl,
-  output,
-  children,
-  structuredData,
-}) {
+function HtmlDocument({ title, description, canonicalUrl, output, children, structuredData }) {
   const prefix = rootPrefix(output);
   return (
     <html lang="en">
@@ -361,7 +348,7 @@ function HtmlDocument({
         <meta name="description" content={description} />
         <meta name="author" content="Kahtaf" />
         <title>{title}</title>
-        {sharedHeadTags({ title, description, canonicalUrl, markdownUrl })}
+        {sharedHeadTags({ title, description, canonicalUrl })}
         <link rel="icon" href={`${prefix}assets/logo.svg`} type="image/svg+xml" />
         <link rel="alternate icon" href={`${prefix}favicon.ico`} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1697,15 +1684,16 @@ function HomePage({ buildDate, version }) {
 
 function DocsPage({ page, content, headings, buildDate }) {
   const canonicalUrl = absoluteUrl(page.output);
-  const markdownUrl = absoluteUrl(markdownOutput(page.output));
   const toc = headings.filter((heading) => heading.level === 2);
+  const relatedPages = sitePages
+    .filter((candidate) => candidate.output !== page.output && candidate.section === page.section)
+    .slice(0, 3);
 
   return (
     <HtmlDocument
       title={`${page.title} - OpenCandle`}
       description={page.description}
       canonicalUrl={canonicalUrl}
-      markdownUrl={markdownUrl}
       output={page.output}
       structuredData={{
         "@context": "https://schema.org",
@@ -1742,6 +1730,23 @@ function DocsPage({ page, content, headings, buildDate }) {
               // biome-ignore lint/security/noDangerouslySetInnerHtml: Markdown is trusted repo-local content rendered during the static build.
               dangerouslySetInnerHTML={{ __html: content }}
             />
+            {relatedPages.length > 0 ? (
+              <nav aria-label="Related documentation" className="mt-12 border-border border-t pt-6">
+                <h2 className="font-semibold text-lg">Related docs</h2>
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {relatedPages.map((relatedPage) => (
+                    <li key={relatedPage.output}>
+                      <a
+                        href={relativeHref(relatedPage.output, page.output)}
+                        className="text-primary underline underline-offset-4 hover:text-primary/80"
+                      >
+                        {relatedPage.navLabel ?? relatedPage.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ) : null}
           </article>
           {toc.length > 0 ? (
             <aside
@@ -1902,11 +1907,6 @@ async function writeLegacyRedirects() {
     const filePath = join(outDir, from);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, renderRedirectDocument(targetUrl));
-    const markdownTarget = `${siteUrl}/${markdownOutput(to.split("#")[0])}`;
-    await writeFile(
-      join(outDir, markdownOutput(from)),
-      `Moved: this page now lives at ${markdownTarget}\n`,
-    );
   }
 }
 
@@ -1920,7 +1920,7 @@ async function writeSiteMetadata(pages, buildDate) {
   await writeFile(
     join(outDir, "sitemap.xml"),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}/</loc><lastmod>${buildDate}</lastmod></url>\n${pages
-      .flatMap((page) => [page.output, markdownOutput(page.output)])
+      .map((page) => page.output)
       .map(
         (output) => `  <url><loc>${siteUrl}/${output}</loc><lastmod>${buildDate}</lastmod></url>`,
       )
@@ -1948,10 +1948,6 @@ async function build() {
     const { html, headings } = await renderMarkdown(page.body, page);
     const filePath = join(outDir, page.output);
     await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(
-      join(outDir, markdownOutput(page.output)),
-      rewriteMarkdownLinksForSite(page.body, page),
-    );
     await writeFile(
       filePath,
       renderDocument(

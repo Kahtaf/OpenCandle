@@ -1,3 +1,7 @@
+---
+description: Read OpenCandle's supported-version policy and the safe private process for reporting security vulnerabilities without exposing sensitive data.
+---
+
 # Security Policy
 
 ## Supported Versions

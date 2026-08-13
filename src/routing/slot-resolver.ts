@@ -23,6 +23,9 @@ export function mapDteHintToTarget(dteHint: string | undefined): string | undefi
   const normalized = dteHint?.toLowerCase().trim();
   if (!normalized) return undefined;
 
+  if (/^(?:\d+_to_\d+_days|\d+_plus_days)$/.test(normalized)) {
+    return normalized;
+  }
   if (/\bleaps?\b/.test(normalized) || /\blong[\s-]*dated\b/.test(normalized)) {
     return "180_plus_days";
   }
