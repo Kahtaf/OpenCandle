@@ -18,6 +18,7 @@ interface RouterFixture {
   input: string;
   priorTurns: RouterInputContext["priorTurns"];
   profileSnapshot: RouterInputContext["profileSnapshot"];
+  portfolioPositions?: RouterInputContext["portfolioPositions"];
   expectedRouterOutput: RouterOutput;
   tags: string[];
 }
@@ -74,6 +75,7 @@ describe("Router deterministic fixtures", () => {
           text: data.input,
           priorTurns: data.priorTurns,
           profileSnapshot: data.profileSnapshot,
+          portfolioPositions: data.portfolioPositions,
           recentWorkflowRuns: [],
         },
         client,
@@ -100,6 +102,7 @@ describe("Router deterministic fixtures", () => {
           text: data.input,
           priorTurns: data.priorTurns,
           profileSnapshot: data.profileSnapshot,
+          portfolioPositions: data.portfolioPositions,
           recentWorkflowRuns: [],
         },
         mockClient(data.expectedRouterOutput),

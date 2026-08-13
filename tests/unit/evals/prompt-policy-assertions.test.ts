@@ -71,6 +71,88 @@ describe("prompt-policy final answer assertions", () => {
 
     expect(result.passed).toBe(false);
   });
+
+  it("accepts explicit invalid-symbol disclosures that request the correct ticker", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "states the ticker could not be verified if lookup fails",
+      trace("ZZZZ appears to be an invalid symbol. Please provide the correct ticker."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts a verified non-company instrument that invalidates the earnings premise", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "states the ticker could not be verified if lookup fails",
+      trace(
+        "ZZZZ resolves to a mutual fund, not an operating company, so the premise that it reports earnings tonight is invalid.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes numeric DTE evidence inside the requested one-to-two-week window", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "preserves requested 1-2 week DTE",
+      trace("The available expirations are August 21 (8 DTE) and August 28 (15 DTE)."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes a spelled-out seven-to-fourteen-day DTE window", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "preserves requested 1-2 week DTE",
+      trace("The DTE target is 7 to 14 days, and this expiry has 8 days to expiration."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes a leading structural allocation read as a bottom-line portfolio read", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "starts with a bottom-line structural portfolio read",
+      trace(
+        "Structural Allocation Read\nThe traditional 60/40 portfolio faces a challenging risk environment.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes a leading portfolio outlook paragraph as the bottom-line read", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "starts with a bottom-line structural portfolio read",
+      trace(
+        "The 60/40 portfolio faces a dynamic environment over the next year. Our read suggests moderate returns with higher volatility.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes a brief evaluation lead-in followed by the structural portfolio read", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "starts with a bottom-line structural portfolio read",
+      trace(
+        "Here is a critical evaluation of a 60/40 portfolio for the next year.\n\n### Structural Allocation Read\nThe allocation faces inflation and volatility risk.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("recognizes an opening analyst commitment as a structural portfolio read", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "starts with a bottom-line structural portfolio read",
+      trace(
+        "Analyst View: The 60/40 portfolio is likely to deliver modest returns with elevated volatility over the next year.\n\nCommitment: Keep the allocation, but expect a challenging risk environment.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {

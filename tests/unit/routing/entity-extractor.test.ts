@@ -222,6 +222,13 @@ describe("extractEntities", () => {
       expect(result.riskProfile).toBe("aggressive");
     });
 
+    it("detects explicit tolerance for large drawdowns as aggressive", () => {
+      const result = extractEntities(
+        "Remember that I can tolerate large drawdowns and substantial volatility",
+      );
+      expect(result.riskProfile).toBe("aggressive");
+    });
+
     it("detects balanced", () => {
       const result = extractEntities("a balanced portfolio for $10k");
       expect(result.riskProfile).toBe("balanced");
@@ -332,6 +339,15 @@ describe("extractEntities", () => {
       expect(result.optionStrategy).toBe("covered_call");
     });
 
+    it("detects selling calls against owned shares as a covered call", () => {
+      const result = extractEntities(
+        "Should I sell calls against my AMD shares for the next 1-2 weeks?",
+      );
+
+      expect(result.optionStrategy).toBe("covered_call");
+      expect(result.heldSymbol).toBe("AMD");
+    });
+
     it("detects protective puts with share quantity and held underlying", () => {
       const result = extractEntities(
         "I own 200 shares of NVDA after a big rally. What's a reasonable protective put 30-45 days out that doesn't cost too much?",
@@ -397,6 +413,11 @@ describe("extractEntities", () => {
       const result = extractEntities(
         "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
       );
+      expect(result.timeHorizon).toBe("3_years");
+    });
+
+    it("detects a hyphenated explicit year horizon", () => {
+      const result = extractEntities("Give me a 3-year portfolio for $25k.");
       expect(result.timeHorizon).toBe("3_years");
     });
 

@@ -476,7 +476,13 @@ function extractRiskProfile(input: string): string | undefined {
   ) {
     return "conservative";
   }
-  if (/\baggressive\b/.test(lower) || /\bhigh\s*risk\b/.test(lower)) {
+  if (
+    /\baggressive\b/.test(lower) ||
+    /\bhigh\s*risk\b/.test(lower) ||
+    /\b(?:can|could|willing to)\s+(?:tolerate|accept|handle)\s+(?:large|major|substantial|significant)\s+(?:drawdowns?|volatility|losses?)\b/.test(
+      lower,
+    )
+  ) {
     return "aggressive";
   }
   if (/\bbalanced\b/.test(lower) || /\bmoderate\b/.test(lower)) {
@@ -558,6 +564,12 @@ function extractDteHint(input: string): string | undefined {
 function extractOptionStrategy(input: string): ExtractedEntities["optionStrategy"] | undefined {
   const lower = input.toLowerCase();
   if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
+  if (
+    /\bsell(?:ing)?\s+calls?\s+against\b/.test(lower) &&
+    /\b(?:my|owned?|hold(?:ing)?|shares?|position)\b/.test(lower)
+  ) {
+    return "covered_call";
+  }
   if (/\b(?:protective|married)\s+puts?\b/.test(lower)) return "protective_put";
   if (
     /\b(?:hedge|protect|protection|insurance)\b/.test(lower) &&
@@ -571,9 +583,9 @@ function extractOptionStrategy(input: string): ExtractedEntities["optionStrategy
 
 function extractTimeHorizon(input: string): string | undefined {
   const lower = input.toLowerCase();
-  const explicitMonths = lower.match(/\b(\d+)\s*(?:month|months|mo|mos)\b/);
+  const explicitMonths = lower.match(/\b(\d+)\s*[- ]?\s*(?:month|months|mo|mos)\b/);
   if (explicitMonths) return `${explicitMonths[1]}mo`;
-  const explicitYears = lower.match(/\b(\d+)\s*(?:year|years|yr|yrs)\b/);
+  const explicitYears = lower.match(/\b(\d+)\s*[- ]?\s*(?:year|years|yr|yrs)\b/);
   if (explicitYears) return `${explicitYears[1]}_years`;
   if (/\bshort[\s-]*term\b/.test(lower) || /\bday[\s-]*trad/i.test(lower)) return "short";
   if (/\blong[\s-]*term\b/.test(lower) || /\bbuy[\s-]*and[\s-]*hold\b/.test(lower)) return "long";

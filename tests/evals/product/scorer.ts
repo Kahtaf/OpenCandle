@@ -194,33 +194,90 @@ function passesFamilyAwareDimension(
   trace: EvalTrace,
   text: string,
 ): boolean {
+  if (dimensionId === "missing_data_honesty") {
+    return !trace.toolCalls.some(toolCallIsUnavailable);
+  }
+  if (dimensionId === "direct_answer" && evalCase.family === "compare_assets") {
+    return /\b(?:preferred|more suitable|less suitable|more attractive|less attractive|more resilient|less resilient|better hedge|stronger choice|weaker choice|positioned as|favou?rs?|outperforms?|better suited)\b/i.test(
+      text,
+    );
+  }
+  if (dimensionId === "direct_answer" && evalCase.family === "macro") {
+    return /\b(?:most significant|primary risks?|positive impact|negative impact|benefits?|hurts?|pressures?|supports?|tailwind|headwind)\b/i.test(
+      text,
+    );
+  }
+  if (dimensionId === "direct_answer" && evalCase.family === "sentiment") {
+    return /\b(?:bullish|bearish|neutral|mixed|positive|negative)\b/i.test(text);
+  }
+  if (
+    dimensionId === "direct_answer" &&
+    evalCase.family === "single_asset" &&
+    /bull and bear case|bull[- ]bear/i.test(evalCase.prompt)
+  ) {
+    return (
+      /\bbull case\b/i.test(text) &&
+      /\bbear case\b/i.test(text) &&
+      /\b(?:change(?:s|d)? (?:my|the) (?:mind|thesis)|what would change|invalidation|thesis changes?)\b/i.test(
+        text,
+      )
+    );
+  }
   if (dimensionId === "direct_answer" && evalCase.family === "portfolio") {
     return (
       trace.classification.workflow === "portfolio_builder" &&
-      /\|\s*symbol\s*\|/i.test(text) &&
-      /\|\s*[^|\n]+\s*\|\s*\d+(?:\.\d+)?\s*%\s*\|\s*\$\s?\d/i.test(text)
+      /\|\s*(?:symbol|ticker|holding|fund|etf)\s*\|/i.test(text) &&
+      /\|\s*[^|\n]+\s*\|\s*\d+(?:\.\d+)?\s*%\s*\|(?:\s*\$\s?[\d,]+\s*\|)?/i.test(text)
     );
   }
   if (dimensionId === "horizon_fit" && evalCase.family === "portfolio") {
     return (
-      /why this fits the horizon|time horizon|horizon/i.test(text) &&
-      /\b(?:asset class|fixed income|equity|stability|growth|downside|drawdown|inflation|shorter timeframes?)\b/i.test(
+      /why this fits the horizon|time horizon|horizon|\b\d+[- ]years?\b|\b(?:three|five|ten)[- ]years?\b/i.test(
+        text,
+      ) &&
+      /\b(?:asset class|fixed income|equity|stability|growth|income|yield|capital preservation|duration|downside|drawdown|inflation|shorter timeframes?)\b/i.test(
         text,
       )
     );
   }
   if (dimensionId === "horizon_fit" && evalCase.family === "options") {
-    return /\b(?:\d+\s*DTE|\d+\s*days?[\s),-]+to\s+(?:expiry|expiration)|expir(?:y|ation).{0,40}\d+\s*days?|25\s*[-–]\s*45\s*days?|roughly\s+one\s+month)\b/i.test(
+    return /\b(?:\d+\s*DTE|DTE\s*:?[\s|]*\d+|DTE\s+window\s*:\s*25\s+(?:to|[-–])\s+45\s+days?|\d+\s*days?[\s),-]+to\s+(?:expiry|expiration)|expir(?:y|ation).{0,40}\d+\s*days?|(?:2[5-9]|3\d|4[0-5])[- ]day|25\s*(?:to|[-–])\s*45\s*days?|roughly\s+one\s+month)\b/i.test(
+      text,
+    );
+  }
+  if (
+    dimensionId === "horizon_fit" &&
+    evalCase.family === "compare_assets" &&
+    trace.classification.entities.compareMetrics?.includes("macro_hedge")
+  ) {
+    return /\b(?:macro hedge|inflation|real yields?|usd|dollar|liquidity|risk[- ]?off|debasement|geopolitical|stagflation)\b/i.test(
       text,
     );
   }
   if (dimensionId === "risk_framing" && evalCase.family === "sentiment") {
     return (
-      /\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
-      /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)
+      (/\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
+        /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)) ||
+      (/\b(?:missing sources?|unavailable)\b/i.test(text) &&
+        /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text))
+    );
+  }
+  if (dimensionId === "risk_framing" && evalCase.family === "macro") {
+    return (
+      /\bcommon traps?\b/i.test(text) ||
+      /\b(?:recession|downturn|stubborn inflation)\b.{0,120}\b(?:offset|hurt|underperform|muted|declin)/i.test(
+        text,
+      )
     );
   }
   return false;
+}
+
+function toolCallIsUnavailable(call: EvalTrace["toolCalls"][number]): boolean {
+  if (call.isError === true) return true;
+  if (!isRecord(call.result)) return false;
+  const status = typeof call.result.status === "string" ? call.result.status.toLowerCase() : "";
+  return ["error", "failed", "unavailable", "rate_limited", "timed_out"].includes(status);
 }
 
 function getVisibleText(trace: EvalTrace): string {

@@ -1595,7 +1595,31 @@ describe("SessionCoordinator.buildRouterContextBase", () => {
       { role: "assistant", text: "hi" },
     ]);
     expect(ctx.profileSnapshot).toEqual({});
+    expect(ctx.portfolioPositions).toEqual([]);
     expect(ctx.recentWorkflowRuns).toEqual([]);
+  });
+
+  it("loads canonical portfolio lots for router context", () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "AMD",
+        assetType: "equity",
+        provider: "yahoo",
+      },
+      quantity: 100,
+      avgCost: 51,
+      currency: "USD",
+    });
+    const coord = new SessionCoordinator({ stateDatabaseFactory: () => db });
+    coord.initSession("router-market-state");
+
+    const ctx = coord.buildRouterContextBase(fakeSessionManager([]));
+
+    expect(ctx.portfolioPositions).toEqual([
+      { symbol: "AMD", quantity: 100, costBasis: 51, currency: "USD" },
+    ]);
   });
 });
 

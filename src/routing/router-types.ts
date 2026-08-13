@@ -61,6 +61,13 @@ export interface RouterInputContext {
   priorTurns: Array<{ role: "user" | "assistant"; text: string }>;
   /** Current investor_profile snapshot retrieved from preferences storage. */
   profileSnapshot: Record<string, unknown>;
+  /** Canonical saved portfolio lots from MarketStateService. */
+  portfolioPositions?: Array<{
+    symbol: string;
+    quantity: number;
+    costBasis?: number;
+    currency?: string;
+  }>;
   /** Last 3 workflow_runs, compact summaries. */
   recentWorkflowRuns: Array<{
     workflowType: string;

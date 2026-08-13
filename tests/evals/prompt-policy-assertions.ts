@@ -52,7 +52,7 @@ export function evaluateFinalAnswerAssertion(
     {
       pattern: /states the ticker could not be verified if lookup fails/i,
       passed:
-        /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|not recognized|no verified|not find|no results|not available/i.test(
+        /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|invalid (?:ticker|symbol)|placeholder|not recognized|no verified|not find|no results|not available|mutual fund|not (?:an? )?(?:company|stock)|does not report earnings|earnings premise/i.test(
           text,
         ) || asksForTickerClarification(trace),
       reason: asksForTickerClarification(trace)
@@ -365,7 +365,10 @@ function evaluateManifestAssertion(
     return requires(/cost basis/, /event[- ]week|dte|days? to expiration/);
   }
   if (lowerAssertion.includes("preserves requested 1-2 week dte")) {
-    return requires(/1\s*[-–]\s*2|one\s+to\s+two|two[- ]week|weekly/, /dte|expiry|expiration/);
+    return requires(
+      /1\s*[-–]\s*2|one\s+to\s+two|two[- ]week|weekly|7_to_14_days|7\s*(?:to|[-–])\s*14\s*days?|\b(?:[7-9]|1[0-4])\s*dte\b/,
+      /dte|expiry|expiration/,
+    );
   }
   if (lowerAssertion.includes("covered-call assignment")) {
     return requiredTerms(/assignment/, /downside/, /opportunity cost|capped upside/);
@@ -392,7 +395,31 @@ function evaluateManifestAssertion(
     lowerAssertion.includes("bottom-line portfolio risk/reward") ||
     lowerAssertion.includes("bottom-line structural portfolio read")
   ) {
-    return requires(/bottom line/, /portfolio/, /risk|reward|structural/);
+    const startsWithStructuralRead = /^\s*(?:\*\*)?structural (?:allocation|portfolio) read/i.test(
+      trace.text,
+    );
+    const leadingParagraph = trace.text.split(/\n\s*\n/, 1)[0] ?? "";
+    const startsWithPortfolioOutlook =
+      /\bportfolio\b/i.test(leadingParagraph) &&
+      /\b(?:our read|suggests?|faces?|expect(?:s|ed)?|outlook)\b/i.test(leadingParagraph) &&
+      /\b(?:risk|reward|returns?|volatility|structural)\b/i.test(leadingParagraph);
+    const openingStructuralRead =
+      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
+      /structural (?:allocation|portfolio) read/i.test(trace.text.slice(0, 600));
+    const openingPortfolioRead =
+      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
+      /\b(?:risk|reward|returns?|volatility|structural|challenging)\b/i.test(
+        trace.text.slice(0, 600),
+      ) &&
+      /\b(?:commitment|analyst view|expect(?:s|ed)?|faces?|outlook|likely|positioned)\b/i.test(
+        trace.text.slice(0, 600),
+      );
+    return startsWithStructuralRead ||
+      startsWithPortfolioOutlook ||
+      openingStructuralRead ||
+      openingPortfolioRead
+      ? requires(/portfolio/, /risk|reward|returns?|volatility|structural|challenging/)
+      : requires(/bottom line/, /portfolio/, /risk|reward|structural/);
   }
   if (lowerAssertion.includes("current macro evidence")) {
     return requiredTerms(

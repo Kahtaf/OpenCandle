@@ -767,14 +767,14 @@ export default function openCandleExtension(
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   ): Promise<{ action: "transform"; text: string } | false> {
     const storage = coordinator.getStorage();
-    const { profileSnapshot, recentWorkflowRuns, priorTurns } = coordinator.buildRouterContextBase(
-      ctx.sessionManager,
-    );
+    const { profileSnapshot, portfolioPositions, recentWorkflowRuns, priorTurns } =
+      coordinator.buildRouterContextBase(ctx.sessionManager);
     // priorTurns is not scrubbed for /forget — tracked in proposal.md follow-ups.
     const input: RouterInputContext = {
       text,
       priorTurns,
       profileSnapshot,
+      portfolioPositions,
       recentWorkflowRuns,
     };
 

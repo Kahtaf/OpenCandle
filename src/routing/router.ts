@@ -212,7 +212,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
 export function postProcessRouterOutput(
   text: string,
   output: RouterOutput,
-  inputContext?: Pick<RouterInputContext, "priorTurns" | "profileSnapshot">,
+  inputContext?: Pick<RouterInputContext, "priorTurns" | "profileSnapshot" | "portfolioPositions">,
 ): RouterOutput {
   const extracted = extractEntities(text);
   const deterministic = classifyWithLegacyRules(text);
@@ -233,15 +233,62 @@ export function postProcessRouterOutput(
     extracted.dteHint !== undefined &&
     (extracted.dteHint.startsWith("0-") ||
       (userDteTarget === undefined && mapDteHintToTarget(output.entities.dteHint) === undefined));
+  const authoritativeTimeHorizon = extracted.timeHorizon?.replace(/^(\d+)_years$/, "$1y");
+  const normalizedSlots = { ...output.slots };
+  if (
+    extracted.budget !== undefined &&
+    (output.workflow === "portfolio_builder" || deterministic.workflow === "portfolio_builder")
+  ) {
+    normalizedSlots.budget = {
+      value: extracted.budget,
+      source: "user",
+      confidence: "high",
+    };
+  }
+  if (authoritativeTimeHorizon) {
+    normalizedSlots.time_horizon = {
+      value: authoritativeTimeHorizon,
+      source: "user",
+      confidence: "high",
+    };
+  }
+  const emittedRiskSource = output.slots.risk_profile?.source;
+  const hasContextBackedRiskSlot =
+    (emittedRiskSource === "preference" ||
+      emittedRiskSource === "memory" ||
+      emittedRiskSource === "prior_context") &&
+    typeof output.slots.risk_profile?.value === "string";
+  const contextBackedRiskProfile = hasContextBackedRiskSlot
+    ? output.entities.riskProfile
+    : undefined;
+  const resolvedRiskProfile = extracted.riskProfile ?? contextBackedRiskProfile;
+  if (extracted.riskProfile) {
+    normalizedSlots.risk_profile = {
+      value: extracted.riskProfile,
+      source: "user",
+      confidence: "high",
+    };
+  } else if (!hasContextBackedRiskSlot) {
+    delete normalizedSlots.risk_profile;
+  }
   let next: RouterOutput = {
     ...output,
+    slots: normalizedSlots,
+    preference_updates: output.preference_updates.filter(
+      (update) =>
+        (update.key !== "risk_profile" || extracted.riskProfile !== undefined) &&
+        (update.key !== "time_horizon" || isStableTimeHorizonPreference(text)) &&
+        (update.key !== "asset_scope" || extracted.assetScope !== undefined),
+    ),
     entities: {
       ...output.entities,
       symbols: symbolsAfterAmbiguousFilter,
-      budget: output.entities.budget ?? extracted.budget,
+      budget:
+        extracted.budget ??
+        (output.workflow === "portfolio_builder" ? output.entities.budget : undefined),
       maxPremium: output.entities.maxPremium ?? extracted.maxPremium,
-      timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
-      riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
+      timeHorizon: authoritativeTimeHorizon ?? output.entities.timeHorizon,
+      riskProfile: resolvedRiskProfile,
       assetScope: output.entities.assetScope ?? extracted.assetScope,
       positionCount: output.entities.positionCount ?? extracted.positionCount,
       maxSinglePositionPct: output.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
@@ -250,7 +297,9 @@ export function postProcessRouterOutput(
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
       shareQuantity: output.entities.shareQuantity ?? extracted.shareQuantity,
-      heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
+      heldSymbol:
+        extracted.heldSymbol ??
+        (output.workflow === "options_screener" ? output.entities.heldSymbol : undefined),
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
       dteHint:
         output.workflow === "options_screener"
@@ -262,14 +311,80 @@ export function postProcessRouterOutput(
     diagnostics,
   };
 
+  if (/\b(?:same question|same (?:analysis|comparison)|what about)\b/i.test(text)) {
+    const priorText =
+      [...(inputContext?.priorTurns ?? [])]
+        .reverse()
+        .find((turn) => turn.role === "user" && extractEntities(turn.text).symbols.length > 0)
+        ?.text ?? "";
+    const priorSymbols = extractEntities(priorText).symbols.filter(
+      (symbol) =>
+        symbolPosition(priorText, symbol) !== Number.MAX_SAFE_INTEGER &&
+        disambiguateSymbols([symbol], priorText).kept.length > 0,
+    );
+    const carriedSymbols = mergeSymbols(next.entities.symbols, priorSymbols);
+    if (!sameStringArray(carriedSymbols, next.entities.symbols)) {
+      diagnostics.push({
+        code: "prior_context_symbols_recovered",
+        message: "explicit follow-up retained symbols from prior conversation context",
+      });
+      next = {
+        ...next,
+        entities: { ...next.entities, symbols: carriedSymbols },
+        diagnostics,
+      };
+    }
+  }
+
+  if (isPortfolioEvaluationRequest(text)) {
+    const savedSymbols = inputContext?.portfolioPositions?.map((position) => position.symbol) ?? [];
+    const savedRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");
+    if (savedSymbols.length > 0 || savedRiskProfile) {
+      if (!diagnostics.some(({ code }) => code === "saved_portfolio_context_recovered")) {
+        diagnostics.push({
+          code: "saved_portfolio_context_recovered",
+          message: "existing-portfolio review retained saved holdings and risk profile context",
+        });
+      }
+      next = {
+        ...next,
+        entities: {
+          ...next.entities,
+          symbols: mergeSymbols(next.entities.symbols, savedSymbols),
+          riskProfile: next.entities.riskProfile ?? savedRiskProfile,
+        },
+        slots:
+          savedRiskProfile && !next.slots.risk_profile
+            ? {
+                ...next.slots,
+                risk_profile: {
+                  value: savedRiskProfile,
+                  source: "preference",
+                  confidence: "high",
+                },
+              }
+            : next.slots,
+        diagnostics,
+      };
+    }
+  }
+
   if (next.workflow === "compare_assets") {
+    const comparisonContext = [
+      text,
+      ...(inputContext?.priorTurns.map((turn) => turn.text) ?? []),
+    ].join("\n");
     const restorableExtractedSymbols = extracted.symbols.filter(
       (symbol) => disambiguateSymbols([symbol], text).kept.length > 0,
     );
-    const orderedSymbols = orderSymbolsByText(
-      text,
-      mergeSymbols(next.entities.symbols, restorableExtractedSymbols),
+    const contextPresentOutputSymbols = next.entities.symbols.filter(
+      (symbol) => symbolPosition(comparisonContext, symbol) !== Number.MAX_SAFE_INTEGER,
     );
+    const comparisonSymbols =
+      restorableExtractedSymbols.length >= 2
+        ? mergeSymbols(restorableExtractedSymbols, contextPresentOutputSymbols)
+        : mergeSymbols(next.entities.symbols, restorableExtractedSymbols);
+    const orderedSymbols = orderSymbolsByText(text, comparisonSymbols);
     if (!sameStringArray(orderedSymbols, next.entities.symbols)) {
       diagnostics.push({
         code: "compare_symbols_canonicalized",
@@ -379,6 +494,31 @@ export function postProcessRouterOutput(
     };
   }
 
+  if (
+    next.workflow !== "compare_assets" &&
+    next.workflow !== "options_screener" &&
+    extracted.symbols.length >= 2 &&
+    isPlainMultiAssetComparisonRequest(text)
+  ) {
+    diagnostics.push({
+      code: "explicit_comparison_recovered",
+      message: "explicit multi-asset comparison recovered from deterministic symbol extraction",
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "compare_assets",
+      entities: {
+        ...next.entities,
+        symbols: orderSymbolsByText(text, extracted.symbols),
+      },
+      slots: removeSymbolSlots(next.slots),
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   const profileRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");
   if (
     next.workflow === "portfolio_builder" &&
@@ -444,11 +584,10 @@ export function postProcessRouterOutput(
     isExistingPositionOptionRequest(text, extracted) &&
     extracted.heldSymbol
   ) {
+    const trustedSymbols = mergeSymbols([extracted.heldSymbol], extracted.symbols);
     const reorderedSymbols = [
       extracted.heldSymbol,
-      ...mergeSymbols(next.entities.symbols, extracted.symbols).filter(
-        (symbol) => symbol !== extracted.heldSymbol,
-      ),
+      ...trustedSymbols.filter((symbol) => symbol !== extracted.heldSymbol),
     ];
     if (next.entities.symbols[0] !== extracted.heldSymbol) {
       diagnostics.push({
@@ -459,19 +598,35 @@ export function postProcessRouterOutput(
         message: `using owned position ${extracted.heldSymbol} as the option-chain underlying`,
       });
     }
+    const savedPosition = readPortfolioPosition(
+      inputContext?.portfolioPositions,
+      extracted.heldSymbol,
+    );
+    const optionStrategy = extracted.optionStrategy ?? next.entities.optionStrategy;
     next = {
       ...next,
       entities: {
         ...next.entities,
         symbols: reorderedSymbols,
-        optionStrategy: extracted.optionStrategy ?? next.entities.optionStrategy,
+        optionStrategy,
         direction: extracted.direction ?? next.entities.direction,
         heldSymbol: extracted.heldSymbol,
-        catalystSymbols: reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol),
-        costBasis: extracted.costBasis ?? next.entities.costBasis,
-        shareQuantity: extracted.shareQuantity ?? next.entities.shareQuantity,
+        catalystSymbols:
+          reorderedSymbols.length > 1
+            ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
+            : undefined,
+        costBasis: extracted.costBasis ?? savedPosition?.costBasis ?? next.entities.costBasis,
+        shareQuantity:
+          extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
       },
+      slots:
+        optionStrategy && !next.slots.strategy
+          ? {
+              ...next.slots,
+              strategy: { value: optionStrategy, source: "user", confidence: "high" },
+            }
+          : next.slots,
       diagnostics,
     };
   }
@@ -492,13 +647,14 @@ export function postProcessRouterOutput(
       route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
+      slots: removeSymbolSlots(next.slots),
       diagnostics,
     };
   }
 
   if (
     next.workflow === "options_screener" &&
-    next.entities.symbols.length >= 2 &&
+    mergeSymbols(next.entities.symbols, extracted.symbols).length >= 2 &&
     isPlainMultiAssetComparisonRequest(text)
   ) {
     diagnostics.push({
@@ -514,6 +670,7 @@ export function postProcessRouterOutput(
       missing_required: [],
       entities: {
         ...next.entities,
+        symbols: orderSymbolsByText(text, mergeSymbols(extracted.symbols, next.entities.symbols)),
         direction: undefined,
         dteHint: undefined,
         optionStrategy: undefined,
@@ -586,6 +743,26 @@ export function postProcessRouterOutput(
   }
 
   if (
+    next.routeKind === "clarification" &&
+    deterministic.workflow !== "unclassified" &&
+    isDispatchableWorkflow(deterministic.workflow) &&
+    computeMissingRequiredSlots(deterministic.workflow, next.entities, next.slots, []).length === 0
+  ) {
+    diagnostics.push({
+      code: "unnecessary_clarification_corrected",
+      message: `${deterministic.workflow} has all required slots from deterministic extraction`,
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: deterministic.workflow,
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
+  if (
     (next.workflow === "compare_assets" || next.workflow === "portfolio_builder") &&
     isStatefulTrackingRequest(text)
   ) {
@@ -624,7 +801,7 @@ export function postProcessRouterOutput(
 
   if (
     next.workflow === "compare_assets" &&
-    next.entities.symbols.length === 0 &&
+    next.entities.symbols.length < 2 &&
     isExplicitMacroDataRequest(text)
   ) {
     diagnostics.push({
@@ -637,6 +814,7 @@ export function postProcessRouterOutput(
       route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
+      slots: removeSymbolSlots(next.slots),
       diagnostics,
     };
   }
@@ -787,6 +965,25 @@ export function postProcessRouterOutput(
     };
   }
 
+  if (
+    next.routeKind !== "clarification" &&
+    next.entities.symbols.length === 0 &&
+    (inputContext?.priorTurns.length ?? 0) === 0 &&
+    isUnresolvedInstrumentReference(text)
+  ) {
+    diagnostics.push({
+      code: "unresolved_instrument_reference",
+      message: "market request uses an unresolved instrument reference",
+    });
+    next = {
+      ...next,
+      routeKind: "clarification",
+      route: "fallback",
+      missing_required: ["symbol"],
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -876,6 +1073,15 @@ function isForwardLookingMacroContextRequest(text: string): boolean {
 
 function isCoveredCallRequest(text: string): boolean {
   return /\bcovered\s+calls?\b/i.test(text);
+}
+
+function isUnresolvedInstrumentReference(text: string): boolean {
+  return (
+    /\b(?:news|price|quote|earnings|analysis|analy[sz]e|outlook)\b/i.test(text) &&
+    /\b(?:that|this)\s+(?:one\s+)?(?:[a-z-]+\s+){0,2}(?:stock|ticker|company|etf|fund|crypto)\b/i.test(
+      text,
+    )
+  );
 }
 
 function isPortfolioEvaluationRequest(text: string): boolean {
@@ -985,7 +1191,7 @@ function isSpecializedSingleAssetPolicyRequest(text: string): boolean {
 }
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {
-  return isCoveredCallRequest(text) || extracted.optionStrategy === "protective_put";
+  return isCoveredCallRequest(text) || extracted.optionStrategy !== undefined;
 }
 
 function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
@@ -1228,6 +1434,34 @@ function readProfileString(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function readPortfolioPosition(
+  positions: RouterInputContext["portfolioPositions"] | undefined,
+  symbol: string,
+): { quantity: number; costBasis?: number } | undefined {
+  if (!Array.isArray(positions)) return undefined;
+  const matching = positions.filter(
+    (item) => item.symbol.toUpperCase() === symbol && item.quantity > 0,
+  );
+  if (matching.length === 0) return undefined;
+  const quantity = matching.reduce((sum, item) => sum + item.quantity, 0);
+  const basisLots = matching.filter(
+    (item): item is typeof item & { costBasis: number } =>
+      typeof item.costBasis === "number" && Number.isFinite(item.costBasis),
+  );
+  const basisQuantity = basisLots.reduce((sum, item) => sum + item.quantity, 0);
+  const basisCurrencies = new Set(basisLots.map((item) => item.currency));
+  return {
+    quantity,
+    ...(basisQuantity > 0 && basisCurrencies.size === 1
+      ? {
+          costBasis:
+            basisLots.reduce((sum, item) => sum + item.costBasis * item.quantity, 0) /
+            basisQuantity,
+        }
+      : {}),
+  };
+}
+
 function isConversationalRiskPreferenceUpdate(
   text: string,
   inputContext: Pick<RouterInputContext, "priorTurns" | "profileSnapshot"> | undefined,
@@ -1240,6 +1474,12 @@ function isConversationalRiskPreferenceUpdate(
   // on the tennis court lately") into a routed preference write.
   const priorText = inputContext?.priorTurns.map((turn) => turn.text).join(" ") ?? "";
   return /\b(?:profile|risk|portfolio|position|invest|sizing)\b/i.test(`${text} ${priorText}`);
+}
+
+function isStableTimeHorizonPreference(text: string): boolean {
+  return /\b(?:i\s+(?:prefer|usually|typically|always)|my\s+(?:usual\s+)?(?:investment\s+)?horizon|remember\s+(?:that\s+)?my\s+horizon)\b/i.test(
+    text,
+  );
 }
 
 function ensurePreferenceUpdate(
