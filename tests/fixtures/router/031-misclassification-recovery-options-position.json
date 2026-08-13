@@ -1,14 +1,13 @@
 {
   "input": "should I sell calls against my AMD shares for the next 1-2 weeks?",
   "priorTurns": [],
-  "profileSnapshot": {
-    "portfolio_positions": [
+  "profileSnapshot": {},
+  "portfolioPositions": [
       {
         "symbol": "AMD",
         "quantity": 100
       }
-    ]
-  },
+  ],
   "expectedRouterOutput": {
     "routeKind": "workflow_dispatch",
     "route": "workflow",

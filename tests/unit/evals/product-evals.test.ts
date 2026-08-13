@@ -149,6 +149,254 @@ describe("product eval scoring", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("recognizes direct comparative verdicts and sentiment ratings", () => {
+    const compareCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "compare-assets-aapl-msft-6mo",
+    );
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!compareCase || !sentimentCase) throw new Error("missing product eval case");
+
+    const comparison = scoreProductEvalCase(
+      compareCase,
+      makeTrace({
+        text: "For this six-month comparison, MSFT appears more attractive than AAPL.",
+      }),
+    );
+    const sentiment = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({ text: "Sentiment for AI stocks is leaning bullish." }),
+    );
+    const resilientComparison = scoreProductEvalCase(
+      compareCase,
+      makeTrace({
+        text: "BTC is positioned as a slightly more resilient option compared to GLD.",
+      }),
+    );
+    const preferredComparison = scoreProductEvalCase(
+      compareCase,
+      makeTrace({ text: "Bitcoin is preferred over gold for this six-month hedge." }),
+    );
+    const suitableComparison = scoreProductEvalCase(
+      compareCase,
+      makeTrace({ text: "GLD is the more suitable choice over Bitcoin for this macro hedge." }),
+    );
+
+    expect(
+      comparison.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed,
+    ).toBe(true);
+    expect(sentiment.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+    expect(
+      resilientComparison.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed,
+    ).toBe(true);
+    expect(
+      preferredComparison.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed,
+    ).toBe(true);
+    expect(
+      suitableComparison.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed,
+    ).toBe(true);
+  });
+
+  it("recognizes direct macro impact and risk conclusions", () => {
+    const ratesCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "macro-rates-growth-stocks",
+    );
+    const riskCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "macro-inflation-portfolio-risk",
+    );
+    if (!ratesCase || !riskCase) throw new Error("missing macro eval cases");
+
+    const rates = scoreProductEvalCase(
+      ratesCase,
+      makeTrace({
+        text: "Positive impact: falling rates benefit growth stocks, but recession risk can hurt.",
+      }),
+    );
+    const risks = scoreProductEvalCase(
+      riskCase,
+      makeTrace({
+        text: "The most significant macro risks are persistent inflation and recession downside.",
+      }),
+    );
+
+    expect(rates.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+    expect(risks.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("recognizes a complete bull-bear thesis without forcing a trade call", () => {
+    const bullBearCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-tsla-bull-bear",
+    );
+    if (!bullBearCase) throw new Error("missing bull-bear eval case");
+
+    const result = scoreProductEvalCase(
+      bullBearCase,
+      makeTrace({
+        classification: { ...makeTrace().classification, workflow: "single_asset_analysis" },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "TSLA" } }],
+        text:
+          "Bull case: earnings growth and improving margins support the valuation. " +
+          "Bear case: price competition creates downside and volatility risk. " +
+          "What would change the thesis: sustained margin expansion or a demand miss.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("recognizes macro-hedge horizon analysis without options or earnings language", () => {
+    const macroHedgeCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "compare-assets-btc-gld-macro-hedge",
+    );
+    if (!macroHedgeCase) throw new Error("missing macro hedge eval case");
+
+    const result = scoreProductEvalCase(
+      macroHedgeCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          entities: {
+            symbols: ["BTC", "GLD"],
+            timeHorizon: "6mo",
+            compareMetrics: ["macro_hedge"],
+          },
+        },
+        text: "For the next 6 months, GLD is the steadier macro hedge during liquidity stress, while BTC is the higher-volatility debasement hedge.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.find((dimension) => dimension.id === "tool_selection")?.passed).toBe(
+      false,
+    );
+
+    const toolBackedResult = scoreProductEvalCase(
+      macroHedgeCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          entities: {
+            symbols: ["BTC", "GLD"],
+            timeHorizon: "6mo",
+            compareMetrics: ["macro_hedge"],
+          },
+        },
+        toolCalls: [
+          { name: "get_crypto_price", args: { symbol: "BTC" } },
+          { name: "get_stock_quote", args: { symbol: "GLD" } },
+        ],
+        text: "GLD is the more suitable macro hedge for the next 6 months during liquidity stress.",
+      }),
+    );
+    expect(
+      toolBackedResult.dimensions.find((dimension) => dimension.id === "tool_selection")?.passed,
+    ).toBe(true);
+  });
+
+  it("recognizes an options candidate described by its day count inside the target window", () => {
+    const optionsCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "options-aapl-covered-call",
+    );
+    if (!optionsCase) throw new Error("missing options eval case");
+
+    const result = scoreProductEvalCase(
+      optionsCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], dteHint: "30d" },
+        },
+        toolCalls: [{ name: "get_option_chain", args: { symbol: "AAPL" } }],
+        text: "Sell the covered call only if live liquidity is sound. It has a 36-day period, with assignment and downside risk.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("recognizes a prose DTE window and table-style DTE values", () => {
+    const optionsCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "options-aapl-covered-call",
+    );
+    if (!optionsCase) throw new Error("missing options eval case");
+
+    const result = scoreProductEvalCase(
+      optionsCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], dteHint: "30d" },
+        },
+        toolCalls: [{ name: "get_option_chain", args: { symbol: "AAPL" } }],
+        text:
+          "Target DTE window: 25 to 45 days. | Strike | Expiry | DTE | Premium |\n" +
+          "| $305 | 2026-09-18 | 36 | $9.10 | Assignment and downside risk apply.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("requires missing-data disclosure only when a tool reports an observed gap", () => {
+    const comparisonCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "compare-assets-aapl-msft-6mo",
+    );
+    if (!comparisonCase) throw new Error("missing comparison eval case");
+
+    const available = scoreProductEvalCase(
+      comparisonCase,
+      makeTrace({
+        toolCalls: [
+          {
+            name: "get_stock_quote",
+            args: { symbol: "AAPL" },
+            result: { content: [{ type: "text", text: "AAPL tracking error: 0.1%" }] },
+            isError: false,
+          },
+        ],
+        text: "MSFT appears more attractive for this 6-month comparison.",
+      }),
+    );
+    const unavailable = scoreProductEvalCase(
+      comparisonCase,
+      makeTrace({
+        toolCalls: [
+          {
+            name: "get_stock_quote",
+            args: { symbol: "AAPL" },
+            result: { content: [{ type: "text", text: "Stock quote unavailable for AAPL" }] },
+            isError: true,
+          },
+        ],
+        text: "MSFT appears more attractive for this 6-month comparison.",
+      }),
+    );
+
+    expect(
+      available.dimensions.find((dimension) => dimension.id === "missing_data_honesty")?.passed,
+    ).toBe(true);
+    expect(
+      unavailable.dimensions.find((dimension) => dimension.id === "missing_data_honesty")?.passed,
+    ).toBe(false);
+  });
+
   it("does not count a commitment heading alone as a direct answer", () => {
     const portfolioCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "portfolio-balanced-50k",
@@ -188,6 +436,34 @@ describe("product eval scoring", () => {
           "| VOO | 20% | $10,000 | Core equity |\n" +
           "| BND | 40% | $20,000 | Core fixed income |\n" +
           "Why this fits the horizon: this is appropriate for a 3-year horizon with stability and downside protection.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("accepts ticker-weight portfolio tables and a stated multi-year income horizon", () => {
+    const portfolioCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "portfolio-income-conservative",
+    );
+    if (!portfolioCase) throw new Error("missing income portfolio eval case");
+
+    const result = scoreProductEvalCase(
+      portfolioCase,
+      makeTrace({
+        classification: { ...makeTrace().classification, workflow: "portfolio_builder" },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "BND" } }],
+        text:
+          "This allocation is designed for a five-year conservative income objective with capital preservation and yield stability.\n\n" +
+          "| Ticker | Weight | Amount | Role |\n" +
+          "| BND | 60% | $60,000 | Core income |\n" +
+          "| VIG | 40% | $40,000 | Dividend growth |\n" +
+          "Risks include duration losses and equity drawdowns.",
       }),
     );
 
@@ -290,6 +566,37 @@ describe("product eval scoring", () => {
       true,
     );
     expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("recognizes source-gap impact and macro offset language as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    const macroCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "macro-rates-growth-stocks",
+    );
+    if (!sentimentCase || !macroCase) throw new Error("missing eval case");
+
+    const sentiment = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment is bullish, but Twitter is unavailable. This missing-source gap could impact the overall signal.",
+      }),
+    );
+    const macro = scoreProductEvalCase(
+      macroCase,
+      makeTrace({
+        text: "Falling rates can support growth valuations. Common traps include ignoring a recession, which can offset the valuation benefit as earnings decline.",
+      }),
+    );
+
+    expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(macro.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
       true,
     );
   });

@@ -503,6 +503,142 @@ describe("route()", () => {
     expect(result.entities.compareMetrics).toEqual(["macro_hedge"]);
   });
 
+  it("keeps a one-off analysis horizon out of persistent preference updates", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Give me entry levels on ASTS for a 6 month horizon" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["ASTS"], timeHorizon: "6mo" },
+          slots: {
+            symbol: { value: "ASTS", source: "user", confidence: "high" },
+            time_horizon: { value: "6mo", source: "user", confidence: "high" },
+          },
+          preference_updates: [
+            {
+              key: "time_horizon",
+              value: "6mo",
+              confidence: "high",
+              source: "inferred",
+            },
+          ],
+          missing_required: [],
+          reasoning: "entry analysis",
+        }),
+      ),
+    );
+
+    expect(result.entities.timeHorizon).toBe("6mo");
+    expect(result.preference_updates).toEqual([]);
+  });
+
+  it("keeps an explicit portfolio horizon authoritative over a widened LLM horizon", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I'm aggressive, give me a 3-year portfolio for $25k" },
+      fixedClient(
+        JSON.stringify({
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: {
+            symbols: [],
+            budget: 25_000,
+            timeHorizon: "3y_plus",
+            riskProfile: "aggressive",
+          },
+          slots: {
+            budget: { value: 25_000, source: "user", confidence: "high" },
+            time_horizon: { value: "3y_plus", source: "user", confidence: "high" },
+            risk_profile: { value: "aggressive", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "portfolio request",
+        }),
+      ),
+    );
+
+    expect(result.entities.timeHorizon).toBe("3y");
+    expect(result.slots.time_horizon?.value).toBe("3y");
+  });
+
+  it("drops an unsupported risk profile inferred from diversification language", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "invest $50k diversified" },
+      fixedClient(
+        JSON.stringify({
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 50_000, riskProfile: "balanced" },
+          slots: {
+            budget: { value: 50_000, source: "user", confidence: "high" },
+            risk_profile: { value: "balanced", source: "user", confidence: "medium" },
+          },
+          preference_updates: [
+            {
+              key: "risk_profile",
+              value: "balanced",
+              confidence: "medium",
+              source: "inferred",
+            },
+          ],
+          missing_required: [],
+          reasoning: "diversified portfolio",
+        }),
+      ),
+    );
+
+    expect(result.entities.riskProfile).toBeUndefined();
+    expect(result.slots.risk_profile).toBeUndefined();
+    expect(result.preference_updates).toEqual([]);
+  });
+
+  it("drops a non-canonical asset-scope preference inferred from diversification language", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "invest $50k diversified" },
+      fixedClient(
+        JSON.stringify({
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 50_000 },
+          slots: { budget: { value: 50_000, source: "user", confidence: "high" } },
+          preference_updates: [
+            {
+              key: "asset_scope",
+              value: "diversified",
+              confidence: "high",
+              source: "inferred",
+            },
+          ],
+          missing_required: [],
+          reasoning: "diversified portfolio",
+        }),
+      ),
+    );
+
+    expect(result.preference_updates).toEqual([]);
+  });
+
+  it("recovers a complete portfolio build from an unnecessary LLM clarification", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "invest $50k diversified" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "clarification",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 50_000 },
+          slots: { budget: { value: 50_000, source: "user", confidence: "high" } },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "ask about risk preference",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.missing_required).toEqual([]);
+  });
+
   it("keeps valid LLM agent-task fallback but drops ambiguous concept symbols", async () => {
     const result = await route(
       {
@@ -525,6 +661,26 @@ describe("route()", () => {
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBeUndefined();
     expect(result.entities.symbols).toEqual([]);
+  });
+
+  it("asks for a ticker when a market-news request has only an unresolved reference", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "what's the latest news on that one semiconductor stock" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "semiconductor news request",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("clarification");
+    expect(result.missing_required).toEqual(["symbol"]);
   });
 
   it("keeps ambiguous symbols when the user explicitly asks for the ticker", async () => {
@@ -642,6 +798,48 @@ describe("route()", () => {
     expect(result.tool_bundles).toContain("macro");
   });
 
+  it("drops comparison tickers invented by the model and absent from context", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "compare KO, IV, PEP" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["KO", "IVV", "PEP"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "interpreted IV as IVV",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["KO", "PEP"]);
+  });
+
+  it("corrects macro metric comparisons when the model already omits the metric symbol", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Show CPI vs SPY YTD" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["SPY"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: ["symbols"],
+          reasoning: "CPI is a metric but comparison needs another ticker",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.entities.symbols).toEqual(["SPY"]);
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+  });
+
   it("keeps finance acronym tickers with a direct ticker phrase", async () => {
     const result = await route(
       {
@@ -665,6 +863,59 @@ describe("route()", () => {
     );
 
     expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+  });
+
+  it("recovers an explicit multi-asset comparison from an LLM clarification", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "compare KO, the IV ticker, and PEP" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "clarification",
+          entities: { symbols: ["KO", "PEP"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: ["symbols"],
+          reasoning: "IV may mean volatility",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+    expect(result.missing_required).toEqual([]);
+  });
+
+  it("does not carry an incidental prior holding range as an agent-task budget", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "same question for QQQ",
+        priorTurns: [
+          {
+            role: "user",
+            text: "I'm holding $500k-$1M in SPY — how's it positioned relative to the broad market?",
+          },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: {
+            symbols: ["QQQ", "SPY"],
+            budget: 750_000,
+            heldSymbol: "SPY",
+          },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "same analysis with prior holding context",
+        }),
+      ),
+    );
+
+    expect(result.entities.budget).toBeUndefined();
+    expect(result.entities.heldSymbol).toBeUndefined();
   });
 
   it("restores locally marked acronym tickers omitted by the model in text order", async () => {
@@ -1732,9 +1983,14 @@ describe("route()", () => {
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.workflow).toBe("portfolio_builder");
     expect(result.entities.budget).toBe(25_000);
+    expect(result.slots.budget).toEqual({
+      value: 25_000,
+      source: "user",
+      confidence: "high",
+    });
     expect(result.entities.riskProfile).toBe("conservative");
     expect(result.entities.assetScope).toBe("etf_focused");
-    expect(result.entities.timeHorizon).toBe("5_years");
+    expect(result.entities.timeHorizon).toBe("5y");
   });
 
   it("does not clarify when prior context supplies the required symbol", async () => {
@@ -1786,6 +2042,34 @@ describe("route()", () => {
     expect(result.entities.direction).toBe("bearish");
     expect(result.entities.maxPremium).toBe(500);
     expect(result.entities.budget).toBeUndefined();
+  });
+
+  it("recovers follow-up symbols only from the nearest prior user turn", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about QQQ?",
+        priorTurns: [
+          { role: "user", text: "Compare NVDA and AMD" },
+          { role: "assistant", text: "NVDA and AMD have different risk profiles." },
+          { role: "user", text: "Tell me about SPY" },
+          { role: "assistant", text: "SPY tracks large-cap US equities and mentioned IWM." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          entities: { symbols: ["QQQ"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "follow-up",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["QQQ", "SPY"]);
   });
 
   it("uses the owned underlying instead of a catalyst ticker for covered-call workflows", async () => {
@@ -2054,6 +2338,211 @@ describe("Router LLM client isolation", () => {
     // pull in tool-adapter or the pi extension module.
     const mod = await import("../../../src/routing/router.js");
     expect(typeof mod.route).toBe("function");
+  });
+});
+
+describe("live-router deterministic context recovery", () => {
+  it("carries prior symbols for an explicit same-question follow-up", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "same question for QQQ",
+        priorTurns: [
+          { role: "user", text: "I'm holding $500k-$1M in SPY — how is it positioned?" },
+          { role: "assistant", text: "SPY tracks the S&P 500." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["QQQ"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "follow-up",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["QQQ", "SPY"]);
+    expect(result.entities.budget).toBeUndefined();
+  });
+
+  it("recovers saved portfolio symbols and risk profile for an exposure review", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "does my current portfolio look too exposed if rates stay high?",
+        profileSnapshot: {
+          risk_profile: "moderate",
+        },
+        portfolioPositions: [
+          { symbol: "SPY", quantity: 100 },
+          { symbol: "TLT", quantity: 100 },
+          { symbol: "AMD", quantity: 100 },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: [], compareMetrics: ["interest_rates"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "portfolio exposure review",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["SPY", "TLT", "AMD"]);
+    expect(result.entities.riskProfile).toBe("moderate");
+    expect(result.slots.risk_profile).toMatchObject({
+      value: "moderate",
+      source: "preference",
+    });
+  });
+
+  it("recovers covered-call strategy and owned share quantity from profile context", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "should I sell calls against my AMD shares for the next 1-2 weeks?",
+        portfolioPositions: [
+          { symbol: "AMD", quantity: 40, costBasis: 40 },
+          { symbol: "AMD", quantity: 60, costBasis: 60 },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AMD"], heldSymbol: "AMD", direction: "bullish" },
+          slots: {
+            symbol: { value: "AMD", source: "user", confidence: "high" },
+            time_horizon: { value: "1-2 weeks", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "sell calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.optionStrategy).toBe("covered_call");
+    expect(result.entities.shareQuantity).toBe(100);
+    expect(result.entities.costBasis).toBe(52);
+    expect(result.slots.strategy).toMatchObject({ value: "covered_call", source: "user" });
+  });
+
+  it("does not average saved cost bases across currencies", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "should I sell calls against my AMD shares for the next 1-2 weeks?",
+        portfolioPositions: [
+          { symbol: "AMD", quantity: 50, costBasis: 40, currency: "USD" },
+          { symbol: "AMD", quantity: 50, costBasis: 60, currency: "CAD" },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AMD"], heldSymbol: "AMD" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "sell calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.shareQuantity).toBe(100);
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("prefers canonical saved position values over model-only financial numbers", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "should I sell calls against my AMD shares for the next 1-2 weeks?",
+        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: {
+            symbols: ["AMD"],
+            heldSymbol: "AMD",
+            shareQuantity: 900,
+            costBasis: 999,
+          },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "sell calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.shareQuantity).toBe(100);
+    expect(result.entities.costBasis).toBe(52);
+  });
+
+  it("drops model-only catalyst symbols from an existing-position request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "should I sell calls against my AMD shares for the next 1-2 weeks?",
+        portfolioPositions: [{ symbol: "AMD", quantity: 100, currency: "USD" }],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AMD", "NVDA"], heldSymbol: "AMD" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "sell calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["AMD"]);
+    expect(result.entities.catalystSymbols).toBeUndefined();
+  });
+
+  it("clears an unsupported model catalyst from a single-symbol position request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What protective put should I buy for my AMD shares next month?",
+        portfolioPositions: [{ symbol: "AMD", quantity: 200 }],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: {
+            symbols: ["AMD"],
+            heldSymbol: "AMD",
+            catalystSymbols: ["NVDA"],
+            optionStrategy: "protective_put",
+            direction: "bearish",
+          },
+          slots: { symbol: { value: "AMD", source: "user", confidence: "high" } },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "protective put",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["AMD"]);
+    expect(result.entities.catalystSymbols).toBeUndefined();
   });
 });
 

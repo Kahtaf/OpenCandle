@@ -19,6 +19,7 @@ export interface TraceToolCall {
   name: string;
   args: Record<string, unknown>;
   result?: unknown;
+  isError?: boolean;
   promptIndex?: number;
 }
 

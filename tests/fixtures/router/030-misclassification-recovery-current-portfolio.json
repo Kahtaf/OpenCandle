@@ -2,13 +2,22 @@
   "input": "does my current portfolio look too exposed if rates stay high?",
   "priorTurns": [],
   "profileSnapshot": {
-    "risk_profile": "moderate",
-    "saved_portfolio_symbols": [
-      "SPY",
-      "TLT",
-      "AMD"
-    ]
+    "risk_profile": "moderate"
   },
+  "portfolioPositions": [
+    {
+      "symbol": "SPY",
+      "quantity": 100
+    },
+    {
+      "symbol": "TLT",
+      "quantity": 100
+    },
+    {
+      "symbol": "AMD",
+      "quantity": 100
+    }
+  ],
   "expectedRouterOutput": {
     "routeKind": "agent_task",
     "route": "fallback",
@@ -40,7 +49,12 @@
       "sec",
       "clarification"
     ],
-    "diagnostics": [],
+    "diagnostics": [
+      {
+        "code": "saved_portfolio_context_recovered",
+        "message": "existing-portfolio review retained saved holdings and risk profile context"
+      }
+    ],
     "reasoning": "asks for a review of an existing current portfolio under a rates scenario, not construction of a new portfolio"
   },
   "tags": [

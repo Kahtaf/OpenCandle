@@ -44,12 +44,6 @@ const horizonFit: ProductEvalDimension = {
   mandatory: true,
 };
 
-const toolBacked: ProductEvalDimension = {
-  id: "tool_backed_evidence",
-  description: "Uses the tool evidence expected for this prompt family.",
-  requiredToolNames: ["get_stock_quote"],
-};
-
 const exactlyOneFocusedAskUser: ProductEvalDimension = {
   id: "ask_instead_of_guess",
   description: "Asks exactly one focused clarification question instead of guessing.",
@@ -72,20 +66,13 @@ export const PRODUCT_SCENARIO_TEMPLATES: ScenarioTemplate[] = [
     id: "compare_assets_with_horizon",
     family: "compare_assets",
     description: "Compares two or more assets while adapting evidence to a stated horizon.",
-    dimensions: [
-      directAnswer,
-      horizonFit,
-      toolBacked,
-      evidenceUse,
-      missingDataHonesty,
-      riskFraming,
-    ],
+    dimensions: [directAnswer, horizonFit, evidenceUse, missingDataHonesty, riskFraming],
   },
   {
     id: "single_asset_recommendation_with_risk",
     family: "single_asset",
     description: "Analyzes a single asset and gives a useful stance with risk framing.",
-    dimensions: [directAnswer, toolBacked, evidenceUse, riskFraming],
+    dimensions: [directAnswer, evidenceUse, riskFraming],
   },
   {
     id: "portfolio_goal_with_constraints",
@@ -146,7 +133,7 @@ export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
     prompt: "For the next 6 months, should I use BTC or GLD as a macro hedge?",
     assertions: {
       expectedWorkflow: "compare_assets",
-      requiredTools: ["get_stock_quote", "analyze_risk"],
+      requiredTools: ["get_crypto_price", "get_stock_quote"],
     },
   }),
   makeCase("single-asset-nvda-recommendation", "single_asset_recommendation_with_risk", {

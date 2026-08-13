@@ -46,6 +46,7 @@
 
 ### Fixed
 
+- Release evaluation now uses OpenCandle's configured Pi model runtime and stored authentication instead of silently falling back when a direct provider key is absent. Its routing checks recover saved portfolio context, covered-call position metadata, prior-turn symbols, and equivalent Alphabet share classes, while product and frozen-panel scorers recognize semantically direct verdicts, canonical DTE evidence, and structural portfolio openings without requiring benchmark-specific wording.
 - Options screening now preserves capped week horizons such as “max 2 weeks” as a zero-to-14-day DTE window, repairs model ranges that omit their day unit, respects negated short horizons, and corrects conflicting monthly router defaults instead of silently screening 25-to-45-day contracts.
 - Public documentation now exposes only rendered HTML pages to search engines: Markdown source mirrors and their alternate tags are no longer published, the sitemap lists canonical HTML URLs only, docs pages link to related pages in the same section, and short or duplicated descriptions now have distinct search-result summaries.
 - The web app no longer claims scheduled automation it does not have. The hosted Settings automation note says alert checks and reports run on demand, and the report schedule form offers no time or save controls in the web app, where a saved schedule would persist a value nothing consumes; the local app keeps its schedule form and copy unchanged.

@@ -348,6 +348,9 @@ Protective-put hedge guidance:
   const topPickExplanation = isCoveredCallContext
     ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.`
     : "Explain why the top pick is ranked #1.";
+  const catalystResponseInstruction = s.catalystSymbols?.length
+    ? `\n- Explicitly name ${s.catalystSymbols.join(", ")} in the final answer and explain how its event can affect ${s.symbol} through sympathy moves, implied volatility, and event risk.`
+    : "";
 
   return `${currentDateLine(dateStr)}
 Do NOT invent or assume a different current date.${expirationSection}
@@ -385,9 +388,10 @@ ${disclosureBlock}
 Response format:
 ${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
+- State the requested DTE target (${s.dteTarget}) and each candidate's numeric days to expiration alongside its expiry date, so the answer visibly confirms that the selected contracts fit the user's window.
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
 - ${topPickExplanation}
-- Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
+- Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.${catalystResponseInstruction}
 - Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : isProtectivePutContext ? "protective-put risks (premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost). Do not discuss short-option assignment risk" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
 }
 

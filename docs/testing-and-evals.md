@@ -234,7 +234,7 @@ The live fixture eval is opt-in:
 npm run eval -- router-live
 ```
 
-It uses `OPENCANDLE_ROUTER_PROVIDER` and `OPENCANDLE_ROUTER_MODEL` when set. Defaults are `anthropic` and `claude-haiku-4-5`, so it requires matching live model credentials unless you override those env vars.
+By default it uses OpenCandle's configured Pi model runtime and stored authentication, preferring the configured Google model used by the competitive eval selector. To override that choice, set `OPENCANDLE_ROUTER_PROVIDER` and `OPENCANDLE_ROUTER_MODEL` together so the provider/model pair and its credentials agree.
 
 Treat task-selection mismatches as regressions even when the aggregate pass rate looks acceptable.
 

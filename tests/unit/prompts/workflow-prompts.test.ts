@@ -222,6 +222,15 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("25_to_45_days");
   });
 
+  it("requires the final answer to restate the requested DTE window", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution({ dteTarget: "7_to_14_days" }, { dteTarget: "user" }),
+    );
+
+    expect(prompt).toContain("State the requested DTE target (7_to_14_days)");
+    expect(prompt).toContain("days to expiration");
+  });
+
   it("marks defaults with [DEFAULT]", () => {
     const prompt = buildOptionsScreenerPrompt(makeOptionsResolution());
     expect(prompt).toContain("[DEFAULT]");
@@ -379,6 +388,9 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Catalyst/context tickers: NVDA");
     expect(prompt).toContain("Use get_option_chain for AMD");
     expect(prompt).toContain("buying puts to hedge an existing long AMD share position");
+    expect(prompt).toContain(
+      "Explicitly name NVDA in the final answer and explain how its event can affect AMD",
+    );
     expect(prompt).toContain(
       "Interpretation: Treating this as buying protective puts on an existing long AMD share position.",
     );

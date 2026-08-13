@@ -387,6 +387,7 @@ export class SessionCoordinator {
    */
   buildRouterContextBase(sessionManager: ReadonlySessionManager): {
     profileSnapshot: Record<string, unknown>;
+    portfolioPositions: Array<{ symbol: string; quantity: number; costBasis?: number }>;
     recentWorkflowRuns: Array<{
       workflowType: string;
       turnType: string;
@@ -397,7 +398,7 @@ export class SessionCoordinator {
   } {
     const priorTurns = this.buildPriorTurns(sessionManager);
     if (!this.storage) {
-      return { profileSnapshot: {}, recentWorkflowRuns: [], priorTurns };
+      return { profileSnapshot: {}, portfolioPositions: [], recentWorkflowRuns: [], priorTurns };
     }
     const prefs = this.storage.getPreferencesByNamespace("global");
     const profileSnapshot: Record<string, unknown> = {};
@@ -418,7 +419,15 @@ export class SessionCoordinator {
       resolvedSlots: parseMaybeJson(r.resolved_slots_json),
       createdAt: String(r.created_at ?? ""),
     }));
-    return { profileSnapshot, recentWorkflowRuns: runs, priorTurns };
+    const portfolioPositions = this.db
+      ? new MarketStateService(this.db).listPortfolioLots().map((lot) => ({
+          symbol: lot.symbol,
+          quantity: lot.quantity,
+          costBasis: lot.avgCost,
+          currency: lot.currency,
+        }))
+      : [];
+    return { profileSnapshot, portfolioPositions, recentWorkflowRuns: runs, priorTurns };
   }
 
   retrieveMemoryForRoute(

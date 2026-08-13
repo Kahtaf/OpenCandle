@@ -190,6 +190,7 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
         name: tool.name,
         args: tool.args,
         result: tool.result,
+        isError: tool.isError,
         ...(tool.promptIndex === undefined ? {} : { promptIndex: tool.promptIndex }),
       }),
     ),
@@ -396,7 +397,7 @@ function planningTelemetryFromTrace(
           name: toolCall.name,
           args: toolCall.args,
           result: toolCall.result,
-          isError: false,
+          isError: toolCall.isError ?? false,
         },
         {
           traceId: "eval-trace",
