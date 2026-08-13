@@ -201,6 +201,17 @@ describe("resolveOptionsScreenerSlots", () => {
     }
   });
 
+  it("preserves a canonical DTE target supplied by the router", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["AAPL"],
+      direction: "bullish",
+      dteHint: "25_to_45_days",
+    });
+
+    expect(result.resolved.dteTarget).toBe("25_to_45_days");
+    expect(result.sources.dteTarget).toBe("user");
+  });
+
   it("preserves an explicit maximum DTE window", () => {
     const result = resolveOptionsScreenerSlots({
       symbols: ["AAPL"],

@@ -223,6 +223,16 @@ export function postProcessRouterOutput(
   const droppedAmbiguousSymbols = output.entities.symbols.filter(
     (symbol) => !symbolsAfterAmbiguousFilter.includes(symbol),
   );
+  const userDteTarget =
+    output.workflow === "options_screener" &&
+    output.slots.dte_target?.source === "user" &&
+    typeof output.slots.dte_target.value === "string"
+      ? output.slots.dte_target.value
+      : undefined;
+  const extractedDteShouldWin =
+    extracted.dteHint !== undefined &&
+    (extracted.dteHint.startsWith("0-") ||
+      (userDteTarget === undefined && mapDteHintToTarget(output.entities.dteHint) === undefined));
   let next: RouterOutput = {
     ...output,
     entities: {
@@ -244,7 +254,7 @@ export function postProcessRouterOutput(
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
       dteHint:
         output.workflow === "options_screener"
-          ? extracted.dteHint?.startsWith("0-")
+          ? extractedDteShouldWin
             ? extracted.dteHint
             : (output.entities.dteHint ?? extracted.dteHint)
           : output.entities.dteHint,
@@ -305,12 +315,26 @@ export function postProcessRouterOutput(
   // the slot on an options dispatch, the deterministic extraction preserves
   // the user's stated range (mirrors the profile risk-slot fill below).
   const dteHint = next.entities.dteHint ?? extracted.dteHint;
-  if (next.workflow === "options_screener" && !next.slots.dte_target && dteHint) {
+  const extractedMaximumDteTarget = extracted.dteHint?.startsWith("0-")
+    ? mapDteHintToTarget(extracted.dteHint)
+    : undefined;
+  const shouldCorrectMaximumDte =
+    extractedMaximumDteTarget !== undefined &&
+    next.slots.dte_target?.value !== extractedMaximumDteTarget;
+  if (
+    next.workflow === "options_screener" &&
+    (!next.slots.dte_target || shouldCorrectMaximumDte) &&
+    dteHint
+  ) {
     const dteTarget = mapDteHintToTarget(dteHint);
     if (dteTarget) {
       diagnostics.push({
-        code: "dte_slot_filled_from_extraction",
-        message: "dte_target slot filled from deterministic horizon extraction",
+        code: shouldCorrectMaximumDte
+          ? "dte_slot_corrected_from_extraction"
+          : "dte_slot_filled_from_extraction",
+        message: shouldCorrectMaximumDte
+          ? "dte_target slot corrected from explicit maximum horizon extraction"
+          : "dte_target slot filled from deterministic horizon extraction",
       });
       next = {
         ...next,

@@ -1,6 +1,6 @@
 ---
 title: OpenCandle Docs
-description: Documentation for the open source financial investigator.
+description: Explore OpenCandle documentation for installation, browser and terminal workflows, data sources, configuration, and extensions.
 ---
 
 # OpenCandle Docs

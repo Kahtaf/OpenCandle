@@ -1,6 +1,6 @@
 ---
 title: Web App Quickstart
-description: Use OpenCandle at web.opencandle.app with nothing to install.
+description: Use OpenCandle at web.opencandle.app with local storage, your own AI provider, and no installation required.
 ---
 
 # Web App Quickstart

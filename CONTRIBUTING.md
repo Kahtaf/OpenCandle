@@ -1,3 +1,7 @@
+---
+description: Learn how to contribute tested, reviewable changes to OpenCandle, from local setup and issue discussion through pull request review.
+---
+
 # Contributing to OpenCandle
 
 OpenCandle is an open source financial investigator built with [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), and [Pi](https://github.com/earendil-works/pi). Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.

@@ -1,6 +1,6 @@
 ---
 title: GUI Quickstart
-description: Run the local OpenCandle browser GUI and take your first steps.
+description: Run the local OpenCandle GUI, connect your preferred model, research symbols, and manage saved market work in one browser workspace.
 ---
 
 # OpenCandle GUI Quickstart

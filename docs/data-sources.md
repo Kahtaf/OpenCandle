@@ -1,6 +1,6 @@
 ---
 title: Data Sources
-description: Provider coverage, credentials, and data boundaries in OpenCandle.
+description: Review OpenCandle market, filings, options, macro, news, and sentiment data sources, including credentials, limits, and fallback behavior.
 ---
 
 # Data Sources
