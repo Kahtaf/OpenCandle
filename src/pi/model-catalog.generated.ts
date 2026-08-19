@@ -14,16 +14,6 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "google",
-    id: "gemini-2.0-flash",
-    label: "google/gemini-2.0-flash",
-  },
-  {
-    provider: "google",
-    id: "gemini-2.0-flash-lite",
-    label: "google/gemini-2.0-flash-lite",
-  },
-  {
-    provider: "google",
     id: "gemini-2.5-computer-use-preview-10-2025",
     label: "google/gemini-2.5-computer-use-preview-10-2025",
   },
@@ -46,11 +36,6 @@ export const firstClassModelCatalog = [
     provider: "google",
     id: "gemini-3-flash-preview",
     label: "google/gemini-3-flash-preview",
-  },
-  {
-    provider: "google",
-    id: "gemini-3-pro-preview",
-    label: "google/gemini-3-pro-preview",
   },
   {
     provider: "google",
@@ -96,6 +81,11 @@ export const firstClassModelCatalog = [
     provider: "google",
     id: "gemini-3.6-flash",
     label: "google/gemini-3.6-flash",
+  },
+  {
+    provider: "google",
+    id: "gemini-3.7-flash",
+    label: "google/gemini-3.7-flash",
   },
   {
     provider: "google",
@@ -326,16 +316,6 @@ export const firstClassModelCatalog = [
     provider: "anthropic",
     id: "claude-haiku-4-5-20251001",
     label: "anthropic/claude-haiku-4-5-20251001",
-  },
-  {
-    provider: "anthropic",
-    id: "claude-opus-4-1",
-    label: "anthropic/claude-opus-4-1",
-  },
-  {
-    provider: "anthropic",
-    id: "claude-opus-4-1-20250805",
-    label: "anthropic/claude-opus-4-1-20250805",
   },
   {
     provider: "anthropic",

@@ -64,6 +64,11 @@ try {
     failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`);
   });
   page.on("response", (response) => {
+    if (response.url().includes(".wasm")) {
+      failedRequests.push(
+        `WASM ${response.url()} HTTP ${response.status()} ${response.headers()["content-type"] || "unknown"}`,
+      );
+    }
     if (response.status() >= 400) {
       failedRequests.push(`${response.request().method()} ${response.url()} HTTP ${response.status()}`);
       void response

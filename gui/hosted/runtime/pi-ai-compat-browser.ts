@@ -11,7 +11,10 @@ import {
   modelsAreEqual,
 } from "../../../node_modules/@earendil-works/pi-ai/dist/models.js";
 import { cleanupSessionResources } from "../../../node_modules/@earendil-works/pi-ai/dist/session-resources.js";
-import { isContextOverflow } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/overflow.js";
+import {
+  isContextOverflow,
+  isRecoverableLength,
+} from "../../../node_modules/@earendil-works/pi-ai/dist/utils/overflow.js";
 import { isRetryableAssistantError } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/retry.js";
 import { createFirstClassModelProviders } from "../../../src/pi/model-provider-catalog.js";
 
@@ -24,6 +27,7 @@ export {
   cleanupSessionResources,
   getSupportedThinkingLevels,
   isContextOverflow,
+  isRecoverableLength,
   isRetryableAssistantError,
   modelsAreEqual,
 };

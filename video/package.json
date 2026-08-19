@@ -5,20 +5,20 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
-    "@remotion/cli": "4.0.499",
-    "@remotion/media": "4.0.499",
-    "lucide-react": "^1.27.0",
-    "openai": "^6.49.0",
+    "@remotion/cli": "4.0.513",
+    "@remotion/media": "4.0.513",
+    "lucide-react": "^1.33.0",
+    "openai": "^7.5.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "remotion": "4.0.499"
+    "remotion": "4.0.513"
   },
   "devDependencies": {
-    "@remotion/eslint-config-flat": "4.0.499",
-    "@types/node": "^26.1.1",
-    "@types/react": "19.2.17",
+    "@remotion/eslint-config-flat": "4.0.513",
+    "@types/node": "^26.2.0",
+    "@types/react": "19.2.18",
     "@types/web": "0.0.354",
-    "eslint": "10.8.0",
+    "eslint": "10.8.1",
     "prettier": "3.9.6",
     "typescript": "5.9.3"
   },
