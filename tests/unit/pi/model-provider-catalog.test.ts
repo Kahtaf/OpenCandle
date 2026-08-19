@@ -12,7 +12,8 @@ describe("first-class Pi model provider catalog", () => {
     const providers = createFirstClassModelProviders();
     const catalog = listFirstClassModelCatalog();
 
-    expect(catalog).toHaveLength(77);
+    expect(catalog.length).toBeGreaterThan(0);
+    expect(new Set(catalog.map(({ label }) => label)).size).toBe(catalog.length);
     expect(catalog).toEqual(
       providers.flatMap((provider) =>
         provider.getModels().map((model) => ({

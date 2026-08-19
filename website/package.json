@@ -8,9 +8,9 @@
   },
   "dependencies": {
     "@opencandle/ui": "file:../packages/ui",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "gray-matter": "^4.0.3",
-    "lucide-react": "^1.31.0",
+    "lucide-react": "^1.33.0",
     "mdast-util-to-string": "^4.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -27,7 +27,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
     "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7"
   }

@@ -317,7 +317,7 @@ async function validateStateDatabaseBytes(bytes) {
   try {
     const module = await import("sql.js");
     const SQL = await module.default({
-      locateFile: (filename) => `/runtime/${filename}`,
+      locateFile: () => "/runtime/sql-wasm.wasm",
     });
     database = new SQL.Database(bytes);
     const integrity = database.exec("PRAGMA integrity_check");

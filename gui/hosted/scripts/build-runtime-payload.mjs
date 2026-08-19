@@ -1,4 +1,5 @@
 import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -6,6 +7,7 @@ import { auditRuntimeComposition } from "./runtime-composition.mjs";
 
 const hostedRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputDirectory = resolve(hostedRoot, "public/runtime");
+const require = createRequire(import.meta.url);
 
 const result = await build({
   entryPoints: [resolve(hostedRoot, "runtime/server.ts")],
@@ -102,11 +104,11 @@ await writeFile(
   "utf8",
 );
 await copyFile(
-  resolve(hostedRoot, "../../node_modules/sql.js/dist/sql-wasm.js"),
+  require.resolve("sql.js/dist/sql-wasm.js"),
   resolve(outputDirectory, "sql-wasm.cjs"),
 );
 await copyFile(
-  resolve(hostedRoot, "../../node_modules/sql.js/dist/sql-wasm.wasm"),
+  require.resolve("sql.js/dist/sql-wasm.wasm"),
   resolve(outputDirectory, "sql-wasm.wasm"),
 );
 

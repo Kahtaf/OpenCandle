@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated supported runtime, agent, GUI, provider-relay, documentation, and video dependencies to their latest compatible releases, including Pi 0.84.2; regenerated the first-class model catalog, removed vulnerable transitive dependency versions from both lockfiles, and kept hosted SQLite imports on the canonical WASM asset path after the Vite upgrade.
+
 ## [0.14.0] - 2026-08-13
 
 ### Added

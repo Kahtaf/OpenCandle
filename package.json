@@ -139,12 +139,13 @@
     "node": "^22.22.2 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.83.0",
-    "@earendil-works/pi-ai": "^0.83.0",
-    "@earendil-works/pi-coding-agent": "0.83.0",
-    "better-sqlite3": "^13.0.1",
-    "ddg-kit": "0.1.0",
-    "yahoo-finance2": "^4.0.0"
+    "@earendil-works/pi-agent-core": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "better-sqlite3": "^13.0.3",
+    "ddg-kit": "0.1.1",
+    "sql.js": "^1.14.2",
+    "yahoo-finance2": "^4.0.2"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
@@ -154,21 +155,23 @@
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.66.0",
-    "@agentclientprotocol/codex-acp": "^1.1.7",
-    "@biomejs/biome": "^2.5.5",
+    "@agentclientprotocol/claude-agent-acp": "^0.70.0",
+    "@agentclientprotocol/codex-acp": "^1.6.0",
+    "@biomejs/biome": "^2.5.9",
     "@sinclair/typebox": "^0.34.52",
+    "@tanstack/react-router": "^1.170.31",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.1.1",
-    "@types/semver": "^7.7.1",
-    "@types/sql.js": "^1.4.10",
-    "acpx": "^0.13.0",
+    "@types/node": "^26.2.0",
+    "@types/semver": "^7.8.0",
+    "@types/sql.js": "^1.4.11",
+    "acpx": "^0.13.1",
     "jsdom": "^30.0.1",
-    "playwright-core": "^1.62.0",
+    "lightweight-charts": "^5.2.1",
+    "playwright-core": "^1.62.1",
     "semver": "^7.8.5",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.1",
+    "vitest": "^4.1.11"
   }
 }
