@@ -154,11 +154,11 @@
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.64.2",
+    "@agentclientprotocol/claude-agent-acp": "^0.66.0",
     "@agentclientprotocol/codex-acp": "^1.1.7",
     "@biomejs/biome": "^2.5.5",
     "@sinclair/typebox": "^0.34.52",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.1.1",
     "@types/semver": "^7.7.1",
     "@types/sql.js": "^1.4.10",
