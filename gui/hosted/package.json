@@ -19,7 +19,7 @@
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "esbuild": "0.28.1",
-    "vite": "8.2.0"
+    "esbuild": "0.28.2",
+    "vite": "8.2.1"
   }
 }
