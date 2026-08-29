@@ -45,6 +45,7 @@ import {
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
 import type { StateDatabase } from "./state-database.js";
+import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
@@ -993,16 +994,16 @@ function toolEvidenceRecord(input: {
   completedAt: string;
   isError: boolean;
 }): EvidenceRecord {
-  const serializedResult = serialize(input.result);
+  const serializedResult = serializeToolValue(input.result);
   const freshness = extractFreshness(input.result);
   return {
     label: `tool:${input.tool}`,
     value: {
       tool: input.tool,
-      args: truncate(serialize(input.args), 500),
+      args: truncateToolValue(serializeToolValue(input.args), 500),
       ...(freshness ? { freshness } : {}),
       resultDigest: {
-        preview: truncate(serializedResult, 500),
+        preview: truncateToolValue(serializedResult, 500),
         totalLength: serializedResult.length,
       },
       startedAt: input.startedAt,
@@ -1019,19 +1020,6 @@ function toolEvidenceRecord(input: {
 
 function summarizeStepEvidence(evidence: EvidenceRecord[]): unknown[] {
   return evidence.map((record) => (isPlainObject(record.value) ? record.value : record));
-}
-
-function serialize(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
 
 function extractFreshness(value: unknown): FreshnessStamp | undefined {

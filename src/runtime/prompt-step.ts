@@ -1,6 +1,7 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { FreshnessStamp } from "../infra/freshness.js";
 import type { EvidenceRecord } from "./evidence.js";
+import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
 import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
 /**
@@ -99,15 +100,15 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
     if (!tool) continue;
     const resultValue = message.details ?? message.content ?? "";
     const freshness = extractFreshness(resultValue);
-    const serializedResult = serialize(resultValue);
+    const serializedResult = serializeToolValue(resultValue);
     evidence.push({
       label: `tool:${tool}`,
       value: {
         tool,
-        args: truncate(serialize(pending?.args ?? {}), 500),
+        args: truncateToolValue(serializeToolValue(pending?.args ?? {}), 500),
         ...(freshness ? { freshness } : {}),
         resultDigest: {
-          preview: truncate(serializedResult, 500),
+          preview: truncateToolValue(serializedResult, 500),
           totalLength: serializedResult.length,
         },
         startedAt: pending?.startedAt ?? entry.timestamp,
@@ -152,19 +153,6 @@ export function extractAssistantText(entries: SessionEntry[]): string {
  */
 export function toStepDefinitions(steps: PromptStep[]): Omit<WorkflowStep, "status">[] {
   return steps.map(({ prompt: _prompt, outputValidation: _outputValidation, ...step }) => step);
-}
-
-function serialize(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

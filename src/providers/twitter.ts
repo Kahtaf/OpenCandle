@@ -1,6 +1,7 @@
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import type { TwitterSentimentResult, TwitterTweet } from "../types/sentiment.js";
+import { topCashtagMentions } from "./social-mentions.js";
 import { searchTweets } from "./twitter-cli.js";
 
 // ── Sentiment scoring ────────────────────────────────────
@@ -62,22 +63,12 @@ export async function getTwitterSentiment(
       .filter((tweet) => new Date(tweet.created) >= cutoff)
       .slice(0, limit);
 
-    // Extract co-mentioned cashtags
-    const tickerRegex = /\$([A-Z]{1,5})\b/g;
-    const mentionCounts = new Map<string, number>();
     // Exclude the searched ticker itself from co-mentions
     const searchedTicker = normalizedQuery.startsWith("$") ? normalizedQuery.slice(1) : null;
-    for (const t of tweets) {
-      for (const match of t.text.matchAll(tickerRegex)) {
-        const ticker = match[1];
-        if (ticker === searchedTicker) continue;
-        mentionCounts.set(ticker, (mentionCounts.get(ticker) ?? 0) + 1);
-      }
-    }
-    const topMentions = [...mentionCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([ticker]) => ticker);
+    const topMentions = topCashtagMentions(
+      tweets.map((tweet) => tweet.text),
+      { exclude: searchedTicker ?? undefined },
+    );
 
     const sentiment = scoreTwitterSentiment(tweets);
 

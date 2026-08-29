@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Consolidated duplicated provider CLI normalization, social cashtag aggregation, stateful-intent detection, memory preference suppression, evidence serialization, and large-number tool formatting behind focused shared helpers, reducing the pinned production duplicate scan from 67 groups and 1.00% duplicated lines to 59 groups and 0.86% without changing public behavior.
 - Updated supported runtime, agent, GUI, provider-relay, documentation, and video dependencies to their latest compatible releases, including Pi 0.84.2; regenerated the first-class model catalog, removed vulnerable transitive dependency versions from both lockfiles, and kept hosted SQLite imports on the canonical WASM asset path after the Vite upgrade.
 
 ## [0.14.0] - 2026-08-13

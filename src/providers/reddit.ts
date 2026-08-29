@@ -3,6 +3,7 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 import { BEARISH_TERMS, BULLISH_TERMS } from "../sentiment/keywords.js";
 import type { RedditSentimentResult } from "../types/sentiment.js";
 import { listSubredditPosts, readRedditPost, searchRedditPosts } from "./reddit-cli.js";
+import { topCashtagMentions } from "./social-mentions.js";
 
 export async function getSubredditPosts(
   subreddit: string,
@@ -19,19 +20,7 @@ export async function getSubredditPosts(
       ? await searchRedditPosts(query, { subreddit, limit })
       : await listSubredditPosts(subreddit, { limit });
 
-    // Extract ticker-like mentions ($AAPL, $TSLA, etc.)
-    const tickerRegex = /\$([A-Z]{1,5})\b/g;
-    const mentionCounts = new Map<string, number>();
-    for (const post of posts) {
-      for (const match of post.title.matchAll(tickerRegex)) {
-        const ticker = match[1];
-        mentionCounts.set(ticker, (mentionCounts.get(ticker) ?? 0) + 1);
-      }
-    }
-    const topMentions = [...mentionCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([ticker]) => ticker);
+    const topMentions = topCashtagMentions(posts.map((post) => post.title));
 
     const sentiment = scoreSentiment(posts);
 

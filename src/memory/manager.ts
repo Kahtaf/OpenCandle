@@ -1,3 +1,4 @@
+import { preferenceKeysForOverriddenSlots } from "./preference-suppression.js";
 import type { MemoryStorage } from "./storage.js";
 import type { MemoryCategory, MemoryEntry } from "./types.js";
 import {
@@ -16,16 +17,6 @@ export interface MemoryRetrievalResult {
   entries: MemoryEntry[];
   filtered: FilteredMemoryEntry[];
 }
-
-/** Slot name → preference key(s) mapping for suppression. */
-const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
-  riskProfile: ["risk_profile"],
-  assetScope: ["asset_scope"],
-  timeHorizon: ["time_horizon"],
-  dteTarget: ["dte_target"],
-  moneynessPreference: ["moneyness_preference"],
-  liquidityMinimum: ["liquidity_minimum", "options_liquidity"],
-};
 
 const MAX_WORKFLOW_HISTORY_PER_TYPE = 3;
 const MAX_PREFERENCE_LINES = 15;
@@ -57,18 +48,7 @@ export class MemoryManager {
     const relevantCategories =
       WORKFLOW_RELEVANT_CATEGORIES[workflowType] ?? WORKFLOW_RELEVANT_CATEGORIES.unclassified;
 
-    // Build set of preference keys to suppress
-    const suppressedKeys = new Set<string>();
-    if (overriddenSlots) {
-      for (const slot of overriddenSlots) {
-        const keys = SLOT_TO_PREF_KEYS[slot];
-        if (keys) {
-          for (const key of keys) {
-            suppressedKeys.add(key);
-          }
-        }
-      }
-    }
+    const suppressedKeys = preferenceKeysForOverriddenSlots(overriddenSlots);
 
     const entries: MemoryEntry[] = [];
     const filtered: FilteredMemoryEntry[] = [];

@@ -1,3 +1,4 @@
+import { normalizeExternalTimestamp, parseCliErrorEnvelope } from "./external-cli-utils.js";
 import { type ExternalToolCommandResult, runExternalToolCommand } from "./external-tool-command.js";
 import { ExternalToolError, ExternalToolNotInstalled } from "./external-tool-error.js";
 import type { RedditComment } from "./reddit.js";
@@ -196,22 +197,6 @@ async function runRdt<T>(args: readonly string[]): Promise<T> {
   return envelope.data;
 }
 
-function parseCliErrorEnvelope(stdout: string): { code?: string; message: string } | null {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      ok?: unknown;
-      error?: { code?: unknown; message?: unknown };
-    };
-    if (parsed.ok !== false || typeof parsed.error?.message !== "string") return null;
-    return {
-      code: typeof parsed.error.code === "string" ? parsed.error.code : undefined,
-      message: parsed.error.message,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function adaptPost(raw: RawRdtPost): RdtPost {
   const permalink = stringValue(raw.permalink);
   const url = stringValue(raw.url) || (permalink ? `https://reddit.com${permalink}` : "");
@@ -225,7 +210,7 @@ function adaptPost(raw: RawRdtPost): RdtPost {
     subreddit: stringValue(raw.subreddit) || undefined,
     url,
     permalink: permalink || undefined,
-    created: normalizeCreatedAt(raw.created_utc),
+    created: normalizeExternalTimestamp(raw.created_utc),
   };
 }
 
@@ -242,18 +227,6 @@ function adaptComment(
     score: numberValue(raw.score),
     permalink: permalink ? `https://reddit.com${permalink}` : "",
   };
-}
-
-function normalizeCreatedAt(value: unknown): string {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const millis = value > 1_000_000_000_000 ? value : value * 1000;
-    return new Date(millis).toISOString();
-  }
-  if (typeof value === "string" && value.length > 0) {
-    const millis = Date.parse(value);
-    if (!Number.isNaN(millis)) return new Date(millis).toISOString();
-  }
-  return new Date(0).toISOString();
 }
 
 function stringValue(value: unknown): string {

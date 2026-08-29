@@ -5,6 +5,7 @@ import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getOverview } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
+import { formatLargeNumber } from "../formatting.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
@@ -56,10 +57,3 @@ export const companyOverviewTool: AgentTool<
     });
   },
 };
-
-function formatLargeNumber(n: number): string {
-  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  return n.toLocaleString();
-}
