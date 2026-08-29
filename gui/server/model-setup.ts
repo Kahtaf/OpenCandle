@@ -82,7 +82,9 @@ export function buildModelSetupState(
   thinking?: { current: ThinkingLevel; available: ThinkingLevel[] },
 ): ModelSetupState {
   registry.refresh();
-  const availableModels = sortModels(registry.getAvailable()).map((model) => ({
+  const availableModels = sortModels(
+    registry.getAvailable().filter((model) => registry.hasConfiguredAuth(model)),
+  ).map((model) => ({
     provider: model.provider,
     id: model.id,
     label: `${model.provider}/${model.id}`,

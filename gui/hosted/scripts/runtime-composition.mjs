@@ -5,6 +5,7 @@ const FORBIDDEN_DEPENDENCY_MARKERS = [
   "rdt-cli",
 ];
 const APPROVED_PI_PROVIDERS = new Set(["anthropic", "google", "openai"]);
+const PI_PROVIDER_SUPPORT_MODULES = new Set(["radius-config"]);
 const PI_PROVIDER_PATH =
   /@earendil-works\/pi-ai\/dist\/providers\/(?:data\/)?([^/.]+?)(?:\.models)?\.(?:js|json)$/;
 
@@ -57,7 +58,10 @@ export function auditRuntimeComposition({
     ...new Set(
       Object.keys(metafile.inputs)
         .map((path) => path.match(PI_PROVIDER_PATH)?.[1])
-        .filter((provider) => provider !== undefined),
+        .filter(
+          (provider) =>
+            provider !== undefined && !PI_PROVIDER_SUPPORT_MODULES.has(provider),
+        ),
     ),
   ].sort();
   const unapproved = piProviders.filter((provider) => !APPROVED_PI_PROVIDERS.has(provider));

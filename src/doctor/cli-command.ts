@@ -59,7 +59,7 @@ export async function handleDoctorCommand(
   return true;
 }
 
-function buildCliModelSetupState(
+export function buildCliModelSetupState(
   modelRegistry: ModelRegistry,
   settingsManager: SettingsManager,
 ): DoctorModelSetupState {
@@ -74,14 +74,17 @@ function buildCliModelSetupState(
     };
   }
 
-  const availableModels = modelRegistry.getAvailable().map((model) => ({
-    provider: model.provider,
-    id: model.id,
-    label: `${model.provider}/${model.id}`,
-  }));
+  const availableModels = modelRegistry
+    .getAvailable()
+    .filter((model) => modelRegistry.hasConfiguredAuth(model))
+    .map((model) => ({
+      provider: model.provider,
+      id: model.id,
+      label: `${model.provider}/${model.id}`,
+    }));
   return {
     requirement: availableModels.length > 0 ? "select_model" : "connect_auth",
-    currentModel: activeModel ? `${activeModel.provider}/${activeModel.id}` : undefined,
+    currentModel: undefined,
     availableModels,
   };
 }
