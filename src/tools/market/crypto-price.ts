@@ -4,6 +4,7 @@ import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../
 import { getCryptoPrice } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CryptoPrice } from "../../types/market.js";
+import { formatLargeNumber } from "../formatting.js";
 
 const params = Type.Object({
   id: Type.String({
@@ -55,11 +56,4 @@ function formatPrice(n: number): string {
   if (n >= 1) return n.toFixed(2);
   if (n >= 0.01) return n.toFixed(4);
   return n.toFixed(8);
-}
-
-function formatLargeNumber(n: number): string {
-  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  return n.toLocaleString();
 }

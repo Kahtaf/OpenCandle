@@ -1,4 +1,5 @@
 import type { TwitterTweet } from "../types/sentiment.js";
+import { normalizeExternalTimestamp, parseCliErrorEnvelope } from "./external-cli-utils.js";
 import { type ExternalToolCommandResult, runExternalToolCommand } from "./external-tool-command.js";
 import { ExternalToolError, ExternalToolNotInstalled } from "./external-tool-error.js";
 
@@ -126,22 +127,6 @@ async function runTwitterCli<T>(args: readonly string[]): Promise<T> {
   }
 }
 
-function parseCliErrorEnvelope(stdout: string): { code?: string; message: string } | null {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      ok?: unknown;
-      error?: { code?: unknown; message?: unknown };
-    };
-    if (parsed.ok !== false || typeof parsed.error?.message !== "string") return null;
-    return {
-      code: typeof parsed.error.code === "string" ? parsed.error.code : undefined,
-      message: parsed.error.message,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function adaptRawTweet(raw: RawTweet): TwitterTweet {
   return {
     id: stringValue(raw.id),
@@ -156,20 +141,8 @@ function adaptRawTweet(raw: RawTweet): TwitterTweet {
     replies: numberValue(raw.metrics?.replies ?? raw.replyCount ?? raw.replies),
     views: nullableNumberValue(raw.metrics?.views ?? raw.viewCount ?? raw.views),
     url: stringValue(raw.url ?? raw.permanentUrl),
-    created: normalizeCreatedAt(raw.createdAt ?? raw.created_at),
+    created: normalizeExternalTimestamp(raw.createdAt ?? raw.created_at),
   };
-}
-
-function normalizeCreatedAt(value: string | number | undefined): string {
-  if (typeof value === "number") {
-    const millis = value > 1_000_000_000_000 ? value : value * 1000;
-    return new Date(millis).toISOString();
-  }
-  if (typeof value === "string" && value.length > 0) {
-    const millis = Date.parse(value);
-    if (!Number.isNaN(millis)) return new Date(millis).toISOString();
-  }
-  return new Date(0).toISOString();
 }
 
 function stringValue(value: unknown): string {

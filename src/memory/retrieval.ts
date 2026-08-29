@@ -1,17 +1,8 @@
+import { preferenceKeysForOverriddenSlots } from "./preference-suppression.js";
 import type { MemoryStorage } from "./storage.js";
 
 const MAX_PREFERENCE_LINES = 15;
 const MAX_WORKFLOW_SUMMARY_LINES = 12;
-
-/** Slot name → preference key(s) mapping for suppression. */
-const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
-  riskProfile: ["risk_profile"],
-  assetScope: ["asset_scope"],
-  timeHorizon: ["time_horizon"],
-  dteTarget: ["dte_target"],
-  moneynessPreference: ["moneyness_preference"],
-  liquidityMinimum: ["liquidity_minimum", "options_liquidity"],
-};
 
 /**
  * Build compact memory context for agent injection.
@@ -22,18 +13,7 @@ const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
 export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: string[]): string {
   const sections: string[] = [];
 
-  // Build set of preference keys to suppress
-  const suppressedKeys = new Set<string>();
-  if (overriddenSlots) {
-    for (const slot of overriddenSlots) {
-      const keys = SLOT_TO_PREF_KEYS[slot];
-      if (keys) {
-        for (const key of keys) {
-          suppressedKeys.add(key);
-        }
-      }
-    }
-  }
+  const suppressedKeys = preferenceKeysForOverriddenSlots(overriddenSlots);
 
   // Preferences
   const prefs = storage.getPreferencesByNamespace("global");

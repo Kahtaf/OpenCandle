@@ -6,6 +6,7 @@ import { getGlobalQuote } from "../../providers/alpha-vantage.js";
 import { withFallback } from "../../providers/with-fallback.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import type { StockQuote } from "../../types/market.js";
+import { formatLargeNumber } from "../formatting.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, TSLA)" }),
@@ -66,10 +67,3 @@ export const stockQuoteTool: AgentTool<
     return { content: [{ type: "text", text }], details: { ...quote, freshness } };
   },
 };
-
-function formatLargeNumber(n: number): string {
-  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  return n.toLocaleString();
-}
