@@ -57,11 +57,37 @@ describe("GUI model setup", () => {
   it("asks the user to select a model when credentials already expose available models", () => {
     const available = [model("openai", "gpt-5-mini")];
 
-    const state = buildModelSetupState(registry(available), undefined);
+    const state = buildModelSetupState(
+      registry(available, new Set(["openai/gpt-5-mini"])),
+      undefined,
+    );
 
     expect(state.requirement).toBe("select_model");
     expect(state.availableModels).toEqual([
       { provider: "openai", id: "gpt-5-mini", label: "openai/gpt-5-mini" },
+    ]);
+  });
+
+  it("requires auth when Pi exposes catalog models without configured credentials", () => {
+    const available = [model("openai", "gpt-5-mini"), model("google", "gemini-2.5-flash")];
+
+    const state = buildModelSetupState(registry(available), undefined);
+
+    expect(state.requirement).toBe("connect_auth");
+    expect(state.availableModels).toEqual([]);
+  });
+
+  it("includes authenticated Pi OAuth models outside the API-key setup providers", () => {
+    const available = [model("openai-codex", "gpt-5.4")];
+
+    const state = buildModelSetupState(
+      registry(available, new Set(["openai-codex/gpt-5.4"])),
+      undefined,
+    );
+
+    expect(state.requirement).toBe("select_model");
+    expect(state.availableModels).toEqual([
+      { provider: "openai-codex", id: "gpt-5.4", label: "openai-codex/gpt-5.4" },
     ]);
   });
 

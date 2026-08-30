@@ -53,6 +53,33 @@ describe("OpenCandle setup", () => {
     expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("connect_auth");
   });
 
+  it("requires auth when Pi exposes only unauthenticated catalog models", async () => {
+    const { modelRuntime, modelRegistry } = await createTestModelRuntime();
+    vi.spyOn(modelRegistry, "getAvailable").mockReturnValue([
+      { provider: "openai", id: "gpt-5-mini", name: "GPT-5 mini" } as never,
+    ]);
+    vi.spyOn(modelRegistry, "hasConfiguredAuth").mockReturnValue(false);
+    const ui = createUi({ select: vi.fn().mockResolvedValue("Exit setup") });
+    const ctx = {
+      hasUI: true,
+      ui,
+      modelRegistry,
+      model: undefined,
+      shutdown: vi.fn(),
+    };
+
+    expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("connect_auth");
+    await runOpenCandleSetup(
+      { setModel: vi.fn() } as any,
+      ctx as any,
+      { mode: "startup" },
+      modelRuntime,
+    );
+
+    expect(ui.select.mock.calls[0]?.[0]).toContain("Welcome to OpenCandle");
+    expect(ui.select).not.toHaveBeenCalledWith("Choose a model", expect.anything());
+  });
+
   it("requires model selection when auth exists but no current model is usable", async () => {
     const { modelRegistry } = await createTestModelRuntime({
       anthropic: { type: "api_key", key: "sk-ant-test" },

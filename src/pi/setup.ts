@@ -50,7 +50,10 @@ const API_KEY_PROVIDER_LABELS: Record<ApiKeyProviderId, string> = {
 
 function getAvailableModels(ctx: ExtensionContext, preferredProvider?: string): Model<Api>[] {
   ctx.modelRegistry.refresh();
-  return sortModels(ctx.modelRegistry.getAvailable(), preferredProvider);
+  return sortModels(
+    ctx.modelRegistry.getAvailable().filter((model) => ctx.modelRegistry.hasConfiguredAuth(model)),
+    preferredProvider,
+  );
 }
 
 export function getLlmSetupRequirement(
@@ -59,7 +62,11 @@ export function getLlmSetupRequirement(
   if (ctx.model && ctx.modelRegistry.hasConfiguredAuth(ctx.model)) {
     return "ready";
   }
-  return ctx.modelRegistry.getAvailable().length > 0 ? "select_model" : "connect_auth";
+  return ctx.modelRegistry
+    .getAvailable()
+    .some((model) => ctx.modelRegistry.hasConfiguredAuth(model))
+    ? "select_model"
+    : "connect_auth";
 }
 
 async function selectProviderForApiKey(

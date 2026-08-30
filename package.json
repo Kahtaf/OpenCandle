@@ -139,9 +139,9 @@
     "node": "^22.22.2 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.84.2",
-    "@earendil-works/pi-ai": "^0.84.2",
-    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-agent-core": "^0.84.4",
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "0.84.4",
     "better-sqlite3": "^13.0.3",
     "ddg-kit": "0.1.1",
     "sql.js": "^1.14.2",
@@ -156,22 +156,22 @@
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.70.0",
-    "@agentclientprotocol/codex-acp": "^1.6.0",
-    "@biomejs/biome": "^2.5.9",
+    "@agentclientprotocol/codex-acp": "^1.7.0",
+    "@biomejs/biome": "^2.5.11",
     "@sinclair/typebox": "^0.34.52",
-    "@tanstack/react-router": "^1.170.31",
+    "@tanstack/react-router": "^1.170.32",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/semver": "^7.8.0",
     "@types/sql.js": "^1.4.11",
-    "acpx": "^0.13.1",
+    "acpx": "^0.13.2",
     "jsdom": "^30.0.1",
     "lightweight-charts": "^5.2.1",
     "playwright-core": "^1.62.1",
     "semver": "^7.8.5",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }
