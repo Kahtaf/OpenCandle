@@ -10,7 +10,7 @@
     "@opencandle/ui": "file:../packages/ui",
     "@vitejs/plugin-react": "^6.1.1",
     "gray-matter": "^4.0.3",
-    "lucide-react": "^1.37.0",
+    "lucide-react": "^1.39.0",
     "mdast-util-to-string": "^4.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
