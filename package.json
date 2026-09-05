@@ -155,7 +155,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.70.0",
+    "@agentclientprotocol/claude-agent-acp": "^0.73.0",
     "@agentclientprotocol/codex-acp": "^1.7.0",
     "@biomejs/biome": "^2.5.11",
     "@sinclair/typebox": "^0.34.52",
