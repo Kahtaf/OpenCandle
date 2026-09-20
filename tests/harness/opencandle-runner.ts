@@ -44,6 +44,16 @@ const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
   "compare_assets",
 ]);
 
+/** Workflow labels the extension can dispatch and name in a workflow entry. */
+const DISPATCHABLE_WORKFLOW_LABELS = new Set<WorkflowType>([
+  "options_screener",
+  "portfolio_builder",
+  "compare_assets",
+  "single_asset_analysis",
+  "watchlist_or_tracking",
+  "general_finance_qa",
+]);
+
 export interface RunOpenCandleSessionOptions {
   prompt?: string;
   prompts?: string[];
@@ -339,9 +349,35 @@ function classificationFromTrace(agentTrace: AgentTrace): ClassificationResult {
       entities: output.entities ?? { symbols: [] },
     };
   }
-  // No router entry means the router never ran for this turn (for example,
-  // no model credential was configured), so there is nothing to report.
-  return { workflow: "unclassified", confidence: 0, tier: "llm", entities: { symbols: [] } };
+  // Comprehensive analysis dispatches before the router runs, so a turn can
+  // legitimately have no router entry. Read the workflow the turn actually
+  // dispatched from its own `opencandle-workflow` entry rather than
+  // re-deriving one from the prompt text.
+  return classificationFromDispatchedWorkflow(agentTrace.customEntries ?? []);
+}
+
+function classificationFromDispatchedWorkflow(
+  customEntries: readonly CustomEntryTrace[],
+): ClassificationResult {
+  const entry = [...customEntries]
+    .reverse()
+    .find((candidate) => candidate.customType === "opencandle-workflow");
+  const data = isRecord(entry?.data) ? entry.data : null;
+  const dispatched = typeof data?.workflow === "string" ? data.workflow : undefined;
+  const resolvedSlots = isRecord(data?.resolvedSlots) ? data.resolvedSlots : null;
+  const symbol = typeof resolvedSlots?.symbol === "string" ? resolvedSlots.symbol : undefined;
+  const entities: ExtractedEntities = { symbols: symbol ? [symbol] : [] };
+
+  // `comprehensive_analysis` is the multi-analyst deep dive on one symbol; it
+  // is not a member of `WorkflowType`, and its routing-layer equivalent is
+  // `single_asset_analysis`.
+  if (dispatched === "comprehensive_analysis") {
+    return { workflow: "single_asset_analysis", confidence: 1, tier: "rule", entities };
+  }
+  if (dispatched && DISPATCHABLE_WORKFLOW_LABELS.has(dispatched as WorkflowType)) {
+    return { workflow: dispatched as WorkflowType, confidence: 1, tier: "rule", entities };
+  }
+  return { workflow: "unclassified", confidence: 0, tier: "rule", entities };
 }
 
 function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
