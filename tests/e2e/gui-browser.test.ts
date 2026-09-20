@@ -1789,12 +1789,20 @@ async function installMockSocket(
           this.emit({
             type: "boot",
             role: mockOverrides.role ?? "writer",
-            // Mirrors the real GUI server: a follower process never proxies
-            // market-state mutations to another process's writer, so it
-            // reports supportsSessionActions=false unless a test overrides it.
-            supportsSessionActions:
-              mockOverrides.supportsSessionActions ?? mockOverrides.role !== "follower",
+            supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
             sessionId: bootSessionId,
+            // Mirrors the real GUI server's coordinationStateForSession: a
+            // follower process never proxies market-state mutations to
+            // another process's writer (only chat-run requests are
+            // proxied), so it reports coordination.marketStateWritable=false unless a
+            // test overrides it. supportsSessionActions stays true for a
+            // follower because its chat prompts still queue behind the
+            // writer -- see actionSurfaceRole() in runtime-transport.js.
+            coordination: mockOverrides.coordination ?? {
+              sessionId: bootSessionId,
+              status: mockOverrides.role === "follower" ? "syncing" : "ready",
+              marketStateWritable: mockOverrides.role !== "follower",
+            },
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
               requirement: "ready",

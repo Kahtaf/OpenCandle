@@ -1002,6 +1002,11 @@ export async function buildSessionBootstrapPayload(
     coordination: {
       sessionId,
       status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
+      // See coordinationStateForSession in ws-hub.ts: this local runtime
+      // never proxies market-state mutations cross-process, so a non-writer
+      // connection must report itself as non-writable for actionSurfaceRole()
+      // without touching supportsSessionActions (which also gates chat).
+      marketStateWritable: roleForSessionBootstrap(options, sessionManager) === "writer",
       ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
     },
     catalog: buildCatalog(),

@@ -158,7 +158,7 @@ export function AppShell() {
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
     !gui.supportsSessionActions;
-  const actionRole = actionSurfaceRole(gui.role, gui.supportsSessionActions);
+  const actionRole = actionSurfaceRole(gui.role, gui.supportsSessionActions, gui.coordination);
 
   const openDrawer = useCallback(
     (drawer) => {

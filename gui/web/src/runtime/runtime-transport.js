@@ -1,7 +1,16 @@
 export const runtimeTransportContractVersion = 1;
 
-export function actionSurfaceRole(role, supportsSessionActions) {
-  if (supportsSessionActions) return "writer";
+export function actionSurfaceRole(role, supportsSessionActions, coordination) {
+  // supportsSessionActions alone means this connection can participate in
+  // chat (a local follower's prompts queue behind the writer), not that
+  // direct tool/market-state mutations will succeed -- the local runtime
+  // never proxies those cross-process the way hosted forwards actions to
+  // its elected writer. coordination.marketStateWritable disambiguates: hosted always
+  // reports it true (matching the unconditional forwarding this function
+  // was introduced for), while the local runtime reports it false for a
+  // non-writer process so mutation controls do not look enabled for a
+  // request the server will reject.
+  if (supportsSessionActions && coordination?.marketStateWritable !== false) return "writer";
   // A hosted tab may retain its last elected role while the runtime switches
   // to offline state. Never let that stale writer label re-enable mutations.
   return role === "writer" ? "offline" : role;

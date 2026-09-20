@@ -50,8 +50,12 @@ describe("GUI WS hub", () => {
     expect(client.messages[0]).toMatchObject({
       type: "boot",
       role: "writer",
-      supportsSessionActions: true,
-      coordination: { sessionId: "session-1", status: "ready", ownerKind: "gui" },
+      coordination: {
+        sessionId: "session-1",
+        status: "ready",
+        marketStateWritable: true,
+        ownerKind: "gui",
+      },
       sessionId: "session-1",
       modelSetup: { requirement: "ready" },
       lock: { role: "writer", processKind: "gui", coordinatorEndpoint: "http://127.0.0.1:25000" },
@@ -161,14 +165,19 @@ describe("GUI WS hub", () => {
     expect(JSON.stringify(bootstrap)).not.toContain("owner-secret");
   });
 
-  it("reports supportsSessionActions=false for a follower process so the browser cannot treat it as writable", async () => {
+  it("reports coordination.marketStateWritable=false for a follower process so the browser cannot treat it as writable", async () => {
     // The local (loopback) runtime never proxies market-state mutations to
     // another process's writer lock the way the hosted runtime forwards
-    // actions to its elected writer. A follower GUI process must therefore
-    // tell the browser it cannot support session actions, or the client's
-    // shared actionSurfaceRole() helper (built for the hosted proxy case)
-    // will treat this follower as a writer and leave mutation controls
-    // enabled for a request the server will reject.
+    // actions to its elected writer -- only chat-run requests are proxied
+    // cross-process. A follower GUI process must therefore report
+    // coordination.marketStateWritable: false, or the client's shared
+    // actionSurfaceRole() helper (built for the hosted proxy case, where
+    // coordination.marketStateWritable is unconditionally true) will treat this
+    // follower as a writer and leave mutation controls enabled for a
+    // request the server will reject. supportsSessionActions stays
+    // unreported here (true is not this test's concern) because that flag
+    // also gates the chat composer, and a local follower's chat prompts do
+    // still queue behind the writer.
     const client = createFakeClient();
     const hub = createWsHub({
       ...baseHubOptions(),
@@ -183,11 +192,11 @@ describe("GUI WS hub", () => {
     expect(client.messages[0]).toMatchObject({
       type: "boot",
       role: "follower",
-      supportsSessionActions: false,
+      coordination: { marketStateWritable: false },
     });
     expect(bootstrap).toMatchObject({
       role: "follower",
-      supportsSessionActions: false,
+      coordination: { marketStateWritable: false },
     });
   });
 

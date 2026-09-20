@@ -274,15 +274,6 @@ export function createWsHub({
     client.send({
       type: "boot",
       role,
-      // The local (loopback) runtime never proxies market-state mutations
-      // to another process's writer lock the way the hosted runtime
-      // forwards actions to its elected writer: only chat-run requests are
-      // proxied cross-process (see proxyChatRunToCoordinator in
-      // http-routes.ts). A follower process must report this explicitly, or
-      // the shared browser actionSurfaceRole() helper (built for the hosted
-      // proxy case) treats any non-"offline" role as a writer and leaves
-      // mutation controls enabled for requests the server will reject.
-      supportsSessionActions: role === "writer",
       lock: publicWriterLock(lock),
       sessionId: sessionManager.getSessionId(),
       sessionPersisted: isSessionPersisted(sessionManager),
@@ -304,7 +295,6 @@ export function createWsHub({
     const sessionManager = getSessionManager();
     return {
       role,
-      supportsSessionActions: role === "writer",
       sessionId: sessionManager.getSessionId(),
       sessionPersisted: isSessionPersisted(sessionManager),
       coordination: coordinationStateForSession(sessionManager, role, lock),
@@ -458,6 +448,18 @@ function coordinationStateForSession(
   return {
     sessionId,
     status,
+    // The local (loopback) runtime never proxies market-state mutations to
+    // another process's writer the way the hosted runtime forwards actions
+    // to its elected writer -- only chat-run requests are proxied
+    // cross-process (see proxyChatRunToCoordinator in http-routes.ts). The
+    // browser's shared actionSurfaceRole() helper (built for the hosted
+    // proxy case, where every connection reports supportsSessionActions and
+    // coordination.marketStateWritable unconditionally true) needs this explicit
+    // signal to keep treating a non-writer local process as read-only for
+    // direct tool/market-state actions, without touching
+    // supportsSessionActions -- that flag also gates the chat composer,
+    // and a local follower's chat prompts do queue behind the writer.
+    marketStateWritable: status === "ready",
     ...(typeof publicLock.processKind === "string" ? { ownerKind: publicLock.processKind } : {}),
   };
 }
