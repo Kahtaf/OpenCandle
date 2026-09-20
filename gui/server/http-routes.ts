@@ -88,7 +88,20 @@ interface GuiHttpRouteOptions {
   syncCurrentWriterLockScope?: () => void;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
-  createSessionForManager: (sessionManager: SessionManager) => Promise<{ session: AgentSession }>;
+  createSessionForManager: (sessionManager: SessionManager) => Promise<{
+    session: AgentSession;
+    // Resolves once the session's own idle state AND any workflow it
+    // dispatched (comprehensive_analysis, options_screener, ...) have both
+    // settled -- see coordinator.waitForActiveWorkflow() /
+    // createOpenCandleSession's waitForSettled(). A multi-step workflow's
+    // later steps keep running on this session well after the request's
+    // own SSE settle-wait (promptAndSettle) returns for the first step;
+    // disposing right after that first-step settle tears the session down
+    // out from under the still-running workflow. Optional so a caller that
+    // cannot observe workflow state (e.g. a test double) still disposes
+    // immediately, matching the previous behavior.
+    waitForSettled?: () => Promise<void>;
+  }>;
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
@@ -909,12 +922,37 @@ async function streamAcceptedSseChatRun({
   } finally {
     activeRunSessionIds.delete(sessionId);
     unsubscribeLive();
-    createdSession?.session.dispose();
+    disposeAfterSettled(createdSession);
     if (lockHeartbeat) clearInterval(lockHeartbeat);
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     res.end();
   }
   return actionAccepted;
+}
+
+// A dispatched multi-step workflow (comprehensive_analysis,
+// options_screener, ...) keeps sending itself further steps on this session
+// well after promptAndSettle returns for the request's own first step --
+// see settleIdleGraceMsForPrompt in session-entry-wait.ts and
+// coordinator.waitForActiveWorkflow(). Disposing the session synchronously
+// in the request's finally block tore that still-running workflow down
+// silently after only its first step, with no error or trace entry
+// recorded, because runner.start()'s own status resolves "cancelled" (not
+// "completed"/"failed") once its session is pulled out from under it. Wait
+// for the session to actually settle before disposing, without blocking
+// this request's own response on a workflow that can run for minutes.
+export function disposeAfterSettled(
+  createdSession: { session: AgentSession; waitForSettled?: () => Promise<void> } | null,
+): void {
+  if (!createdSession) return;
+  const { session, waitForSettled } = createdSession;
+  if (!waitForSettled) {
+    session.dispose();
+    return;
+  }
+  void waitForSettled()
+    .catch(() => {})
+    .finally(() => session.dispose());
 }
 
 class SessionActionNotAdmitted extends Error {}
