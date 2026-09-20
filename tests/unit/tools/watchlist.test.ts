@@ -288,6 +288,9 @@ describe("watchlistTool", () => {
     ]);
   });
 
+  // 101 sequential stateful "add" calls (each resolving and persisting an
+  // instrument) can run well past vitest's default 5s test timeout under a
+  // loaded machine even though it stays under a second when idle.
   it("checks 100+ equity symbols with one TradingView batch call", async () => {
     const symbols = Array.from({ length: 101 }, (_, index) => `SYM${index}`);
     for (const symbol of symbols) {
@@ -322,7 +325,7 @@ describe("watchlistTool", () => {
         sourceProvider: "tradingview",
       }),
     );
-  });
+  }, 20_000);
 
   it("labels stale TradingView watchlist quotes", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
