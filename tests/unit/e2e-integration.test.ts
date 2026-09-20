@@ -26,7 +26,6 @@ import {
   resolvePortfolioSlots,
 } from "../../src/routing/slot-resolver.js";
 import type { CompareAssetsSlots, SlotResolution } from "../../src/routing/types.js";
-import { buildSystemPrompt } from "../../src/system-prompt.js";
 import { buildOptionsScreenerWorkflowDefinition } from "../../src/workflows/options-screener.js";
 import { buildPortfolioWorkflowDefinition } from "../../src/workflows/portfolio-builder.js";
 
@@ -347,26 +346,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(context).toContain("conservative");
       expect(context).toContain("portfolio_builder");
       expect(context).toContain("4-position ETF portfolio");
-    });
-
-    it("system prompt integrates memory context", () => {
-      storage.upsertPreference({
-        namespace: "global",
-        key: "risk_profile",
-        valueJson: JSON.stringify("aggressive"),
-      });
-
-      const memoryContext = buildMemoryContext(storage);
-      const prompt = buildSystemPrompt(memoryContext || undefined);
-      expect(prompt).toContain("Persistent Memory Context");
-      expect(prompt).toContain("aggressive");
-      expect(prompt).toContain("Assumption Disclosure");
-    });
-
-    it("system prompt works without memory context", () => {
-      const prompt = buildSystemPrompt();
-      expect(prompt).toContain("You are OpenCandle");
-      expect(prompt).not.toContain("Persistent Memory Context");
     });
   });
 

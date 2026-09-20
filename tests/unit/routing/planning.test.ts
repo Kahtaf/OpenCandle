@@ -122,38 +122,6 @@ describe("planning layer", () => {
     expect(planning.commitmentMode).toBe("decision");
   });
 
-  it("can activate only the current-event slice without changing unrelated task families", () => {
-    const currentEvent = buildPlanningEnvelope(
-      {
-        ...input,
-        text: "Why did Boeing move today? I want the actual catalyst.",
-      },
-      {
-        ...compareOutput,
-        routeKind: "agent_task",
-        route: "fallback",
-        workflow: "general_finance_qa",
-        entities: { symbols: ["BA"] },
-        tool_bundles: ["core_market"],
-      },
-      {
-        migrationStatuses: {
-          current_event_explanation: "dual_run",
-        },
-      },
-    );
-    const assetCompare = buildPlanningEnvelope(input, compareOutput, {
-      migrationStatuses: {
-        current_event_explanation: "dual_run",
-      },
-    });
-
-    expect(currentEvent.taskFamily).toBe("current_event_explanation");
-    expect(currentEvent.behaviorMode).toBe("dual_run");
-    expect(assetCompare.taskFamily).toBe("asset_compare");
-    expect(assetCompare.behaviorMode).toBe("replacement_active");
-  });
-
   it("runs the current-event migration slice in replacement-active mode by default", () => {
     const planning = buildPlanningEnvelope(
       {
@@ -235,7 +203,6 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("concept_valuation_metric_education");
     expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
     expect(planning.answerContractId).toBe("concept_explainer");
-    expect(planning.artifactContractIds).toContain("concept_example_table");
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
@@ -744,10 +711,6 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("portfolio_rebalance_review");
     expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
     expect(planning.answerContractId).toBe("portfolio_review");
-    expect(planning.artifactContractIds).toEqual([
-      "portfolio_exposure_map",
-      "rebalance_action_plan",
-    ]);
     expect(planning.structuredCheckIds).toEqual(
       expect.arrayContaining(["assumption_disclosed", "target_bands_present"]),
     );

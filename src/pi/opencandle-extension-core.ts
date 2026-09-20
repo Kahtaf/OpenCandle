@@ -817,9 +817,6 @@ export default function openCandleExtension(
         filtered: true,
         filterReason: reason,
       })),
-      planning: {
-        migrationStatuses: getConfig().planningMigrationStatuses,
-      },
     });
 
     pi.appendEntry("opencandle-router", { output });

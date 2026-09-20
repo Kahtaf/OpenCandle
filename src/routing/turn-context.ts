@@ -1,9 +1,5 @@
 import type { MemoryCategory, MemoryEntry } from "../memory/types.js";
-import {
-  buildPlanningEnvelope,
-  type PlanningBuildOptions,
-  type PlanningEnvelope,
-} from "./planning.js";
+import { buildPlanningEnvelope, type PlanningEnvelope } from "./planning.js";
 import { activeToolsForBundles, memoryScopesForRoute } from "./route-manifest.js";
 import type {
   RouterDiagnostic,
@@ -59,7 +55,6 @@ export function buildResolvedTurnContext(
     availableToolNames?: readonly string[];
     memoryEntries?: readonly MemoryEntry[];
     filteredMemory?: readonly MemoryProvenance[];
-    planning?: PlanningBuildOptions;
   } = {},
 ): ResolvedTurnContext {
   const memoryQueryPlan = buildMemoryQueryPlan(output);
@@ -83,7 +78,7 @@ export function buildResolvedTurnContext(
     memoryProvenance,
     promptPlaybook: output.routeKind,
     diagnostics: output.diagnostics,
-    planning: buildPlanningEnvelope(input, output, options.planning),
+    planning: buildPlanningEnvelope(input, output),
   };
 }
 

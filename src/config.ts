@@ -1,6 +1,5 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
-import type { PlanningBehaviorMode, TaskFamily } from "./routing/planning.js";
 
 export interface SentimentConfig {
   retentionDays: number;
@@ -14,9 +13,7 @@ export interface SentimentConfig {
   maxNotableClaims?: number;
 }
 
-export type RouterMode = "llm";
 export type ToolScopeMode = "observe" | "enforce";
-export type PlanningMigrationStatuses = Partial<Record<TaskFamily, PlanningBehaviorMode>>;
 
 export interface Config {
   alphaVantageApiKey?: string;
@@ -26,23 +23,11 @@ export interface Config {
   finnhubApiKey?: string;
   lseApiKey?: string;
   /**
-   * Intent-router mode. The LLM router is the only production routing path;
-   * `OPENCANDLE_ROUTER_MODE` accepts only `"llm"` (or unset). The removed
-   * `"rules"` value fails startup with migration guidance.
-   */
-  routerMode: RouterMode;
-  /**
    * Route-selected tool scope mode. `"observe"` (default) records selected
    * bundles and active-tool candidates. `"enforce"` applies Pi active tools
    * for the turn via `pi.setActiveTools`.
    */
   toolScopeMode: ToolScopeMode;
-  /**
-   * Per-task planning behavior rollback/activation overrides. Controlled by
-   * `OPENCANDLE_PLANNING_MIGRATION_STATUSES`, e.g.
-   * `asset_compare=dual_run,single_asset_decision=observe_only`.
-   */
-  planningMigrationStatuses?: PlanningMigrationStatuses;
   sentiment?: SentimentConfig;
 }
 
@@ -114,33 +99,14 @@ const SENTIMENT_DEFAULTS: SentimentConfig = {
   maxNotableClaims: 5,
 };
 
-const PLANNING_TASK_FAMILIES = [
-  "single_asset_decision",
-  "asset_compare",
-  "portfolio_build",
-  "portfolio_review",
-  "macro_allocation_review",
-  "options_strategy",
-  "current_event_explanation",
-  "ticker_disambiguation",
-  "filing_thesis_review",
-  "sentiment_snapshot",
-  "concept_explainer",
-  "retail_finance_tradeoff",
-  "stateful_tracking_update",
-  "backtest_review",
-  "general_fallback",
-] as const satisfies readonly TaskFamily[];
-
-const PLANNING_BEHAVIOR_MODES = [
-  "observe_only",
-  "dual_run",
-  "replacement_active",
-] as const satisfies readonly PlanningBehaviorMode[];
-
-function resolveRouterMode(): RouterMode {
+/**
+ * The LLM router is the only production routing path, and nothing reads a
+ * router-mode value. This only rejects a stale `OPENCANDLE_ROUTER_MODE` so a
+ * config left over from the rules era fails loudly instead of being ignored.
+ */
+function assertSupportedRouterMode(): void {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
-  if (raw === undefined || raw === "" || raw === "llm") return "llm";
+  if (raw === undefined || raw === "" || raw === "llm") return;
   if (raw === "rules") {
     throw new Error(
       'OPENCANDLE_ROUTER_MODE="rules" was removed: the deterministic rules router is no longer a production routing path. Unset OPENCANDLE_ROUTER_MODE to use the LLM router.',
@@ -158,40 +124,8 @@ function resolveToolScopeMode(): ToolScopeMode {
   );
 }
 
-function resolvePlanningMigrationStatuses(): PlanningMigrationStatuses | undefined {
-  const raw = process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES;
-  if (raw === undefined || raw.trim() === "") return undefined;
-
-  const statuses: PlanningMigrationStatuses = {};
-  for (const entry of raw.split(",")) {
-    const trimmed = entry.trim();
-    if (!trimmed) continue;
-
-    const parts = trimmed.split("=");
-    const taskFamily = parts[0]?.trim();
-    const behaviorMode = parts[1]?.trim();
-    if (
-      parts.length !== 2 ||
-      !isPlanningTaskFamily(taskFamily) ||
-      !isPlanningBehaviorMode(behaviorMode)
-    ) {
-      throw new Error(`Invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES entry "${trimmed}".`);
-    }
-    statuses[taskFamily] = behaviorMode;
-  }
-
-  return Object.keys(statuses).length > 0 ? statuses : undefined;
-}
-
-function isPlanningTaskFamily(value: string | undefined): value is TaskFamily {
-  return PLANNING_TASK_FAMILIES.includes(value as TaskFamily);
-}
-
-function isPlanningBehaviorMode(value: string | undefined): value is PlanningBehaviorMode {
-  return PLANNING_BEHAVIOR_MODES.includes(value as PlanningBehaviorMode);
-}
-
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
+  assertSupportedRouterMode();
   const fileSentiment = fileConfig.sentiment;
   return {
     alphaVantageApiKey:
@@ -201,9 +135,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
     lseApiKey: process.env.LSE_API_KEY ?? fileConfig.providers?.lse?.apiKey,
-    routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
-    planningMigrationStatuses: resolvePlanningMigrationStatuses(),
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,

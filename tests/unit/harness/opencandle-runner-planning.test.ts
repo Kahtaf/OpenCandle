@@ -48,7 +48,6 @@ describe("OpenCandle harness planning telemetry", () => {
               structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
               workspacePlaceholderIds: ["research_workspace_v1_placeholder"],
               artifactPlaceholderIds: ["artifact_source_coverage_placeholder"],
-              artifactContractIds: ["source_coverage_table"],
               capabilityGapIds: ["market_calendar"],
               diagnostics: [],
             },
@@ -68,7 +67,6 @@ describe("OpenCandle harness planning telemetry", () => {
         answerContractId: "current_event_explanation",
         workspacePlaceholderIds: ["research_workspace_v1_placeholder"],
         artifactPlaceholderIds: ["artifact_source_coverage_placeholder"],
-        artifactContractIds: ["source_coverage_table"],
         capabilityGapIds: ["market_calendar"],
       }),
     );
@@ -271,7 +269,6 @@ describe("OpenCandle harness planning telemetry", () => {
               structuredCheckIds: ["required_evidence_present"],
               workspacePlaceholderIds: [],
               artifactPlaceholderIds: [],
-              artifactContractIds: ["portfolio_exposure_map", "rebalance_action_plan"],
               capabilityGapIds: ["etf_holdings_overlap"],
               diagnostics: [],
             },

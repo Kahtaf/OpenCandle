@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { PlanningEvidenceRecord } from "../../harness/planning-evidence.js";
 import {
   ANSWER_CONTRACT_REGISTRY,
   COMMITMENT_MODE_CONTRACTS,
   evaluateFrameworkFallbackEligibility,
   runStructuredChecks,
-} from "../../../src/runtime/answer-contracts.js";
-import type { PlanningEvidenceRecord } from "../../../src/runtime/planning-evidence.js";
+} from "../../harness/structured-checks.js";
 
 const tickerEvidence: PlanningEvidenceRecord = {
   id: "ticker_disambiguation:selected_slice",

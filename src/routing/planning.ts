@@ -1,7 +1,3 @@
-import {
-  type ArtifactContractId,
-  artifactContractIdsForPlanning,
-} from "../runtime/artifact-contracts.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -204,12 +200,7 @@ export interface PlanningEnvelope extends PlanningSelection {
   behaviorMode: PlanningBehaviorMode;
   workspacePlaceholderIds: string[];
   artifactPlaceholderIds: string[];
-  artifactContractIds?: ArtifactContractId[];
   diagnostics: RouterDiagnostic[];
-}
-
-export interface PlanningBuildOptions {
-  migrationStatuses?: Partial<Record<TaskFamily, PlanningBehaviorMode>>;
 }
 
 interface PlanningManifestEntry extends PlanningSelection {
@@ -449,13 +440,11 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
 export function buildPlanningEnvelope(
   input: RouterInputContext,
   output: RouterOutput,
-  options: PlanningBuildOptions = {},
 ): PlanningEnvelope {
   const proposed = defaultPlanningSelection(input, output);
   const { selection, diagnostics } = validatePlanningSelection(output, proposed);
   const manifestEntry = PLANNING_MANIFEST[selection.taskFamily];
   const behaviorMode: PlanningBehaviorMode =
-    options.migrationStatuses?.[selection.taskFamily] ??
     manifestEntry.migrationStatus ??
     (manifestEntry.migrated ? "replacement_active" : "observe_only");
 
@@ -465,7 +454,6 @@ export function buildPlanningEnvelope(
     behaviorMode,
     workspacePlaceholderIds: [],
     artifactPlaceholderIds: [],
-    artifactContractIds: artifactContractIdsForPlanning(selection),
     diagnostics: [
       ...diagnostics,
       ...(output.diagnostics.length > 0

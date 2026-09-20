@@ -255,27 +255,25 @@ describe("loadConfig", () => {
     delete process.env.OPENCANDLE_DEBATE;
   });
 
-  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is unset", () => {
+  it("loads without complaint when OPENCANDLE_ROUTER_MODE is unset", () => {
     delete process.env.OPENCANDLE_ROUTER_MODE;
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
-    const config = loadConfig();
-    expect(config.routerMode).toBe("llm");
+    expect(() => loadConfig()).not.toThrow();
   });
 
-  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is blank", () => {
+  it("loads without complaint when OPENCANDLE_ROUTER_MODE is blank", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "";
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
-    const config = loadConfig();
-    expect(config.routerMode).toBe("llm");
+    expect(() => loadConfig()).not.toThrow();
   });
 
-  it("routerMode fails fast with migration guidance when set to rules", () => {
+  it("fails fast with migration guidance when OPENCANDLE_ROUTER_MODE is set to rules", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "rules";
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
@@ -284,7 +282,7 @@ describe("loadConfig", () => {
     expect(() => loadConfig()).toThrowError(/OPENCANDLE_ROUTER_MODE="rules" was removed/);
   });
 
-  it("routerMode rejects invalid OPENCANDLE_ROUTER_MODE values", () => {
+  it("rejects invalid OPENCANDLE_ROUTER_MODE values", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "regex";
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
@@ -292,31 +290,6 @@ describe("loadConfig", () => {
     });
     expect(() => loadConfig()).toThrowError(
       'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed value: "llm" (default).',
-    );
-  });
-
-  it("loads planning migration status overrides from OPENCANDLE_PLANNING_MIGRATION_STATUSES", () => {
-    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES =
-      "single_asset_decision=dual_run,asset_compare=observe_only";
-    mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    const config = loadConfig();
-    expect(config.planningMigrationStatuses).toEqual({
-      single_asset_decision: "dual_run",
-      asset_compare: "observe_only",
-    });
-  });
-
-  it("rejects invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES values", () => {
-    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES = "single_asset_decision=regex";
-    mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    expect(() => loadConfig()).toThrowError(
-      'Invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES entry "single_asset_decision=regex".',
     );
   });
 
