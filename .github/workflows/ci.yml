@@ -34,17 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
+      - name: Check (typecheck, test-scripts typecheck, relay typecheck, lint)
         if: matrix.node-version == '24.x'
-        run: npx tsc --noEmit
-
-      - name: Typecheck provider relay
-        if: matrix.node-version == '24.x'
-        run: npm run relay:typecheck
-
-      - name: Lint
-        if: matrix.node-version == '24.x'
-        run: npx biome ci .
+        run: npm run check
 
       # test:site builds the site and runs the public-site build contract
       # tests against it; package-contents validation below reuses the
