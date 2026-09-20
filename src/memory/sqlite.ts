@@ -376,6 +376,62 @@ export function initDefaultDatabase(): Database.Database {
   return initDatabase(getStateDbPath());
 }
 
+/**
+ * Tables OpenCandle owns. `schema_version` is deliberately excluded: its
+ * presence says nothing about whether user data is at stake.
+ */
+const KNOWN_STATE_TABLES = [
+  "user_preferences",
+  "workflow_runs",
+  "recommendations",
+  "workflow_events",
+  "tool_defaults",
+  "instruments",
+  "instrument_aliases",
+  "watchlists",
+  "watchlist_items",
+  "portfolios",
+  "portfolio_lots",
+  "alert_rules",
+  "alert_events",
+  "alert_check_runs",
+  "report_templates",
+  "report_runs",
+  "automation_runner_leases",
+  "notification_events",
+  "notification_delivery_attempts",
+  "import_batches",
+  "import_rows",
+  // Dropped by the v7 → v8 migration, but still proof of an OpenCandle database.
+  "prediction_records",
+] as const;
+
+interface SchemaMigration {
+  readonly from: number;
+  readonly to: number;
+  readonly apply: (db: StateDatabase) => void;
+}
+
+/**
+ * The ordered upgrade ladder. Each step is applied — together with the
+ * schema_version write that records it — inside one transaction, so a crash or
+ * failure part-way through leaves the database exactly as it was.
+ *
+ * v8 drops prediction_records and v9 drops watchlist item annotation columns;
+ * those are explicit feature removals, every other step preserves all rows.
+ */
+const MIGRATIONS: readonly SchemaMigration[] = [
+  { from: 2, to: 3, apply: migrateV2ToV3 },
+  { from: 3, to: 4, apply: migrateV3ToV4 },
+  { from: 4, to: 5, apply: migrateV4ToV5 },
+  { from: 5, to: 6, apply: migrateV5ToV6 },
+  { from: 6, to: 7, apply: migrateV6ToV7 },
+  { from: 7, to: 8, apply: migrateV7ToV8 },
+  { from: 8, to: 9, apply: migrateV8ToV9 },
+];
+
+const OLDEST_MIGRATABLE_VERSION = MIGRATIONS[0].from;
+
 export function initializeStateDatabase(db: StateDatabase): void {
   const currentVersion = readSchemaVersion(db);
 
@@ -392,67 +448,67 @@ export function initializeStateDatabase(db: StateDatabase): void {
     );
   }
 
-  if (currentVersion === 8) {
-    migrateV8ToV9(db);
+  if (currentVersion === null || currentVersion < OLDEST_MIGRATABLE_VERSION) {
+    // No ladder can reach this database. Recreating the schema is only safe on a
+    // genuinely fresh (or foreign) file — never over tables that may hold saved
+    // watchlists, portfolios or alerts.
+    const ownTables = findKnownStateTables(db);
+    if (ownTables.length > 0) {
+      throw new Error(
+        `State database at ${describeDatabaseLocation(db)} holds ${ownTables.length} OpenCandle table(s) but ` +
+          `${
+            currentVersion === null
+              ? "no readable schema version"
+              : `an unsupported schema version (${currentVersion})`
+          }. Refusing to recreate the schema — your data was left untouched. ` +
+          "Restore a backup, or move the file aside to start with empty state.",
+      );
+    }
+    resetSchema(db);
     return;
   }
 
-  if (currentVersion === 7) {
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
+  runMigrations(db, currentVersion);
+}
+
+function runMigrations(db: StateDatabase, fromVersion: number): void {
+  let version = fromVersion;
+
+  for (const migration of MIGRATIONS) {
+    if (migration.from !== version) continue;
+    db.transaction(() => {
+      migration.apply(db);
+      writeSchemaVersion(db, migration.to);
+    })();
+    version = migration.to;
   }
 
-  if (currentVersion === 6) {
-    migrateV6ToV7(db);
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
+  if (version !== CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `No OpenCandle migration path from schema version ${fromVersion} to ${CURRENT_SCHEMA_VERSION}; the database was left untouched.`,
+    );
   }
+}
 
-  if (currentVersion === 5) {
-    migrateV5ToV6(db);
-    migrateV6ToV7(db);
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
+function writeSchemaVersion(db: StateDatabase, version: number): void {
+  const updated = db.prepare("UPDATE schema_version SET version = ?").run(version);
+  if (updated.changes === 0) {
+    db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(version);
   }
+}
 
-  if (currentVersion === 4) {
-    migrateV4ToV5(db);
-    migrateV5ToV6(db);
-    migrateV6ToV7(db);
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
+function findKnownStateTables(db: StateDatabase): string[] {
+  return KNOWN_STATE_TABLES.filter((tableName) => tableExists(db, tableName));
+}
+
+function describeDatabaseLocation(db: StateDatabase): string {
+  try {
+    const rows = db.pragma("database_list") as Array<{ name?: string; file?: string }>;
+    const main = rows.find((row) => row.name === "main");
+    return main?.file ? main.file : "(in-memory)";
+  } catch {
+    return "(unknown location)";
   }
-
-  if (currentVersion === 3) {
-    migrateV3ToV4(db);
-    migrateV4ToV5(db);
-    migrateV5ToV6(db);
-    migrateV6ToV7(db);
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
-  }
-
-  // Additive v2 → v3 → ... migration without dropping data (v8 drops
-  // prediction_records and v9 drops watchlist item annotation columns as
-  // explicit feature removals).
-  if (currentVersion === 2) {
-    migrateV2ToV3(db);
-    migrateV3ToV4(db);
-    migrateV4ToV5(db);
-    migrateV5ToV6(db);
-    migrateV6ToV7(db);
-    migrateV7ToV8(db);
-    migrateV8ToV9(db);
-    return;
-  }
-
-  // Any other mismatch (null first-run, or a foreign schema): reset.
-  resetSchema(db);
 }
 
 function migrateV2ToV3(db: StateDatabase): void {
@@ -466,35 +522,23 @@ function migrateV2ToV3(db: StateDatabase): void {
 
   // Ensure any tables or indexes added between versions are present.
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(3);
 }
 
 function migrateV3ToV4(db: StateDatabase): void {
   // CURRENT_SCHEMA indexes alert_events(dedupe_key); pre-v7 tables lack the column.
   addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(4);
 }
 
 function migrateV4ToV5(db: StateDatabase): void {
   addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(5);
 }
 
 function migrateV5ToV6(db: StateDatabase): void {
   addColumnIfMissing(db, "import_rows", "source_row_id", "TEXT");
   addColumnIfMissing(db, "import_rows", "source_account_ref", "TEXT");
   addColumnIfMissing(db, "import_rows", "source_metadata_json", "TEXT");
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(6);
 }
 
 function migrateV6ToV7(db: StateDatabase): void {
@@ -521,9 +565,6 @@ function migrateV6ToV7(db: StateDatabase): void {
   }
 
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(7);
 }
 
 function migrateV7ToV8(db: StateDatabase): void {
@@ -531,9 +572,6 @@ function migrateV7ToV8(db: StateDatabase): void {
   // documented destructive step for this table; all other rows are preserved.
   db.exec("DROP TABLE IF EXISTS prediction_records");
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(8);
 }
 
 function migrateV8ToV9(db: StateDatabase): void {
@@ -577,9 +615,6 @@ function migrateV8ToV9(db: StateDatabase): void {
     ALTER TABLE watchlist_items_v9 RENAME TO watchlist_items;
   `);
   db.exec(CURRENT_SCHEMA);
-
-  db.prepare("DELETE FROM schema_version").run();
-  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
 }
 
 function addColumnIfMissing(
