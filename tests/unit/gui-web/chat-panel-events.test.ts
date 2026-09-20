@@ -272,9 +272,18 @@ describe("ChatPanel event transcript rendering", () => {
     const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
 
     expect(source).toContain("const nonChatActionsUnavailable");
-    expect(source).toContain('gui.coordination?.ownerKind === "tui"');
+    expect(source).toContain("ownerKind ===");
+    expect(source).toContain('"tui";');
     expect(source).not.toContain(
       'gui.coordination?.ownerKind === "tui" &&\n    gui.role !== "writer"',
+    );
+    // gui.coordination is a single global value scoped to whichever session
+    // it was last fetched for; nonChatActionsUnavailable must only trust it
+    // when it matches the currently active session (resolveSessionScopedCoordination),
+    // not read gui.coordination directly, or a stale coordination from a
+    // previously visited TUI-owned session leaks into an unrelated one.
+    expect(source).toContain(
+      "resolveSessionScopedCoordination(gui.coordination, sessionView.activeSessionId)",
     );
     expect(source).toContain("const visibleAskUserPrompts = nonChatActionsUnavailable");
     // The unavailable branch must reject (not return a bare false) so awaiting

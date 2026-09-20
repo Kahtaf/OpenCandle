@@ -10,6 +10,7 @@ import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import {
   chatRunSessionTarget,
   hasSessionContent,
+  resolveSessionScopedCoordination,
   routeSessionView,
   sessionIdFromPath,
   shouldStartFreshHomeSession,
@@ -157,8 +158,8 @@ export function AppShell() {
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
   const nonChatActionsUnavailable =
-    gui.coordination?.sessionId === sessionView.activeSessionId &&
-    gui.coordination?.ownerKind === "tui";
+    resolveSessionScopedCoordination(gui.coordination, sessionView.activeSessionId)?.ownerKind ===
+    "tui";
   const visibleAskUserPrompts = nonChatActionsUnavailable
     ? []
     : gui.askUserPrompts.filter(
@@ -168,7 +169,11 @@ export function AppShell() {
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
     !gui.supportsSessionActions;
-  const actionRole = actionSurfaceRole(gui.role, gui.supportsSessionActions, gui.coordination);
+  const actionRole = actionSurfaceRole(
+    gui.role,
+    gui.supportsSessionActions,
+    resolveSessionScopedCoordination(gui.coordination, sessionView.activeSessionId),
+  );
 
   const openDrawer = useCallback(
     (drawer) => {
