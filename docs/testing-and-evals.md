@@ -51,10 +51,7 @@ Do not commit generated traces or local market-state files from this smoke.
 ```bash
 npm run test:e2e
 npm run test:e2e:cli
-npm run test:e2e:credential-prompt
-npm run test:e2e:credential-snooze
-npm run test:e2e:credential-soft-fallback
-npm run test:e2e:credential-per-workflow-cap
+npm run test:e2e:credential
 npm run test:e2e:harness-dcf
 ```
 
