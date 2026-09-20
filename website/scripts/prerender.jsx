@@ -1810,14 +1810,14 @@ async function copyStaticAssets() {
   await cp(join(root, "website/assets"), join(outDir, "assets"), { recursive: true });
   await cp(join(root, "docs/images"), join(outDir, "docs/images"), { recursive: true });
   await Promise.all([
-    copyFile(join(root, "video/public/approved/gui.mp4"), join(outDir, "assets/gui-demo.mp4")),
-    copyFile(join(root, "video/public/approved/tui.mp4"), join(outDir, "assets/tui-demo.mp4")),
+    copyFile(join(root, "website/assets/video/gui.mp4"), join(outDir, "assets/gui-demo.mp4")),
+    copyFile(join(root, "website/assets/video/tui.mp4"), join(outDir, "assets/tui-demo.mp4")),
     copyFile(
-      join(root, "video/public/approved/gui-start.png"),
+      join(root, "website/assets/video/gui-start.png"),
       join(outDir, "assets/gui-demo-poster.png"),
     ),
     copyFile(
-      join(root, "video/public/approved/tui-final.png"),
+      join(root, "website/assets/video/tui-final.png"),
       join(outDir, "assets/tui-demo-poster.png"),
     ),
   ]);
