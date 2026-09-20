@@ -1348,7 +1348,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const tuiSequence = opencandleEntrySequence(tui.agentTrace.customEntries ?? []);
     expect(tuiSequence).toContain("opencandle-analyst-step");
 
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    // Not the home route: "/" auto-starts a fresh session whenever the current
+    // one has content (shouldStartFreshHomeSession), and earlier tests in this
+    // file leave content behind. That request is dispatched from a React effect
+    // after the WebSocket boot message, so `networkidle` does not wait for it —
+    // it can land after this test creates its own session and replace the very
+    // session the run below is dispatched to. Settings is a plain route that
+    // never resets the session, so the run's session stays put.
+    await page.goto(`${guiUrl}/settings`, { waitUntil: "networkidle" });
     const newSession = await page.evaluate(async () => {
       const response = await fetch("/api/session/new", { method: "POST" });
       if (!response.ok) throw new Error(`new session failed: ${response.status}`);
@@ -1357,6 +1364,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const sessionId = stringValue(recordValue(newSession).sessionId);
     expect(sessionId).toBeTruthy();
 
+    await page.goto(`${guiUrl}/sessions/${encodeURIComponent(sessionId)}`, {
+      waitUntil: "networkidle",
+    });
     const guiRunEvents = await runGuiChat(page, sessionId, parityPrompt);
     const guiSnapshot = await fetchGuiSessionSnapshot(page, sessionId);
     const guiEntries = arrayValue(recordValue(guiSnapshot).entries);
