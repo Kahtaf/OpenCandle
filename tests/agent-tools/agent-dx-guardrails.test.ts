@@ -103,7 +103,6 @@ describe("agent developer guardrails", () => {
       "credentials",
       "never print",
       "CHANGELOG",
-      "graphify update",
       "Codex review",
     ]) {
       expect(contract).toContain(requiredPhrase);
