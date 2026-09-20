@@ -84,13 +84,7 @@ npm run eval -- release
 | `product` | `tests/scripts/run-product-evals.ts` | `--case <id>`, `--family <name>`, `--include-opt-in`, `--limit <n>` |
 | `competitive` | `tests/scripts/run-competitive-finance-eval.ts` | `--provider <id>`, `--model <id>`, `--count <n>`, `--seed <seed>` |
 | `competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | `--provider <id>`, `--model <id>` |
-| `competitive:analyze` | `tests/scripts/analyze-competitive-finance-report.ts` | optional report path |
 | `router-live` | `tests/scripts/run-live-router-eval.ts` | `--provider <id>`, `--model <id>` |
-| `replay:product` | `tests/scripts/run-main-branch-product-replay.ts` | `--base-ref <ref>` |
-| `replay:competitive` | `tests/scripts/run-main-branch-competitive-replay.ts` | forwards `--current-report`, `--base-report`, `--unsupported-base-reason`, `--current-ref`, `--base-ref` |
-| `scorecard` | `tests/scripts/build-oc-superiority-scorecard.ts` | forwards `--product-replay`, `--competitive-replay`, `--prompt-policy` |
-| `prompt-policy` | `tests/scripts/run-prompt-policy-manifest.ts` | `--ids <csv>`, `--limit <n>`, `--strict` |
-| `prompt-policy:parity` | `tests/scripts/run-prompt-policy-ref-parity.ts` | `--base-ref <ref>`, `--current-ref <ref>` |
 | `release` | `router-live`, `cases`, `product`, `competitive:frozen` | continues past failures and exits non-zero if any suite fails |
 
 For release preparation, run the full manual eval cadence:
