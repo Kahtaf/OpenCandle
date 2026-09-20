@@ -30,6 +30,20 @@ describe("truncateTobudget", () => {
 });
 
 describe("PromptContextBuilder", () => {
+  it("always carries the provider-tag data-gap guidance", () => {
+    // Tools emit [OPENCANDLE_*] tags on every route, so the handling rules
+    // must reach the model on every turn, not only workflow-dispatch ones.
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+    const prompt = builder.build();
+
+    expect(prompt).toContain("## Data Gaps and Skipped Sources");
+    expect(prompt).toContain("[OPENCANDLE_SOFT_DEGRADED ...]");
+    expect(prompt).toContain("**Data gaps**");
+    expect(prompt).toContain("(silenced)");
+    expect(prompt).toContain("Never echo a raw bracket tag to the user.");
+  });
+
   it("assembles sections in defined order", () => {
     const builder = new PromptContextBuilder();
     builder.setSection("output-format", "Format here");
