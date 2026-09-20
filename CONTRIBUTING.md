@@ -41,11 +41,13 @@ npm run test:e2e:providers
 ```bash
 npm run lint        # biome check (CI gates on this)
 npm run typecheck   # tsc --noEmit
-npm run gates       # full handoff battery: typecheck + biome ci + unit tests + agent-tool tests
-npm run review:pr   # repo autoreview + typecheck/lint/test (run before opening or updating a PR)
+npm run check       # typecheck + relay typecheck + biome ci
+npm run gates       # check + unit tests + relay tests + agent-tool tests
+npm run gates:full  # gates + site tests + GUI release smoke + hosted GUI tests + package-contents check
+npm run review:pr   # repo autoreview + gates:full (run before opening or updating a PR)
 ```
 
-Before opening a release-facing PR, also run the CI-equivalent local gate:
+Run `npm run gates:full` before opening or updating a PR; `npm run gates` is the faster mid-loop check. Before opening a release-facing PR, also run the CI-equivalent local gate:
 
 ```bash
 npm run release:check

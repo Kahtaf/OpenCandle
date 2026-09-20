@@ -46,11 +46,12 @@ jobs:
         if: matrix.node-version == '24.x'
         run: npx biome ci .
 
-      # The full Node 24.x leg builds the site because the public-site build
-      # contract tests in `npm test` read website/dist output.
-      - name: Build public docs
+      # test:site builds the site and runs the public-site build contract
+      # tests against it; package-contents validation below reuses the
+      # website/dist output it leaves behind.
+      - name: Run site tests
         if: matrix.node-version == '24.x'
-        run: npm run docs:site:build
+        run: npm run test:site
 
       - name: Validate package contents
         if: matrix.node-version == '24.x'

@@ -433,6 +433,11 @@ describe("invokeToolFromUi", () => {
   it("recovers a dead coordinator lock after tool delivery fails", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-failed-"));
     const originalFetch = globalThis.fetch;
+    // acquireWriterLock waits out the full stale-lock grace period (15s,
+    // DEFAULT_STALE_GRACE_MS in src/pi/session-writer-lock.ts) before
+    // reclaiming a lock whose pid is already confirmed dead. Fake timers let
+    // this test observe that recovery without a real 15s sleep.
+    vi.useFakeTimers();
     try {
       const currentSessionManager = {
         getSessionId: () => "current-session",
@@ -477,20 +482,25 @@ describe("invokeToolFromUi", () => {
         invokeTool,
       });
 
-      await expect(
-        controller.handleToolInvoke("get_stock_quote", { symbol: "AAPL" }, "target-session", {
-          actionId: "tool-action-1",
-        }),
-      ).resolves.toMatchObject({
+      const resultPromise = controller.handleToolInvoke(
+        "get_stock_quote",
+        { symbol: "AAPL" },
+        "target-session",
+        { actionId: "tool-action-1" },
+      );
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(resultPromise).resolves.toMatchObject({
         result: { details: { symbol: "AAPL", price: 190 } },
         isError: false,
       });
       expect(invokeTool).toHaveBeenCalledOnce();
     } finally {
+      vi.useRealTimers();
       globalThis.fetch = originalFetch;
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 25_000);
+  });
 
   it("does not advertise direct tool proxying for TUI coordinators until they support it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-"));

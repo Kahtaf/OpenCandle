@@ -239,6 +239,13 @@ describe("opencandle package commands", () => {
     expect(process.exitCode).toBe(0);
   });
 
+  // The "doctor" branch in src/cli.ts is the only path in this file that
+  // dynamically imports doctor/cli-command.js and
+  // @earendil-works/pi-coding-agent; this is the first test to hit that
+  // import, and it measurably exceeds vitest's default 5s test timeout on a
+  // loaded machine even though it stays under a second when idle. A
+  // beforeAll warm-up does not help: `runCli` calls `vi.resetModules()`, so
+  // the cost is re-paid on every fresh import, not just the first one.
   it("prints doctor health for doctor without starting the TUI", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -247,7 +254,7 @@ describe("opencandle package commands", () => {
     expect(log).toHaveBeenCalledWith("rendered doctor report");
     expect(piMocks.assertSupportedNodeVersion).not.toHaveBeenCalled();
     expect(piMocks.ensureOpenCandleNativeDependencies).not.toHaveBeenCalled();
-  });
+  }, 20_000);
 
   it.each([
     ["blocked", 1],
