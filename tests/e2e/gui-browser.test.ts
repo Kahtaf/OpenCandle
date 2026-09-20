@@ -1408,20 +1408,19 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     expect(analystStageCount).toBeGreaterThan(0);
 
     const dashboard = recordValue(recordValue(guiSnapshot).state);
-    // FINDING (2026-07-04): the /analyze transform path emits no
-    // "opencandle-workflow" entry (only router-dispatch paths in
-    // src/pi/opencandle-extension.ts do), so the projector's analysis
-    // tracking — activeAnalyses during the run, recentResearch after —
-    // never sees comprehensive analysis at all. Emitting that entry is an
-    // ask-first extension change; until then the truthful projection
-    // contract for a completed /analyze run is "no tracked analyses", and
-    // the analystsDone-from-entries math is owned by the projector unit
-    // tests over real entry shapes.
+    // The 2026-07-04 finding recorded here ("/analyze emits no
+    // opencandle-workflow entry, so the projector never sees comprehensive
+    // analysis") no longer holds: the transform path emits that entry, and a
+    // run that reaches its terminal answer is moved out of activeAnalyses into
+    // recentResearch. The analystsDone-from-entries math stays owned by the
+    // projector unit tests over real entry shapes.
     expect(arrayValue(dashboard.activeAnalyses)).toHaveLength(0);
     const recentResearch = arrayValue(dashboard.recentResearch).map(recordValue);
-    expect(
-      recentResearch.find((entry) => stringValue(entry.workflow) === "comprehensive_analysis"),
-    ).toBeUndefined();
+    const completedAnalysis = recentResearch.find(
+      (entry) => stringValue(entry.workflow) === "comprehensive_analysis",
+    );
+    expect(completedAnalysis).toBeDefined();
+    expect(stringValue(recordValue(completedAnalysis).sessionId)).toBe(sessionId);
 
     const screenshot = await page.screenshot({ fullPage: true });
     writeParityEvidence("gui-tui-parity.json", {
