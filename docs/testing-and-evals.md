@@ -128,7 +128,7 @@ Each run writes a timestamped `*_product-evals.json` report under `tests/evals/r
 
 The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins. Generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
 
-Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner resolved on demand (a global install on PATH, else fetched via `npx`; it is not a repo devDependency); the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped, with an actionable reason (what's missing and how to install it) rather than a silent skip, unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 
 ```bash
 npm run eval -- competitive
@@ -150,7 +150,7 @@ Useful knobs (all optional):
 - `OPENCANDLE_COMPETITIVE_PANEL=frozen`: rerun the fixed historical-loss panel instead of generating prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
 - `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
-- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
+- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides (each defaults to a global install on PATH, else `npx --yes <package>@<pinned range>`), timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls. See `docs/internal/competitive-benchmarking.md` for the exact resolution order and the `CODEX_PATH`/`CLAUDE_CODE_EXECUTABLE` env vars the runner sets so each ACP adapter drives your own global CLI/account instead of a bundled one.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window (ms) used by the competitive eval runner when it calls the shared harness.
 
 Do not commit raw transcripts or one-off run reports; treat run files as local evidence.
