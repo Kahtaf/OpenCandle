@@ -1,10 +1,4 @@
 import { defineConfig } from "vitest/config";
+import { evalsProject } from "./vitest.projects.js";
 
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: "node",
-    include: ["tests/evals/cases/**/*.eval.ts"],
-    testTimeout: 180_000,
-  },
-});
+export default defineConfig(evalsProject);
