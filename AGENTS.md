@@ -9,7 +9,8 @@ npm run gui                    # run local browser GUI at 127.0.0.1:14567
 npm test                       # unit tests — full test menu in tests/AGENTS.md
 npm run lint                   # biome check (CI gates on this)
 npm run typecheck              # TypeScript typecheck without emitting files
-npm run gates                  # full agent handoff proof battery
+npm run gates                  # agent handoff proof battery
+npm run gates:full             # gates plus site, GUI release smoke, hosted, package contents
 npm run bootstrap:agent        # prepare a fresh agent worktree
 npm run eval -- <suite>        # eval front door — the only supported eval surface
 npm run review:pr              # repo autoreview + typecheck/lint/test gate
@@ -25,7 +26,7 @@ npm run review:pr              # repo autoreview + typecheck/lint/test gate
 | Local GUI | `gui/` | → `gui/AGENTS.md` |
 | Type definitions | `src/types/<domain>.ts` | One file per domain |
 | Memory / persistence | `src/memory/` | SQLite-backed |
-| System prompt | `src/system-prompt.ts` | Core AI persona instructions |
+| System prompt | `src/prompts/context-builder.ts` | Core AI persona instructions |
 | Pi shell integration | `src/pi/` | Extension, session, tool adapter |
 | Add-on tool package | `docs/build-a-tool.md` | Tools as separate npm packages |
 
@@ -47,7 +48,7 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 
 ## GIT & REVIEW
 - Conventional commits (`feat:`, `fix:`, `docs:`, `style:`, `chore:`); atomic commits — one logical change per commit.
-- Run `npm run review:pr` (autoreview) after every sizable piece of work, before opening or updating a PR.
+- Run `npm run gates:full`, then `npm run review:pr` (autoreview), after every sizable piece of work and before opening or updating a PR.
 - For new atomic features or bug fixes, update the CHANGELOG.md (use changelog-automation skill). Entries are one sentence, user-visible behaviour only, no internal hardening lists.
 
 ## DELEGATION

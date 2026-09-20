@@ -9,7 +9,7 @@ import type { RouterInputContext } from "./router-types.js";
  * `target_price`). A future `/forget` command is the designated scrubbing
  * primitive for removing or masking matching entries from the session branch
  * so they no longer reach the router. See
- * `openspec/changes/router-context-and-observability/` for the follow-up.
+ * `openspec/specs/test-harness-observability/` for the follow-up.
  */
 
 function renderCatalog(): string {
