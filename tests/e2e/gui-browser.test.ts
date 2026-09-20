@@ -1007,7 +1007,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await expectVisible(mocked.getByText("Delayed prompt"));
-    await expectVisible(mocked.getByText("Working"));
+    await expectVisible(mocked.getByText("Request received…"));
     await expect(mocked.getByText("Delayed answer").count()).resolves.toBe(0);
 
     await mocked.evaluate(() => window.__releaseDelayedRun?.());
