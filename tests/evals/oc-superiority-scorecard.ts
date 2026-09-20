@@ -163,9 +163,6 @@ function classifyArchitectureSignals(report: PromptPolicyManifestLike | undefine
   const hasPlanning = observed.some(
     (entry) => typeof entry.taskFamily === "string" || typeof entry.policyCardId === "string",
   );
-  const hasArtifactContracts = observed.some(
-    (entry) => Array.isArray(entry.artifactContractIds) && entry.artifactContractIds.length > 0,
-  );
   const hasEvidenceTypes = observed.some(
     (entry) => Array.isArray(entry.evidenceTypes) && entry.evidenceTypes.length > 0,
   );
@@ -176,8 +173,8 @@ function classifyArchitectureSignals(report: PromptPolicyManifestLike | undefine
   );
   const reasons: string[] = [];
   if (!hasPlanning) reasons.push("planning metadata missing from prompt-policy report");
-  if (!hasArtifactContracts && !hasEvidenceTypes) {
-    reasons.push("artifact-contract or evidence-plan signals missing from prompt-policy report");
+  if (!hasEvidenceTypes) {
+    reasons.push("evidence-plan signals missing from prompt-policy report");
   }
   const blockingReasons = [...reasons];
   const totalSectionBudget = Number(report.promptBudget?.totalSectionBudget ?? 0);

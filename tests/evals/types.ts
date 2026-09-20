@@ -4,12 +4,8 @@ import type {
   StructuredCheckId,
 } from "../../src/routing/planning.js";
 import type { ClassificationResult, WorkflowType } from "../../src/routing/types.js";
-import type {
-  RetryEligibilityTrace,
-  StructuredCheckResult,
-} from "../../src/runtime/answer-contracts.js";
-import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
-import type { PlanningEvidenceRecord } from "../../src/runtime/planning-evidence.js";
+import type { PlanningEvidenceRecord } from "../harness/planning-evidence.js";
+import type { RetryEligibilityTrace, StructuredCheckResult } from "../harness/structured-checks.js";
 import type { CustomEntryTrace } from "../harness/types.js";
 import type { SeededMarketStateFixture } from "./competitive-finance.js";
 import type { SavedMarketStateFidelityAssertion } from "./scorers/saved-market-state-fidelity.js";
@@ -47,7 +43,6 @@ export interface PlanningTelemetry {
   structuredCheckIds: StructuredCheckId[];
   workspacePlaceholderIds: string[];
   artifactPlaceholderIds: string[];
-  artifactContractIds: ArtifactContractId[];
   capabilityGapIds: CapabilityGapId[];
   evidenceRecords: PlanningEvidenceRecord[];
   structuredCheckResults: StructuredCheckResult[];

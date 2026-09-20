@@ -291,7 +291,6 @@ describe("scoreSavedMarketStateFidelity", () => {
         structuredCheckIds: [],
         workspacePlaceholderIds: [],
         artifactPlaceholderIds: [],
-        artifactContractIds: [],
         capabilityGapIds: [],
         evidenceRecords: [],
         structuredCheckResults: [],

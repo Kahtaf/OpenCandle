@@ -1,7 +1,3 @@
-import {
-  type ArtifactContractId,
-  artifactContractIdsForPlanning,
-} from "../runtime/artifact-contracts.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -204,7 +200,6 @@ export interface PlanningEnvelope extends PlanningSelection {
   behaviorMode: PlanningBehaviorMode;
   workspacePlaceholderIds: string[];
   artifactPlaceholderIds: string[];
-  artifactContractIds?: ArtifactContractId[];
   diagnostics: RouterDiagnostic[];
 }
 
@@ -465,7 +460,6 @@ export function buildPlanningEnvelope(
     behaviorMode,
     workspacePlaceholderIds: [],
     artifactPlaceholderIds: [],
-    artifactContractIds: artifactContractIdsForPlanning(selection),
     diagnostics: [
       ...diagnostics,
       ...(output.diagnostics.length > 0

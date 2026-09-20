@@ -8,7 +8,7 @@ import {
   EVIDENCE_PLAN_REGISTRY,
   normalizeProviderGapFromToolText,
   providerResultToPlanningEvidence,
-} from "../../../src/runtime/planning-evidence.js";
+} from "../../harness/planning-evidence.js";
 
 describe("planning evidence plans", () => {
   it("implements only market_status and ticker_disambiguation evidence plans", () => {

@@ -15,7 +15,6 @@ describe("OpenCandle superiority scorecard", () => {
       }),
       promptPolicy: promptPolicy({
         failed: 0,
-        artifactContracts: ["portfolio_exposure_map"],
         structuredFailures: [],
       }),
     });
@@ -45,7 +44,6 @@ describe("OpenCandle superiority scorecard", () => {
       }),
       promptPolicy: promptPolicy({
         failed: 1,
-        artifactContracts: [],
         evidenceTypes: [],
         structuredFailures: ["target_bands_present"],
       }),
@@ -73,7 +71,6 @@ describe("OpenCandle superiority scorecard", () => {
       }),
       promptPolicy: promptPolicy({
         failed: 0,
-        artifactContracts: ["portfolio_exposure_map"],
         evidenceTypes: ["portfolio_exposure_map"],
         structuredFailures: ["assumption_disclosed"],
       }),
@@ -100,7 +97,6 @@ describe("OpenCandle superiority scorecard", () => {
       }),
       promptPolicy: promptPolicy({
         failed: 0,
-        artifactContracts: ["portfolio_exposure_map"],
         structuredFailures: [],
         promptBudget: { totalSectionBudget: 32_000, ceiling: 31_500 },
       }),
@@ -221,7 +217,6 @@ function competitiveReplay(input: {
 
 function promptPolicy(input: {
   failed: number;
-  artifactContracts: string[];
   evidenceTypes?: string[];
   structuredFailures: string[];
   promptBudget?: { totalSectionBudget: number; ceiling: number };
@@ -246,7 +241,6 @@ function promptPolicy(input: {
           taskFamily: "portfolio_review",
           policyCardId: "portfolio_rebalance_review",
           evidenceTypes: input.evidenceTypes ?? ["portfolio_exposure_map"],
-          artifactContractIds: input.artifactContracts,
           structuredCheckFailures: input.structuredFailures,
         },
       },

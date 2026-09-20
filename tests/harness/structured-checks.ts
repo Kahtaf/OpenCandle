@@ -4,7 +4,7 @@ import type {
   CommitmentMode,
   StructuredCheckId,
   TaskFamily,
-} from "../routing/planning.js";
+} from "../../src/routing/planning.js";
 import type { PlanningEvidenceRecord, PlanningEvidenceType } from "./planning-evidence.js";
 
 export type FinalAnswerField =

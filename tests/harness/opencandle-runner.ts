@@ -22,21 +22,20 @@ import type {
   ExtractedEntities,
   WorkflowType,
 } from "../../src/routing/types.js";
-import {
-  ANSWER_CONTRACT_REGISTRY,
-  type FinalAnswerField,
-  runStructuredChecks,
-} from "../../src/runtime/answer-contracts.js";
-import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
+import type { AskUserHandler } from "../../src/types/index.js";
+import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import {
   buildMarketStatusEvidence,
   buildPortfolioExposureMapEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
-} from "../../src/runtime/planning-evidence.js";
-import type { AskUserHandler } from "../../src/types/index.js";
-import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
+} from "./planning-evidence.js";
+import {
+  ANSWER_CONTRACT_REGISTRY,
+  type FinalAnswerField,
+  runStructuredChecks,
+} from "./structured-checks.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
 
@@ -442,7 +441,6 @@ function planningTelemetryFromTrace(
     structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
     workspacePlaceholderIds: stringArrayOrUndefined(planning.workspacePlaceholderIds) ?? [],
     artifactPlaceholderIds: stringArrayOrUndefined(planning.artifactPlaceholderIds) ?? [],
-    artifactContractIds: artifactContractArrayOrEmpty(planning.artifactContractIds),
     capabilityGapIds,
     evidenceRecords,
     structuredCheckResults: structuredTrace?.results ?? [],
@@ -741,18 +739,6 @@ function capabilityGapArrayOrEmpty(value: unknown): CapabilityGapId[] {
   ]);
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is CapabilityGapId =>
     allowed.has(item as CapabilityGapId),
-  );
-}
-
-function artifactContractArrayOrEmpty(value: unknown): ArtifactContractId[] {
-  const allowed = new Set([
-    "concept_example_table",
-    "portfolio_exposure_map",
-    "rebalance_action_plan",
-    "source_coverage_table",
-  ]);
-  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId =>
-    allowed.has(item),
   );
 }
 
