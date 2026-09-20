@@ -111,6 +111,16 @@ export function AppShell() {
   const homeResetSessionRef = useRef("");
   const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);
+  // True for the whole lifetime of an in-flight createFreshHomeSession()
+  // call. shouldPrepareFreshHomeSession() flips back to false as soon as the
+  // effect below records homeResetSessionRef (needed so the effect itself
+  // does not refire on every unrelated render while the request is still
+  // pending), which can happen before the request actually settles -- any
+  // other state update between those two renders (for example the boot
+  // message's deferred catalog/modelSetup transition) would otherwise
+  // re-expose the stale transcript as fully interactive while the real
+  // fresh-session request is still in flight.
+  const [homeSessionPreparing, setHomeSessionPreparing] = useState(false);
   const createFreshHomeSession = useCallback(() => {
     if (homeSessionCreationRef.current) return homeSessionCreationRef.current;
     const creation = gui.newSession();
@@ -142,7 +152,7 @@ export function AppShell() {
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
     canStartFreshHomeSession: canPrepareFreshHomeSession,
-    pendingFreshHomeSession: shouldPrepareFreshHomeSession,
+    pendingFreshHomeSession: shouldPrepareFreshHomeSession || homeSessionPreparing,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
@@ -267,9 +277,12 @@ export function AppShell() {
     }
     if (!shouldPrepareFreshHomeSession) return;
     homeResetSessionRef.current = gui.currentSessionId;
-    void createFreshHomeSession().then((sessionId) => {
-      if (sessionId) homeResetSessionRef.current = sessionId;
-    });
+    setHomeSessionPreparing(true);
+    void createFreshHomeSession()
+      .then((sessionId) => {
+        if (sessionId) homeResetSessionRef.current = sessionId;
+      })
+      .finally(() => setHomeSessionPreparing(false));
   }, [pathname, gui.currentSessionId, createFreshHomeSession, shouldPrepareFreshHomeSession]);
 
   useEffect(() => {

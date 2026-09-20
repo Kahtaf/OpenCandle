@@ -1182,6 +1182,12 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   it("disables empty-state suggestions while home waits for a fresh session", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
+      // A fresh home session is only prepared for a session the server has
+      // actually persisted to disk (shouldStartFreshHomeSession checks
+      // gui.currentSessionPersisted); a session with entries that never
+      // reports itself as persisted stays on its transcript instead of
+      // clearing to the empty-state suggestions this test exercises.
+      sessionPersisted: true,
       entries: [
         {
           type: "message",
@@ -1193,18 +1199,51 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     });
     await mocked.addInitScript(() => {
       window.__fetchCount = 0;
-      window.fetch = () => {
+      window.fetch = (input) => {
         window.__fetchCount += 1;
+        const url = String(input);
+        if (url.endsWith("/api/session/new")) {
+          // The pending-fresh-session effect calls this for real while the
+          // stale transcript is hidden. Hold it open so the test can assert
+          // the disabled window before letting it resolve to a genuinely
+          // empty session -- otherwise the empty-state suggestions this
+          // test checks would fall back to the stale transcript (a broken
+          // creation) or flip enabled again (an instant one) before the
+          // assertions below run.
+          return new Promise((resolve) => {
+            window.__releaseFreshSession = () =>
+              resolve(
+                new Response(
+                  JSON.stringify({
+                    role: "writer",
+                    sessionId: "fresh-session",
+                    sessionPersisted: true,
+                    coordination: { sessionId: "fresh-session", status: "ready" },
+                    catalog: { tools: [], workflows: [], providers: [] },
+                    modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+                    askUserPrompts: [],
+                    sessions: [],
+                    snapshot: { sessionId: "fresh-session", entries: [], events: [] },
+                  }),
+                  { status: 200, headers: { "content-type": "application/json" } },
+                ),
+              );
+          });
+        }
         return Promise.resolve(new Response("", { status: 204 }));
       };
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
     const suggestion = mocked.getByRole("button", { name: "What is NVDA trading at?" });
+    await expectVisible(suggestion);
+    const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
     await expect(suggestion.isDisabled()).resolves.toBe(true);
     await suggestion.click({ force: true });
     await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(baselineFetchCount);
+
+    await mocked.evaluate(() => window.__releaseFreshSession?.());
+    await expect(suggestion.isDisabled()).resolves.toBe(false);
     await mocked.close();
   }, 30_000);
 
@@ -1790,6 +1829,7 @@ async function installMockSocket(
             type: "boot",
             role: mockOverrides.role ?? "writer",
             supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
+            sessionPersisted: mockOverrides.sessionPersisted ?? false,
             sessionId: bootSessionId,
             // Mirrors the real GUI server's coordinationStateForSession: a
             // follower process never proxies market-state mutations to
@@ -1813,6 +1853,11 @@ async function installMockSocket(
           this.emit({
             type: "state.snapshot",
             sessionId: bootSessionId,
+            // Mirrors the real server's buildStateSnapshot(), which also
+            // reports sessionPersisted: useGuiConnection's state.snapshot
+            // handler re-derives currentSessionPersisted from this message
+            // and would otherwise clobber the value the boot message set.
+            sessionPersisted: mockOverrides.sessionPersisted ?? false,
             state: mockOverrides.dashboard ?? {
               watchlist: [],
               activeAnalyses: [],
