@@ -1,9 +1,10 @@
 /**
  * End-to-end integration test for the orchestration layer.
  *
- * Tests the full pipeline: user input → classify → extract entities →
- * resolve slots → build prompt → persist to SQLite →
- * extract preferences → retrieve memory context.
+ * Tests the full pipeline: user input → extract entities → resolve slots →
+ * build prompt → persist to SQLite → extract preferences → retrieve memory
+ * context. Route classification itself belongs to the LLM router and is
+ * covered by `tests/unit/routing/router.test.ts` and the router fixtures.
  *
  * Session lifecycle, chat history, and tool-call tracking are handled
  * by Pi's native session persistence — not tested here.
@@ -19,7 +20,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildMemoryContext, initDatabase, MemoryStorage } from "../../src/memory/index.js";
 import { extractPreferences } from "../../src/memory/preference-extractor.js";
 import { buildCompareAssetsPrompt } from "../../src/prompts/workflow-prompts.js";
-import { classifyIntent } from "../../src/routing/classify-intent.js";
 import { extractEntities } from "../../src/routing/entity-extractor.js";
 import {
   resolveOptionsScreenerSlots,
@@ -63,20 +63,14 @@ describe("E2E integration: full orchestration pipeline", () => {
   describe("Scenario 1: portfolio builder from ambiguous prompt", () => {
     const INPUT = "If I had $10k to invest today, what should I invest in?";
 
-    it("classifies as portfolio_builder", () => {
-      const classification = classifyIntent(INPUT);
-      expect(classification.workflow).toBe("portfolio_builder");
-      expect(classification.tier).toBe("rule");
-    });
-
     it("extracts $10k budget", () => {
       const entities = extractEntities(INPUT);
       expect(entities.budget).toBe(10_000);
     });
 
     it("resolves slots with defaults and produces a structured prompt", () => {
-      const classification = classifyIntent(INPUT);
-      const resolution = resolvePortfolioSlots(classification.entities);
+      const entities = extractEntities(INPUT);
+      const resolution = resolvePortfolioSlots(entities);
 
       expect(resolution.resolved.budget).toBe(10_000);
       expect(resolution.resolved.riskProfile).toBe("balanced");
@@ -92,13 +86,13 @@ describe("E2E integration: full orchestration pipeline", () => {
     });
 
     it("persists a workflow run to SQLite", () => {
-      const classification = classifyIntent(INPUT);
-      const resolution = resolvePortfolioSlots(classification.entities);
+      const entities = extractEntities(INPUT);
+      const resolution = resolvePortfolioSlots(entities);
 
       storage.insertWorkflowRun({
         sessionId,
         workflowType: "portfolio_builder",
-        inputSlotsJson: JSON.stringify(classification.entities),
+        inputSlotsJson: JSON.stringify(entities),
         resolvedSlotsJson: JSON.stringify(resolution.resolved),
         defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
       });
@@ -119,11 +113,6 @@ describe("E2E integration: full orchestration pipeline", () => {
   describe("Scenario 2: options screener from natural prompt", () => {
     const INPUT = "Give me the best MSFT call options that are a month out";
 
-    it("classifies as options_screener", () => {
-      const classification = classifyIntent(INPUT);
-      expect(classification.workflow).toBe("options_screener");
-    });
-
     it("extracts MSFT symbol, bullish direction, month DTE", () => {
       const entities = extractEntities(INPUT);
       expect(entities.symbols).toContain("MSFT");
@@ -132,8 +121,8 @@ describe("E2E integration: full orchestration pipeline", () => {
     });
 
     it("resolves slots with defaults and produces a structured prompt", () => {
-      const classification = classifyIntent(INPUT);
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities(INPUT);
+      const resolution = resolveOptionsScreenerSlots(entities);
 
       expect(resolution.resolved.symbol).toBe("MSFT");
       expect(resolution.resolved.direction).toBe("bullish");
@@ -154,11 +143,6 @@ describe("E2E integration: full orchestration pipeline", () => {
   describe("Scenario 3: options with premium cap", () => {
     const INPUT = "Show me safer NVDA call options next month under $500 premium";
 
-    it("classifies as options_screener", () => {
-      const classification = classifyIntent(INPUT);
-      expect(classification.workflow).toBe("options_screener");
-    });
-
     it("extracts NVDA, bullish, month, and $500 max premium", () => {
       const entities = extractEntities(INPUT);
       expect(entities.symbols).toContain("NVDA");
@@ -168,8 +152,8 @@ describe("E2E integration: full orchestration pipeline", () => {
     });
 
     it("passes maxPremium through to resolved slots", () => {
-      const classification = classifyIntent(INPUT);
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities(INPUT);
+      const resolution = resolveOptionsScreenerSlots(entities);
       expect(resolution.resolved.maxPremium).toBe(500);
     });
   });
@@ -180,16 +164,10 @@ describe("E2E integration: full orchestration pipeline", () => {
   describe("Scenario 4: compare assets", () => {
     const INPUT = "compare AAPL MSFT GOOGL";
 
-    it("classifies as compare_assets with 3 symbols", () => {
-      const classification = classifyIntent(INPUT);
-      expect(classification.workflow).toBe("compare_assets");
-      expect(classification.entities.symbols).toEqual(["AAPL", "MSFT", "GOOGL"]);
-    });
-
     it("produces a comparison prompt with all symbols and tools", () => {
-      const classification = classifyIntent(INPUT);
+      const entities = extractEntities(INPUT);
       const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: { symbols: classification.entities.symbols },
+        resolved: { symbols: entities.symbols },
         sources: { symbols: "user" },
         defaultsUsed: [],
         missingRequired: [],
@@ -206,26 +184,6 @@ describe("E2E integration: full orchestration pipeline", () => {
   // -----------------------------------------------------------------------
   // Scenario 5: "analyze NVDA" — backward compatibility
   // Must still trigger single_asset_analysis exactly as before.
-  // -----------------------------------------------------------------------
-  describe("Scenario 5: backward compatibility — analyze NVDA", () => {
-    it("classifies as single_asset_analysis with symbol NVDA", () => {
-      const classification = classifyIntent("analyze NVDA");
-      expect(classification.workflow).toBe("single_asset_analysis");
-      expect(classification.confidence).toBe(1.0);
-      expect(classification.entities.symbols).toEqual(["NVDA"]);
-    });
-
-    it("also works with $ prefix", () => {
-      const classification = classifyIntent("analyze $NVDA");
-      expect(classification.workflow).toBe("single_asset_analysis");
-    });
-
-    it("also works with 'deep dive on'", () => {
-      const classification = classifyIntent("deep dive on TSLA");
-      expect(classification.workflow).toBe("single_asset_analysis");
-      expect(classification.entities.symbols).toEqual(["TSLA"]);
-    });
-  });
 
   // -----------------------------------------------------------------------
   // Scenario 6: Preference extraction, persistence, and retrieval
@@ -286,11 +244,10 @@ describe("E2E integration: full orchestration pipeline", () => {
       });
 
       // Simulate next turn: classify, get preferences, resolve
-      const classification = classifyIntent("invest $5k");
-      expect(classification.workflow).toBe("portfolio_builder");
+      const entities = extractEntities("invest $5k");
 
       const preferences = storage.getWorkflowPreferences("global");
-      const resolution = resolvePortfolioSlots(classification.entities, preferences);
+      const resolution = resolvePortfolioSlots(entities, preferences);
 
       expect(resolution.resolved.riskProfile).toBe("conservative");
       expect(resolution.sources.riskProfile).toBe("preference");
@@ -305,13 +262,12 @@ describe("E2E integration: full orchestration pipeline", () => {
       });
 
       const input = "aggressive growth portfolio for $10k";
-      const classification = classifyIntent(input);
-      expect(classification.workflow).toBe("portfolio_builder");
+      const entities = extractEntities(input);
 
       // In the real CLI, collectCurrentTurnPreferences merges extracted + stored.
       // Here we simulate that: entities.riskProfile = "aggressive" from extraction.
-      expect(classification.entities.riskProfile).toBe("aggressive");
-      const resolution = resolvePortfolioSlots(classification.entities);
+      expect(entities.riskProfile).toBe("aggressive");
+      const resolution = resolvePortfolioSlots(entities);
       expect(resolution.resolved.riskProfile).toBe("aggressive");
       expect(resolution.sources.riskProfile).toBe("user");
     });
@@ -351,42 +307,14 @@ describe("E2E integration: full orchestration pipeline", () => {
 
   // -----------------------------------------------------------------------
   // Scenario 8: Cross-workflow routing edge cases
-  // -----------------------------------------------------------------------
-  describe("Scenario 8: routing edge cases", () => {
-    it("'what does delta mean?' → general_finance_qa, not options_screener", () => {
-      const classification = classifyIntent("what does delta mean?");
-      expect(classification.workflow).toBe("general_finance_qa");
-    });
-
-    it("'show my portfolio' → watchlist_or_tracking, not portfolio_builder", () => {
-      const classification = classifyIntent("show my portfolio");
-      expect(classification.workflow).toBe("watchlist_or_tracking");
-    });
-
-    it("'add NVDA to my watchlist' → watchlist_or_tracking", () => {
-      const classification = classifyIntent("add NVDA to my watchlist");
-      expect(classification.workflow).toBe("watchlist_or_tracking");
-    });
-
-    it("'hello' → unclassified (passes through to generic agent)", () => {
-      const classification = classifyIntent("hello");
-      expect(classification.workflow).toBe("unclassified");
-    });
-
-    it("'which is better, SPY or QQQ?' → compare_assets with 2 symbols", () => {
-      const classification = classifyIntent("which is better, SPY or QQQ?");
-      expect(classification.workflow).toBe("compare_assets");
-      expect(classification.entities.symbols).toEqual(["SPY", "QQQ"]);
-    });
-  });
 
   // -----------------------------------------------------------------------
   // Scenario 9: DTE hint to target mapping
   // -----------------------------------------------------------------------
   describe("Scenario 9: DTE hint resolution", () => {
     it("'weekly AAPL puts' → 7_to_14_days DTE", () => {
-      const classification = classifyIntent("weekly AAPL puts");
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities("weekly AAPL puts");
+      const resolution = resolveOptionsScreenerSlots(entities);
       expect(resolution.resolved.dteTarget).toBe("7_to_14_days");
       expect(resolution.sources.dteTarget).toBe("user");
     });
@@ -417,15 +345,15 @@ describe("E2E integration: full orchestration pipeline", () => {
     });
 
     it("'LEAPS on MSFT' → 180_plus_days DTE", () => {
-      const classification = classifyIntent("LEAPS on MSFT");
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities("LEAPS on MSFT");
+      const resolution = resolveOptionsScreenerSlots(entities);
       expect(resolution.resolved.dteTarget).toBe("180_plus_days");
       expect(resolution.sources.dteTarget).toBe("user");
     });
 
     it("'AAPL calls' with no DTE hint → default 25_to_45_days", () => {
-      const classification = classifyIntent("AAPL calls");
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities("AAPL calls");
+      const resolution = resolveOptionsScreenerSlots(entities);
       expect(resolution.resolved.dteTarget).toBe("25_to_45_days");
       expect(resolution.sources.dteTarget).toBe("default");
     });
@@ -452,11 +380,10 @@ describe("E2E integration: full orchestration pipeline", () => {
 
       // Turn 2: user asks for portfolio without restating preferences
       const turn2 = "invest $5k";
-      const classification = classifyIntent(turn2);
-      expect(classification.workflow).toBe("portfolio_builder");
+      const entities = extractEntities(turn2);
 
       const preferences = storage.getWorkflowPreferences("global");
-      const resolution = resolvePortfolioSlots(classification.entities, preferences);
+      const resolution = resolvePortfolioSlots(entities, preferences);
 
       expect(resolution.resolved.budget).toBe(5_000);
       expect(resolution.resolved.riskProfile).toBe("conservative");
@@ -474,8 +401,8 @@ describe("E2E integration: full orchestration pipeline", () => {
   // -----------------------------------------------------------------------
   describe("Scenario 11: local timezone date grounding", () => {
     it("portfolio prompt date matches local date, not UTC", () => {
-      const classification = classifyIntent("invest $10k");
-      const resolution = resolvePortfolioSlots(classification.entities);
+      const entities = extractEntities("invest $10k");
+      const resolution = resolvePortfolioSlots(entities);
       const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));
 
       const now = new Date();
@@ -484,8 +411,8 @@ describe("E2E integration: full orchestration pipeline", () => {
     });
 
     it("options prompt expiration window uses local dates", () => {
-      const classification = classifyIntent("MSFT calls a month out");
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const entities = extractEntities("MSFT calls a month out");
+      const resolution = resolveOptionsScreenerSlots(entities);
       const plan = workflowPrompts(buildOptionsScreenerWorkflowDefinition(resolution));
 
       // The expiration window should contain dates that are local, not UTC.

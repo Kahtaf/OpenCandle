@@ -271,7 +271,7 @@ describe("validateRouterOutput", () => {
 });
 
 describe("route()", () => {
-  it("keeps valid LLM route kind authoritative when legacy rules would classify differently", async () => {
+  it("keeps a valid LLM route kind authoritative", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "analyze NVDA" },
       fixedClient(
@@ -289,11 +289,6 @@ describe("route()", () => {
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.workflow).toBeUndefined();
-    expect(result.diagnostics).not.toContainEqual(
-      expect.objectContaining({
-        code: "deterministic_failure_recovery",
-      }),
-    );
   });
 
   it("returns validated output on first successful call", async () => {
@@ -463,11 +458,15 @@ describe("route()", () => {
     };
     const result = await route({ ...BASE_INPUT, text: "hello" }, client);
     expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
     expect(result.missing_required).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "router_validation_failed" }),
+    );
   });
 
-  it("upgrades persistent router validation failure when deterministic rules can classify", async () => {
+  it("falls back to a general finance agent task when the router never returns valid JSON", async () => {
     const client: RouterLlmClient = {
       async complete() {
         return "not json at all";
@@ -484,10 +483,9 @@ describe("route()", () => {
     expect(result.routeKind).toBe("agent_task");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
+    expect(result.tool_bundles).toContain("core_market");
     expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "deterministic_failure_recovery",
-      }),
+      expect.objectContaining({ code: "router_validation_failed" }),
     );
   });
 
@@ -1085,9 +1083,7 @@ describe("route()", () => {
     expect(result.entities.symbols).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
     expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "macro_task_inferred_from_prompt",
-      }),
+      expect.objectContaining({ code: "router_validation_failed" }),
     );
   });
 
@@ -1759,6 +1755,55 @@ describe("route()", () => {
         code: "stateful_tracking_corrected_to_agent_task",
       }),
     );
+  });
+
+  it("promotes a clarification whose own workflow already has every required slot", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "find me bullish calls on NVDA 30-45 DTE" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "clarification",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], direction: "bullish" },
+          slots: { symbol: { value: "NVDA", source: "user", confidence: "high" } },
+          preference_updates: [],
+          missing_required: ["symbol"],
+          tool_bundles: ["clarification"],
+          diagnostics: [],
+          reasoning: "asked for a symbol the turn already supplied",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.missing_required).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "unnecessary_clarification_corrected" }),
+    );
+  });
+
+  it("leaves a clarification alone when its workflow really is missing a slot", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "screen calls for me" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "clarification",
+          workflow: "options_screener",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: ["symbol"],
+          tool_bundles: ["clarification"],
+          diagnostics: [],
+          reasoning: "no ticker in the turn",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("clarification");
+    expect(result.missing_required).toEqual(["symbol"]);
+    expect(result.tool_bundles).toEqual(["clarification"]);
   });
 
   it("removes live tool bundles for no-symbol conceptual education", async () => {

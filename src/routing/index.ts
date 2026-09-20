@@ -1,7 +1,5 @@
-export { classifyIntent } from "./classify-intent.js";
 export { OPTIONS_SCREENER_DEFAULTS, PORTFOLIO_DEFAULTS, parseDteTarget } from "./defaults.js";
 export { extractBudget, extractEntities } from "./entity-extractor.js";
-export { classifyWithLegacyRules } from "./legacy-rule-router.js";
 export type {
   AnswerContractId,
   CapabilityGapId,

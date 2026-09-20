@@ -756,11 +756,10 @@ export default function openCandleExtension(
   });
 
   /**
-   * LLM-mode input handler. In this mode `classifyIntent` and
-   * `extractPreferences` are NOT called — the router is the single source of
-   * classification + preference extraction. Mirrors rule-mode dispatch for
-   * identified workflows; for `fallback` turns, stashes a fallback context
-   * for the next `before_agent_start` to inject.
+   * Router input handler. The router is the single source of classification
+   * and preference extraction; `extractPreferences` is NOT called here. It
+   * dispatches identified workflows, and for every other route kind stashes a
+   * fallback context for the next `before_agent_start` to inject.
    */
   async function handleLlmRouterTurn(
     text: string,

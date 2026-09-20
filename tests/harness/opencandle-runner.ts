@@ -10,7 +10,6 @@ import {
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
-import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type {
   AnswerContractId,
   CapabilityGapId,
@@ -111,8 +110,10 @@ export async function runOpenCandleSession(
     let customEntryOffset = 0;
     for (const [promptIndex, prompt] of prompts.entries()) {
       collector.setPromptIndex(promptIndex);
+      const sessionManager = session.sessionManager;
       await promptAndWaitForSettle(session, prompt, {
-        settleGraceMs: options.settleGraceMs ?? defaultSettleGraceMs(prompt),
+        resolveSettleGraceMs: () =>
+          options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
         timeoutMs: options.timeoutMs ?? 900_000,
       });
       const drained = drainOpenCandleCustomEntries(
@@ -248,7 +249,7 @@ function createScriptedAskHandler(
 async function promptAndWaitForSettle(
   session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"],
   prompt: string,
-  options: { settleGraceMs: number; timeoutMs: number },
+  options: { resolveSettleGraceMs: () => number; timeoutMs: number },
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -279,7 +280,7 @@ async function promptAndWaitForSettle(
       settleTimer = setTimeout(() => {
         cleanup();
         resolve();
-      }, options.settleGraceMs);
+      }, options.resolveSettleGraceMs());
     };
 
     unsub = session.subscribe((event: AgentSessionEvent) => {
@@ -301,11 +302,28 @@ async function promptAndWaitForSettle(
   });
 }
 
-function defaultSettleGraceMs(prompt: string): number {
-  const classification = classifyIntent(prompt);
-  return isAnalysisRequest(prompt).match || MULTI_STEP_WORKFLOWS.has(classification.workflow)
-    ? 30_000
-    : 3_000;
+/**
+ * A dispatched multi-step workflow keeps emitting steps after the first
+ * `agent_end`, so it needs the longer settle grace. Read what the turn
+ * actually dispatched from the session's own workflow entries rather than
+ * guessing the workflow from the prompt text.
+ */
+function settleGraceMsForTurn(
+  prompt: string,
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+): number {
+  if (isAnalysisRequest(prompt).match) return 30_000;
+  return dispatchedMultiStepWorkflow(sessionManager) ? 30_000 : 3_000;
+}
+
+function dispatchedMultiStepWorkflow(
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+): boolean {
+  return drainOpenCandleCustomEntries(sessionManager).some((entry) => {
+    if (entry.customType !== "opencandle-workflow" || !isRecord(entry.data)) return false;
+    const workflow = entry.data.workflow;
+    return typeof workflow === "string" && MULTI_STEP_WORKFLOWS.has(workflow as WorkflowType);
+  });
 }
 
 function classificationFromTrace(agentTrace: AgentTrace): ClassificationResult {
@@ -321,7 +339,9 @@ function classificationFromTrace(agentTrace: AgentTrace): ClassificationResult {
       entities: output.entities ?? { symbols: [] },
     };
   }
-  return classifyIntent(agentTrace.prompt);
+  // No router entry means the router never ran for this turn (for example,
+  // no model credential was configured), so there is nothing to report.
+  return { workflow: "unclassified", confidence: 0, tier: "llm", entities: { symbols: [] } };
 }
 
 function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {

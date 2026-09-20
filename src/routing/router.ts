@@ -3,7 +3,6 @@ import {
   isAmbiguousConceptUsage,
   isCurrencyCodeUsage,
 } from "./entity-extractor.js";
-import { classifyWithLegacyRules } from "./legacy-rule-router.js";
 import {
   computeMissingRequiredSlots,
   isDispatchableWorkflow,
@@ -191,8 +190,7 @@ export function postProcessRouterOutput(
   inputContext?: Pick<RouterInputContext, "priorTurns" | "profileSnapshot" | "portfolioPositions">,
 ): RouterOutput {
   const extracted = extractEntities(text);
-  const deterministic = classifyWithLegacyRules(text);
-  let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
+  const diagnostics: RouterDiagnostic[] = [...output.diagnostics];
   const symbolsAfterAmbiguousFilter = output.entities.symbols.filter(
     (symbol) => !isAmbiguousConceptUsage(text, symbol),
   );
@@ -211,10 +209,7 @@ export function postProcessRouterOutput(
       (userDteTarget === undefined && mapDteHintToTarget(output.entities.dteHint) === undefined));
   const authoritativeTimeHorizon = extracted.timeHorizon?.replace(/^(\d+)_years$/, "$1y");
   const normalizedSlots = { ...output.slots };
-  if (
-    extracted.budget !== undefined &&
-    (output.workflow === "portfolio_builder" || deterministic.workflow === "portfolio_builder")
-  ) {
+  if (extracted.budget !== undefined && output.workflow === "portfolio_builder") {
     normalizedSlots.budget = {
       value: extracted.budget,
       source: "user",
@@ -651,53 +646,6 @@ export function postProcessRouterOutput(
     };
   }
 
-  // Legacy rules may recover a primary route only when the LLM router path has
-  // already failed validation. Otherwise they are limited to enrichment and
-  // narrow corrections below.
-  if (
-    next.diagnostics.some((d) => d.code === "router_validation_failed") &&
-    deterministic.workflow !== "unclassified"
-  ) {
-    next = {
-      ...next,
-      routeKind: isDispatchableWorkflow(deterministic.workflow)
-        ? "workflow_dispatch"
-        : "agent_task",
-      workflow: deterministic.workflow,
-      entities: {
-        ...deterministic.entities,
-        budget: deterministic.entities.budget ?? extracted.budget,
-        maxPremium: deterministic.entities.maxPremium ?? extracted.maxPremium,
-        timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
-        riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
-        assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
-        positionCount: deterministic.entities.positionCount ?? extracted.positionCount,
-        maxSinglePositionPct:
-          deterministic.entities.maxSinglePositionPct ?? extracted.maxSinglePositionPct,
-        compareMetrics: mergeStringArrays(
-          deterministic.entities.compareMetrics,
-          extracted.compareMetrics,
-        ),
-        direction: deterministic.entities.direction ?? extracted.direction,
-        costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
-        shareQuantity: deterministic.entities.shareQuantity ?? extracted.shareQuantity,
-        heldSymbol: deterministic.entities.heldSymbol ?? extracted.heldSymbol,
-        catalystSymbols: deterministic.entities.catalystSymbols ?? extracted.catalystSymbols,
-      },
-      diagnostics: [
-        ...diagnostics,
-        {
-          code: "deterministic_failure_recovery",
-          message: `deterministic classifier selected ${deterministic.workflow} after router validation failure`,
-        },
-      ],
-      reasoning: next.reasoning
-        ? `${next.reasoning}; deterministic classifier selected ${deterministic.workflow}`
-        : `deterministic classifier selected ${deterministic.workflow}`,
-    };
-    diagnostics = next.diagnostics;
-  }
-
   if (next.routeKind === "workflow_dispatch" && !isDispatchableWorkflow(next.workflow)) {
     diagnostics.push({
       code: "route_kind_corrected_to_agent_task",
@@ -712,20 +660,21 @@ export function postProcessRouterOutput(
     };
   }
 
+  // The router sometimes asks for clarification on a turn whose own chosen
+  // workflow already has every required slot filled. Promote it rather than
+  // asking the user for something the turn already supplied.
   if (
     next.routeKind === "clarification" &&
-    deterministic.workflow !== "unclassified" &&
-    isDispatchableWorkflow(deterministic.workflow) &&
-    computeMissingRequiredSlots(deterministic.workflow, next.entities, next.slots, []).length === 0
+    isDispatchableWorkflow(next.workflow) &&
+    computeMissingRequiredSlots(next.workflow, next.entities, next.slots, []).length === 0
   ) {
     diagnostics.push({
       code: "unnecessary_clarification_corrected",
-      message: `${deterministic.workflow} has all required slots from deterministic extraction`,
+      message: `${next.workflow} already has every required slot`,
     });
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      workflow: deterministic.workflow,
       missing_required: [],
       diagnostics,
     };
@@ -1551,6 +1500,7 @@ function minimalFallback(text: string): RouterOutput {
   const entities = extractEntities(text);
   return {
     routeKind: "agent_task",
+    workflow: "general_finance_qa",
     entities,
     slots: {},
     preference_updates: [],
