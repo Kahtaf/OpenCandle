@@ -19,6 +19,7 @@ import {
   getEnvApiKey,
   getModel,
   type Model,
+  type ProviderHeaders,
   registerBuiltInApiProviders,
 } from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
@@ -72,7 +73,9 @@ interface CompetitiveRunResult {
 interface ResolvedModel {
   model: Model<Api>;
   apiKey?: string;
-  headers?: Record<string, string>;
+  // Pi's own header type: a null value means "drop this header", which
+  // completeSimple understands and Record<string, string> cannot express.
+  headers?: ProviderHeaders;
 }
 
 interface CompetitorRunner {

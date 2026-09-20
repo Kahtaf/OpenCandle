@@ -102,6 +102,10 @@ describe("agent developer guardrails", () => {
     expect(gates, "gates must run lint (biome ci)").toMatch(/\bbiome ci\b/);
     expect(gates, "gates must run unit tests").toMatch(/\bnpm test\b/);
     expect(gates, "gates must run agent-tool tests").toMatch(/\btest:agent-tools\b/);
+    // The eval/benchmark scripts live outside the main tsconfig, so their
+    // typecheck has to be gated explicitly or it silently rots until a
+    // release:check run trips over it.
+    expect(gates, "gates must typecheck the test scripts").toMatch(/\btest:scripts:typecheck\b/);
 
     expect(packageJson.scripts["gates:full"], "gates:full must build on gates").toMatch(
       /\bnpm run gates\b/,
