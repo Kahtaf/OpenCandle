@@ -1,7 +1,7 @@
 # turn-context-resolution Specification
 
 ## Purpose
-TBD - created by archiving change typed-finance-router. Update Purpose after archive.
+Define the `ResolvedTurnContext` built after router post-processing and before prompt assembly: the application-facing record of route kind, workflow, normalized entities, provenance-tagged slots, tool bundles, and diagnostics, backed by a typed memory query plan whose results are filtered for provenance and staleness before they reach it.
 ## Requirements
 ### Requirement: Resolved Turn Context
 

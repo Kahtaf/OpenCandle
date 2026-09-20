@@ -1,7 +1,7 @@
 # symbol-detail-page Specification
 
 ## Purpose
-TBD - created by archiving change symbol-detail-redesign. Update Purpose after archive.
+Define the GUI's per-symbol detail page: a full-canvas, asset-type-aware layout with a hero price/stat strip, key levels tied into alert creation, a deterministic trend summary, saved position/watchlist/alert context, and prefill-only action chips, with sections adapting to or gracefully omitting themselves for each instrument type and whatever data is actually available.
 ## Requirements
 ### Requirement: Full-canvas layout with detail rail
 The symbol page SHALL render as a full-width primary column (hero, chart, key stats, about) with a fixed-width right detail rail (key levels, position, alerts, watchlist membership, analyze actions) at desktop widths, using the shared detail-rail layout primitive, and SHALL stack those regions in priority order at narrower widths.

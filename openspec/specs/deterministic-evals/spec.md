@@ -131,7 +131,7 @@ Before removing global prompt clauses or weakening deterministic behavior, the d
 
 #### Scenario: Deterministic routing behavior characterized before change
 
-- **WHEN** a deterministic router correction, workflow dispatch rule, tool-scope rule, or provider-degradation behavior is selected for change
+- **WHEN** a deterministic router correction, workflow dispatch rule, tool-bundle selection rule, or provider-degradation behavior is selected for change
 - **THEN** deterministic tests cover the current behavior before the change is activated
 
 #### Scenario: After migration preserves behavior

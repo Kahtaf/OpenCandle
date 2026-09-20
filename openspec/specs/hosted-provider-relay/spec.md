@@ -1,7 +1,7 @@
 # hosted-provider-relay Specification
 
 ## Purpose
-TBD - created by archiving change add-hosted-provider-relay. Update Purpose after archive.
+Define the audited, no-storage Cloudflare relay that lets the hosted browser app reach allowlisted provider APIs on the user's behalf: exact versioned request allowlisting, no persisted user data or application logs, bounded resource use against abuse, and stateless authorization that gates which hosted tools get advertised.
 ## Requirements
 ### Requirement: Relay accepts only versioned allowlisted provider requests
 

@@ -1,7 +1,7 @@
 # browser-hosted-runtime Specification
 
 ## Purpose
-TBD - created by archiving change browser-hosted-pwa. Update Purpose after archive.
+Define the hosted browser PWA's runtime: a static, serverless deployment that runs Pi's real agent loop in-browser, shares one domain and event core with the local GUI and TUI, and fails closed rather than degrading silently when its bounded transport, model discovery, or credentials are unavailable.
 ## Requirements
 ### Requirement: Static hosted runtime needs no OpenCandle server
 

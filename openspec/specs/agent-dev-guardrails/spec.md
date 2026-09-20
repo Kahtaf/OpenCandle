@@ -1,22 +1,22 @@
 # agent-dev-guardrails Specification
 
 ## Purpose
-TBD - created by archiving change agent-dx-guardrails. Update Purpose after archive.
+Give agents (and humans delegating to them) one canonical, scripted proof battery — a fast `gates` for routine handoffs and a fuller `gates:full` for release-grade checks — plus a repeatable worktree bootstrap and a checked-in delegation contract, so agent work is reproducible and does not silently skip validation.
 ## Requirements
 ### Requirement: Canonical proof commands
-The repo SHALL expose `npm run typecheck` (running `tsc --noEmit`) and `npm run gates` (running typecheck, `npx biome ci .`, `npm test`, and `npm run test:agent-tools` in that order) as the single named proof battery for agent handoffs, and `npm run review:pr` SHALL invoke the same battery via `npm run gates` rather than a duplicated inline command string.
+The repo SHALL expose `npm run typecheck` (running `tsc --noEmit`) and a layered proof battery: `npm run check` (typecheck, `npm run test:scripts:typecheck`, `npm run relay:typecheck`, and `npx biome ci .`), `npm run gates` (`npm run check` plus `npm test`, `npm run relay:test`, and `npm run test:agent-tools`), and `npm run gates:full` (`npm run gates` plus `npm run test:site`, `npm run test:gui:release-smoke`, `npm run test:gui:hosted`, and `npm run package:contents:check`). `npm run review:pr` SHALL invoke the proof battery via its `--parallel-tests` argument rather than a duplicated inline command string.
 
 #### Scenario: Gates passes on a clean tree
-- **WHEN** `npm run gates` is run on a checkout where typecheck, lint, unit tests, and agent-tool tests are green
+- **WHEN** `npm run gates` is run on a checkout where typecheck, the test-scripts typecheck, the relay typecheck, lint, unit tests, relay tests, and agent-tool tests are green
 - **THEN** it exits 0
 
 #### Scenario: Gates fails on any red leg
-- **WHEN** any of typecheck, `biome ci`, `npm test`, or `test:agent-tools` would fail
+- **WHEN** any of typecheck, `test:scripts:typecheck`, `relay:typecheck`, `biome ci`, `npm test`, `relay:test`, or `test:agent-tools` would fail
 - **THEN** `npm run gates` exits non-zero
 
 #### Scenario: Single definition of the battery
 - **WHEN** `package.json` is inspected
-- **THEN** the `review:pr` script's `--parallel-tests` argument is `npm run gates`, and no other script re-spells the same command chain
+- **THEN** the `review:pr` script's `--parallel-tests` argument runs the same named script (`npm run gates:full`), and no other script re-spells the same command chain
 
 ### Requirement: Agent worktree bootstrap
 The repo SHALL provide `scripts/agent-bootstrap.mjs`, exposed as `npm run bootstrap:agent`, which idempotently prepares the current checkout for agent work: copying `.env` from the main checkout when absent, installing dependencies via `npm ci` only when `node_modules` is missing or stale relative to `package-lock.json`, and printing a readiness report. The script MUST never overwrite an existing `.env`, MUST never print secret values, MUST never use `npm install` or workspace-prefixed installs, and MUST exit 0 when ready and 1 when blocked.
@@ -42,7 +42,7 @@ The repo SHALL provide `scripts/agent-bootstrap.mjs`, exposed as `npm run bootst
 - **THEN** the env-copy behavior operates on those directories without requiring a real git worktree
 
 ### Requirement: Checked-in delegation contract and resume template
-The repo SHALL provide `.agents/delegation/subagent-contract.md` and `.agents/delegation/resume-template.md`. The contract MUST begin with a per-run variables block (owned tasks, commit policy, branch and PR target, test scope, extra constraints) and MUST include standing clauses covering: bootstrap-first, stop-and-report on contradictions, TDD with the failing run observed, `npm run gates` green before handoff, truthful task bookkeeping with declared deviations, no production-code edits to make evals pass, no live evals without credentials, secret hygiene, scope fencing, CHANGELOG entry, `graphify update .`, checking advisory Codex PR review feedback without treating it as a merge gate, and the final report shape. The resume template MUST instruct continuation from the preserved working tree and re-running `npm run gates`.
+The repo SHALL provide `.agents/delegation/subagent-contract.md` and `.agents/delegation/resume-template.md`. The contract MUST begin with a per-run variables block (owned tasks, commit policy, branch and PR target, test scope, extra constraints) and MUST include standing clauses covering: bootstrap-first, stop-and-report on contradictions, TDD with the failing run observed, `npm run gates` green before handoff, truthful task bookkeeping with declared deviations, no production-code edits to make evals pass, no live evals without credentials, secret hygiene, scope fencing, CHANGELOG entry, and checking advisory Codex PR review feedback without treating it as a merge gate, and the final report shape. The resume template MUST instruct continuation from the preserved working tree and re-running `npm run gates`.
 
 #### Scenario: Orchestrator composes a delegation prompt
 - **WHEN** an orchestrating agent prepends the contract file to a task description and fills the variables block

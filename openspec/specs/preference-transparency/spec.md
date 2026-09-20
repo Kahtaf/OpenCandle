@@ -1,7 +1,7 @@
 # preference-transparency Specification
 
 ## Purpose
-TBD - created by archiving change add-gui-settings-page. Update Purpose after archive.
+Give users visibility into and control over what OpenCandle has quietly learned or saved about them, so every stored preference and tool default can be listed with its value, source, and timestamps, and deleted so it stops entering agent prompt context, with identical behavior on the WebSocket, HTTP, and hosted transports.
 ## Requirements
 ### Requirement: Persisted preferences are visible
 

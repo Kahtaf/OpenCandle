@@ -242,6 +242,6 @@ The `get_reddit_sentiment` tool SHALL include confidence and caveats for Reddit-
 ## REMOVED
 
 ### get_reddit_discussions removed entirely
-The `get_reddit_discussions` tool (`src/tools/sentiment/news-sentiment.ts`) SHALL be deleted. The file, its import in `src/tools/index.ts`, and all references in `src/system-prompt.ts`, `src/prompts/context-builder.ts`, `src/analysts/orchestrator.ts`, and `tests/e2e/audit-fixes.test.ts` SHALL be removed. The project is unreleased — no deprecation path is needed.
+The `get_reddit_discussions` tool (`src/tools/sentiment/news-sentiment.ts`) SHALL be deleted. The file, its import in `src/tools/index.ts`, and all references in `src/prompts/context-builder.ts`, `src/analysts/orchestrator.ts`, and `tests/e2e/audit-fixes.test.ts` SHALL be removed. The project is unreleased — no deprecation path is needed.
 
 Its functionality (searching r/stocks + r/investing for topic-relevant posts) is fully absorbed by the enhanced `get_reddit_sentiment` with `query` param and cross-subreddit aggregation, plus actual sentiment scoring that the old tool lacked.

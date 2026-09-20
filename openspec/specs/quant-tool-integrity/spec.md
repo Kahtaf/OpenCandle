@@ -1,7 +1,7 @@
 # quant-tool-integrity Specification
 
 ## Purpose
-TBD - created by archiving change product-audit-downscope. Update Purpose after archive.
+Keep quantitative tools such as DCF valuation and strategy backtesting honest: they must refuse to compute from inputs they cannot derive rather than fabricating placeholder numbers, and must disclose the real execution assumptions and limitations behind any result they do produce.
 ## Requirements
 ### Requirement: DCF Refuses To Compute From Fabricated Inputs
 

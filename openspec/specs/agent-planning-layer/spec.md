@@ -1,7 +1,7 @@
 # agent-planning-layer Specification
 
 ## Purpose
-TBD - created by archiving change prompt-to-policy-agent-planning. Update Purpose after archive.
+Define OpenCandle's typed planning layer, which enriches each routed finance turn with a task family, commitment mode, policy cards, evidence plans, and answer contracts. Existing behaviors migrate onto the layer incrementally, gated by a shadow-mode parity ledger, so no scenario's live behavior changes until its migration slice is proven safe to activate.
 ## Requirements
 ### Requirement: Typed Planning Layer
 
@@ -25,13 +25,13 @@ The system SHALL enrich each routed finance turn with a typed, versioned plannin
 
 ### Requirement: Shadow Planning Preserves Current Behavior
 
-The planning layer SHALL support shadow planning in which current prompt, router, workflow, tool-scope, provider-degradation, and final-answer behavior remains active while planning metadata and replacement behavior run observationally.
+The planning layer SHALL support shadow planning in which current prompt, router, workflow, advisory tool-bundle selection, provider-degradation, and final-answer behavior remains active while planning metadata and replacement behavior run observationally.
 
 #### Scenario: Planner enriches but does not override current routing
 
 - **WHEN** shadow planning is enabled
 - **THEN** planning metadata is added after existing route validation, deterministic corrections, workflow dispatch, and tool-bundle selection
-- **AND** the planner does not silently change the current route kind, workflow, active tool scope, or clarification behavior
+- **AND** the planner does not silently change the current route kind, workflow, selected tool bundles, or clarification behavior
 
 #### Scenario: Current prompt behavior remains active until parity passes
 
@@ -41,11 +41,11 @@ The planning layer SHALL support shadow planning in which current prompt, router
 
 ### Requirement: Parity Ledger Gates Behavioral Removal
 
-The planning layer SHALL maintain a parity ledger for every current behavior that may be migrated out of global prompt prose, router corrections, workflow dispatch, tool-scope behavior, or provider-degradation handling.
+The planning layer SHALL maintain a parity ledger for every current behavior that may be migrated out of global prompt prose, router corrections, workflow dispatch, advisory tool-bundle selection, or provider-degradation handling.
 
 #### Scenario: Behavior cannot be removed without owner and passing gate
 
-- **WHEN** a prompt clause, router correction, workflow behavior, tool-scope rule, or provider-degradation behavior is selected for removal or weakening
+- **WHEN** a prompt clause, router correction, workflow behavior, tool-bundle selection rule, or provider-degradation behavior is selected for removal or weakening
 - **THEN** the parity ledger includes its current owner, replacement owner, characterization cases, required assertions, baseline run path, migration status, and rollback knob
 - **AND** removal is blocked until those characterization cases pass with equal or better behavior
 
@@ -715,39 +715,6 @@ The planning layer SHALL support a rebalance-specific policy card under the exis
 - **WHEN** the rebalance policy card is selected
 - **THEN** the answer should cover concentration, hidden overlap, geography, sector and factor exposure, fixed-income role, time horizon, risk tolerance uncertainty, staged implementation, tax-aware execution caveats, target ranges or bands, and monitoring triggers
 - **AND** it should end with a clear adjustment or monitoring trigger tied to the user's stated or assumed horizon
-
-### Requirement: Typed Answer Artifact Contracts
-
-The planning layer SHALL expose typed answer artifact contract identifiers for structured intermediate outputs while keeping V1 trace-only and avoiding persisted workspace or UI requirements.
-
-#### Scenario: Artifact contracts are typed trace metadata
-
-- **WHEN** planning metadata includes artifact contract identifiers
-- **THEN** each identifier maps to a registry entry with an owning task family set, description, and lifecycle status
-- **AND** V1 treats the contract as trace-only unless a later spec promotes rendering or persistence
-
-#### Scenario: Concept education can request example table structure
-
-- **WHEN** a concept education policy card would benefit from examples, cross-checks, or comparison rows
-- **THEN** planning MAY include `concept_example_table`
-- **AND** the answer still remains a prose educational answer unless a later spec implements rendered artifacts
-
-#### Scenario: Portfolio rebalance can request exposure and action artifacts
-
-- **WHEN** a portfolio rebalance review policy card is selected
-- **THEN** planning MAY include `portfolio_exposure_map` and `rebalance_action_plan`
-- **AND** those IDs do not imply exact holdings overlap, tax-lot optimization, or persisted portfolio storage
-
-#### Scenario: Source-heavy tasks can request source coverage structure
-
-- **WHEN** sentiment, filing, or current-event tasks require source/gap visibility
-- **THEN** planning MAY include `source_coverage_table`
-- **AND** the trace must still distinguish unavailable provider coverage from available evidence
-
-#### Scenario: Artifact contracts do not create new task families by themselves
-
-- **WHEN** a task can reuse an existing task family, evidence plan, and answer contract
-- **THEN** adding an artifact contract does not require a new task family
 
 ### Requirement: Portfolio Exposure Map Evidence
 

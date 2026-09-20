@@ -1,7 +1,7 @@
 # browser-session-coordination Specification
 
 ## Purpose
-TBD - created by archiving change browser-hosted-pwa. Update Purpose after archive.
+Coordinate hosted browser sessions so exactly one open tab owns writes at a time while other tabs remain live, read-only followers, and so writer ownership fails over safely across crashes, epochs, and reloads without stranding an active client.
 ## Requirements
 ### Requirement: One hosted tab owns writes
 

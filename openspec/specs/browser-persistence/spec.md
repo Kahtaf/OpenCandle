@@ -1,7 +1,7 @@
 # browser-persistence Specification
 
 ## Purpose
-TBD - created by archiving change browser-hosted-pwa. Update Purpose after archive.
+Define how the hosted browser runtime persists Pi sessions and market state durably in the browser (OPFS/SQLite) in a format compatible with local OpenCandle, keeps credentials separate from research state, and gives users reliable export, import, clear, and recovery controls across app updates and restarts.
 ## Requirements
 ### Requirement: Hosted Pi sessions are durable and format compatible
 

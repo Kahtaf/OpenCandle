@@ -44,7 +44,7 @@ Third-party tool descriptions currently appended in the extension's `before_agen
 - **THEN** their descriptions appear in the tool-catalog section alongside built-in tool descriptions
 
 ### Requirement: Monolithic buildSystemPrompt is replaced
-The current `buildSystemPrompt()` function in `system-prompt.ts` SHALL be replaced by the `PromptContextBuilder`. The extension's `before_agent_start` hook SHALL delegate to the builder instead of concatenating strings.
+Prompt assembly SHALL go through the `PromptContextBuilder` rather than a monolithic string-concatenating `buildSystemPrompt()` function. The extension's `before_agent_start` hook SHALL delegate to the builder instead of concatenating strings; the standalone `system-prompt.ts` module SHALL NOT exist.
 
 #### Scenario: Extension delegates to PromptContextBuilder
 - **WHEN** the `before_agent_start` event fires

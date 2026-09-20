@@ -1,7 +1,7 @@
 # tool-input-validation Specification
 
 ## Purpose
-TBD - created by archiving change production-router-and-tool-hardening. Update Purpose after archive.
+Ensure tools and routed tool bundles validate their inputs before doing real work: workflow templating pre-flights symbols against the resolver before use, and the core routed tool bundle includes the durable market-state tools (alerts, reports) a finance request may need.
 ## Requirements
 ### Requirement: Pre-Flight Symbol Validation in Workflow Templating
 

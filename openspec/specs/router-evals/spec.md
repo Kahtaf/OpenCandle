@@ -351,17 +351,21 @@ Each fixture SHALL include the expected post-filter outcome in `expectedRouterOu
 - **THEN** there is a fixture whose input contains a local phrase such as "IV ticker" AND whose `expectedRouterOutput.entities.symbols` includes `"IV"`
 - **AND** the fixture's `tags` array contains `acronym-disambiguation`
 
-### Requirement: Live-Eval Baseline Archived per Run
+### Requirement: Live-Eval Runs Recorded in the Local Run Index
 
-Each `npm run eval -- router-live` run executed for acceptance verification SHALL be archived under `tests/fixtures/router/eval-baselines/<YYYY-MM-DD>.txt` with the full per-fixture pass/fail output, latency p50/p95, and total cost. Inadmissible runs (e.g., missing API credentials) SHALL be labeled as such in the archive.
+Each `npm run eval -- router-live` invocation SHALL append an entry to the local, git-ignored JSONL run index at `tests/evals/runs/index.jsonl` (via the shared eval front door in `tests/scripts/run-evals-table.ts`) recording the suite id, start/finish timestamps, exit code, and any generated report file paths. Per-fixture pass/fail, latency p50/p95, and pass-rate are printed to stdout by `tests/scripts/run-live-router-eval.ts`; committed fixture-derived acceptance evidence, when needed, SHALL be pasted into the PR description rather than checked into the repository as archived run logs.
 
-#### Scenario: Acceptance run archived
+#### Scenario: Run appears in the local index
 
-- **WHEN** an acceptance verification run completes
-- **THEN** a file at `tests/fixtures/router/eval-baselines/<date>.txt` exists containing the full eval output
+- **WHEN** a developer runs `npm run eval -- router-live`
+- **THEN** `tests/evals/runs/index.jsonl` gains a new line naming the `router-live` suite, its exit code, and its start/finish timestamps
 
-#### Scenario: Inadmissible run labeled
+#### Scenario: Run output is not committed
+
+- **WHEN** `git status` is inspected after a local eval run
+- **THEN** `tests/evals/runs/` contents are ignored by `.gitignore` and nothing under it is staged for commit
+
+#### Scenario: Inadmissible run is visible in its own output
 
 - **WHEN** the eval is run without credentials and the output shows the deterministic-fallback shape on every fixture
-- **THEN** the archive entry is annotated `INADMISSIBLE: missing ANTHROPIC_API_KEY` (or equivalent provider)
-- **AND** that run is NOT used to compute the acceptance gate
+- **THEN** the printed summary and non-zero exit code make the run's inadmissibility apparent without relying on a committed archive file

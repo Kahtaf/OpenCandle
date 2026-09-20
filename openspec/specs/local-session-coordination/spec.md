@@ -1,7 +1,7 @@
 # local-session-coordination Specification
 
 ## Purpose
-TBD - created by archiving change transparent-local-session-coordinator. Update Purpose after archive.
+Define how the local GUI coordinates a single writer process per Pi session across multiple local connections: transparent per-session ownership with conservative recovery, heartbeat-based freshness, an authenticated coordination endpoint, idempotent session-scoped actions, and honest, non-technical status language for users.
 ## Requirements
 ### Requirement: Transparent Local Session Coordinator
 OpenCandle SHALL coordinate local GUI server, browser, and TUI chat write intents through one authoritative local owner for each target session without exposing writer/follower ownership to the user.
