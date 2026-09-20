@@ -503,7 +503,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("link", { name: "Portfolios" }).click();
     await mocked.waitForURL("**/portfolios", { timeout: 5_000 });
     await expectVisible(mocked.getByRole("heading", { name: "Portfolios" }));
-    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("button", { name: "Add holding" }).first().click();
     await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
     const alcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
     await expectVisible(alcoaOption);
@@ -528,7 +528,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("link", { name: "Reports" }));
     await mocked.goto(`${guiUrl}/portfolios`, { waitUntil: "networkidle" });
-    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("button", { name: "Add holding" }).first().click();
     await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
     const mobileAlcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
     await expectVisible(mobileAlcoaOption);
