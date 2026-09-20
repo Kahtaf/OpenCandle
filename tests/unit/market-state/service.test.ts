@@ -319,24 +319,7 @@ describe("MarketStateService", () => {
     expect(service.updatePortfolioLot(lot.id, { notes: "kept" })?.notes).toBe("kept");
   });
 
-  it("represents import provenance on import rows and saved market-state rows", () => {
-    const batch = service.recordImportBatch({
-      source: "tradingview",
-      sourceLabel: "TradingView watchlist export",
-      importedAt: "2026-05-31T13:00:00.000Z",
-      status: "completed",
-      rawMetadata: { filename: "watchlist.csv" },
-    });
-    const importRow = service.recordImportRow({
-      batchId: batch.id,
-      rowType: "watchlist_item",
-      sourceSymbol: "NASDAQ:AAPL",
-      sourceRowId: "tv-row-1",
-      status: "imported",
-      raw: { Symbol: "NASDAQ:AAPL" },
-      sourceMetadata: { watchlist: "Growth" },
-    });
-
+  it("represents import provenance on saved market-state rows", () => {
     const watchlistItem = service.addWatchlistItem({
       instrument: {
         symbol: "AAPL",
@@ -347,8 +330,8 @@ describe("MarketStateService", () => {
         provider: "yahoo",
       },
       source: "tradingview",
-      sourceRowId: importRow.sourceRowId ?? undefined,
-      sourceMetadata: { importRowId: importRow.id },
+      sourceRowId: "tv-row-1",
+      sourceMetadata: { importRowId: 1 },
     });
     const portfolioLot = service.addPortfolioLot({
       instrument: {
@@ -369,16 +352,10 @@ describe("MarketStateService", () => {
       sourceMetadata: { importRowId: 9 },
     });
 
-    expect(batch.rawMetadata).toEqual({ filename: "watchlist.csv" });
-    expect(importRow).toMatchObject({
-      sourceRowId: "tv-row-1",
-      sourceMetadata: { watchlist: "Growth" },
-      raw: { Symbol: "NASDAQ:AAPL" },
-    });
     expect(watchlistItem).toMatchObject({
       source: "tradingview",
       sourceRowId: "tv-row-1",
-      sourceMetadata: { importRowId: importRow.id },
+      sourceMetadata: { importRowId: 1 },
     });
     expect(portfolioLot).toMatchObject({
       source: "interactive_brokers",

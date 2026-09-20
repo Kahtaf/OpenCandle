@@ -213,29 +213,6 @@ export interface ReportRunRecord {
   errorsJson: unknown;
 }
 
-export interface ImportBatchRecord {
-  id: number;
-  source: string;
-  sourceLabel: string | null;
-  importedAt: string;
-  status: string;
-  rawMetadata: unknown;
-}
-
-export interface ImportRowRecord {
-  id: number;
-  batchId: number;
-  rowType: string;
-  sourceSymbol: string | null;
-  sourceRowId: string | null;
-  sourceAccountRef: string | null;
-  normalizedInstrumentId: number | null;
-  status: string;
-  error: string | null;
-  sourceMetadata: unknown;
-  raw: unknown;
-}
-
 interface WatchlistRow {
   id: number;
   name: string;
@@ -421,29 +398,6 @@ type ReportRunRow = {
   artifact_path: string | null;
   summary_json: string | null;
   errors_json: string | null;
-};
-
-type ImportBatchRow = {
-  id: number;
-  source: string;
-  source_label: string | null;
-  imported_at: string;
-  status: string;
-  raw_metadata_json: string | null;
-};
-
-type ImportRowRow = {
-  id: number;
-  batch_id: number;
-  row_type: string;
-  source_symbol: string | null;
-  source_row_id: string | null;
-  source_account_ref: string | null;
-  normalized_instrument_id: number | null;
-  status: string;
-  error: string | null;
-  source_metadata_json: string | null;
-  raw_json: string | null;
 };
 
 export class MarketStateService {
@@ -1803,66 +1757,6 @@ export class MarketStateService {
     return rows.map(mapReportRun);
   }
 
-  recordImportBatch(params: {
-    source: string;
-    sourceLabel?: string;
-    importedAt?: string;
-    status: string;
-    rawMetadata?: unknown;
-  }): ImportBatchRecord {
-    const importedAt = params.importedAt ?? new Date().toISOString();
-    const result = this.db
-      .prepare(
-        `INSERT INTO import_batches (
-           source, source_label, imported_at, status, raw_metadata_json
-         )
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
-        normalizeNullable(params.source) ?? "unknown",
-        normalizeNullable(params.sourceLabel),
-        importedAt,
-        params.status,
-        params.rawMetadata == null ? null : JSON.stringify(params.rawMetadata),
-      );
-    return this.getImportBatch(Number(result.lastInsertRowid));
-  }
-
-  recordImportRow(params: {
-    batchId: number;
-    rowType: string;
-    sourceSymbol?: string;
-    sourceRowId?: string;
-    sourceAccountRef?: string;
-    normalizedInstrumentId?: number | null;
-    status: string;
-    error?: string;
-    sourceMetadata?: unknown;
-    raw?: unknown;
-  }): ImportRowRecord {
-    const result = this.db
-      .prepare(
-        `INSERT INTO import_rows (
-           batch_id, row_type, source_symbol, source_row_id, source_account_ref,
-           normalized_instrument_id, status, error, source_metadata_json, raw_json
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        params.batchId,
-        params.rowType,
-        normalizeNullable(params.sourceSymbol),
-        normalizeNullable(params.sourceRowId),
-        normalizeNullable(params.sourceAccountRef),
-        params.normalizedInstrumentId ?? null,
-        params.status,
-        normalizeNullable(params.error),
-        params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
-        params.raw == null ? null : JSON.stringify(params.raw),
-      );
-    return this.getImportRow(Number(result.lastInsertRowid));
-  }
-
   private upsertInstrument(input: InstrumentInput): InstrumentRow {
     const symbol = input.symbol.trim().toUpperCase();
     const assetType = input.assetType.trim().toLowerCase();
@@ -2058,18 +1952,6 @@ export class MarketStateService {
   private getReportRun(id: number): ReportRunRecord {
     const row = this.db.prepare("SELECT * FROM report_runs WHERE id = ?").get(id) as ReportRunRow;
     return mapReportRun(row);
-  }
-
-  private getImportBatch(id: number): ImportBatchRecord {
-    const row = this.db
-      .prepare("SELECT * FROM import_batches WHERE id = ?")
-      .get(id) as ImportBatchRow;
-    return mapImportBatch(row);
-  }
-
-  private getImportRow(id: number): ImportRowRecord {
-    const row = this.db.prepare("SELECT * FROM import_rows WHERE id = ?").get(id) as ImportRowRow;
-    return mapImportRow(row);
   }
 }
 
@@ -2286,33 +2168,6 @@ function mapReportRun(row: ReportRunRow): ReportRunRecord {
     artifactPath: row.artifact_path,
     summaryJson: row.summary_json == null ? null : JSON.parse(row.summary_json),
     errorsJson: row.errors_json == null ? null : JSON.parse(row.errors_json),
-  };
-}
-
-function mapImportBatch(row: ImportBatchRow): ImportBatchRecord {
-  return {
-    id: row.id,
-    source: row.source,
-    sourceLabel: row.source_label,
-    importedAt: row.imported_at,
-    status: row.status,
-    rawMetadata: row.raw_metadata_json == null ? null : JSON.parse(row.raw_metadata_json),
-  };
-}
-
-function mapImportRow(row: ImportRowRow): ImportRowRecord {
-  return {
-    id: row.id,
-    batchId: row.batch_id,
-    rowType: row.row_type,
-    sourceSymbol: row.source_symbol,
-    sourceRowId: row.source_row_id,
-    sourceAccountRef: row.source_account_ref,
-    normalizedInstrumentId: row.normalized_instrument_id,
-    status: row.status,
-    error: row.error,
-    sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
-    raw: row.raw_json == null ? null : JSON.parse(row.raw_json),
   };
 }
 
