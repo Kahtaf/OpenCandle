@@ -132,7 +132,7 @@ describe("harness opencandle-* custom-entry drain", () => {
   });
 
   // Spec scenarios from
-  // openspec/changes/router-context-and-observability/specs/test-harness-observability/spec.md
+  // openspec/specs/test-harness-observability/spec.md
   describe("spec scenarios", () => {
     it("'Router entry appears in trace.json' — data.output is preserved verbatim", () => {
       const sm = SessionManager.inMemory();

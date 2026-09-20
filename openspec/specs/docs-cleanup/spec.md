@@ -39,7 +39,7 @@ Completed generated implementation-plan queues SHALL be preserved under archived
 #### Scenario: OpenSpec remains the completed-work ledger
 
 - **WHEN** maintainers inspect completed generated implementation work
-- **THEN** they can find the proposal, completed tasks, and original plan records under `openspec/changes/archive/`
+- **THEN** they can find the proposal, completed tasks, and original plan records in git history (this repo does not keep an `openspec/changes/archive/` directory; a shipped change's spec deltas are folded into `openspec/specs/` and the change proposal is then deleted)
 - **AND** no second root-level planning index is required for those completed records
 
 ### Requirement: Public docs source boundaries
