@@ -173,7 +173,7 @@ describe("release readiness automation", () => {
     expect(ciWorkflow).toContain('node-version: ["22.22.2", "24.x", "26.x"]');
     expect(ciWorkflow).toContain("npm run test:site");
     expect(ciWorkflow).toContain("npm run package:contents:check");
-    expect(ciWorkflow).toContain("npm run relay:typecheck");
+    expect(ciWorkflow).toContain("npm run check");
     expect(ciWorkflow).toContain("npm run relay:test");
     expect(ciWorkflow).toContain("npm run test:packed-install");
     expect(ciWorkflow).toContain("npm run docs:links:check");
