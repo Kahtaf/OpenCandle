@@ -41,7 +41,7 @@ npm run test:e2e:providers
 ```bash
 npm run lint        # biome check (CI gates on this)
 npm run typecheck   # tsc --noEmit
-npm run check       # typecheck + relay typecheck + biome ci
+npm run check       # typecheck + eval-script typecheck + relay typecheck + biome ci
 npm run gates       # check + unit tests + relay tests + agent-tool tests
 npm run gates:full  # gates + site tests + GUI release smoke + hosted GUI tests + package-contents check
 npm run review:pr   # repo autoreview + gates:full (run before opening or updating a PR)

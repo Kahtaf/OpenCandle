@@ -41,7 +41,7 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 - Strictly typed. No `any` except provider raw API responses.
 
 ## CONVENTIONS
-- **TDD mandatory**: write failing test first, then implement - refer to tdd skill
+- **TDD mandatory**: write the failing test first, watch it fail, then implement.
 - Tools fetch + format. Analysts/LLM synthesize. Never analyze within a tool.
 - Use `cache` and `rateLimiter` from `src/infra/` for all external calls.
 - Tests mock `globalThis.fetch` with fixture JSON. No live API calls in unit tests.
@@ -49,7 +49,7 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 ## GIT & REVIEW
 - Conventional commits (`feat:`, `fix:`, `docs:`, `style:`, `chore:`); atomic commits — one logical change per commit.
 - Run `npm run gates:full`, then `npm run review:pr` (autoreview), after every sizable piece of work and before opening or updating a PR.
-- For new atomic features or bug fixes, update the CHANGELOG.md (use changelog-automation skill). Entries are one sentence, user-visible behaviour only, no internal hardening lists.
+- For new atomic features or bug fixes, add an entry under `[Unreleased]` in CHANGELOG.md. Entries are one sentence, user-visible behaviour only, no internal hardening lists.
 
 ## DELEGATION
 

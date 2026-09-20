@@ -108,7 +108,7 @@
     "bootstrap:agent": "node scripts/agent-bootstrap.mjs",
     "pretest": "npm run check:node",
     "test": "vitest run --project unit",
-    "test:watch": "vitest",
+    "test:watch": "vitest --project unit",
     "test:agent-tools": "vitest run --project agent-tools",
     "test:scripts:typecheck": "tsc -p tsconfig.test-scripts.json",
     "test:e2e": "tsx tests/e2e/tools.test.ts",
