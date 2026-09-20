@@ -3,14 +3,13 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "portfolioPositions": [
-      {
-        "symbol": "AMD",
-        "quantity": 100
-      }
+    {
+      "symbol": "AMD",
+      "quantity": 100
+    }
   ],
   "expectedRouterOutput": {
     "routeKind": "workflow_dispatch",
-    "route": "workflow",
     "workflow": "options_screener",
     "entities": {
       "symbols": [

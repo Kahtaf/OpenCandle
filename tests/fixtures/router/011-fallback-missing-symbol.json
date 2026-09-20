@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "clarification",
-    "route": "fallback",
     "entities": {
       "symbols": []
     },

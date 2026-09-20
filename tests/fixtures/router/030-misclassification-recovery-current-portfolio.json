@@ -20,7 +20,6 @@
   ],
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "workflow": "general_finance_qa",
     "entities": {
       "symbols": [

@@ -9,8 +9,6 @@ import {
   isDispatchableWorkflow,
   isRouteKind,
   isToolBundleName,
-  legacyRouteForRouteKind,
-  routeKindFromLegacyRoute,
   selectToolBundles,
   workflowRequiredSlots,
 } from "./route-manifest.js";
@@ -21,7 +19,6 @@ import type {
   RouterLlmClient,
   RouterOutput,
   RouterPreferenceUpdate,
-  RouterRoute,
   RouterRouteKind,
   RouterSlot,
   ToolBundleName,
@@ -31,7 +28,6 @@ import { isStatefulTrackingRequest } from "./stateful-intent.js";
 import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
-const VALID_ROUTES: readonly RouterRoute[] = ["workflow", "fallback"];
 const VALID_WORKFLOWS: ReadonlyArray<Exclude<WorkflowType, "unclassified">> = [
   "portfolio_builder",
   "options_screener",
@@ -46,7 +42,7 @@ const VALID_CONFIDENCE = new Set(["high", "medium", "low"]);
 /**
  * Run the LLM router against the given input context. Retries once on
  * validation failure with a corrective message. Falls back to a minimal
- * `route: "fallback"` output on persistent failure.
+ * `agent_task` output on persistent failure.
  *
  * The LLM client is injected so unit tests can supply deterministic responses.
  */
@@ -85,40 +81,20 @@ export function validateRouterOutput(raw: string): RouterOutput {
 
   const rawMissingRequired = validateStringArray(obj.missing_required, "missing_required");
 
-  const explicitRouteKind = obj.routeKind;
-  if (
-    explicitRouteKind !== undefined &&
-    (typeof explicitRouteKind !== "string" || !isRouteKind(explicitRouteKind))
-  ) {
-    throw new Error(`invalid routeKind: ${JSON.stringify(explicitRouteKind)}`);
+  const rawRouteKind = obj.routeKind;
+  if (typeof rawRouteKind !== "string" || !isRouteKind(rawRouteKind)) {
+    throw new Error(`invalid routeKind: ${JSON.stringify(rawRouteKind)}`);
   }
-
-  const rawRoute = obj.route;
-  let route: RouterRoute;
-  if (typeof rawRoute === "string") {
-    if (!VALID_ROUTES.includes(rawRoute as RouterRoute)) {
-      throw new Error(`invalid route: ${JSON.stringify(rawRoute)}`);
-    }
-    route = rawRoute as RouterRoute;
-  } else if (typeof explicitRouteKind === "string" && isRouteKind(explicitRouteKind)) {
-    route = legacyRouteForRouteKind(explicitRouteKind);
-  } else {
-    throw new Error(`invalid route: ${JSON.stringify(rawRoute)}`);
-  }
+  const routeKind: RouterRouteKind = rawRouteKind;
 
   let workflow: RouterOutput["workflow"];
-  const routeKind: RouterRouteKind =
-    typeof explicitRouteKind === "string" && isRouteKind(explicitRouteKind)
-      ? explicitRouteKind
-      : routeKindFromLegacyRoute(route, rawMissingRequired);
-
-  if (route === "workflow" || routeKind === "workflow_dispatch") {
+  if (routeKind === "workflow_dispatch") {
     if (
       typeof obj.workflow !== "string" ||
       !VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)
     ) {
       throw new Error(
-        `workflow route requires a valid workflow; got ${JSON.stringify(obj.workflow)}`,
+        `workflow_dispatch requires a valid workflow; got ${JSON.stringify(obj.workflow)}`,
       );
     }
     workflow = obj.workflow as Exclude<WorkflowType, "unclassified">;
@@ -139,7 +115,6 @@ export function validateRouterOutput(raw: string): RouterOutput {
 
   return {
     routeKind,
-    route: legacyRouteForRouteKind(routeKind),
     workflow,
     entities,
     slots,
@@ -508,7 +483,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      route: "workflow",
       workflow: "compare_assets",
       entities: {
         ...next.entities,
@@ -557,7 +531,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       entities: {
         ...next.entities,
         riskProfile: extracted.riskProfile,
@@ -645,7 +618,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       slots: removeSymbolSlots(next.slots),
@@ -666,7 +638,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      route: "workflow",
       workflow: "compare_assets",
       missing_required: [],
       entities: {
@@ -692,7 +663,6 @@ export function postProcessRouterOutput(
       routeKind: isDispatchableWorkflow(deterministic.workflow)
         ? "workflow_dispatch"
         : "agent_task",
-      route: isDispatchableWorkflow(deterministic.workflow) ? "workflow" : "fallback",
       workflow: deterministic.workflow,
       entities: {
         ...deterministic.entities,
@@ -738,7 +708,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       diagnostics,
     };
   }
@@ -756,7 +725,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      route: "workflow",
       workflow: deterministic.workflow,
       missing_required: [],
       diagnostics,
@@ -775,7 +743,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "watchlist_or_tracking",
       missing_required: [],
       entities: {
@@ -795,7 +762,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      route: "workflow",
       diagnostics,
     };
   }
@@ -812,7 +778,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       slots: removeSymbolSlots(next.slots),
@@ -829,7 +794,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       diagnostics,
@@ -862,7 +826,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       diagnostics,
@@ -878,7 +841,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       diagnostics,
@@ -898,7 +860,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "workflow_dispatch",
-      route: "workflow",
       workflow: "compare_assets",
       missing_required: [],
       diagnostics,
@@ -958,7 +919,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       missing_required: [],
       slots: removeSymbolSlots(next.slots),
@@ -979,7 +939,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "clarification",
-      route: "fallback",
       missing_required: ["symbol"],
       diagnostics,
     };
@@ -1001,7 +960,6 @@ export function postProcessRouterOutput(
     next = {
       ...next,
       routeKind: "clarification",
-      route: "fallback",
       missing_required: missingRequired,
       diagnostics,
     };
@@ -1035,7 +993,6 @@ export function postProcessRouterOutput(
 
   return omitUndefined({
     ...next,
-    route: legacyRouteForRouteKind(next.routeKind),
     tool_bundles: selectedToolBundles,
     diagnostics,
   });
@@ -1594,7 +1551,6 @@ function minimalFallback(text: string): RouterOutput {
   const entities = extractEntities(text);
   return {
     routeKind: "agent_task",
-    route: "fallback",
     entities,
     slots: {},
     preference_updates: [],

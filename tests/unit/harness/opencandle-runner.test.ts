@@ -19,7 +19,7 @@ vi.mock("../../../src/index.js", () => ({
 describe("OpenCandle harness runner helpers", () => {
   it("drains only opencandle custom entries in append order", () => {
     const sm = SessionManager.inMemory();
-    sm.appendCustomEntry("opencandle-router", { output: { route: "workflow" } });
+    sm.appendCustomEntry("opencandle-router", { output: { routeKind: "workflow_dispatch" } });
     sm.appendCustomEntry("other-extension", { ignored: true });
     sm.appendCustomEntry("opencandle-workflow", { workflow: "portfolio_builder" });
 
@@ -29,7 +29,7 @@ describe("OpenCandle harness runner helpers", () => {
       "opencandle-router",
       "opencandle-workflow",
     ]);
-    expect(entries[0]?.data).toEqual({ output: { route: "workflow" } });
+    expect(entries[0]?.data).toEqual({ output: { routeKind: "workflow_dispatch" } });
   });
 
   it("flattens AgentTrace into the EvalTrace shape used by scorers", () => {
@@ -77,7 +77,7 @@ describe("OpenCandle harness runner helpers", () => {
           timestamp: "2026-05-16T00:00:00.000Z",
           data: {
             output: {
-              route: "workflow",
+              routeKind: "workflow_dispatch",
               workflow: "compare_assets",
               entities: { symbols: ["AAPL", "MSFT"] },
               confidence: "high",

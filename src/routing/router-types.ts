@@ -1,6 +1,5 @@
 import type { ExtractedEntities, SlotSource, WorkflowType } from "./types.js";
 
-export type RouterRoute = "workflow" | "fallback";
 export type RouterRouteKind = "workflow_dispatch" | "agent_task" | "clarification" | "pass_through";
 
 export type ToolBundleName =
@@ -37,12 +36,12 @@ export interface RouterDiagnostic {
  * (`ClassificationResult`, `ExtractedEntities`, `SlotSource`) so downstream
  * consumers can branch without a new vocabulary.
  *
- * `workflow` is only meaningful when `route === "workflow"`. For `fallback`
- * routes, `workflow_type` at the storage layer is the sentinel `"fallback"`.
+ * `workflow` is only meaningful when `routeKind === "workflow_dispatch"`. For
+ * every other route kind, `workflow_type` at the storage layer is the sentinel
+ * `"fallback"`.
  */
 export interface RouterOutput {
   routeKind: RouterRouteKind;
-  route: RouterRoute;
   workflow?: Exclude<WorkflowType, "unclassified">;
   entities: ExtractedEntities;
   slots: Record<string, RouterSlot>;

@@ -1,5 +1,5 @@
 import type { MemoryCategory } from "../memory/types.js";
-import type { RouterOutput, RouterRoute, RouterRouteKind, ToolBundleName } from "./router-types.js";
+import type { RouterOutput, RouterRouteKind, ToolBundleName } from "./router-types.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 export const ROUTE_KINDS: readonly RouterRouteKind[] = [
@@ -58,7 +58,6 @@ export type PromptPlaybookId =
 
 interface RouteCapability {
   routeKind: RouterRouteKind;
-  legacyRoute: RouterRoute;
   promptPlaybook: PromptPlaybookId;
   toolBundles: ToolBundleName[];
   memoryScopes: MemoryCategory[];
@@ -77,7 +76,6 @@ interface WorkflowCapability {
 export const ROUTE_CAPABILITY_MANIFEST: Record<RouterRouteKind, RouteCapability> = {
   workflow_dispatch: {
     routeKind: "workflow_dispatch",
-    legacyRoute: "workflow",
     promptPlaybook: "workflow_dispatch",
     toolBundles: ["core_market"],
     memoryScopes: ["investor_profile", "workflow_history"],
@@ -85,7 +83,6 @@ export const ROUTE_CAPABILITY_MANIFEST: Record<RouterRouteKind, RouteCapability>
   },
   agent_task: {
     routeKind: "agent_task",
-    legacyRoute: "fallback",
     promptPlaybook: "agent_task",
     toolBundles: ["core_market"],
     memoryScopes: ["investor_profile", "workflow_history"],
@@ -93,7 +90,6 @@ export const ROUTE_CAPABILITY_MANIFEST: Record<RouterRouteKind, RouteCapability>
   },
   clarification: {
     routeKind: "clarification",
-    legacyRoute: "fallback",
     promptPlaybook: "clarification",
     toolBundles: ["clarification"],
     memoryScopes: ["investor_profile", "workflow_history"],
@@ -101,7 +97,6 @@ export const ROUTE_CAPABILITY_MANIFEST: Record<RouterRouteKind, RouteCapability>
   },
   pass_through: {
     routeKind: "pass_through",
-    legacyRoute: "fallback",
     promptPlaybook: "pass_through",
     toolBundles: [],
     memoryScopes: [],
@@ -171,23 +166,11 @@ export function isToolBundleName(value: string): value is ToolBundleName {
   return Object.hasOwn(TOOL_BUNDLE_TOOLS, value);
 }
 
-export function legacyRouteForRouteKind(routeKind: RouterRouteKind): RouterRoute {
-  return ROUTE_CAPABILITY_MANIFEST[routeKind].legacyRoute;
-}
-
 export function isDispatchableWorkflow(
   workflow: Exclude<WorkflowType, "unclassified"> | undefined,
 ): boolean {
   if (!workflow) return false;
   return WORKFLOW_CAPABILITY_MANIFEST[workflow]?.dispatchable === true;
-}
-
-export function routeKindFromLegacyRoute(
-  route: RouterRoute,
-  missingRequired: readonly string[] = [],
-): RouterRouteKind {
-  if (missingRequired.length > 0) return "clarification";
-  return route === "workflow" ? "workflow_dispatch" : "agent_task";
 }
 
 export function workflowRequiredSlots(

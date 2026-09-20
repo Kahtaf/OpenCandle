@@ -1,4 +1,4 @@
-export { classifyIntent, hasFinanceSignals } from "./classify-intent.js";
+export { classifyIntent } from "./classify-intent.js";
 export { OPTIONS_SCREENER_DEFAULTS, PORTFOLIO_DEFAULTS, parseDteTarget } from "./defaults.js";
 export { extractBudget, extractEntities } from "./entity-extractor.js";
 export { classifyWithLegacyRules } from "./legacy-rule-router.js";
@@ -24,11 +24,9 @@ export {
   activeToolsForBundles,
   computeMissingRequiredSlots,
   isDispatchableWorkflow,
-  legacyRouteForRouteKind,
   memoryScopesForRoute,
   ROUTE_CAPABILITY_MANIFEST,
   ROUTE_KINDS,
-  routeKindFromLegacyRoute,
   selectToolBundles,
   TOOL_BUNDLE_TOOLS,
   WORKFLOW_CAPABILITY_MANIFEST,
@@ -43,7 +41,6 @@ export type {
   RouterLlmClient,
   RouterOutput,
   RouterPreferenceUpdate,
-  RouterRoute,
   RouterRouteKind,
   RouterSlot,
   ToolBundleName,

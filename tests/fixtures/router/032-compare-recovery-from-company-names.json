@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "workflow_dispatch",
-    "route": "workflow",
     "workflow": "compare_assets",
     "entities": {
       "symbols": [

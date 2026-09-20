@@ -15,7 +15,7 @@ The system SHALL enrich each routed finance turn with a typed, versioned plannin
 #### Scenario: Planning preserves existing route metadata
 
 - **WHEN** planning metadata is added to a resolved turn context
-- **THEN** the existing route kind, legacy route, workflow label, slots, slot provenance, entities, tool bundles, active tools, memory provenance, and diagnostics remain present
+- **THEN** the existing route kind, workflow label, slots, slot provenance, entities, tool bundles, active tools, memory provenance, and diagnostics remain present
 
 #### Scenario: V1 planning can run observationally
 

@@ -13,7 +13,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "entities": {
       "symbols": [
         "NVDA"
@@ -26,7 +25,7 @@
       "core_market"
     ],
     "diagnostics": [],
-    "reasoning": "topic shift — the current turn names NVDA and does not reference BTC; prior-turn crypto context must not leak into entities or slots"
+    "reasoning": "topic shift \u2014 the current turn names NVDA and does not reference BTC; prior-turn crypto context must not leak into entities or slots"
   },
   "tags": [
     "multi-turn-topic-shift",

@@ -347,7 +347,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
 
   return {
     routeKind: stringOrUndefined(routeContext?.routeKind ?? routerOutput?.routeKind),
-    legacyRoute: stringOrUndefined(routeContext?.legacyRoute ?? routerOutput?.route),
     workflow: stringOrUndefined(routeContext?.workflow ?? routerOutput?.workflow),
     missingRequired: stringArrayOrUndefined(
       routeContext?.missingRequired ?? routerOutput?.missing_required,

@@ -30,7 +30,6 @@ describe("OpenCandle harness planning telemetry", () => {
           timestamp: "2026-05-24T00:00:00.000Z",
           data: {
             routeKind: "agent_task",
-            legacyRoute: "fallback",
             workflow: "general_finance_qa",
             entities: { symbols: ["BA"] },
             toolBundles: ["core_market"],
@@ -99,7 +98,6 @@ describe("OpenCandle harness planning telemetry", () => {
           timestamp: "2026-05-24T00:00:00.000Z",
           data: {
             routeKind: "agent_task",
-            legacyRoute: "fallback",
             workflow: "general_finance_qa",
             entities: { symbols: [] },
             toolBundles: [],
@@ -146,7 +144,6 @@ describe("OpenCandle harness planning telemetry", () => {
           timestamp: "2026-05-24T00:00:00.000Z",
           data: {
             routeKind: "agent_task",
-            legacyRoute: "fallback",
             workflow: "general_finance_qa",
             entities: { symbols: ["NVDA"] },
             toolBundles: [],
@@ -200,7 +197,6 @@ describe("OpenCandle harness planning telemetry", () => {
           timestamp: "2026-05-24T00:00:00.000Z",
           data: {
             routeKind: "agent_task",
-            legacyRoute: "fallback",
             workflow: "general_finance_qa",
             entities: { symbols: ["NVDA"] },
             toolBundles: [],
@@ -251,7 +247,6 @@ describe("OpenCandle harness planning telemetry", () => {
           timestamp: "2026-05-24T00:00:00.000Z",
           data: {
             routeKind: "agent_task",
-            legacyRoute: "fallback",
             workflow: "general_finance_qa",
             entities: { symbols: [] },
             toolBundles: [],

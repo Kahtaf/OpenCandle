@@ -5,7 +5,6 @@ import type {
   RouterDiagnostic,
   RouterInputContext,
   RouterOutput,
-  RouterRoute,
   RouterRouteKind,
   RouterSlot,
   ToolBundleName,
@@ -34,7 +33,6 @@ export interface ResolvedTurnContext {
   userInput: string;
   priorTurns: RouterInputContext["priorTurns"];
   routeKind: RouterRouteKind;
-  legacyRoute: RouterRoute;
   workflow?: Exclude<WorkflowType, "unclassified">;
   entities: ExtractedEntities;
   slots: Record<string, RouterSlot>;
@@ -67,7 +65,6 @@ export function buildResolvedTurnContext(
     userInput: input.text,
     priorTurns: input.priorTurns,
     routeKind: output.routeKind,
-    legacyRoute: output.route,
     workflow: output.workflow,
     entities: output.entities,
     slots: output.slots,

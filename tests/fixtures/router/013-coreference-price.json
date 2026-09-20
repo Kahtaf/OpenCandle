@@ -13,7 +13,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "entities": {
       "symbols": [
         "NVDA"
@@ -26,7 +25,7 @@
       "core_market"
     ],
     "diagnostics": [],
-    "reasoning": "coreference — the 'what about' clause references the NVDA subject from the prior turn; NVDA is prior-turn-derived so it lands in entities, not slots"
+    "reasoning": "coreference \u2014 the 'what about' clause references the NVDA subject from the prior turn; NVDA is prior-turn-derived so it lands in entities, not slots"
   },
   "tags": [
     "multi-turn-coreference",

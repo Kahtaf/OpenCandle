@@ -5,7 +5,7 @@ TBD - created by archiving change typed-finance-router. Update Purpose after arc
 ## Requirements
 ### Requirement: Resolved Turn Context
 
-The system SHALL build a `ResolvedTurnContext` after router post-processing and before prompt assembly. The context SHALL be the application-facing record for the current turn and SHALL include route kind, legacy route mapping while needed, workflow, normalized entities, slots with source provenance, missing required slots, selected tool bundles, memory query plan, retrieved memory provenance, prompt playbook, and diagnostics.
+The system SHALL build a `ResolvedTurnContext` after router post-processing and before prompt assembly. The context SHALL be the application-facing record for the current turn and SHALL include route kind, workflow, normalized entities, slots with source provenance, missing required slots, selected tool bundles, memory query plan, retrieved memory provenance, prompt playbook, and diagnostics.
 
 #### Scenario: Context is built before prompt assembly
 

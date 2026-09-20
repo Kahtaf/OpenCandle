@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "workflow_dispatch",
-    "route": "workflow",
     "workflow": "portfolio_builder",
     "entities": {
       "symbols": [],

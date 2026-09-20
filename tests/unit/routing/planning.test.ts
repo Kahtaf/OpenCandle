@@ -16,7 +16,6 @@ const input: RouterInputContext = {
 
 const compareOutput: RouterOutput = {
   routeKind: "workflow_dispatch",
-  route: "workflow",
   workflow: "compare_assets",
   entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"] },
   slots: {},
@@ -86,7 +85,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["ARMH"] },
         tool_bundles: ["core_market"],
@@ -109,7 +107,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["ZZZZ"] },
         tool_bundles: ["core_market", "options"],
@@ -131,7 +128,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["BA"] },
         tool_bundles: ["core_market"],
@@ -151,7 +147,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["NVDA", "AAPL", "TSLA"] },
         tool_bundles: ["core_market", "macro", "sentiment"],
@@ -171,7 +166,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["SPY", "MSFT"] },
         tool_bundles: ["core_market"],
@@ -191,7 +185,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: [],
@@ -215,7 +208,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: [],
@@ -240,7 +232,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: [],
@@ -258,7 +249,6 @@ describe("planning layer", () => {
     const singleAssetOutput: RouterOutput = {
       ...compareOutput,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "single_asset_analysis",
       entities: { symbols: ["GME"] },
       tool_bundles: ["core_market", "sentiment"],
@@ -311,7 +301,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["GME"] },
         tool_bundles: ["core_market", "sentiment"],
@@ -335,7 +324,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["COIN"] },
         tool_bundles: ["core_market", "sec"],
@@ -358,7 +346,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: [],
@@ -372,7 +359,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro", "sentiment"],
@@ -401,7 +387,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: [],
@@ -431,7 +416,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"], compareMetrics: ["overlap"] },
         tool_bundles: ["core_market", "macro", "sentiment"],
@@ -456,7 +440,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["NVDA"] },
         tool_bundles: ["core_market"],
@@ -480,7 +463,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["MSFT"] },
         tool_bundles: ["core_market", "options"],
@@ -503,7 +485,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["NVDA", "DRAM"] },
         tool_bundles: ["core_market", "options"],
@@ -523,7 +504,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["NVDA"] },
         tool_bundles: ["core_market", "options"],
@@ -543,7 +523,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "options"],
@@ -557,7 +536,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["NVDA"] },
         tool_bundles: ["core_market", "options"],
@@ -577,7 +555,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["BTC", "GLD"] },
         tool_bundles: ["core_market", "macro"],
@@ -597,7 +574,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro"],
@@ -617,7 +593,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro", "sentiment"],
@@ -648,7 +623,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "options_screener",
         entities: { symbols: ["NVDA"] },
         tool_bundles: ["core_market", "options", "sentiment", "clarification"],
@@ -673,7 +647,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro", "sentiment", "sec", "clarification"],
@@ -700,7 +673,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro"],
@@ -728,7 +700,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro"],
@@ -750,7 +721,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro"],
@@ -771,7 +741,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         tool_bundles: ["macro"],
@@ -793,7 +762,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["VOO", "BND"] },
         tool_bundles: ["core_market", "macro"],
@@ -837,7 +805,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "portfolio_builder",
         entities: { symbols: [] },
         tool_bundles: ["core_market", "macro", "sentiment"],
@@ -857,7 +824,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["SPY"] },
         tool_bundles: ["core_market", "options", "sentiment", "sec", "clarification"],
@@ -882,7 +848,6 @@ describe("planning layer", () => {
       {
         ...compareOutput,
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "watchlist_or_tracking",
         entities: { symbols: ["AAPL"] },
         tool_bundles: ["core_market", "clarification"],
@@ -902,7 +867,6 @@ describe("planning layer", () => {
     const corrected: RouterOutput = {
       ...compareOutput,
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "general_finance_qa",
       tool_bundles: ["core_market", "macro"],
       diagnostics: [

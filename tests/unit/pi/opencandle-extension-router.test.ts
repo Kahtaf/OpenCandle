@@ -145,7 +145,7 @@ describe("opencandle-extension router prompt assembly (task 7.2)", () => {
       async complete(prompt) {
         capturedPrompt = prompt;
         return JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: ["NVDA"] },
           slots: {},
           preference_updates: [],

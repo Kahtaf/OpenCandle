@@ -21,7 +21,6 @@ export interface TraceToolCall {
 
 export interface RouterTelemetry {
   routeKind?: string;
-  legacyRoute?: string;
   workflow?: string;
   missingRequired?: string[];
   toolBundles?: string[];

@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "clarification",
-    "route": "fallback",
     "workflow": "options_screener",
     "entities": {
       "symbols": [],

@@ -128,7 +128,6 @@ function turnContext(overrides: Partial<ResolvedTurnContext>): ResolvedTurnConte
     userInput: "analyze AAPL",
     priorTurns: [],
     routeKind: "agent_task",
-    legacyRoute: "fallback",
     workflow: "general_finance_qa",
     entities: { symbols: ["AAPL"] },
     slots: {},
@@ -216,7 +215,6 @@ describe("prompt output snapshots", () => {
           resolvedTurnContext: turnContext({
             userInput: "Compare VOO and SCHD for long-term income",
             routeKind: "workflow_dispatch",
-            legacyRoute: "workflow",
             workflow: "compare_assets",
             entities: { symbols: ["VOO", "SCHD"], compareMetrics: ["overlap"] },
             toolBundles: ["core_market", "macro", "sentiment"],

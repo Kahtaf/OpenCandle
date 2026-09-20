@@ -136,7 +136,7 @@ export class PromptContextBuilder {
 }
 
 /**
- * Fallback playbook — rendered when the router picks `route: "fallback"`.
+ * Fallback playbook — rendered for every non-workflow-dispatch route kind.
  * Composes with the universal analyst stance in `base-role`/`safety-rules`.
  * Instructs tool-first, commit-with-reasoning, ask_user when required slots
  * are missing. Contains NO refusal or hedging language.

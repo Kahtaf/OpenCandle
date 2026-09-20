@@ -1786,7 +1786,6 @@ function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {
     },
     {
       routeKind,
-      route: "fallback",
       workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
       entities: { symbols: [] },
       slots: {},

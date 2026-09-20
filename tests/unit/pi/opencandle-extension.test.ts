@@ -454,7 +454,7 @@ describe("opencandle extension", () => {
     it("records workflow runs after router dispatch", async () => {
       const fake = createFakeApi();
       const workflowOutput = {
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "portfolio_builder",
         entities: { symbols: [], budget: 10_000 },
         slots: {
@@ -493,7 +493,7 @@ describe("opencandle extension", () => {
     it("injects memory context into system prompt after router preference writes", async () => {
       const fake = createFakeApi();
       const fallbackOutput = {
-        route: "fallback",
+        routeKind: "agent_task",
         entities: { symbols: [] },
         slots: {},
         preference_updates: [
@@ -591,7 +591,7 @@ describe("opencandle extension", () => {
     }
 
     const workflowOutput: RouterOutput = {
-      route: "workflow",
+      routeKind: "workflow_dispatch",
       workflow: "portfolio_builder",
       entities: { symbols: [], budget: 10_000 },
       slots: {
@@ -604,7 +604,7 @@ describe("opencandle extension", () => {
     };
 
     const fallbackOutput: RouterOutput = {
-      route: "fallback",
+      routeKind: "agent_task",
       entities: { symbols: ["ASTS"], timeHorizon: "6mo" },
       slots: {
         symbols: { value: ["ASTS"], source: "user", confidence: "high" },
@@ -691,7 +691,6 @@ describe("opencandle extension", () => {
     it("dispatches portfolio workflows using budget supplied only by router slots", async () => {
       const slotOnlyBudgetOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "portfolio_builder",
         entities: { symbols: [] },
         slots: {
@@ -733,7 +732,6 @@ describe("opencandle extension", () => {
     it("dispatches options workflows using a symbol supplied only by router slots", async () => {
       const slotOnlySymbolOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "options_screener",
         entities: { symbols: [], direction: "bullish" },
         slots: {
@@ -775,7 +773,6 @@ describe("opencandle extension", () => {
     it("dispatches compare workflows using symbols supplied only by router slots", async () => {
       const slotOnlySymbolsOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: [] },
         slots: {
@@ -820,7 +817,6 @@ describe("opencandle extension", () => {
     it("preflights compare workflow symbols before dispatch", async () => {
       const compareOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["AAPL", "XXFAKEXX", "MSFT"] },
         slots: {},
@@ -873,7 +869,6 @@ describe("opencandle extension", () => {
     it("aborts compare workflow dispatch when preflight leaves too few symbols", async () => {
       const compareOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["ZZZBAD", "XXFAKEXX"] },
         slots: {},
@@ -962,7 +957,6 @@ describe("opencandle extension", () => {
     it("does not record pass-through turns as finance workflow history", async () => {
       const passThroughOutput: RouterOutput = {
         routeKind: "pass_through",
-        route: "fallback",
         entities: { symbols: [] },
         slots: {},
         preference_updates: [],
@@ -1032,7 +1026,6 @@ describe("opencandle extension", () => {
     it("logs router symbol drops as custom entries", async () => {
       const symbolDropOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["IV", "ASTS"] },
         slots: {},
@@ -1078,7 +1071,6 @@ describe("opencandle extension", () => {
     it("does not reintroduce dropped LLM symbols from router slots", async () => {
       const symbolDropOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["IV", "ASTS"] },
         slots: {

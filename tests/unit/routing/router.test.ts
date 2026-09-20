@@ -33,7 +33,7 @@ describe("validateRouterOutput", () => {
   it("accepts a minimal valid fallback output", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "fallback",
+        routeKind: "agent_task",
         entities: { symbols: ["AAPL"] },
         slots: {},
         preference_updates: [],
@@ -41,14 +41,14 @@ describe("validateRouterOutput", () => {
         reasoning: "x",
       }),
     );
-    expect(out.route).toBe("fallback");
+    expect(out.routeKind).toBe("agent_task");
     expect(out.entities.symbols).toEqual(["AAPL"]);
   });
 
   it("accepts compare metrics emitted by the router", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "compare_assets",
         entities: { symbols: ["BTC", "GLD"], compareMetrics: ["macro_hedge"] },
         slots: {},
@@ -64,7 +64,7 @@ describe("validateRouterOutput", () => {
   it("accepts protective-put strategy and share quantity emitted by the router", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "options_screener",
         entities: {
           symbols: ["NVDA"],
@@ -86,7 +86,7 @@ describe("validateRouterOutput", () => {
   it("canonicalizes camelCase slot keys to snake_case", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "portfolio_builder",
         entities: { symbols: [] },
         slots: {
@@ -110,7 +110,6 @@ describe("validateRouterOutput", () => {
     const out = validateRouterOutput(
       JSON.stringify({
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["TSLA"] },
         slots: {
@@ -130,7 +129,6 @@ describe("validateRouterOutput", () => {
     const out = validateRouterOutput(
       JSON.stringify({
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["TSLA", "F"] },
         slots: {
@@ -149,7 +147,7 @@ describe("validateRouterOutput", () => {
   it("wraps a scalar symbol slot into symbols for compare workflows", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "compare_assets",
         entities: { symbols: ["KO"] },
         slots: {
@@ -165,11 +163,11 @@ describe("validateRouterOutput", () => {
     expect(out.slots.symbol).toBeUndefined();
   });
 
-  it("rejects invalid route", () => {
+  it("rejects an invalid route kind", () => {
     expect(() =>
       validateRouterOutput(
         JSON.stringify({
-          route: "direct_tool",
+          routeKind: "direct_tool",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -177,14 +175,13 @@ describe("validateRouterOutput", () => {
           reasoning: "",
         }),
       ),
-    ).toThrow(/invalid route/);
+    ).toThrow(/invalid routeKind/);
   });
 
-  it("rejects workflow route without a workflow name", () => {
+  it("rejects output with no route kind", () => {
     expect(() =>
       validateRouterOutput(
         JSON.stringify({
-          route: "workflow",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -192,14 +189,29 @@ describe("validateRouterOutput", () => {
           reasoning: "",
         }),
       ),
-    ).toThrow(/workflow route requires/);
+    ).toThrow(/invalid routeKind/);
+  });
+
+  it("rejects workflow_dispatch without a workflow name", () => {
+    expect(() =>
+      validateRouterOutput(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "",
+        }),
+      ),
+    ).toThrow(/workflow_dispatch requires/);
   });
 
   it("rejects invalid slot source", () => {
     expect(() =>
       validateRouterOutput(
         JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: [] },
           slots: { foo: { value: 1, source: "unknown", confidence: "high" } },
           preference_updates: [],
@@ -214,7 +226,7 @@ describe("validateRouterOutput", () => {
     const out = validateRouterOutput(
       "```json\n" +
         JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -223,13 +235,13 @@ describe("validateRouterOutput", () => {
         }) +
         "\n```",
     );
-    expect(out.route).toBe("fallback");
+    expect(out.routeKind).toBe("agent_task");
   });
 
   it("normalizes omitted preference_updates[].source to 'inferred'", () => {
     const out = validateRouterOutput(
       JSON.stringify({
-        route: "fallback",
+        routeKind: "agent_task",
         entities: { symbols: [] },
         slots: {},
         preference_updates: [{ key: "risk_profile", value: "aggressive", confidence: "high" }],
@@ -244,7 +256,7 @@ describe("validateRouterOutput", () => {
     expect(() =>
       validateRouterOutput(
         JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [
@@ -287,7 +299,6 @@ describe("route()", () => {
   it("returns validated output on first successful call", async () => {
     const expected = {
       routeKind: "workflow_dispatch",
-      route: "workflow",
       workflow: "single_asset_analysis",
       entities: { symbols: ["AAPL"] },
       slots: { symbol: { value: "AAPL", source: "user", confidence: "high" } },
@@ -301,7 +312,6 @@ describe("route()", () => {
     const result = await route(BASE_INPUT, client);
     expect(result).toMatchObject({
       routeKind: "agent_task",
-      route: "fallback",
       workflow: "single_asset_analysis",
       entities: { symbols: ["AAPL"] },
       slots: expected.slots,
@@ -333,7 +343,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
-    expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("compare_assets");
     expect(result.entities.compareMetrics).toEqual(["overlap"]);
     expect(result.diagnostics).toContainEqual(
@@ -425,9 +434,9 @@ describe("route()", () => {
   });
 
   it("retries once on validation failure", async () => {
-    const bad = JSON.stringify({ route: "nope" });
+    const bad = JSON.stringify({ routeKind: "nope" });
     const good = JSON.stringify({
-      route: "fallback",
+      routeKind: "agent_task",
       entities: { symbols: [] },
       slots: {},
       preference_updates: [],
@@ -442,7 +451,7 @@ describe("route()", () => {
       },
     };
     const result = await route({ ...BASE_INPUT, text: "hello" }, client);
-    expect(result.route).toBe("fallback");
+    expect(result.routeKind).toBe("agent_task");
     expect(call).toBe(2);
   });
 
@@ -453,7 +462,7 @@ describe("route()", () => {
       },
     };
     const result = await route({ ...BASE_INPUT, text: "hello" }, client);
-    expect(result.route).toBe("fallback");
+    expect(result.routeKind).toBe("agent_task");
     expect(result.entities.symbols).toEqual([]);
     expect(result.missing_required).toEqual([]);
   });
@@ -473,7 +482,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
     expect(result.diagnostics).toContainEqual(
@@ -488,7 +496,7 @@ describe("route()", () => {
       { ...BASE_INPUT, text: "For the next 6 months, should I use BTC or GLD as a macro hedge?" },
       fixedClient(
         JSON.stringify({
-          route: "workflow",
+          routeKind: "workflow_dispatch",
           workflow: "compare_assets",
           entities: { symbols: ["BTC", "GLD"] },
           slots: {},
@@ -537,7 +545,7 @@ describe("route()", () => {
       { ...BASE_INPUT, text: "I'm aggressive, give me a 3-year portfolio for $25k" },
       fixedClient(
         JSON.stringify({
-          route: "workflow",
+          routeKind: "workflow_dispatch",
           workflow: "portfolio_builder",
           entities: {
             symbols: [],
@@ -566,7 +574,7 @@ describe("route()", () => {
       { ...BASE_INPUT, text: "invest $50k diversified" },
       fixedClient(
         JSON.stringify({
-          route: "workflow",
+          routeKind: "workflow_dispatch",
           workflow: "portfolio_builder",
           entities: { symbols: [], budget: 50_000, riskProfile: "balanced" },
           slots: {
@@ -597,7 +605,7 @@ describe("route()", () => {
       { ...BASE_INPUT, text: "invest $50k diversified" },
       fixedClient(
         JSON.stringify({
-          route: "workflow",
+          routeKind: "workflow_dispatch",
           workflow: "portfolio_builder",
           entities: { symbols: [], budget: 50_000 },
           slots: { budget: { value: 50_000, source: "user", confidence: "high" } },
@@ -647,7 +655,7 @@ describe("route()", () => {
       },
       fixedClient(
         JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: ["AI"] },
           slots: {},
           preference_updates: [],
@@ -658,7 +666,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBeUndefined();
     expect(result.entities.symbols).toEqual([]);
   });
@@ -691,7 +698,7 @@ describe("route()", () => {
       },
       fixedClient(
         JSON.stringify({
-          route: "fallback",
+          routeKind: "agent_task",
           entities: { symbols: ["AI"] },
           slots: {},
           preference_updates: [],
@@ -713,7 +720,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["IV", "ASTS"] },
           slots: {},
@@ -744,7 +750,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["IV", "ASTS"] },
           slots: {
@@ -774,7 +779,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["CPI", "SPY"] },
           slots: {
@@ -790,7 +794,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual(["SPY"]);
     expect(result.slots.symbols).toBeUndefined();
@@ -849,7 +852,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["KO", "IV", "PEP"] },
           slots: {},
@@ -927,7 +929,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["KO", "PEP"] },
           slots: {
@@ -961,7 +962,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["NVDA", "AMD", "SPY"] },
           slots: {
@@ -998,7 +998,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["SPY", "NVDA", "AMD"] },
           slots: {
@@ -1025,7 +1024,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["VOO", "VTI"] },
           slots: {
@@ -1063,7 +1061,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1104,7 +1101,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1121,7 +1117,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1137,7 +1132,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "portfolio_builder",
           entities: { symbols: [], budget: 30000 },
           slots: {
@@ -1168,7 +1162,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["NVDA"] },
           slots: {
@@ -1202,7 +1195,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], dteHint: "month" },
           slots: {
@@ -1235,7 +1227,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], dteHint: "month" },
           slots: {
@@ -1268,7 +1259,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "30-45" },
           slots: {},
@@ -1298,7 +1288,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
           slots: {
@@ -1330,7 +1319,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
           slots: {
@@ -1362,7 +1350,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "options_screener",
           entities: { symbols: ["AAPL"], direction: "bullish", dteHint: "month" },
           slots: {
@@ -1394,7 +1381,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "portfolio_builder",
           entities: { symbols: [], budget: 20000 },
           slots: {
@@ -1431,7 +1417,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "workflow_dispatch",
-          route: "workflow",
           workflow: "compare_assets",
           entities: { symbols: ["VOO", "SCHD"] },
           slots: {
@@ -1468,7 +1453,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "pass_through",
-          route: "fallback",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -1502,7 +1486,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "pass_through",
-          route: "fallback",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -1515,7 +1498,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.entities.riskProfile).toBe("conservative");
     expect(result.slots.risk_profile).toEqual({
       value: "conservative",
@@ -1553,7 +1535,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1586,7 +1567,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
-    expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("portfolio_builder");
     expect(result.diagnostics).not.toContainEqual(
       expect.objectContaining({ code: "portfolio_evaluation_corrected_to_agent_task" }),
@@ -1613,7 +1593,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -1644,7 +1623,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1677,7 +1655,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
@@ -1708,7 +1685,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
-    expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("compare_assets");
     expect(result.entities.symbols).toEqual(["VYM", "SCHD", "VOO", "QQQ"]);
     expect(result.missing_required).toEqual([]);
@@ -1739,7 +1715,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
-    expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("compare_assets");
     expect(result.entities.symbols).toEqual(["NVDA", "AMD"]);
     expect(result.entities.direction).toBeUndefined();
@@ -1775,7 +1750,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("watchlist_or_tracking");
     expect(result.entities.symbols).toEqual(["ASTS"]);
     expect(result.missing_required).toEqual([]);
@@ -1856,7 +1830,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "agent_task",
-          route: "fallback",
           entities: { symbols: [] },
           slots: {},
           preference_updates: [],
@@ -1882,7 +1855,6 @@ describe("route()", () => {
       fixedClient(
         JSON.stringify({
           routeKind: "agent_task",
-          route: "fallback",
           workflow: "watchlist_or_tracking",
           entities: { symbols: [] },
           slots: {},
@@ -1916,7 +1888,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("clarification");
-    expect(result.route).toBe("fallback");
     expect(result.missing_required).toEqual(["symbol"]);
     expect(result.tool_bundles).toEqual(["clarification"]);
   });
@@ -2155,7 +2126,6 @@ describe("route()", () => {
     );
 
     expect(result.routeKind).toBe("agent_task");
-    expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.tool_bundles).toEqual(expect.arrayContaining(["core_market", "options"]));
     expect(result.diagnostics).toContainEqual(
@@ -2547,15 +2517,13 @@ describe("live-router deterministic context recovery", () => {
 });
 
 describe("route capability manifest", () => {
-  it("declares all canonical route kinds and legacy mappings", () => {
+  it("declares all canonical route kinds", () => {
     expect(Object.keys(ROUTE_CAPABILITY_MANIFEST).sort()).toEqual([
       "agent_task",
       "clarification",
       "pass_through",
       "workflow_dispatch",
     ]);
-    expect(ROUTE_CAPABILITY_MANIFEST.workflow_dispatch.legacyRoute).toBe("workflow");
-    expect(ROUTE_CAPABILITY_MANIFEST.agent_task.legacyRoute).toBe("fallback");
   });
 
   it("resolves active tools from selected bundles", () => {
@@ -2638,7 +2606,6 @@ describe("ResolvedTurnContext", () => {
     });
 
     expect(context.routeKind).toBe("agent_task");
-    expect(context.legacyRoute).toBe("fallback");
     expect(context.toolBundles).toContain("core_market");
     expect(context.activeToolNames).toContain("get_stock_quote");
     expect(context.memoryQueryPlan.categories).toContain("investor_profile");

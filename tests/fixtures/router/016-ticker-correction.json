@@ -9,7 +9,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "workflow": "single_asset_analysis",
     "entities": {
       "symbols": [
@@ -38,7 +37,7 @@
         "message": "single_asset_analysis is not a dispatchable workflow"
       }
     ],
-    "reasoning": "user correction — the current turn explicitly replaces the prior ticker; corrected symbol is from the current turn so it populates both entities and a user-sourced slot"
+    "reasoning": "user correction \u2014 the current turn explicitly replaces the prior ticker; corrected symbol is from the current turn so it populates both entities and a user-sourced slot"
   },
   "tags": [
     "multi-turn-correction",

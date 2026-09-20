@@ -13,7 +13,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "clarification",
-    "route": "fallback",
     "workflow": "compare_assets",
     "entities": {
       "symbols": [

@@ -17,7 +17,6 @@ export function stripNonContract(
 
   return {
     routeKind: out.routeKind,
-    route: out.route,
     workflow: out.routeKind === "workflow_dispatch" ? out.workflow : undefined,
     entities,
     slots: contractSlotValues(out.slots, expected?.slotKeys),

@@ -8,7 +8,6 @@ function context(overrides: Partial<ResolvedTurnContext>): ResolvedTurnContext {
     userInput: "analyze AAPL",
     priorTurns: [],
     routeKind: "agent_task",
-    legacyRoute: "fallback",
     workflow: "general_finance_qa",
     entities: { symbols: ["AAPL"] },
     slots: {},
@@ -46,7 +45,6 @@ const promptVariants: Array<{ name: string; options: PromptContextOptions }> = [
     options: {
       resolvedTurnContext: context({
         routeKind: "workflow_dispatch",
-        legacyRoute: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["VOO", "SCHD"] },
         toolBundles: ["core_market", "macro", "sentiment"],

@@ -172,7 +172,7 @@ describe("Router fixtures drive prompt assembly correctly", () => {
       });
     }
 
-    if (data.expectedRouterOutput.route === "fallback") {
+    if (data.expectedRouterOutput.routeKind !== "workflow_dispatch") {
       it(`fixture ${name} fallback playbook embeds assumptions as context and ask_user directive`, () => {
         const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
         const playbook = buildFallbackPlaybook({
@@ -211,7 +211,9 @@ describe("Router fixtures drive prompt assembly correctly", () => {
   }
 
   it("full system prompt assembled for a fallback fixture contains analyst stance + playbook + assumptions", () => {
-    const fallback = fixtures.find((f) => f.data.expectedRouterOutput.route === "fallback");
+    const fallback = fixtures.find(
+      (f) => f.data.expectedRouterOutput.routeKind !== "workflow_dispatch",
+    );
     expect(fallback, "need at least one fallback fixture").toBeDefined();
     if (!fallback) throw new Error("need at least one fallback fixture");
     const { slots, missing_required, entities } = fallback.data.expectedRouterOutput;
