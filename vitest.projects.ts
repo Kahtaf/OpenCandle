@@ -1,11 +1,10 @@
 import type { ViteUserConfig } from "vitest/config";
 
-// Named Vitest project configs, shared between the unified vitest.config.ts
-// `test.projects` array and the standalone vitest.config.evals.ts shim (kept
-// for tests/scripts/run-evals-table.ts, which invokes
-// `vitest run --config vitest.config.evals.ts` directly instead of
-// `--project evals`). Keep each project's include/exclude, environment,
-// timeouts, and setup files exactly as they were before consolidation.
+// Named Vitest project configs consumed by the unified vitest.config.ts
+// `test.projects` array. Every surface (npm test, the eval front door, the
+// browser suites) selects one of these with `--project <name>`, so each
+// project's include/exclude, environment, timeouts, and setup files stay
+// exactly as they were before consolidation.
 
 export const unitProject: ViteUserConfig = {
   test: {

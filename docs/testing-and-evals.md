@@ -77,7 +77,7 @@ npm run eval -- release
 
 | Suite | Delegates to | Key options |
 |-------|--------------|-------------|
-| `cases` | `vitest run --config vitest.config.evals.ts` | `--tier usually`, `--known-fail e1`, `--known-fail e2` |
+| `cases` | `vitest run --project evals` | `--tier usually`, `--known-fail e1`, `--known-fail e2` |
 | `product` | `tests/scripts/run-product-evals.ts` | `--case <id>`, `--family <name>`, `--include-opt-in`, `--limit <n>` |
 | `competitive` | `tests/scripts/run-competitive-finance-eval.ts` | `--provider <id>`, `--model <id>`, `--count <n>`, `--seed <seed>` |
 | `competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | `--provider <id>`, `--model <id>` |

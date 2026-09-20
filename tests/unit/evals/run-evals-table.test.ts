@@ -47,7 +47,7 @@ describe("eval front door dispatch table", () => {
   it("resolves suite ids to the delegated command without reimplementing suite logic", () => {
     expect(resolveEvalCommand("cases", [])).toMatchObject({
       command: "vitest",
-      args: ["run", "--config", "vitest.config.evals.ts"],
+      args: ["run", "--project", "evals"],
       env: {},
     });
     expect(resolveEvalCommand("product", [])).toMatchObject({

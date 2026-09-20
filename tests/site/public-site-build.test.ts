@@ -71,6 +71,21 @@ describe("public site build contract", () => {
       ).resolves.toBeUndefined();
     }
 
+    // The approved demo clips and posters are checked into the website itself
+    // (they used to live under the removed video/ Remotion project), so the
+    // build has no source outside website/assets to fall back on.
+    for (const source of [
+      "website/assets/video/gui.mp4",
+      "website/assets/video/tui.mp4",
+      "website/assets/video/gui-start.png",
+      "website/assets/video/tui-final.png",
+    ]) {
+      await expect(
+        access(join(root, source)),
+        `${source} should be the checked-in build source`,
+      ).resolves.toBeUndefined();
+    }
+
     const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
     const sitemap = await readFile(join(root, "website/dist/sitemap.xml"), "utf8");
 

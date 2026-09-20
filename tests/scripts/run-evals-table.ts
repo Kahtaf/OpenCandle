@@ -48,7 +48,7 @@ const SUITES: EvalSuite[] = [
       } else if (options["known-fail"]) {
         throw new Error(`Unknown known-fail "${options["known-fail"]}". Expected e1 or e2.`);
       }
-      return command("cases", "vitest", ["run", "--config", "vitest.config.evals.ts"], env);
+      return command("cases", "vitest", ["run", "--project", "evals"], env);
     },
   },
   {
