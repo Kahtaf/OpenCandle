@@ -32,7 +32,6 @@
       "!openspec",
       "!docs",
       "!.agents",
-      "!.codex",
       "!tests/fixtures"
     ]
   },
