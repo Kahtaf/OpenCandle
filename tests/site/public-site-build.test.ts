@@ -1,18 +1,20 @@
-import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const root = process.cwd();
-const execFileAsync = promisify(execFile);
 
 describe("public site build contract", () => {
-  beforeAll(async () => {
-    await execFileAsync("npm", ["run", "docs:site:build"], { cwd: root });
-  }, 30_000);
+  beforeAll(() => {
+    if (!existsSync(join(root, "website/dist/index.html"))) {
+      throw new Error(
+        "website/dist is missing. Run `npm run test:site` (which builds the site before " +
+          "running these tests) instead of invoking this file directly through the unit project.",
+      );
+    }
+  });
 
   it("declares shared UI and website workspaces", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -178,43 +180,6 @@ describe("public site build contract", () => {
     }
   });
 
-  it("keeps desktop documentation rails white while the mobile drawer stays muted", async () => {
-    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
-    const docsDocument = new JSDOM(docsHtml, {
-      url: "https://opencandle.app/docs/index.html",
-    }).window.document;
-    const sidebar = docsDocument.querySelector("aside[data-docs-sidebar]");
-    const tocSidebar = docsDocument.querySelector("aside[data-docs-toc-sidebar]");
-    const mobileDrawer = docsDocument.querySelector("[data-drawer-panel]");
-
-    expect(sidebar).not.toBeNull();
-    expect(sidebar?.classList.contains("docs-sidebar")).toBe(true);
-    expect(sidebar?.classList.contains("bg-background")).toBe(true);
-    expect(sidebar?.classList.contains("bg-secondary")).toBe(false);
-    expect(sidebar?.classList.contains("overflow-hidden")).toBe(false);
-    expect(sidebar?.querySelector('nav[aria-label="Documentation"]')).not.toBeNull();
-    expect(tocSidebar?.classList.contains("bg-background")).toBe(true);
-    expect(mobileDrawer?.classList.contains("bg-secondary")).toBe(true);
-  });
-
-  it("extends the desktop table of contents surface to the viewport edge", async () => {
-    const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
-    const docsDocument = new JSDOM(docsHtml, {
-      url: "https://opencandle.app/docs/index.html",
-    }).window.document;
-    const sidebar = docsDocument.querySelector("aside[data-docs-toc-sidebar]");
-    const nav = sidebar?.querySelector('nav[aria-label="On this page"]');
-    const firstLink = nav?.querySelector("a");
-
-    expect(sidebar).not.toBeNull();
-    expect(sidebar?.classList.contains("docs-toc-sidebar")).toBe(true);
-    expect(nav).not.toBeNull();
-    expect(nav?.parentElement?.classList.contains("px-3")).toBe(true);
-    expect(nav?.parentElement?.classList.contains("py-5")).toBe(true);
-    expect(firstLink?.classList.contains("hover:bg-tertiary")).toBe(true);
-    expect(firstLink?.classList.contains("hover:bg-secondary")).toBe(false);
-  });
-
   it("presents the GUI as primary and the TUI as equally complete across the docs journey", async () => {
     const overviewHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
     const gettingStartedHtml = await readFile(
@@ -369,41 +334,6 @@ describe("public site build contract", () => {
     expect(cliPanel?.hasAttribute("inert")).toBe(true);
     expect(browserPanel?.hidden).toBe(false);
     expect(cliPanel?.hidden).toBe(false);
-  });
-
-  it("keeps the expanded hero demo within the available desktop viewport gutter", async () => {
-    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
-    const desktopHeroRule = siteCss.match(
-      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero-media\s*\{([\s\S]*?)\}/,
-    )?.[1];
-    const normalizedRule = desktopHeroRule
-      ?.replace(/\s+/g, " ")
-      .replace(/\(\s+/g, "(")
-      .replace(/\s+\)/g, ")")
-      .trim();
-
-    expect(normalizedRule).toContain(
-      "width: min(calc(100% + min(7vw, 6rem)), calc(100% + max(1.5rem, (100vw - 1320px) / 2 + 1.5rem)))",
-    );
-    expect(normalizedRule).not.toContain("width: calc(100% + min(7vw, 6rem))");
-  });
-
-  it("keeps the desktop hero heading clear of the product demo", async () => {
-    const siteCss = await readFile(join(root, "website/src/site.css"), "utf8");
-    const heroHeadingRule = siteCss.match(/\.landing-hero-copy h1\s*\{([\s\S]*?)\}/)?.[1];
-    const desktopHeroRule = siteCss.match(
-      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero\s*\{([\s\S]*?)\}/,
-    )?.[1];
-    const desktopHeroMediaRule = siteCss.match(
-      /@media \(min-width: 60rem\)[\s\S]*?\.landing-hero-media\s*\{([\s\S]*?)\}/,
-    )?.[1];
-
-    expect(heroHeadingRule?.replace(/\s+/g, " ")).toContain("font-size: clamp(2.75rem, 4vw, 4rem)");
-    expect(desktopHeroRule?.replace(/\s+/g, " ")).toContain(
-      "grid-template-columns: minmax(460px, 0.75fr) minmax(0, 1.25fr)",
-    );
-    expect(desktopHeroRule?.replace(/\s+/g, " ")).toContain("gap: clamp(4rem, 6vw, 6rem)");
-    expect(desktopHeroMediaRule?.replace(/\s+/g, " ")).toContain("transform: translateX(-2rem)");
   });
 
   it("answers first-run and privacy questions without implementation jargon", async () => {

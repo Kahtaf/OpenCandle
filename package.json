@@ -97,6 +97,7 @@
     "relay:smoke:browser": "tsx workers/provider-relay/scripts/browser-live-smoke.ts",
     "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
+    "test:site": "npm run docs:site:build && vitest run --config vitest.config.site.ts",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
     "gui": "tsx gui/server/server.ts",
     "lint": "biome check .",
@@ -132,7 +133,7 @@
     "version:major": "npm version major --no-git-tag-version",
     "prepublishOnly": "npm run release:check",
     "publish:dry": "npm run release:check && npm publish --access public --dry-run",
-    "release:check": "npx tsc --noEmit && npm run test:scripts:typecheck && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
+    "release:check": "npx tsc --noEmit && npm run test:scripts:typecheck && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run test:site && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major"
