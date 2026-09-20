@@ -5,7 +5,6 @@ import {
   isAnalysisRequest,
   normalizeSymbol,
 } from "../analysts/orchestrator.js";
-import { getConfig } from "../config.js";
 import type { InstrumentCandidate } from "../market-state/resolve.js";
 import { runProviderConnect } from "../onboarding/connect.js";
 import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
@@ -32,7 +31,6 @@ import {
   route as routeLlm,
 } from "../routing/index.js";
 import type { RouterInputContext, RouterLlmClient, RouterOutput } from "../routing/router-types.js";
-import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type {
   CompareAssetsSlots,
   ExtractedEntities,
@@ -125,8 +123,6 @@ export default function openCandleExtension(
   const sessionPromptedSet = new Set<ProviderId>();
   let hardPromptFiredInWorkflow = false;
   const degradationAccumulator = createDegradationAccumulator();
-  let activeToolSnapshot: string[] | null = null;
-  let currentRouteToolContext: ResolvedTurnContext | null = null;
   // LLM session-title state: one title attempt per session per process.
   // Reset on session_start; set before the (async) title call fires so
   // overlapping turn_end events cannot double-title.
@@ -326,19 +322,9 @@ export default function openCandleExtension(
   pi.on("turn_end", async (event) => {
     const msg = event.message;
     const isSuccessfulFinalAssistantTurn = msg.role === "assistant" && msg.stopReason === "stop";
-    const isTerminalAssistantTurn =
-      msg.role === "assistant" &&
-      (msg.stopReason === "stop" ||
-        msg.stopReason === "length" ||
-        msg.stopReason === "error" ||
-        msg.stopReason === "aborted");
     if (isSuccessfulFinalAssistantTurn) {
       pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
     }
-    if (isTerminalAssistantTurn) {
-      restoreRouteToolScope();
-    }
-
     if (degradationAccumulator.isEmpty()) return;
     const state = loadOnboardingState();
     const annotation = degradationAccumulator.buildCombinedAnnotation(state);
@@ -709,29 +695,6 @@ export default function openCandleExtension(
     return undefined;
   });
 
-  pi.on("tool_call", async (event) => {
-    if (!currentRouteToolContext) return undefined;
-    const allowed = new Set(currentRouteToolContext.activeToolNames);
-    if (allowed.has(event.toolName)) return undefined;
-
-    const diagnostic = {
-      routeKind: currentRouteToolContext.routeKind,
-      workflow: currentRouteToolContext.workflow,
-      toolName: event.toolName,
-      toolBundles: currentRouteToolContext.toolBundles,
-      activeToolNames: currentRouteToolContext.activeToolNames,
-    };
-    pi.appendEntry("opencandle-tool-scope-violation", diagnostic);
-
-    if (getConfig().toolScopeMode === "enforce") {
-      return {
-        block: true,
-        reason: `Tool ${event.toolName} is outside the route-selected OpenCandle tool bundle.`,
-      };
-    }
-    return undefined;
-  });
-
   // Input handling — the LLM router is the single production routing path.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
@@ -822,7 +785,6 @@ export default function openCandleExtension(
     appendRouterSymbolDropEntries(output);
     pi.appendEntry("opencandle-route-context", resolvedTurnContext);
     coordinator.setPendingResolvedTurnContext(resolvedTurnContext);
-    applyRouteToolScope(resolvedTurnContext);
 
     // Preference writes: HIGH-confidence only. Medium/low are logged for
     // observability even when no storage is available.
@@ -1175,68 +1137,6 @@ export default function openCandleExtension(
       return pi.getAllTools().map((tool) => tool.name);
     } catch {
       return [];
-    }
-  }
-
-  function applyRouteToolScope(context: ResolvedTurnContext): void {
-    const mode = getConfig().toolScopeMode;
-    currentRouteToolContext = context;
-    pi.appendEntry("opencandle-tool-scope", {
-      mode,
-      routeKind: context.routeKind,
-      workflow: context.workflow,
-      toolBundles: context.toolBundles,
-      activeToolNames: context.activeToolNames,
-      enforced: false,
-    });
-
-    if (mode !== "enforce") return;
-    if (context.activeToolNames.length === 0) return;
-
-    try {
-      if (activeToolSnapshot === null) {
-        activeToolSnapshot = pi.getActiveTools();
-      }
-      pi.setActiveTools(context.activeToolNames);
-      pi.appendEntry("opencandle-tool-scope", {
-        mode,
-        routeKind: context.routeKind,
-        workflow: context.workflow,
-        toolBundles: context.toolBundles,
-        activeToolNames: context.activeToolNames,
-        enforced: true,
-      });
-    } catch (err) {
-      pi.appendEntry("opencandle-tool-scope", {
-        mode,
-        routeKind: context.routeKind,
-        workflow: context.workflow,
-        toolBundles: context.toolBundles,
-        activeToolNames: context.activeToolNames,
-        enforced: false,
-        diagnostic: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  function restoreRouteToolScope(): void {
-    currentRouteToolContext = null;
-    if (activeToolSnapshot === null) return;
-    try {
-      pi.setActiveTools(activeToolSnapshot);
-      pi.appendEntry("opencandle-tool-scope", {
-        mode: getConfig().toolScopeMode,
-        restored: true,
-        activeToolNames: activeToolSnapshot,
-      });
-    } catch (err) {
-      pi.appendEntry("opencandle-tool-scope", {
-        mode: getConfig().toolScopeMode,
-        restored: false,
-        diagnostic: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      activeToolSnapshot = null;
     }
   }
 

@@ -13,8 +13,6 @@ export interface SentimentConfig {
   maxNotableClaims?: number;
 }
 
-export type ToolScopeMode = "observe" | "enforce";
-
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
@@ -22,12 +20,6 @@ export interface Config {
   exaApiKey?: string;
   finnhubApiKey?: string;
   lseApiKey?: string;
-  /**
-   * Route-selected tool scope mode. `"observe"` (default) records selected
-   * bundles and active-tool candidates. `"enforce"` applies Pi active tools
-   * for the turn via `pi.setActiveTools`.
-   */
-  toolScopeMode: ToolScopeMode;
   sentiment?: SentimentConfig;
 }
 
@@ -115,15 +107,6 @@ function assertSupportedRouterMode(): void {
   throw new Error(`Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed value: "llm" (default).`);
 }
 
-function resolveToolScopeMode(): ToolScopeMode {
-  const raw = process.env.OPENCANDLE_TOOL_SCOPE_MODE;
-  if (raw === undefined || raw === "") return "observe";
-  if (raw === "observe" || raw === "enforce") return raw;
-  throw new Error(
-    `Invalid OPENCANDLE_TOOL_SCOPE_MODE="${raw}". Allowed values: "observe" (default) or "enforce".`,
-  );
-}
-
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   assertSupportedRouterMode();
   const fileSentiment = fileConfig.sentiment;
@@ -135,7 +118,6 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
     lseApiKey: process.env.LSE_API_KEY ?? fileConfig.providers?.lse?.apiKey,
-    toolScopeMode: resolveToolScopeMode(),
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,

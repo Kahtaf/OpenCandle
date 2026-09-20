@@ -21,7 +21,6 @@ const DEFAULT_EMPTY_CONFIG = {
   exaApiKey: undefined,
   finnhubApiKey: undefined,
   lseApiKey: undefined,
-  toolScopeMode: "observe",
   sentiment: undefined,
 } satisfies Config;
 

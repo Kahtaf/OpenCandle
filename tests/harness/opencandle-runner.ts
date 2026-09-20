@@ -352,13 +352,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
   const routeContextEntry = [...customEntries]
     .reverse()
     .find((entry) => entry.customType === "opencandle-route-context");
-  const scopeEntries = customEntries
-    .filter((entry) => entry.customType === "opencandle-tool-scope")
-    .map((entry) => entry.data);
-  const violations = customEntries
-    .filter((entry) => entry.customType === "opencandle-tool-scope-violation")
-    .map((entry) => entry.data);
-
   const routerOutput = routerEntry ? getRouterOutputRecord(routerEntry.data) : null;
   const routeContext = isRecord(routeContextEntry?.data) ? routeContextEntry.data : null;
   const memoryQueryPlan = isRecord(routeContext?.memoryQueryPlan)
@@ -380,8 +373,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
     diagnostics: Array.isArray(routeContext?.diagnostics ?? routerOutput?.diagnostics)
       ? ((routeContext?.diagnostics ?? routerOutput?.diagnostics) as unknown[])
       : undefined,
-    toolScopeViolations: violations.length > 0 ? violations : undefined,
-    ...(scopeEntries.length > 0 ? { toolScope: scopeEntries } : {}),
   };
 }
 

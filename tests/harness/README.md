@@ -124,8 +124,6 @@ Currently-emitted `customType`s:
 | `opencandle-workflow-aborted`      | Workflow preflight aborted (e.g. too few valid symbols).                |
 | `opencandle-symbol-preflight-dropped` | A symbol dropped during compare-workflow ticker preflight.           |
 | `opencandle-symbol-dropped`        | A router-extracted symbol token dropped as a false-positive ticker.      |
-| `opencandle-tool-scope`            | Route-selected active tool scope applied or restored for a turn.        |
-| `opencandle-tool-scope-violation`  | A tool call outside the route's active tool scope.                      |
 | `opencandle-title-error`           | Session auto-titling failed for a turn.                                 |
 | `opencandle-user-input`            | The user's original words, preserved when a workflow transform rewrites the turn. |
 | `opencandle-validation`            | Synthesis-output validation result against tool evidence.               |

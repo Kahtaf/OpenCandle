@@ -28,8 +28,6 @@ export interface RouterTelemetry {
   memoryCategories?: string[];
   memoryProvenance?: unknown[];
   diagnostics?: unknown[];
-  toolScope?: unknown[];
-  toolScopeViolations?: unknown[];
 }
 
 export interface PlanningTelemetry {
