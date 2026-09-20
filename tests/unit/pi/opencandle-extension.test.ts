@@ -183,6 +183,35 @@ describe("opencandle extension", () => {
     );
   });
 
+  it("retires an in-flight workflow on session_shutdown before Pi disposes the session", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const ctx: FakeCommandContext = {
+      isIdle: () => false,
+      ui: { notify: vi.fn() },
+    };
+    await fake.commands.get("analyze")!.handler("NVDA", ctx);
+    await vi.advanceTimersByTimeAsync(50);
+    const promptsBeforeShutdown = fake.sendUserMessage.mock.calls.length;
+
+    const shutdownHandler = fake.handlers.get("session_shutdown")?.[0];
+    expect(shutdownHandler).toBeDefined();
+    const shutdown = shutdownHandler!({ type: "session_shutdown", reason: "new" }, ctx);
+    await vi.advanceTimersByTimeAsync(200);
+    await shutdown;
+
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "comprehensive_analysis",
+      status: "failed",
+      reason: "session_replaced",
+    });
+    // Nothing more may be queued into a session that is about to be disposed.
+    expect(fake.sendUserMessage.mock.calls.length).toBe(promptsBeforeShutdown);
+    await vi.runAllTimersAsync();
+    expect(fake.sendUserMessage.mock.calls.length).toBe(promptsBeforeShutdown);
+  });
+
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);

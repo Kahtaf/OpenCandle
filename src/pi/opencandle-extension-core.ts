@@ -1,5 +1,10 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ModelRuntime, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ModelRuntime,
+  SessionShutdownEvent,
+  ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
 import {
   buildComprehensiveAnalysisDefinition,
   isAnalysisRequest,
@@ -297,6 +302,16 @@ export default function openCandleExtension(
         "info",
       );
     }
+  });
+
+  // Pi awaits this handler before it disposes the outgoing session, so it is
+  // the last point at which a workflow still bound to that session can write
+  // to it. A dispatched multi-step workflow outlives the turn that started it
+  // (the coordinator keeps queueing its later steps), so a session replaced
+  // mid-run would otherwise leave the run to die against an invalidated
+  // context with nothing recorded in the transcript it belonged to.
+  pi.on("session_shutdown", async (event) => {
+    await coordinator.endActiveWorkflowForSessionShutdown(sessionShutdownReason(event.reason));
   });
 
   // Reset the per-workflow prompt cap AND the degradation accumulator on each
@@ -1216,6 +1231,13 @@ function extractMessageText(content: unknown): string {
     }
   }
   return text;
+}
+
+/** Plain-language reason recorded on a workflow retired by session shutdown. */
+function sessionShutdownReason(reason: SessionShutdownEvent["reason"]): string {
+  if (reason === "reload") return "session_reloaded";
+  if (reason === "quit") return "session_closed";
+  return "session_replaced";
 }
 
 /**
