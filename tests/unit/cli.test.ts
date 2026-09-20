@@ -13,10 +13,10 @@ const piMocks = vi.hoisted(() => ({
   install: vi.fn(),
   InteractiveMode: vi.fn(),
   continueOpenCandleSession: vi.fn(),
-  acquireSessionWriterLock: vi.fn(),
+  acquireWriterLock: vi.fn(),
   migrateWriterLockScope: vi.fn(),
-  refreshSessionWriterLock: vi.fn(),
-  releaseSessionWriterLock: vi.fn(),
+  refreshWriterLock: vi.fn(),
+  releaseWriterLock: vi.fn(),
   startTuiSessionCoordinatorServer: vi.fn(),
   writerLockScopeForSession: vi.fn(),
   existsSync: vi.fn(),
@@ -137,10 +137,10 @@ vi.mock("../../src/pi/session-storage.js", () => ({
 }));
 
 vi.mock("../../src/pi/session-writer-lock.js", () => ({
-  acquireSessionWriterLock: piMocks.acquireSessionWriterLock,
+  acquireWriterLock: piMocks.acquireWriterLock,
   migrateWriterLockScope: piMocks.migrateWriterLockScope,
-  refreshSessionWriterLock: piMocks.refreshSessionWriterLock,
-  releaseSessionWriterLock: piMocks.releaseSessionWriterLock,
+  refreshWriterLock: piMocks.refreshWriterLock,
+  releaseWriterLock: piMocks.releaseWriterLock,
   writerLockScopeForSession: piMocks.writerLockScopeForSession,
 }));
 
@@ -167,7 +167,7 @@ describe("opencandle package commands", () => {
     piMocks.update.mockResolvedValue(undefined);
     piMocks.ensureOpenCandleNativeDependencies.mockResolvedValue(undefined);
     piMocks.existsSync.mockReturnValue(false);
-    piMocks.acquireSessionWriterLock.mockResolvedValue({
+    piMocks.acquireWriterLock.mockResolvedValue({
       role: "writer",
       lock: {
         pid: process.pid,
@@ -335,12 +335,12 @@ describe("opencandle package commands", () => {
     await runCli([]);
 
     expect(piMocks.writerLockScopeForSession).toHaveBeenCalledWith(sessionManager);
-    expect(piMocks.acquireSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl", "tui", {
+    expect(piMocks.acquireWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl", "tui", {
       coordinatorEndpoint: "http://127.0.0.1:24000",
       coordinatorSecret: "test-secret",
     });
     expect(run).toHaveBeenCalled();
-    expect(piMocks.releaseSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl");
+    expect(piMocks.releaseWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl");
     expect(runtime.dispose).toHaveBeenCalled();
   });
 
@@ -380,26 +380,16 @@ describe("opencandle package commands", () => {
     await runCli([]);
 
     expect(runtime.setRebindSession).toHaveBeenCalledOnce();
-    expect(piMocks.acquireSessionWriterLock).toHaveBeenNthCalledWith(
-      1,
-      "/tmp/session-a.jsonl",
-      "tui",
-      {
-        coordinatorEndpoint: "http://127.0.0.1:24000",
-        coordinatorSecret: "test-secret",
-      },
-    );
-    expect(piMocks.acquireSessionWriterLock).toHaveBeenNthCalledWith(
-      2,
-      "/tmp/session-b.jsonl",
-      "tui",
-      {
-        coordinatorEndpoint: "http://127.0.0.1:24000",
-        coordinatorSecret: "test-secret",
-      },
-    );
-    expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(1, "/tmp/session-a.jsonl");
-    expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(2, "/tmp/session-b.jsonl");
+    expect(piMocks.acquireWriterLock).toHaveBeenNthCalledWith(1, "/tmp/session-a.jsonl", "tui", {
+      coordinatorEndpoint: "http://127.0.0.1:24000",
+      coordinatorSecret: "test-secret",
+    });
+    expect(piMocks.acquireWriterLock).toHaveBeenNthCalledWith(2, "/tmp/session-b.jsonl", "tui", {
+      coordinatorEndpoint: "http://127.0.0.1:24000",
+      coordinatorSecret: "test-secret",
+    });
+    expect(piMocks.releaseWriterLock).toHaveBeenNthCalledWith(1, "/tmp/session-a.jsonl");
+    expect(piMocks.releaseWriterLock).toHaveBeenNthCalledWith(2, "/tmp/session-b.jsonl");
   });
 
   it("uses neutral syncing language when the TUI cannot coordinate the session", async () => {
@@ -410,7 +400,7 @@ describe("opencandle package commands", () => {
       secret: "test-secret",
       close,
     });
-    piMocks.acquireSessionWriterLock.mockResolvedValue({
+    piMocks.acquireWriterLock.mockResolvedValue({
       role: "follower",
       lock: {
         pid: 123,
@@ -441,7 +431,7 @@ describe("opencandle package commands", () => {
       secret: "test-secret",
       close,
     });
-    piMocks.acquireSessionWriterLock.mockResolvedValue({
+    piMocks.acquireWriterLock.mockResolvedValue({
       role: "follower",
       lock: {
         pid: 123,

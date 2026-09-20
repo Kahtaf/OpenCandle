@@ -137,10 +137,6 @@ export function releaseWriterLock(
   }
 }
 
-export const acquireSessionWriterLock = acquireWriterLock;
-export const refreshSessionWriterLock = refreshWriterLock;
-export const releaseSessionWriterLock = releaseWriterLock;
-
 export function writerLockScopeForSession(sessionManager: SessionLockScopeSource): string {
   return sessionManager.getSessionFile() ?? sessionManager.getSessionDir();
 }

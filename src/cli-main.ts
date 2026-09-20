@@ -22,10 +22,10 @@ import { handleDoctorCommand } from "./doctor/cli-command.js";
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 import {
-  acquireSessionWriterLock,
+  acquireWriterLock,
   migrateWriterLockScope,
-  refreshSessionWriterLock,
-  releaseSessionWriterLock,
+  refreshWriterLock,
+  releaseWriterLock,
   type WriterLock,
   writerLockScopeForSession,
 } from "./pi/session-writer-lock.js";
@@ -235,7 +235,7 @@ async function main(): Promise<void> {
     },
     syncWriterLockScope: () => syncActiveSessionWriterLockScope(),
   });
-  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui", {
+  const sessionWriterLock = await acquireWriterLock(sessionWriterLockScope, "tui", {
     coordinatorEndpoint: tuiCoordinator.endpoint,
     coordinatorSecret: tuiCoordinator.secret,
   });
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
   const writerLockHeartbeat = setInterval(() => {
     try {
       syncActiveSessionWriterLockScope();
-      refreshSessionWriterLock(activeSessionWriterLockScope);
+      refreshWriterLock(activeSessionWriterLockScope);
     } catch {
       clearInterval(writerLockHeartbeat);
     }
@@ -301,18 +301,14 @@ async function main(): Promise<void> {
         syncActiveSessionWriterLockScope();
         return;
       }
-      const nextSessionWriterLock = await acquireSessionWriterLock(
-        nextSessionWriterLockScope,
-        "tui",
-        {
-          coordinatorEndpoint: tuiCoordinator.endpoint,
-          coordinatorSecret: tuiCoordinator.secret,
-        },
-      );
+      const nextSessionWriterLock = await acquireWriterLock(nextSessionWriterLockScope, "tui", {
+        coordinatorEndpoint: tuiCoordinator.endpoint,
+        coordinatorSecret: tuiCoordinator.secret,
+      });
       if (nextSessionWriterLock.role !== "writer") {
         throw new Error("OpenCandle is syncing this session in another window. Try again shortly.");
       }
-      releaseSessionWriterLock(activeSessionWriterLockScope);
+      releaseWriterLock(activeSessionWriterLockScope);
       activeSessionWriterLockScope = nextSessionWriterLockScope;
       activeSessionManager = nextSession.sessionManager;
     });
@@ -324,7 +320,7 @@ async function main(): Promise<void> {
     await interactiveMode.run();
   } finally {
     clearInterval(writerLockHeartbeat);
-    releaseSessionWriterLock(activeSessionWriterLockScope);
+    releaseWriterLock(activeSessionWriterLockScope);
     await tuiCoordinator.close();
     await runtime?.dispose();
   }
