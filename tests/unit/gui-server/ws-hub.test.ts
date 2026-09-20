@@ -50,6 +50,7 @@ describe("GUI WS hub", () => {
     expect(client.messages[0]).toMatchObject({
       type: "boot",
       role: "writer",
+      supportsSessionActions: true,
       coordination: { sessionId: "session-1", status: "ready", ownerKind: "gui" },
       sessionId: "session-1",
       modelSetup: { requirement: "ready" },
@@ -158,6 +159,36 @@ describe("GUI WS hub", () => {
     });
     expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
     expect(JSON.stringify(bootstrap)).not.toContain("owner-secret");
+  });
+
+  it("reports supportsSessionActions=false for a follower process so the browser cannot treat it as writable", async () => {
+    // The local (loopback) runtime never proxies market-state mutations to
+    // another process's writer lock the way the hosted runtime forwards
+    // actions to its elected writer. A follower GUI process must therefore
+    // tell the browser it cannot support session actions, or the client's
+    // shared actionSurfaceRole() helper (built for the hosted proxy case)
+    // will treat this follower as a writer and leave mutation controls
+    // enabled for a request the server will reject.
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "follower",
+      lock: { role: "writer", processKind: "tui" },
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    const bootstrap = await hub.buildBootstrapPayload();
+
+    expect(client.messages[0]).toMatchObject({
+      type: "boot",
+      role: "follower",
+      supportsSessionActions: false,
+    });
+    expect(bootstrap).toMatchObject({
+      role: "follower",
+      supportsSessionActions: false,
+    });
   });
 
   it("refreshes coordination in state snapshot broadcasts", () => {

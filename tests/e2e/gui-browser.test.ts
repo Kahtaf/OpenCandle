@@ -1789,7 +1789,11 @@ async function installMockSocket(
           this.emit({
             type: "boot",
             role: mockOverrides.role ?? "writer",
-            supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
+            // Mirrors the real GUI server: a follower process never proxies
+            // market-state mutations to another process's writer, so it
+            // reports supportsSessionActions=false unless a test overrides it.
+            supportsSessionActions:
+              mockOverrides.supportsSessionActions ?? mockOverrides.role !== "follower",
             sessionId: bootSessionId,
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
