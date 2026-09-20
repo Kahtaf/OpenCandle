@@ -285,7 +285,11 @@ def resolve_command(name: str, repo: Path) -> str:
     resolved = find_command(name, repo)
     if resolved:
         return resolved
-    raise SystemExit(f"executable not found: {name}. Install it or pass an explicit trusted path when supported.")
+    raise SystemExit(
+        f"executable not found: {name}. Install it, add it to PATH outside any node_modules/.bin or "
+        "repo/worktree directory, or pass an explicit trusted path when supported "
+        f"(for engine binaries, set the matching *_BIN environment variable, e.g. CODEX_BIN)."
+    )
 
 
 def find_command(name: str, repo: Path) -> str | None:
@@ -304,7 +308,17 @@ def find_command(name: str, repo: Path) -> str | None:
             resolved_repo = repo.resolve()
         except OSError:
             continue
-        if is_within(resolved_part, resolved_repo):
+        # Reject PATH entries under any node_modules/.bin (a devDependency can
+        # shadow a differently-versioned global binary of the same name, e.g.
+        # @agentclientprotocol/codex-acp pulling in an old @openai/codex that
+        # shadows the user's real `codex`) and entries inside this repo or
+        # worktree's own tree (untrusted, repo-controlled). npm's lifecycle
+        # PATH prepends node_modules/.bin for the cwd *and every ancestor
+        # directory*, so a worktree nested under the main checkout can still
+        # see the main checkout's node_modules/.bin even though it is not
+        # "within" the worktree's own repo root — check both conditions
+        # independently rather than relying on repo-containment alone.
+        if is_node_modules_bin(resolved_part) or is_within(resolved_part, resolved_repo):
             continue
         found = first_executable_candidate(resolved_part / name, reject_root=resolved_repo)
         if found:
@@ -314,6 +328,10 @@ def find_command(name: str, repo: Path) -> str | None:
 
 def is_within(path: Path, root: Path) -> bool:
     return path == root or path.is_relative_to(root)
+
+
+def is_node_modules_bin(path: Path) -> bool:
+    return path.name == ".bin" and path.parent.name == "node_modules"
 
 
 def has_directory_component(name: str, command: Path) -> bool:
