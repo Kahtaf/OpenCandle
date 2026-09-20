@@ -71,14 +71,41 @@ describe("agent developer guardrails", () => {
       scripts: Record<string, string>;
     };
 
+    for (const requiredScript of ["check", "gates", "gates:full", "bootstrap:agent", "typecheck"]) {
+      expect(packageJson.scripts, `expected a "${requiredScript}" script`).toHaveProperty(
+        requiredScript,
+      );
+    }
+
     expect(packageJson.scripts.typecheck).toBe("tsc --noEmit");
     expect(packageJson.scripts["relay:typecheck"]).toBe(
       "npm --workspace @opencandle/provider-relay run typecheck",
     );
-    expect(packageJson.scripts.gates).toBe(
-      "npm run typecheck && npm run relay:typecheck && npx biome ci . && npm run gui:hosted:build && npm test && npm run relay:test && npm run test:agent-tools",
-    );
     expect(packageJson.scripts["bootstrap:agent"]).toBe("node scripts/agent-bootstrap.mjs");
+
+    // `gates` must cover typecheck, lint, unit tests, and agent-tool tests.
+    // Scripts may delegate through an intermediate script (e.g. a shared
+    // `check` script bundling typecheck + lint), so resolve one level of
+    // `npm run <name>` indirection before asserting on the composed text,
+    // rather than pinning the exact composition string.
+    const resolveScripts = (script: string): string => {
+      let resolved = script;
+      for (const match of script.matchAll(/npm run ([\w:-]+)/g)) {
+        const referenced = packageJson.scripts[match[1]];
+        if (referenced) resolved += ` && ${referenced}`;
+      }
+      return resolved;
+    };
+
+    const gates = resolveScripts(packageJson.scripts.gates);
+    expect(gates, "gates must run typecheck").toMatch(/\btypecheck\b/);
+    expect(gates, "gates must run lint (biome ci)").toMatch(/\bbiome ci\b/);
+    expect(gates, "gates must run unit tests").toMatch(/\bnpm test\b/);
+    expect(gates, "gates must run agent-tool tests").toMatch(/\btest:agent-tools\b/);
+
+    expect(packageJson.scripts["gates:full"], "gates:full must build on gates").toMatch(
+      /\bnpm run gates\b/,
+    );
     expect(packageJson.scripts["review:pr"]).toContain("npm run gates");
   });
 

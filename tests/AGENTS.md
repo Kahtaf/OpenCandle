@@ -4,8 +4,11 @@ Unit + e2e tests for all OpenCandle modules.
 
 ## COMMANDS
 ```bash
-npm test                       # vitest run (unit only)
-npm run gates                  # full agent handoff proof battery
+npm test                       # vitest run --project unit (default unit coverage)
+npm run check                  # typecheck + relay typecheck + biome ci
+npm run gates                  # check + unit tests + relay tests + agent-tool tests
+npm run gates:full             # gates + site tests + GUI release smoke + hosted GUI tests + package-contents check
+npm run test:site              # public docs site build + site project tests
 npm run test:watch             # vitest watch mode
 npm run test:agent-tools       # maintainer/agent helper tests
 npm run test:scripts:typecheck # type-check opt-in eval/front-door scripts
@@ -17,7 +20,8 @@ npm run test:e2e:providers     # e2e provider tests (hits live APIs)
 ## STRUCTURE
 ```
 tests/
-├── unit/         # Mirrors src/ (tests/unit/<module>/ ↔ src/<module>/), plus gui-server/, gui-web/, website/
+├── unit/         # Mirrors src/ (tests/unit/<module>/ ↔ src/<module>/), plus gui-server/, gui-web/
+├── site/         # Public docs site build contract tests (npm run test:site), not default unit coverage
 ├── agent-tools/  # Repo-maintainer/agent helper tests, not default unit coverage
 ├── harness/      # Agent test harness (file-based IPC) → see tests/harness/README.md
 ├── evals/        # Agent/session eval cases, scoring, and report helpers
