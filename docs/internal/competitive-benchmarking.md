@@ -106,7 +106,7 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_GEMINI_AGENT`: set to `api` to force direct Google API mode or `acpx` to force the legacy Gemini CLI ACP path. Defaults to API mode when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is present, otherwise ACP.
 - `OPENCANDLE_COMPETITIVE_GEMINI_MODEL`: Gemini API baseline model. Defaults to `gemini-2.5-flash`.
 - `OPENCANDLE_COMPETITIVE_GEMINI_AGENT_COMMAND`: optional Gemini ACP adapter override when using `OPENCANDLE_COMPETITIVE_GEMINI_AGENT=acpx`. Defaults to `gemini --acp --skip-trust`.
-- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark`.
+- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.6-terra` (the model id must be one the connected Codex CLI actually advertises; check `~/.codex/config.toml` or run the baseline preflight to see the current list).
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS`: acpx timeout in seconds for each baseline call. Defaults to `900`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout in milliseconds for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls before running OpenCandle. Defaults to enabled so auth failures happen early.
