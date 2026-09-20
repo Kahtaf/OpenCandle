@@ -86,6 +86,10 @@ describe("public site build contract", () => {
       ).resolves.toBeUndefined();
     }
 
+    // Those sources are published under their demo names above; shipping the
+    // source directory as well would double ~15 MB of video in every deploy.
+    await expect(access(join(root, "website/dist/assets/video"))).rejects.toThrow();
+
     const docsHtml = await readFile(join(root, "website/dist/docs/index.html"), "utf8");
     const sitemap = await readFile(join(root, "website/dist/sitemap.xml"), "utf8");
 
