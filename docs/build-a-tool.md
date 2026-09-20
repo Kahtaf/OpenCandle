@@ -98,7 +98,7 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}) {
 The tool is now registered. To make it usable in normal conversations, also wire it into active-tool selection:
 
 - Add the tool name to the relevant bundle in `src/routing/route-manifest.ts` (for example, core market tools belong in `TOOL_BUNDLE_TOOLS.core_market`).
-- Update the tool catalog text in `src/prompts/context-builder.ts` and, when the global prompt mentions the same domain, `src/system-prompt.ts`.
+- Update the tool catalog text in `src/prompts/context-builder.ts`.
 - Add tests showing the tool is present for the intended bundle and absent from unrelated bundles.
 - Add prompt or harness coverage proving the agent chooses the new tool for the intended prompt class and keeps existing tools for adjacent tasks.
 
