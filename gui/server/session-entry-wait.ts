@@ -1,4 +1,6 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
+import type { WorkflowType } from "../../src/routing/types.js";
 
 export interface WaitForEntryCountOptions {
   timeoutMs?: number;
@@ -57,6 +59,50 @@ export async function waitForNewEntryId(
   if (!getIds().some((id) => !previousIds.has(id))) {
     throw new Error("Timed out waiting for a new session entry");
   }
+}
+
+// Workflow labels whose dispatch keeps driving further model turns well
+// after the first one goes idle: each analyst pass, screener/portfolio/
+// compare step, etc. runs its own tool calls and orchestration between
+// turns, easily exceeding the default idle grace tuned for an ordinary
+// single-turn chat reply. The TUI harness
+// (tests/harness/opencandle-runner.ts's settleGraceMsForTurn) already
+// widens its own settle grace for exactly these cases; without the same
+// grace here, the GUI chat-run endpoint declares a multi-step run
+// "complete" after only its first step; see gui-tui parity coverage in
+// tests/e2e/gui-browser.test.ts.
+const MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS = 30_000;
+const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
+  "options_screener",
+  "portfolio_builder",
+  "compare_assets",
+]);
+
+/**
+ * The idle grace `waitForSessionTurnSettlement` should use for the turn a
+ * prompt is about to start (or has just started), or `undefined` to keep
+ * the caller's own default. `entries` should reflect the session as of
+ * right after the prompt was sent, so a workflow-dispatch entry the input
+ * handler appended synchronously (comprehensive_analysis is detected from
+ * the prompt text itself; the router-dispatched workflows are detected
+ * from their `opencandle-workflow` entry) is already visible.
+ */
+export function settleIdleGraceMsForPrompt(
+  prompt: string,
+  entries: SessionEntry[],
+): number | undefined {
+  if (isAnalysisRequest(prompt).match) return MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS;
+  return dispatchesMultiStepWorkflow(entries) ? MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS : undefined;
+}
+
+function dispatchesMultiStepWorkflow(entries: SessionEntry[]): boolean {
+  return entries.some((entry) => {
+    if (entry.type !== "custom" || entry.customType !== "opencandle-workflow") return false;
+    const data = (entry as { data?: unknown }).data;
+    if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
+    const workflow = (data as Record<string, unknown>).workflow;
+    return typeof workflow === "string" && MULTI_STEP_WORKFLOWS.has(workflow as WorkflowType);
+  });
 }
 
 export async function waitForSessionTurnSettlement(

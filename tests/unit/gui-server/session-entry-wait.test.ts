@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   findUnresolvedToolCalls,
+  settleIdleGraceMsForPrompt,
   waitForEntryCount,
   waitForNewEntryId,
   waitForSessionTurnSettlement,
@@ -172,6 +173,52 @@ describe("waitForSessionTurnSettlement", () => {
         idleGraceMs: 5,
       }),
     ).rejects.toThrow("Timed out waiting for the session turn to settle");
+  });
+});
+
+describe("settleIdleGraceMsForPrompt", () => {
+  // Regression coverage for the GUI/TUI parity gap: dispatching
+  // comprehensive_analysis ("analyze NVDA") produced only its first-step
+  // opencandle-workflow/user-input entries over the GUI chat-run endpoint,
+  // missing every opencandle-analyst-step/disclaimer/validation/
+  // workflow-event/workflow-complete entry the same prompt produces over
+  // the TUI harness. The GUI's default idle grace (tuned for an ordinary
+  // single-turn reply) elapsed in the gap between one workflow step's turn
+  // going idle and the runner sending the next step's prompt, so the chat
+  // run reported "complete" after only the first step.
+  it("widens the grace for a comprehensive-analysis prompt, matching the TUI harness's settleGraceMsForTurn", () => {
+    expect(settleIdleGraceMsForPrompt("analyze NVDA", [])).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("full analysis of NVDA", [])).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("deep dive on $NVDA", [])).toBe(30_000);
+  });
+
+  it("widens the grace when the session already shows a dispatched multi-step workflow", () => {
+    const entries = [
+      {
+        type: "custom",
+        customType: "opencandle-workflow",
+        data: { workflow: "portfolio_builder" },
+      },
+    ] as unknown[] as Parameters<typeof settleIdleGraceMsForPrompt>[1];
+    expect(settleIdleGraceMsForPrompt("build me a portfolio", entries)).toBe(30_000);
+  });
+
+  it("leaves the caller's default grace alone for an ordinary single-turn prompt", () => {
+    expect(settleIdleGraceMsForPrompt("what is NVDA trading at?", [])).toBeUndefined();
+  });
+
+  it("does not widen the grace for a workflow type that settles in one turn", () => {
+    const entries = [
+      {
+        type: "custom",
+        customType: "opencandle-workflow",
+        data: { workflow: "comprehensive_analysis" },
+      },
+    ] as unknown[] as Parameters<typeof settleIdleGraceMsForPrompt>[1];
+    // comprehensive_analysis is detected from the prompt text itself
+    // (isAnalysisRequest), not from its own workflow-dispatch entry, so an
+    // unrelated prompt sharing a session with one does not get widened.
+    expect(settleIdleGraceMsForPrompt("what is NVDA trading at?", entries)).toBeUndefined();
   });
 });
 
