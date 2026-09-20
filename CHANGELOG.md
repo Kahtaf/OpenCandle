@@ -6,6 +6,12 @@
 
 - Consolidated duplicated provider CLI normalization, social cashtag aggregation, stateful-intent detection, memory preference suppression, evidence serialization, and large-number tool formatting behind focused shared helpers, reducing the pinned production duplicate scan from 67 groups and 1.00% duplicated lines to 59 groups and 0.86% without changing public behavior.
 - Updated supported runtime, agent, GUI, provider-relay, documentation, and video dependencies to their latest compatible releases, including Pi 0.84.4; removed vulnerable transitive dependency versions from both lockfiles, taught the hosted runtime audit to distinguish Pi provider-support modules from provider implementations, and kept GUI, terminal, and doctor model setup scoped to credential-backed models—including Pi OAuth providers—after Pi expanded its available-model catalog.
+- Removed two configuration knobs nothing read, `OPENCANDLE_PLANNING_MIGRATION_STATUSES` and `routerMode`, so setting them no longer suggests they change how OpenCandle behaves.
+- Contributor tooling is leaner: `check`, `gates`, and `gates:full` tier the proof battery, site build tests moved to `test:site`, every Vitest suite now comes from one projects config, and the vendored third-party skills, the OpenSpec archive, orphan eval suites, and the Remotion video project (whose approved clips now live with the website assets) are gone.
+
+### Fixed
+
+- Local database upgrades are now all-or-nothing, and an unrecognised database is reported with its path instead of being emptied.
 
 ## [0.14.0] - 2026-08-13
 
