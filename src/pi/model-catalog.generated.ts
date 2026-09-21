@@ -89,6 +89,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "google",
+    id: "gemini-3.8-flash",
+    label: "google/gemini-3.8-flash",
+  },
+  {
+    provider: "google",
     id: "gemini-flash-latest",
     label: "google/gemini-flash-latest",
   },
@@ -96,11 +101,6 @@ export const firstClassModelCatalog = [
     provider: "google",
     id: "gemini-flash-lite-latest",
     label: "google/gemini-flash-lite-latest",
-  },
-  {
-    provider: "google",
-    id: "gemini-robotics-er-1.6-preview",
-    label: "google/gemini-robotics-er-1.6-preview",
   },
   {
     provider: "google",
@@ -269,6 +269,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
+    id: "gpt-6-astra",
+    label: "openai/gpt-6-astra",
+  },
+  {
+    provider: "openai",
     id: "gpt-realtime-2.1",
     label: "openai/gpt-realtime-2.1",
   },
@@ -306,6 +311,11 @@ export const firstClassModelCatalog = [
     provider: "anthropic",
     id: "claude-fable-5",
     label: "anthropic/claude-fable-5",
+  },
+  {
+    provider: "anthropic",
+    id: "claude-fable-5-1",
+    label: "anthropic/claude-fable-5-1",
   },
   {
     provider: "anthropic",
