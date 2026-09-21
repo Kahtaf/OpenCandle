@@ -23,3 +23,6 @@ docs/internal/pr-evidence/
 
 # Local UI/UX reference scratch (Mobbin screenshots, not for distribution)
 tmp/
+
+# Local video/render scratch (large binary renders, not for distribution)
+video/
