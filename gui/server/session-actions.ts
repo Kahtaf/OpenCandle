@@ -244,7 +244,7 @@ export async function promptAndSettle(
   await runSession.prompt(prompt, options);
   await settleWithEventProgress(
     runSession,
-    settleIdleGraceMsForPrompt(prompt, runSession.sessionManager.getEntries()),
+    settleIdleGraceMsForPrompt(prompt, runSession.sessionManager.getEntries(), beforeIds),
   );
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),

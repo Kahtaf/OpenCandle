@@ -187,29 +187,69 @@ describe("settleIdleGraceMsForPrompt", () => {
   // going idle and the runner sending the next step's prompt, so the chat
   // run reported "complete" after only the first step.
   it("widens the grace for a comprehensive-analysis prompt, matching the TUI harness's settleGraceMsForTurn", () => {
-    expect(settleIdleGraceMsForPrompt("analyze NVDA", [])).toBe(30_000);
-    expect(settleIdleGraceMsForPrompt("full analysis of NVDA", [])).toBe(30_000);
-    expect(settleIdleGraceMsForPrompt("deep dive on $NVDA", [])).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("analyze NVDA", [], new Set())).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("full analysis of NVDA", [], new Set())).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("deep dive on $NVDA", [], new Set())).toBe(30_000);
   });
 
   it("widens the grace when the session already shows a dispatched multi-step workflow", () => {
     const entries = [
       {
+        id: "new-1",
         type: "custom",
         customType: "opencandle-workflow",
         data: { workflow: "portfolio_builder" },
       },
     ] as unknown[] as Parameters<typeof settleIdleGraceMsForPrompt>[1];
-    expect(settleIdleGraceMsForPrompt("build me a portfolio", entries)).toBe(30_000);
+    expect(settleIdleGraceMsForPrompt("build me a portfolio", entries, new Set())).toBe(30_000);
+  });
+
+  it("does not widen the grace for a multi-step workflow entry from a previous prompt", () => {
+    const entries = [
+      {
+        id: "old-1",
+        type: "custom",
+        customType: "opencandle-workflow",
+        data: { workflow: "portfolio_builder" },
+      },
+    ] as unknown[] as Parameters<typeof settleIdleGraceMsForPrompt>[1];
+    // Regression: a session that once ran portfolio_builder must not give
+    // every later ordinary prompt the multi-step grace. The workflow entry
+    // predates this prompt, so it says nothing about what this prompt
+    // dispatches.
+    expect(
+      settleIdleGraceMsForPrompt("what is NVDA trading at?", entries, new Set(["old-1"])),
+    ).toBeUndefined();
+  });
+
+  it("widens the grace for a multi-step workflow entry added by the current prompt", () => {
+    const entries = [
+      {
+        id: "old-1",
+        type: "custom",
+        customType: "opencandle-workflow",
+        data: { workflow: "portfolio_builder" },
+      },
+      {
+        id: "new-1",
+        type: "custom",
+        customType: "opencandle-workflow",
+        data: { workflow: "options_screener" },
+      },
+    ] as unknown[] as Parameters<typeof settleIdleGraceMsForPrompt>[1];
+    expect(
+      settleIdleGraceMsForPrompt("what is NVDA trading at?", entries, new Set(["old-1"])),
+    ).toBe(30_000);
   });
 
   it("leaves the caller's default grace alone for an ordinary single-turn prompt", () => {
-    expect(settleIdleGraceMsForPrompt("what is NVDA trading at?", [])).toBeUndefined();
+    expect(settleIdleGraceMsForPrompt("what is NVDA trading at?", [], new Set())).toBeUndefined();
   });
 
   it("does not widen the grace for a workflow type that settles in one turn", () => {
     const entries = [
       {
+        id: "new-1",
         type: "custom",
         customType: "opencandle-workflow",
         data: { workflow: "comprehensive_analysis" },
@@ -218,7 +258,9 @@ describe("settleIdleGraceMsForPrompt", () => {
     // comprehensive_analysis is detected from the prompt text itself
     // (isAnalysisRequest), not from its own workflow-dispatch entry, so an
     // unrelated prompt sharing a session with one does not get widened.
-    expect(settleIdleGraceMsForPrompt("what is NVDA trading at?", entries)).toBeUndefined();
+    expect(
+      settleIdleGraceMsForPrompt("what is NVDA trading at?", entries, new Set()),
+    ).toBeUndefined();
   });
 });
 

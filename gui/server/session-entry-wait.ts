@@ -85,18 +85,28 @@ const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
  * right after the prompt was sent, so a workflow-dispatch entry the input
  * handler appended synchronously (comprehensive_analysis is detected from
  * the prompt text itself; the router-dispatched workflows are detected
- * from their `opencandle-workflow` entry) is already visible.
+ * from their `opencandle-workflow` entry) is already visible. `beforeIds`
+ * lists the ids of entries that existed before the prompt was sent, so
+ * workflow entries left behind by earlier prompts do not widen the grace
+ * for this one.
  */
 export function settleIdleGraceMsForPrompt(
   prompt: string,
   entries: SessionEntry[],
+  beforeIds: ReadonlySet<string>,
 ): number | undefined {
   if (isAnalysisRequest(prompt).match) return MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS;
-  return dispatchesMultiStepWorkflow(entries) ? MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS : undefined;
+  return dispatchesMultiStepWorkflow(entries, beforeIds)
+    ? MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS
+    : undefined;
 }
 
-function dispatchesMultiStepWorkflow(entries: SessionEntry[]): boolean {
+function dispatchesMultiStepWorkflow(
+  entries: SessionEntry[],
+  beforeIds: ReadonlySet<string>,
+): boolean {
   return entries.some((entry) => {
+    if (beforeIds.has(entry.id)) return false;
     if (entry.type !== "custom" || entry.customType !== "opencandle-workflow") return false;
     const data = (entry as { data?: unknown }).data;
     if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
