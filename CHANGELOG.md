@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-21
+
 ### Changed
 
 - Upgrading the Pi agent framework to 0.86.1 makes Gemini 3.8 Flash, GPT-6 Astra, and Claude Fable 5.1 selectable in model setup and removes the unavailable Gemini Robotics ER 1.6 Preview.
