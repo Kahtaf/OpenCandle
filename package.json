@@ -153,20 +153,20 @@
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.11",
+    "@biomejs/biome": "^2.5.14",
     "@sinclair/typebox": "^0.34.52",
-    "@tanstack/react-router": "^1.170.32",
+    "@tanstack/react-router": "^1.170.38",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.6.2",
     "@types/semver": "^7.8.0",
     "@types/sql.js": "^1.4.11",
-    "jsdom": "^30.0.1",
+    "jsdom": "^30.1.0",
     "lightweight-charts": "^5.2.1",
-    "playwright-core": "^1.62.1",
+    "playwright-core": "^1.63.0",
     "semver": "^7.8.5",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2",
+    "vite": "^8.3.0",
     "vitest": "^4.1.11"
   }
 }

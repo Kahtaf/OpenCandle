@@ -12,14 +12,14 @@
   },
   "dependencies": {
     "@opencandle/gui-web": "*",
-    "@tanstack/react-router": "^1.170.32",
+    "@tanstack/react-router": "^1.170.38",
     "@webcontainer/api": "1.6.4",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "vite": "8.2.2"
+    "vite": "8.3.0"
   }
 }
