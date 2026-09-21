@@ -150,7 +150,8 @@
   },
   "overrides": {
     "@hono/node-server": "^2.0.12",
-    "@modelcontextprotocol/sdk": "^1.30.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "qs": "^6.16.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
@@ -167,6 +168,6 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   }
 }
