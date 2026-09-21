@@ -25,4 +25,5 @@ docs/internal/pr-evidence/
 tmp/
 
 # Local video/render scratch (large binary renders, not for distribution)
-video/
+# Anchored so it cannot swallow the tracked website/assets/video/ build sources.
+/video/
