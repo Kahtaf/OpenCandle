@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- A multi-step research workflow interrupted by its session being replaced, such as starting a new chat, reloading, or quitting while an analysis runs, is now closed out and recorded as a failed run in its session instead of disappearing with nothing saved.
 - Answers again explain the data they could not get. Tools mark a source that was skipped, needs a key, or fell back to a keyless alternative, and the rules for handling those marks had been stranded in a prompt file nothing loaded. They are back in the live prompt on every turn: carry on with the data that is available without apologizing, close with a **Data gaps** section naming each affected source and how to connect it, say which fallback a degraded result actually came from, stay quiet about connecting a source the user has silenced, and ask the user to re-run the request after a source connects mid-answer.
 - Local database upgrades are now all-or-nothing, and an unrecognised database is reported with its path instead of being emptied.
 - A local GUI window that is following a session owned by another process now shows watchlist, portfolio, and alert controls as read-only instead of editable controls that fail on submit, and its chat box stays usable for drafting.
