@@ -92,6 +92,11 @@ describe("session-addressed GUI bootstrap", () => {
 
       expect(payload.role).toBe("follower");
       expect(payload.sessionId).toBe(requested.getSessionId());
+      // This local runtime never proxies market-state mutations
+      // cross-process to the other writer, so a browser bootstrapping this
+      // session must see coordination.marketStateWritable: false and not the
+      // shared actionSurfaceRole() helper mistake it for a writer.
+      expect(payload.coordination).toMatchObject({ marketStateWritable: false });
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

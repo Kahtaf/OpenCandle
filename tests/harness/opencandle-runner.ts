@@ -10,7 +10,6 @@ import {
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
-import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type {
   AnswerContractId,
   CapabilityGapId,
@@ -22,21 +21,20 @@ import type {
   ExtractedEntities,
   WorkflowType,
 } from "../../src/routing/types.js";
-import {
-  ANSWER_CONTRACT_REGISTRY,
-  type FinalAnswerField,
-  runStructuredChecks,
-} from "../../src/runtime/answer-contracts.js";
-import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
+import type { AskUserHandler } from "../../src/types/index.js";
+import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import {
   buildMarketStatusEvidence,
   buildPortfolioExposureMapEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
-} from "../../src/runtime/planning-evidence.js";
-import type { AskUserHandler } from "../../src/types/index.js";
-import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
+} from "./planning-evidence.js";
+import {
+  ANSWER_CONTRACT_REGISTRY,
+  type FinalAnswerField,
+  runStructuredChecks,
+} from "./structured-checks.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
 
@@ -44,6 +42,16 @@ const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
   "options_screener",
   "portfolio_builder",
   "compare_assets",
+]);
+
+/** Workflow labels the extension can dispatch and name in a workflow entry. */
+const DISPATCHABLE_WORKFLOW_LABELS = new Set<WorkflowType>([
+  "options_screener",
+  "portfolio_builder",
+  "compare_assets",
+  "single_asset_analysis",
+  "watchlist_or_tracking",
+  "general_finance_qa",
 ]);
 
 export interface RunOpenCandleSessionOptions {
@@ -112,8 +120,10 @@ export async function runOpenCandleSession(
     let customEntryOffset = 0;
     for (const [promptIndex, prompt] of prompts.entries()) {
       collector.setPromptIndex(promptIndex);
+      const sessionManager = session.sessionManager;
       await promptAndWaitForSettle(session, prompt, {
-        settleGraceMs: options.settleGraceMs ?? defaultSettleGraceMs(prompt),
+        resolveSettleGraceMs: () =>
+          options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
         timeoutMs: options.timeoutMs ?? 900_000,
       });
       const drained = drainOpenCandleCustomEntries(
@@ -249,7 +259,7 @@ function createScriptedAskHandler(
 async function promptAndWaitForSettle(
   session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"],
   prompt: string,
-  options: { settleGraceMs: number; timeoutMs: number },
+  options: { resolveSettleGraceMs: () => number; timeoutMs: number },
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -280,7 +290,7 @@ async function promptAndWaitForSettle(
       settleTimer = setTimeout(() => {
         cleanup();
         resolve();
-      }, options.settleGraceMs);
+      }, options.resolveSettleGraceMs());
     };
 
     unsub = session.subscribe((event: AgentSessionEvent) => {
@@ -302,11 +312,28 @@ async function promptAndWaitForSettle(
   });
 }
 
-function defaultSettleGraceMs(prompt: string): number {
-  const classification = classifyIntent(prompt);
-  return isAnalysisRequest(prompt).match || MULTI_STEP_WORKFLOWS.has(classification.workflow)
-    ? 30_000
-    : 3_000;
+/**
+ * A dispatched multi-step workflow keeps emitting steps after the first
+ * `agent_end`, so it needs the longer settle grace. Read what the turn
+ * actually dispatched from the session's own workflow entries rather than
+ * guessing the workflow from the prompt text.
+ */
+function settleGraceMsForTurn(
+  prompt: string,
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+): number {
+  if (isAnalysisRequest(prompt).match) return 30_000;
+  return dispatchedMultiStepWorkflow(sessionManager) ? 30_000 : 3_000;
+}
+
+function dispatchedMultiStepWorkflow(
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+): boolean {
+  return drainOpenCandleCustomEntries(sessionManager).some((entry) => {
+    if (entry.customType !== "opencandle-workflow" || !isRecord(entry.data)) return false;
+    const workflow = entry.data.workflow;
+    return typeof workflow === "string" && MULTI_STEP_WORKFLOWS.has(workflow as WorkflowType);
+  });
 }
 
 function classificationFromTrace(agentTrace: AgentTrace): ClassificationResult {
@@ -322,7 +349,35 @@ function classificationFromTrace(agentTrace: AgentTrace): ClassificationResult {
       entities: output.entities ?? { symbols: [] },
     };
   }
-  return classifyIntent(agentTrace.prompt);
+  // Comprehensive analysis dispatches before the router runs, so a turn can
+  // legitimately have no router entry. Read the workflow the turn actually
+  // dispatched from its own `opencandle-workflow` entry rather than
+  // re-deriving one from the prompt text.
+  return classificationFromDispatchedWorkflow(agentTrace.customEntries ?? []);
+}
+
+function classificationFromDispatchedWorkflow(
+  customEntries: readonly CustomEntryTrace[],
+): ClassificationResult {
+  const entry = [...customEntries]
+    .reverse()
+    .find((candidate) => candidate.customType === "opencandle-workflow");
+  const data = isRecord(entry?.data) ? entry.data : null;
+  const dispatched = typeof data?.workflow === "string" ? data.workflow : undefined;
+  const resolvedSlots = isRecord(data?.resolvedSlots) ? data.resolvedSlots : null;
+  const symbol = typeof resolvedSlots?.symbol === "string" ? resolvedSlots.symbol : undefined;
+  const entities: ExtractedEntities = { symbols: symbol ? [symbol] : [] };
+
+  // `comprehensive_analysis` is the multi-analyst deep dive on one symbol; it
+  // is not a member of `WorkflowType`, and its routing-layer equivalent is
+  // `single_asset_analysis`.
+  if (dispatched === "comprehensive_analysis") {
+    return { workflow: "single_asset_analysis", confidence: 1, tier: "rule", entities };
+  }
+  if (dispatched && DISPATCHABLE_WORKFLOW_LABELS.has(dispatched as WorkflowType)) {
+    return { workflow: dispatched as WorkflowType, confidence: 1, tier: "rule", entities };
+  }
+  return { workflow: "unclassified", confidence: 0, tier: "rule", entities };
 }
 
 function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
@@ -333,13 +388,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
   const routeContextEntry = [...customEntries]
     .reverse()
     .find((entry) => entry.customType === "opencandle-route-context");
-  const scopeEntries = customEntries
-    .filter((entry) => entry.customType === "opencandle-tool-scope")
-    .map((entry) => entry.data);
-  const violations = customEntries
-    .filter((entry) => entry.customType === "opencandle-tool-scope-violation")
-    .map((entry) => entry.data);
-
   const routerOutput = routerEntry ? getRouterOutputRecord(routerEntry.data) : null;
   const routeContext = isRecord(routeContextEntry?.data) ? routeContextEntry.data : null;
   const memoryQueryPlan = isRecord(routeContext?.memoryQueryPlan)
@@ -348,7 +396,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
 
   return {
     routeKind: stringOrUndefined(routeContext?.routeKind ?? routerOutput?.routeKind),
-    legacyRoute: stringOrUndefined(routeContext?.legacyRoute ?? routerOutput?.route),
     workflow: stringOrUndefined(routeContext?.workflow ?? routerOutput?.workflow),
     missingRequired: stringArrayOrUndefined(
       routeContext?.missingRequired ?? routerOutput?.missing_required,
@@ -362,8 +409,6 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
     diagnostics: Array.isArray(routeContext?.diagnostics ?? routerOutput?.diagnostics)
       ? ((routeContext?.diagnostics ?? routerOutput?.diagnostics) as unknown[])
       : undefined,
-    toolScopeViolations: violations.length > 0 ? violations : undefined,
-    ...(scopeEntries.length > 0 ? { toolScope: scopeEntries } : {}),
   };
 }
 
@@ -442,7 +487,6 @@ function planningTelemetryFromTrace(
     structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
     workspacePlaceholderIds: stringArrayOrUndefined(planning.workspacePlaceholderIds) ?? [],
     artifactPlaceholderIds: stringArrayOrUndefined(planning.artifactPlaceholderIds) ?? [],
-    artifactContractIds: artifactContractArrayOrEmpty(planning.artifactContractIds),
     capabilityGapIds,
     evidenceRecords,
     structuredCheckResults: structuredTrace?.results ?? [],
@@ -741,18 +785,6 @@ function capabilityGapArrayOrEmpty(value: unknown): CapabilityGapId[] {
   ]);
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is CapabilityGapId =>
     allowed.has(item as CapabilityGapId),
-  );
-}
-
-function artifactContractArrayOrEmpty(value: unknown): ArtifactContractId[] {
-  const allowed = new Set([
-    "concept_example_table",
-    "portfolio_exposure_map",
-    "rebalance_action_plan",
-    "source_coverage_table",
-  ]);
-  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId =>
-    allowed.has(item),
   );
 }
 

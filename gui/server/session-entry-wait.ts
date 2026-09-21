@@ -1,4 +1,6 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
+import type { WorkflowType } from "../../src/routing/types.js";
 
 export interface WaitForEntryCountOptions {
   timeoutMs?: number;
@@ -7,6 +9,11 @@ export interface WaitForEntryCountOptions {
 
 export interface WaitForSessionTurnSettlementOptions extends WaitForEntryCountOptions {
   idleGraceMs?: number;
+}
+
+export interface StallBoundedPromiseOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
 }
 
 export interface SessionRunStatus {
@@ -59,6 +66,60 @@ export async function waitForNewEntryId(
   }
 }
 
+// Workflow labels whose dispatch keeps driving further model turns well
+// after the first one goes idle: each analyst pass, screener/portfolio/
+// compare step, etc. runs its own tool calls and orchestration between
+// turns, easily exceeding the default idle grace tuned for an ordinary
+// single-turn chat reply. The TUI harness
+// (tests/harness/opencandle-runner.ts's settleGraceMsForTurn) already
+// widens its own settle grace for exactly these cases; without the same
+// grace here, the GUI chat-run endpoint declares a multi-step run
+// "complete" after only its first step; see gui-tui parity coverage in
+// tests/e2e/gui-browser.test.ts.
+const MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS = 30_000;
+const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
+  "options_screener",
+  "portfolio_builder",
+  "compare_assets",
+]);
+
+/**
+ * The idle grace `waitForSessionTurnSettlement` should use for the turn a
+ * prompt is about to start (or has just started), or `undefined` to keep
+ * the caller's own default. `entries` should reflect the session as of
+ * right after the prompt was sent, so a workflow-dispatch entry the input
+ * handler appended synchronously (comprehensive_analysis is detected from
+ * the prompt text itself; the router-dispatched workflows are detected
+ * from their `opencandle-workflow` entry) is already visible. `beforeIds`
+ * lists the ids of entries that existed before the prompt was sent, so
+ * workflow entries left behind by earlier prompts do not widen the grace
+ * for this one.
+ */
+export function settleIdleGraceMsForPrompt(
+  prompt: string,
+  entries: SessionEntry[],
+  beforeIds: ReadonlySet<string>,
+): number | undefined {
+  if (isAnalysisRequest(prompt).match) return MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS;
+  return dispatchesMultiStepWorkflow(entries, beforeIds)
+    ? MULTI_STEP_WORKFLOW_SETTLE_GRACE_MS
+    : undefined;
+}
+
+function dispatchesMultiStepWorkflow(
+  entries: SessionEntry[],
+  beforeIds: ReadonlySet<string>,
+): boolean {
+  return entries.some((entry) => {
+    if (beforeIds.has(entry.id)) return false;
+    if (entry.type !== "custom" || entry.customType !== "opencandle-workflow") return false;
+    const data = (entry as { data?: unknown }).data;
+    if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
+    const workflow = (data as Record<string, unknown>).workflow;
+    return typeof workflow === "string" && MULTI_STEP_WORKFLOWS.has(workflow as WorkflowType);
+  });
+}
+
 export async function waitForSessionTurnSettlement(
   getStatus: () => SessionRunStatus,
   options: WaitForSessionTurnSettlementOptions = {},
@@ -100,6 +161,47 @@ export async function waitForSessionTurnSettlement(
 
     await delay(intervalMs);
   }
+}
+
+/**
+ * Await an already-created `wait` promise, but reject if the observed
+ * progress token stops advancing for `timeoutMs`. This mirrors
+ * waitForSessionTurnSettlement's stall semantics (bounds stall, not total
+ * runtime) for callers that must not hold a writer lock forever behind a
+ * hung session, while still letting a healthy long workflow that keeps
+ * emitting session events finish.
+ */
+export async function waitWithStallGuard(
+  wait: Promise<void>,
+  getProgressToken: () => number,
+  options: StallBoundedPromiseOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const intervalMs = options.intervalMs ?? 250;
+  let finished = false;
+  const tracked = wait.finally(() => {
+    finished = true;
+  });
+  let lastToken = getProgressToken();
+  let lastProgressAt = Date.now();
+
+  const stallWatch = (async () => {
+    while (!finished) {
+      await delay(intervalMs);
+      if (finished) return;
+      const token = getProgressToken();
+      if (token !== lastToken) {
+        lastToken = token;
+        lastProgressAt = Date.now();
+        continue;
+      }
+      if (Date.now() - lastProgressAt >= timeoutMs) {
+        throw new Error("Timed out waiting for the session to settle");
+      }
+    }
+  })();
+
+  await Promise.race([tracked, stallWatch]);
 }
 
 export function findUnresolvedToolCalls(entries: SessionEntry[]): UnresolvedToolCall[] {

@@ -38,6 +38,12 @@ const openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-credential-prompt-
 process.env.OPENCANDLE_HOME = openCandleHome;
 // Ensure Alpha Vantage credential is absent: the flow only prompts when the
 // provider is unconfigured.
+// Read `.env` the way the CLI does, before the provider scrubs below, so a
+// credential that lives only in `.env` still counts. Without this the run
+// exited 0 with a "skipping" line and read as a pass.
+const { loadEnv } = await import("../../src/config.js");
+loadEnv();
+
 delete process.env.ALPHA_VANTAGE_API_KEY;
 
 // Pick an LLM provider/model based on available credentials. Matches the
@@ -50,13 +56,14 @@ const LLM_CANDIDATES: readonly LlmChoice[] = [
 ];
 const llmChoice = LLM_CANDIDATES.find((c) => c.envVars.some((envVar) => !!process.env[envVar]));
 if (!llmChoice) {
-  console.log(
-    "⚠ Skipping credential-prompt e2e: no LLM credential in env " +
-      `(need one of ${LLM_CANDIDATES.flatMap((c) => c.envVars).join(", ")})`,
+  console.error(
+    "credential-prompt e2e cannot run: no LLM credential " +
+      `(need one of ${LLM_CANDIDATES.flatMap((c) => c.envVars).join(", ")}). ` +
+      "Set one in the shell or in .env.",
   );
   rmSync(openCandleHome, { recursive: true, force: true });
   delete process.env.OPENCANDLE_HOME;
-  process.exit(0);
+  process.exit(1);
 }
 
 // -----------------------------------------------------------------------------

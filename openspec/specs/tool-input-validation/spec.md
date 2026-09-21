@@ -1,7 +1,7 @@
 # tool-input-validation Specification
 
 ## Purpose
-TBD - created by archiving change production-router-and-tool-hardening. Update Purpose after archive.
+Ensure tools and routed tool bundles validate their inputs before doing real work: workflow templating pre-flights symbols against the resolver before use, and the core routed tool bundle includes the durable market-state tools (alerts, reports) a finance request may need.
 ## Requirements
 ### Requirement: Pre-Flight Symbol Validation in Workflow Templating
 
@@ -50,7 +50,6 @@ OpenCandle SHALL include durable market-state tools in the routed tool bundles t
 
 #### Scenario: Core market bundle contains alert and report tools
 
-- **WHEN** routed tool-scope enforcement selects the core market bundle for a finance or market-state request
-- **THEN** `manage_alerts` and `daily_watchlist_report` SHALL be active alongside watchlist and portfolio tools
-- **AND** tool-call enforcement SHALL NOT block alert creation/checking or daily report runs for routed market-state prompts
+- **WHEN** routing selects the core market bundle for a finance or market-state request
+- **THEN** `manage_alerts` and `daily_watchlist_report` SHALL appear alongside watchlist and portfolio tools
 

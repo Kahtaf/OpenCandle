@@ -9,7 +9,8 @@ npm run gui                    # run local browser GUI at 127.0.0.1:14567
 npm test                       # unit tests — full test menu in tests/AGENTS.md
 npm run lint                   # biome check (CI gates on this)
 npm run typecheck              # TypeScript typecheck without emitting files
-npm run gates                  # full agent handoff proof battery
+npm run gates                  # agent handoff proof battery
+npm run gates:full             # gates plus site, GUI release smoke, hosted, package contents
 npm run bootstrap:agent        # prepare a fresh agent worktree
 npm run eval -- <suite>        # eval front door — the only supported eval surface
 npm run review:pr              # repo autoreview + typecheck/lint/test gate
@@ -25,7 +26,7 @@ npm run review:pr              # repo autoreview + typecheck/lint/test gate
 | Local GUI | `gui/` | → `gui/AGENTS.md` |
 | Type definitions | `src/types/<domain>.ts` | One file per domain |
 | Memory / persistence | `src/memory/` | SQLite-backed |
-| System prompt | `src/system-prompt.ts` | Core AI persona instructions |
+| System prompt | `src/prompts/context-builder.ts` | Core AI persona instructions |
 | Pi shell integration | `src/pi/` | Extension, session, tool adapter |
 | Add-on tool package | `docs/build-a-tool.md` | Tools as separate npm packages |
 
@@ -40,15 +41,15 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 - Strictly typed. No `any` except provider raw API responses.
 
 ## CONVENTIONS
-- **TDD mandatory**: write failing test first, then implement - refer to tdd skill
+- **TDD mandatory**: write the failing test first, watch it fail, then implement.
 - Tools fetch + format. Analysts/LLM synthesize. Never analyze within a tool.
 - Use `cache` and `rateLimiter` from `src/infra/` for all external calls.
 - Tests mock `globalThis.fetch` with fixture JSON. No live API calls in unit tests.
 
 ## GIT & REVIEW
 - Conventional commits (`feat:`, `fix:`, `docs:`, `style:`, `chore:`); atomic commits — one logical change per commit.
-- Run `npm run review:pr` (autoreview) after every sizable piece of work, before opening or updating a PR.
-- For new atomic features or bug fixes, update the @CHANGELOG.md (use changelog-automation skill).
+- Run `npm run gates:full`, then `npm run review:pr` (autoreview), after every sizable piece of work and before opening or updating a PR.
+- For new atomic features or bug fixes, add an entry under `[Unreleased]` in CHANGELOG.md. Entries are one sentence, user-visible behaviour only, no internal hardening lists.
 
 ## DELEGATION
 
@@ -72,7 +73,6 @@ When fixing eval or competitive-benchmark regressions, classify the issue into t
 **Ask first:**
 - Adding a new provider (needs rate-limit config, fixture strategy)
 - Changing system prompt or analyst orchestration
-- Modifying Pi shell integration (`src/pi/`)
 - Schema changes in memory SQLite tables
 - Larger features or breaking changes → OpenSpec proposal first (`openspec/`, opsx skills)
 
@@ -91,13 +91,4 @@ When fixing eval or competitive-benchmark regressions, classify the issue into t
 
 ## GRAPHIFY
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
 When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

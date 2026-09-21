@@ -58,7 +58,7 @@ import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
-import { waitForNewEntryId } from "./session-entry-wait.js";
+import { waitForNewEntryId, waitWithStallGuard } from "./session-entry-wait.js";
 import { listDisplaySessions } from "./session-list.js";
 import { fetchTickerLineSparkline } from "./ticker-line-sparkline.js";
 import { buildCatalog } from "./tool-metadata.js";
@@ -88,7 +88,20 @@ interface GuiHttpRouteOptions {
   syncCurrentWriterLockScope?: () => void;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
-  createSessionForManager: (sessionManager: SessionManager) => Promise<{ session: AgentSession }>;
+  createSessionForManager: (sessionManager: SessionManager) => Promise<{
+    session: AgentSession;
+    // Resolves once the session's own idle state AND any workflow it
+    // dispatched (comprehensive_analysis, options_screener, ...) have both
+    // settled -- see coordinator.waitForActiveWorkflow() /
+    // createOpenCandleSession's waitForSettled(). A multi-step workflow's
+    // later steps keep running on this session well after the request's
+    // own SSE settle-wait (promptAndSettle) returns for the first step;
+    // disposing right after that first-step settle tears the session down
+    // out from under the still-running workflow. Optional so a caller that
+    // cannot observe workflow state (e.g. a test double) still disposes
+    // immediately, matching the previous behavior.
+    waitForSettled?: () => Promise<void>;
+  }>;
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
@@ -748,15 +761,27 @@ async function streamAcceptedSseChatRun({
   }
 
   activeRunSessionIds.add(sessionId);
-  let createdSession: { session: AgentSession } | null = null;
+  let createdSession: {
+    session: AgentSession;
+    waitForSettled?: () => Promise<void>;
+  } | null = null;
+  let runOwnershipReleased = false;
+  // The busy guard, heartbeat, and writer lock are one unit of run
+  // ownership: release them together, exactly once, and only after the
+  // deferred session disposal has finished.
+  const releaseRunOwnership = () => {
+    if (runOwnershipReleased) return;
+    runOwnershipReleased = true;
+    activeRunSessionIds.delete(sessionId);
+    if (lockHeartbeat) clearInterval(lockHeartbeat);
+    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+  };
   try {
     createdSession = useCurrentSession
       ? null
       : await options.createSessionForManager(runSessionManager);
   } catch (error) {
-    activeRunSessionIds.delete(sessionId);
-    if (lockHeartbeat) clearInterval(lockHeartbeat);
-    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    releaseRunOwnership();
     const message = error instanceof Error ? error.message : String(error);
     writeJson(res, { error: message }, 500);
     return false;
@@ -907,14 +932,65 @@ async function streamAcceptedSseChatRun({
     }
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
   } finally {
-    activeRunSessionIds.delete(sessionId);
     unsubscribeLive();
-    createdSession?.session.dispose();
-    if (lockHeartbeat) clearInterval(lockHeartbeat);
-    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    void disposeAfterSettled(createdSession).finally(releaseRunOwnership);
     res.end();
   }
   return actionAccepted;
+}
+
+// A dispatched multi-step workflow (comprehensive_analysis,
+// options_screener, ...) keeps sending itself further steps on this session
+// well after promptAndSettle returns for the request's own first step --
+// see settleIdleGraceMsForPrompt in session-entry-wait.ts and
+// coordinator.waitForActiveWorkflow(). Disposing the session synchronously
+// in the request's finally block tore that still-running workflow down
+// silently after only its first step, with no error or trace entry
+// recorded, because runner.start()'s own status resolves "cancelled" (not
+// "completed"/"failed") once its session is pulled out from under it. Wait
+// for the session to actually settle before disposing, without blocking
+// this request's own response on a workflow that can run for minutes.
+//
+// The returned promise resolves only after session.dispose() has run so the
+// caller can keep run ownership -- the busy-session guard, the writer-lock
+// heartbeat, and the writer lock itself -- until the deferred disposal has
+// finished, rather than releasing them while the workflow is still writing.
+export function disposeAfterSettled(
+  createdSession: { session: AgentSession; waitForSettled?: () => Promise<void> } | null,
+): Promise<void> {
+  if (!createdSession) return Promise.resolve();
+  const { session, waitForSettled } = createdSession;
+  if (!waitForSettled) {
+    session.dispose();
+    return Promise.resolve();
+  }
+  const progress = trackSessionProgress(session);
+  return waitWithStallGuard(waitForSettled(), progress.getToken)
+    .catch(() => {})
+    .finally(() => {
+      progress.stop();
+      session.dispose();
+    });
+}
+
+// Session events are the only activity signal that distinguishes a live
+// long-running workflow from a hung one; they reset the stall guard's clock
+// so a healthy workflow can run for as long as it keeps making progress.
+function trackSessionProgress(session: AgentSession): {
+  getToken: () => number;
+  stop: () => void;
+} {
+  if (typeof session.subscribe !== "function") {
+    return { getToken: () => 0, stop: () => {} };
+  }
+  let token = 0;
+  const unsubscribe = session.subscribe(() => {
+    token += 1;
+  });
+  return {
+    getToken: () => token,
+    stop: () => unsubscribe(),
+  };
 }
 
 class SessionActionNotAdmitted extends Error {}
@@ -1002,6 +1078,11 @@ export async function buildSessionBootstrapPayload(
     coordination: {
       sessionId,
       status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
+      // See coordinationStateForSession in ws-hub.ts: this local runtime
+      // never proxies market-state mutations cross-process, so a non-writer
+      // connection must report itself as non-writable for actionSurfaceRole()
+      // without touching supportsSessionActions (which also gates chat).
+      marketStateWritable: roleForSessionBootstrap(options, sessionManager) === "writer",
       ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
     },
     catalog: buildCatalog(),

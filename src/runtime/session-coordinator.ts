@@ -57,6 +57,12 @@ const IMMEDIATE_IDLE_GRACE_MS = 100;
 interface ActiveWorkflowRunRef {
   active: boolean;
   contextToken: RunContextToken;
+  /**
+   * Set when a run is terminated by something other than its own steps —
+   * today, the session it is bound to being replaced or disposed. A run that
+   * carries a reason is reported as failed, never as a silent cancellation.
+   */
+  interruptedReason?: string;
 }
 
 interface ActiveStepCapture {
@@ -599,176 +605,168 @@ export class SessionCoordinator {
         definition.workflowType,
         stepDefs,
         async (step, stepIndex, _priorEvidence, context) => {
-          let entriesBeforeStep = entriesBeforeActivePrompt;
-          const eventCapture = this.startStepCapture();
+          try {
+            let entriesBeforeStep = entriesBeforeActivePrompt;
+            const eventCapture = this.startStepCapture();
 
-          // First step was already sent above — later steps are sent here.
-          if (stepIndex > 0) {
+            // First step was already sent above — later steps are sent here.
+            if (stepIndex > 0) {
+              const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+                entriesBeforePrompt: entriesBeforeActivePrompt,
+                expectedPrompt: activePrompt,
+              });
+              if (!settled || !runRef.active) {
+                throw new Error("run_cancelled");
+              }
+              if (shouldSkipRebuttal(runner.getActiveRun(), step.stepType)) {
+                this.appendWorkflowEvent(pi, "step_skipped", {
+                  stepType: step.stepType,
+                  reason: "analyst_consensus",
+                });
+                throw new Error("analyst_consensus");
+              }
+              entriesBeforeStep = readSessionEntries(ctx).length;
+              entriesBeforeActivePrompt = entriesBeforeStep;
+              const prompt = this.prepareWorkflowPrompt(
+                pi,
+                definition.steps[stepIndex].prompt,
+                step.stepType,
+                runner.getActiveRun(),
+              );
+              activePrompt = prompt;
+              pi.sendUserMessage(prompt);
+            }
+
             const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
-              entriesBeforePrompt: entriesBeforeActivePrompt,
+              entriesBeforePrompt: entriesBeforeStep,
               expectedPrompt: activePrompt,
+              // Pi accepts follow-up messages asynchronously. Do not interpret a
+              // briefly idle queue as a completed workflow step before that
+              // prompt is actually observed; doing so queues every remaining
+              // workflow instruction without any assistant/tool events between
+              // them.
+              requireActivity: true,
             });
             if (!settled || !runRef.active) {
               throw new Error("run_cancelled");
             }
-            if (shouldSkipRebuttal(runner.getActiveRun(), step.stepType)) {
-              this.appendWorkflowEvent(pi, "step_skipped", {
-                stepType: step.stepType,
-                reason: "analyst_consensus",
+
+            let stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
+            let rawText = capturedText(eventCapture, stepEntries);
+            let output = promptStepOutput(stepIndex, step.stepType, {
+              evidence: capturedEvidence(eventCapture, stepEntries),
+              rawText,
+            });
+
+            if (
+              isStructuredAnalystStep(step.stepType) &&
+              !hasStructuredContract(step.stepType, rawText)
+            ) {
+              const entriesBeforeRetry = readSessionEntries(ctx).length;
+              entriesBeforeActivePrompt = entriesBeforeRetry;
+              const retryPrompt =
+                "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.";
+              activePrompt = retryPrompt;
+              pi.sendUserMessage(retryPrompt);
+              const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+                entriesBeforePrompt: entriesBeforeRetry,
+                expectedPrompt: retryPrompt,
+                requireActivity: true,
               });
-              throw new Error("analyst_consensus");
+              if (!retrySettled || !runRef.active) {
+                throw new Error("run_cancelled");
+              }
+              stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
+              rawText = capturedText(eventCapture, stepEntries);
+              output = promptStepOutput(stepIndex, step.stepType, {
+                evidence: capturedEvidence(eventCapture, stepEntries),
+                rawText,
+              });
             }
-            entriesBeforeStep = readSessionEntries(ctx).length;
-            entriesBeforeActivePrompt = entriesBeforeStep;
-            const prompt = this.prepareWorkflowPrompt(
-              pi,
-              definition.steps[stepIndex].prompt,
-              step.stepType,
-              runner.getActiveRun(),
-            );
-            activePrompt = prompt;
-            pi.sendUserMessage(prompt);
-          }
 
-          const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
-            entriesBeforePrompt: entriesBeforeStep,
-            expectedPrompt: activePrompt,
-            // Pi accepts follow-up messages asynchronously. Do not interpret a
-            // briefly idle queue as a completed workflow step before that
-            // prompt is actually observed; doing so queues every remaining
-            // workflow instruction without any assistant/tool events between
-            // them.
-            requireActivity: true,
-          });
-          if (!settled || !runRef.active) {
-            throw new Error("run_cancelled");
-          }
-
-          let stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
-          let rawText = capturedText(eventCapture, stepEntries);
-          let output = promptStepOutput(stepIndex, step.stepType, {
-            evidence: capturedEvidence(eventCapture, stepEntries),
-            rawText,
-          });
-
-          if (
-            isStructuredAnalystStep(step.stepType) &&
-            !hasStructuredContract(step.stepType, rawText)
-          ) {
-            const entriesBeforeRetry = readSessionEntries(ctx).length;
-            entriesBeforeActivePrompt = entriesBeforeRetry;
-            const retryPrompt =
-              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.";
-            activePrompt = retryPrompt;
-            pi.sendUserMessage(retryPrompt);
-            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active, {
-              entriesBeforePrompt: entriesBeforeRetry,
-              expectedPrompt: retryPrompt,
-              requireActivity: true,
-            });
-            if (!retrySettled || !runRef.active) {
-              throw new Error("run_cancelled");
-            }
-            stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
-            rawText = capturedText(eventCapture, stepEntries);
-            output = promptStepOutput(stepIndex, step.stepType, {
-              evidence: capturedEvidence(eventCapture, stepEntries),
-              rawText,
-            });
-          }
-
-          const outputValidation = definition.steps[stepIndex].outputValidation;
-          let validationErrors = outputValidation?.validate(rawText) ?? [];
-          if (outputValidation && validationErrors.length > 0) {
-            this.appendWorkflowEvent(pi, "output_validation_failed", {
-              stepType: step.stepType,
-              errors: validationErrors,
-            });
-            const entriesBeforeRepair = readSessionEntries(ctx).length;
-            entriesBeforeActivePrompt = entriesBeforeRepair;
-            eventCapture.rawText = "";
-            const repairPrompt = outputValidation.repairPrompt(validationErrors);
-            activePrompt = repairPrompt;
-            pi.sendUserMessage(repairPrompt);
-            const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
-              entriesBeforePrompt: entriesBeforeRepair,
-              expectedPrompt: repairPrompt,
-              requireActivity: true,
-            });
-            if (!repairSettled || !runRef.active) {
-              throw new Error("run_cancelled");
-            }
-            stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
-            rawText = capturedText(eventCapture, stepEntries);
-            output = promptStepOutput(stepIndex, step.stepType, {
-              evidence: capturedEvidence(eventCapture, stepEntries),
-              rawText,
-            });
-            validationErrors = outputValidation.validate(rawText);
-            if (validationErrors.length > 0) {
+            const outputValidation = definition.steps[stepIndex].outputValidation;
+            let validationErrors = outputValidation?.validate(rawText) ?? [];
+            if (outputValidation && validationErrors.length > 0) {
               this.appendWorkflowEvent(pi, "output_validation_failed", {
                 stepType: step.stepType,
                 errors: validationErrors,
+              });
+              const entriesBeforeRepair = readSessionEntries(ctx).length;
+              entriesBeforeActivePrompt = entriesBeforeRepair;
+              eventCapture.rawText = "";
+              const repairPrompt = outputValidation.repairPrompt(validationErrors);
+              activePrompt = repairPrompt;
+              pi.sendUserMessage(repairPrompt);
+              const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
+                entriesBeforePrompt: entriesBeforeRepair,
+                expectedPrompt: repairPrompt,
+                requireActivity: true,
+              });
+              if (!repairSettled || !runRef.active) {
+                throw new Error("run_cancelled");
+              }
+              stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
+              rawText = capturedText(eventCapture, stepEntries);
+              output = promptStepOutput(stepIndex, step.stepType, {
+                evidence: capturedEvidence(eventCapture, stepEntries),
+                rawText,
+              });
+              validationErrors = outputValidation.validate(rawText);
+              if (validationErrors.length > 0) {
+                this.appendWorkflowEvent(pi, "output_validation_failed", {
+                  stepType: step.stepType,
+                  errors: validationErrors,
+                  repairAttempted: true,
+                });
+                throw new Error(
+                  `workflow_output_validation_failed: ${validationErrors.join("; ")}`,
+                );
+              }
+              this.appendWorkflowEvent(pi, "output_validation_passed", {
+                stepType: step.stepType,
                 repairAttempted: true,
               });
-              throw new Error(`workflow_output_validation_failed: ${validationErrors.join("; ")}`);
             }
-            this.appendWorkflowEvent(pi, "output_validation_passed", {
-              stepType: step.stepType,
-              repairAttempted: true,
-            });
-          }
 
-          for (const record of output.evidence) {
-            const value = isPlainObject(record.value) ? record.value : {};
-            this.eventLogger?.log(context.runId, stepIndex, "tool_called", {
-              stepType: step.stepType,
-              tool: value.tool,
-              args: value.args,
-              resultDigest: value.resultDigest,
-            });
-          }
+            for (const record of output.evidence) {
+              const value = isPlainObject(record.value) ? record.value : {};
+              this.eventLogger?.log(context.runId, stepIndex, "tool_called", {
+                stepType: step.stepType,
+                tool: value.tool,
+                args: value.args,
+                resultDigest: value.resultDigest,
+              });
+            }
 
-          if (this.activeStepCapture === eventCapture) {
-            this.activeStepCapture = null;
-          }
+            if (this.activeStepCapture === eventCapture) {
+              this.activeStepCapture = null;
+            }
 
-          const structuredOutput = attachStructuredOutput(pi, output);
-          if (step.stepType === "synthesis") {
-            this.emitSynthesisValidation(
-              pi,
-              context.runId,
-              stepIndex,
-              runner.getActiveRun(),
-              structuredOutput,
-            );
-          }
+            const structuredOutput = attachStructuredOutput(pi, output);
+            if (step.stepType === "synthesis") {
+              this.emitSynthesisValidation(
+                pi,
+                context.runId,
+                stepIndex,
+                runner.getActiveRun(),
+                structuredOutput,
+              );
+            }
 
-          return structuredOutput;
+            return structuredOutput;
+          } catch (error) {
+            // Replacing or disposing the session under a running workflow makes
+            // every session-bound accessor on the captured pi/ctx throw. Retire
+            // the run here instead of letting the runner skip a skippable step
+            // and queue the next prompt into a session that no longer exists.
+            if (isStaleExtensionContextError(error)) {
+              this.markWorkflowInterrupted(runRef, "session_replaced");
+            }
+            throw error;
+          }
         },
       )
-      .then((completedRun) => {
-        // Validation is only emitted by synthesis. Persist a neutral terminal
-        // marker for every completed or failed workflow so transcript
-        // consumers can end the workflow group before an ordinary later turn.
-        if (
-          this.activeWorkflowRunRef === runRef &&
-          (completedRun.status === "completed" || completedRun.status === "failed")
-        ) {
-          // A long workflow can finish after Pi replaces the session context
-          // (for example, when the GUI opens a new session). The terminal
-          // marker belongs to the old session, so do not let a stale-context
-          // assertion tear down the whole local runtime while cleaning up.
-          try {
-            pi.appendEntry("opencandle-workflow-complete", {
-              workflow: completedRun.workflowType,
-              status: completedRun.status,
-            });
-          } catch (error) {
-            if (!isStaleExtensionContextError(error)) throw error;
-          }
-        }
-      })
+      .then((completedRun) => this.finishWorkflowRun(pi, runRef, completedRun))
       .finally(() => {
         if (this.activeWorkflowRunRef === runRef) {
           this.activeStepCapture = null;
@@ -782,6 +780,75 @@ export class SessionCoordinator {
         }
       });
     this.activeWorkflowPromise = workflowPromise;
+  }
+
+  /**
+   * Retire the active workflow at a session-replacement boundary.
+   *
+   * Pi awaits an extension's `session_shutdown` handler before it disposes the
+   * outgoing session, so the `pi` handed to this call is still bound to the
+   * session the run belongs to: the run is stopped, its terminal marker is
+   * written into that session, and only then does the caller return and let Pi
+   * invalidate the context.
+   */
+  async endActiveWorkflowForSessionShutdown(reason: string): Promise<void> {
+    const runRef = this.activeWorkflowRunRef;
+    const pending = this.activeWorkflowPromise;
+    if (!runRef || !pending) return;
+    this.markWorkflowInterrupted(runRef, reason);
+    await pending;
+  }
+
+  private markWorkflowInterrupted(runRef: ActiveWorkflowRunRef, reason: string): void {
+    runRef.interruptedReason ??= reason;
+    // Settle loops poll `runRef.active`; clearing it retires the run without
+    // reading the session context again.
+    runRef.active = false;
+    // Writes `workflow_cancelled` to the durable workflow-event log, which
+    // survives even when the session context can no longer be appended to.
+    this.runner.cancel();
+  }
+
+  /**
+   * Persist the workflow's terminal marker. Validation is only emitted by
+   * synthesis, so every completed, failed, or interrupted run needs a neutral
+   * marker for transcript consumers to close the workflow group before an
+   * ordinary later turn.
+   */
+  private finishWorkflowRun(
+    pi: ExtensionAPI,
+    runRef: ActiveWorkflowRunRef,
+    completedRun: WorkflowRun,
+  ): void {
+    if (this.activeWorkflowRunRef !== runRef) return;
+    const reason = runRef.interruptedReason;
+    // An interrupted run is a failed run: it never reached its answer, so it
+    // must not settle as a silent cancellation with no terminal marker.
+    const status =
+      completedRun.status === "completed" ? "completed" : reason ? "failed" : completedRun.status;
+    if (status !== "completed" && status !== "failed") return;
+
+    try {
+      if (reason) {
+        this.appendWorkflowEvent(pi, "workflow_interrupted", { reason });
+      }
+      pi.appendEntry("opencandle-workflow-complete", {
+        workflow: completedRun.workflowType,
+        status,
+        ...(reason ? { reason } : {}),
+      });
+    } catch (error) {
+      // A workflow can outlive its session context when the session is disposed
+      // without Pi's awaited `session_shutdown` handoff. The transcript marker
+      // is unreachable then, so record the outcome in the durable workflow-event
+      // log rather than losing it, and never let a stale-context assertion tear
+      // down the surrounding runtime.
+      if (!isStaleExtensionContextError(error)) throw error;
+      this.eventLogger?.log(completedRun.runId, completedRun.currentStepIndex, "step_failed", {
+        stepType: "workflow_terminal_marker",
+        error: reason ?? "stale_extension_context",
+      });
+    }
   }
 
   /** Cancel any active workflow. */

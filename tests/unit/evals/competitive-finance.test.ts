@@ -21,16 +21,21 @@ import {
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
   fixedPromptFromEnv,
+  formatAdapterBinaryCommand,
   formatCompetitiveReportAnalysisMarkdown,
   frozenCompetitivePanelFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveAdapterBinary,
+  resolveClaudeCodeExecutableEnv,
+  resolveCodexPathEnv,
   resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectCompetitiveGeminiBaseline,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
+  stripNodeModulesBinSegments,
 } from "../../evals/competitive-finance.js";
 import { seedOpenCandleHomeMarketState } from "../../evals/runner.js";
 import type { EvalTrace } from "../../evals/types.js";
@@ -478,16 +483,146 @@ describe("competitive finance benchmarking", () => {
 
   it("builds a portable agent PATH without user-specific toolchain paths", () => {
     const path = buildPortableAgentPath({
-      cwd: "/repo",
       HOME: "/home/alice",
       PATH: "/usr/bin:/bin",
       execPath: "/opt/node/bin/node",
     });
 
-    expect(path).toContain("/repo/node_modules/.bin");
     expect(path).toContain("/home/alice/.local/bin");
     expect(path).toContain("/opt/node/bin");
     expect(path).not.toContain("/Users/");
+  });
+
+  // npm prepends the invoking project's node_modules/.bin to PATH for every
+  // `npm run` script, so a repo-local devDependency binary (e.g. a stale
+  // pinned Codex CLI pulled in by an ACP adapter) silently shadows the
+  // owner's global install of the same command name. Baseline agent
+  // subprocesses must never see those repo-local entries.
+  it("strips node_modules/.bin entries from an inherited PATH, wherever they appear", () => {
+    expect(stripNodeModulesBinSegments("/repo/node_modules/.bin:/usr/bin:/bin")).toBe(
+      "/usr/bin:/bin",
+    );
+    expect(
+      stripNodeModulesBinSegments("/usr/bin:/repo/nested/node_modules/.bin:/opt/homebrew/bin"),
+    ).toBe("/usr/bin:/opt/homebrew/bin");
+    expect(stripNodeModulesBinSegments("/usr/bin:/bin")).toBe("/usr/bin:/bin");
+    expect(stripNodeModulesBinSegments("")).toBe("");
+  });
+
+  it("never reintroduces a node_modules/.bin entry through the inherited PATH", () => {
+    const path = buildPortableAgentPath({
+      HOME: "/home/alice",
+      PATH: "/repo/node_modules/.bin:/usr/bin:/bin",
+      execPath: "/opt/node/bin/node",
+    });
+
+    expect(path).not.toContain("node_modules/.bin");
+  });
+
+  describe("resolveAdapterBinary", () => {
+    it("prefers an explicit override command", () => {
+      const resolution = resolveAdapterBinary({
+        overrideCommand: "my-custom-codex-acp",
+        globalBinName: "codex-acp",
+        npxPackageSpec: "@agentclientprotocol/codex-acp@^1.7.0",
+        findGlobalExecutable: () => "/should/not/be/used",
+      });
+      expect(resolution).toEqual({
+        command: "my-custom-codex-acp",
+        args: [],
+        source: "override",
+      });
+    });
+
+    it("falls back to a globally installed adapter on PATH when no override is set", () => {
+      const resolution = resolveAdapterBinary({
+        globalBinName: "codex-acp",
+        npxPackageSpec: "@agentclientprotocol/codex-acp@^1.7.0",
+        findGlobalExecutable: (name) =>
+          name === "codex-acp" ? "/usr/local/bin/codex-acp" : undefined,
+      });
+      expect(resolution).toEqual({
+        command: "/usr/local/bin/codex-acp",
+        args: [],
+        source: "global",
+      });
+    });
+
+    it("falls back to npx on demand when nothing is overridden or globally installed", () => {
+      const resolution = resolveAdapterBinary({
+        globalBinName: "codex-acp",
+        npxPackageSpec: "@agentclientprotocol/codex-acp@^1.7.0",
+        findGlobalExecutable: () => undefined,
+      });
+      expect(resolution).toEqual({
+        command: "npx",
+        args: ["--yes", "@agentclientprotocol/codex-acp@^1.7.0"],
+        source: "npx",
+      });
+    });
+
+    it("formats a resolution back into a single --agent command string", () => {
+      expect(
+        formatAdapterBinaryCommand({
+          command: "npx",
+          args: ["--yes", "@agentclientprotocol/codex-acp@^1.7.0"],
+          source: "npx",
+        }),
+      ).toBe("npx --yes @agentclientprotocol/codex-acp@^1.7.0");
+      expect(
+        formatAdapterBinaryCommand({
+          command: "/usr/local/bin/codex-acp",
+          args: [],
+          source: "global",
+        }),
+      ).toBe("/usr/local/bin/codex-acp");
+    });
+  });
+
+  describe("resolveCodexPathEnv / resolveClaudeCodeExecutableEnv", () => {
+    it("resolves CODEX_PATH from a global codex binary, never a node_modules/.bin one", () => {
+      const findGlobalExecutable = vi.fn((name: string) =>
+        name === "codex" ? "/Users/alice/.local/bin/codex" : undefined,
+      );
+      expect(resolveCodexPathEnv({ findGlobalExecutable })).toEqual({
+        CODEX_PATH: "/Users/alice/.local/bin/codex",
+      });
+      expect(findGlobalExecutable).toHaveBeenCalledWith("codex");
+    });
+
+    it("leaves CODEX_PATH unset when no global codex binary is found", () => {
+      expect(resolveCodexPathEnv({ findGlobalExecutable: () => undefined })).toEqual({});
+    });
+
+    it("does not override an already-configured CODEX_PATH", () => {
+      const findGlobalExecutable = vi.fn(() => "/should/not/be/used");
+      expect(
+        resolveCodexPathEnv({
+          existingCodexPath: "/explicit/codex",
+          findGlobalExecutable,
+        }),
+      ).toEqual({});
+      expect(findGlobalExecutable).not.toHaveBeenCalled();
+    });
+
+    it("resolves CLAUDE_CODE_EXECUTABLE from a global claude binary", () => {
+      expect(
+        resolveClaudeCodeExecutableEnv({
+          findGlobalExecutable: (name) => (name === "claude" ? "/usr/local/bin/claude" : undefined),
+        }),
+      ).toEqual({ CLAUDE_CODE_EXECUTABLE: "/usr/local/bin/claude" });
+    });
+
+    it("does not override an already-configured CLAUDE_CODE_EXECUTABLE", () => {
+      const findGlobalExecutable = vi.fn(() => "/should/not/be/used");
+      expect(
+        resolveClaudeCodeExecutableEnv({
+          existingExecutable: "/explicit/claude",
+          findGlobalExecutable,
+        }),
+      ).toEqual({});
+      expect(findGlobalExecutable).not.toHaveBeenCalled();
+    });
   });
 
   it("supports rerunning a fixed competitive prompt from env", () => {
@@ -785,12 +920,13 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("uses the ACP-advertised Codex model id by default", () => {
-    // The current codex ACP agent advertises plain model ids
-    // (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark); the old
-    // reasoning-suffixed "gpt-5.3-codex-spark[medium]" id is rejected with
-    // "did not advertise that model", which made the codex baseline fail
-    // preflight and get skipped.
-    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark");
+    // The current codex ACP agent (run against the operator's global Codex
+    // CLI via CODEX_PATH, not a bundled copy) advertises gpt-6-astra,
+    // gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5 — the previous
+    // default "gpt-5.3-codex-spark" is rejected with "did not advertise
+    // that model", which made the codex baseline fail preflight and get
+    // skipped. gpt-5.6-terra matches the operator's own configured default.
+    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.6-terra");
     expect(
       selectCompetitiveCodexModel({
         OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",

@@ -87,13 +87,13 @@ describe("release readiness automation", () => {
     const releaseCheck = pkg.scripts["release:check"];
 
     expect(pkg.scripts["test:gui:release-smoke"]).toBe(
-      "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --config vitest.config.gui-release.ts",
+      "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --project gui-release",
     );
     expect(releaseCheck).toContain("npx tsc --noEmit");
     expect(releaseCheck).toContain("npx biome ci .");
     expect(releaseCheck).toContain("npm test");
     expect(releaseCheck).toContain("npm run test:gui:release-smoke");
-    expect(releaseCheck).toContain("npm run docs:site:build");
+    expect(releaseCheck).toContain("npm run test:site");
     expect(releaseCheck).toContain("npm run package:contents:check");
     expect(releaseCheck).toContain("npm run test:packed-install");
     expect(releaseCheck).toContain("npm run docs:links:check");
@@ -171,9 +171,9 @@ describe("release readiness automation", () => {
 
     expect(ciWorkflow).toContain("permissions:\n  contents: read");
     expect(ciWorkflow).toContain('node-version: ["22.22.2", "24.x", "26.x"]');
-    expect(ciWorkflow).toContain("npm run docs:site:build");
+    expect(ciWorkflow).toContain("npm run test:site");
     expect(ciWorkflow).toContain("npm run package:contents:check");
-    expect(ciWorkflow).toContain("npm run relay:typecheck");
+    expect(ciWorkflow).toContain("npm run check");
     expect(ciWorkflow).toContain("npm run relay:test");
     expect(ciWorkflow).toContain("npm run test:packed-install");
     expect(ciWorkflow).toContain("npm run docs:links:check");

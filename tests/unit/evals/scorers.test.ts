@@ -284,14 +284,12 @@ describe("scoreSavedMarketStateFidelity", () => {
       },
       router: {
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
       },
       planning: {
         structuredCheckIds: [],
         workspacePlaceholderIds: [],
         artifactPlaceholderIds: [],
-        artifactContractIds: [],
         capabilityGapIds: [],
         evidenceRecords: [],
         structuredCheckResults: [],

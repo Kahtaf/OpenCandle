@@ -1,3 +1,4 @@
+import { FINANCE_ACRONYM_DICTIONARY } from "./symbol-disambiguator.js";
 import type { ExtractedEntities } from "./types.js";
 
 const COMMON_WORDS = new Set([
@@ -162,26 +163,6 @@ const COMMON_WORDS = new Set([
 
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI", "MA"]);
 const CURRENCY_CODES = new Set(["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "CHF"]);
-const EXPLICIT_FINANCE_ACRONYM_TICKERS = new Set([
-  "IV",
-  "HV",
-  "ITM",
-  "OTM",
-  "ATM",
-  "IPO",
-  "SEC",
-  "FED",
-  "FOMC",
-  "IRS",
-  "ECB",
-  "BOE",
-  "BOJ",
-  "GDP",
-  "CPI",
-  "PPI",
-  "FX",
-  "NDA",
-]);
 const LOWERCASE_FINANCE_TERMS = new Set([
   "bond",
   "bonds",
@@ -318,7 +299,7 @@ function extractSymbols(input: string): string[] {
       symbol.length <= 5 &&
       /^[A-Z]+$/.test(symbol) &&
       (!COMMON_WORDS.has(symbol) ||
-        (options.explicitTicker && EXPLICIT_FINANCE_ACRONYM_TICKERS.has(symbol))) &&
+        (options.explicitTicker && FINANCE_ACRONYM_DICTIONARY.has(symbol))) &&
       !isAmbiguousConceptUsage(input, symbol) &&
       !symbols.includes(symbol)
     ) {

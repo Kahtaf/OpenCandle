@@ -30,6 +30,20 @@ describe("truncateTobudget", () => {
 });
 
 describe("PromptContextBuilder", () => {
+  it("always carries the provider-tag data-gap guidance", () => {
+    // Tools emit [OPENCANDLE_*] tags on every route, so the handling rules
+    // must reach the model on every turn, not only workflow-dispatch ones.
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+    const prompt = builder.build();
+
+    expect(prompt).toContain("## Data Gaps and Skipped Sources");
+    expect(prompt).toContain("[OPENCANDLE_SOFT_DEGRADED ...]");
+    expect(prompt).toContain("**Data gaps**");
+    expect(prompt).toContain("(silenced)");
+    expect(prompt).toContain("Never echo a raw bracket tag to the user.");
+  });
+
   it("assembles sections in defined order", () => {
     const builder = new PromptContextBuilder();
     builder.setSection("output-format", "Format here");
@@ -160,7 +174,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Explain how to use valuation ratios.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -193,7 +206,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Is ARMH still the right ticker for Arm?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["ARMH"] },
         slots: {},
@@ -242,7 +254,6 @@ describe("PromptContextBuilder", () => {
         userInput: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying?",
         priorTurns: [],
         routeKind: "workflow_dispatch",
-        legacyRoute: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["VOO", "QQQ", "SCHD"], compareMetrics: ["overlap"] },
         slots: {},
@@ -295,7 +306,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Should I prioritize VYM, SCHD, VOO, or QQQ for 10-15 years?",
         priorTurns: [],
         routeKind: "workflow_dispatch",
-        legacyRoute: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"] },
         slots: {},
@@ -349,7 +359,6 @@ describe("PromptContextBuilder", () => {
           "I own 100 shares of NVDA at a $500 cost basis. Should I sell covered calls around earnings?",
         priorTurns: [],
         routeKind: "workflow_dispatch",
-        legacyRoute: "workflow",
         workflow: "options_screener",
         entities: { symbols: ["NVDA"] },
         slots: {},
@@ -397,7 +406,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Should I buy protective puts on SPY before CPI?",
         priorTurns: [],
         routeKind: "workflow_dispatch",
-        legacyRoute: "workflow",
         workflow: "options_screener",
         entities: { symbols: ["SPY"] },
         slots: {},
@@ -445,7 +453,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Add AAPL to my watchlist with a $248 target.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "watchlist_or_tracking",
         entities: { symbols: ["AAPL"] },
         slots: {},
@@ -496,7 +503,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Analyze NVDA and tell me whether to buy, wait, or avoid.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["NVDA"] },
         slots: {},
@@ -549,7 +555,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Analyze NVDA and tell me whether to buy, wait, or avoid.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["NVDA"] },
         slots: {},
@@ -603,7 +608,6 @@ describe("PromptContextBuilder", () => {
           "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -666,7 +670,6 @@ describe("PromptContextBuilder", () => {
           "Given the current macro outlook for 2026, critically evaluate a balanced portfolio with 60% equity and 40% fixed income.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -729,7 +732,6 @@ describe("PromptContextBuilder", () => {
           "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -782,7 +784,6 @@ describe("PromptContextBuilder", () => {
           "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -851,7 +852,6 @@ describe("PromptContextBuilder", () => {
           "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["SPY"] },
         slots: {},
@@ -903,7 +903,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Backtest a simple moving average crossover on SPY over 1 year.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["SPY"] },
         slots: {},
@@ -1061,7 +1060,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Why did Boeing move today?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["BA"] },
         slots: {},
@@ -1108,7 +1106,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Explain how to use P/E ratios without over relying on them.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -1159,7 +1156,6 @@ describe("PromptContextBuilder", () => {
           "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["GME"] },
         slots: {},
@@ -1220,7 +1216,6 @@ describe("PromptContextBuilder", () => {
           "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["GME"] },
         slots: {},
@@ -1272,7 +1267,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["COIN"] },
         slots: {},
@@ -1319,7 +1313,6 @@ describe("PromptContextBuilder", () => {
         userInput: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "single_asset_analysis",
         entities: { symbols: ["COIN"] },
         slots: {},
@@ -1370,7 +1363,6 @@ describe("PromptContextBuilder", () => {
           "I’m opening a taxable account and want simple recurring ETF investing. Which brokerage would you pick?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -1420,7 +1412,6 @@ describe("PromptContextBuilder", () => {
           "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
         priorTurns: [],
         routeKind: "agent_task",
-        legacyRoute: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: [] },
         slots: {},
@@ -1478,7 +1469,6 @@ describe("PromptContextBuilder", () => {
       userInput: "build me an options setup",
       priorTurns: [],
       routeKind: "clarification",
-      legacyRoute: "fallback",
       workflow: "options_screener",
       entities: { symbols: [] },
       slots: {},
@@ -1507,7 +1497,6 @@ describe("PromptContextBuilder", () => {
       userInput: "write a haiku",
       priorTurns: [],
       routeKind: "pass_through",
-      legacyRoute: "fallback",
       entities: { symbols: [] },
       slots: {},
       missingRequired: [],

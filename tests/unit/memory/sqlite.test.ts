@@ -8,8 +8,9 @@ import {
   getTableNames,
   initDatabase,
   initDefaultDatabase,
+  initializeStateDatabase,
 } from "../../../src/memory/sqlite.js";
-import { MemoryStorage } from "../../../src/memory/storage.js";
+import type { StateDatabase } from "../../../src/runtime/state-database.js";
 
 function rowCount(db: Database.Database, tableName: string): number {
   return (db.prepare(`SELECT COUNT(*) AS n FROM ${tableName}`).get() as { n: number }).n;
@@ -153,7 +154,7 @@ describe("initDatabase", () => {
     },
   );
 
-  it("resets stale pre-release schemas to the current layout", () => {
+  it("refuses to reset stale pre-release schemas that still hold rows", () => {
     const base = mkdtempSync(join(tmpdir(), "vantage-sqlite-reset-"));
     const dbPath = join(base, "state.db");
     const legacyDb = initDatabase(dbPath);
@@ -206,28 +207,24 @@ describe("initDatabase", () => {
         FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id)
       );
     `);
+    legacyDb.exec(`
+      INSERT INTO user_preferences (namespace, key, value_json, confidence, source, created_at, updated_at)
+      VALUES ('global', 'risk_profile', '"balanced"', 'high', 'explicit', '2026-01-01', '2026-01-01');
+    `);
     legacyDb.close();
 
-    const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(9);
+    // No ladder reaches a pre-release schema, and recreating one over live
+    // tables would silently drop the user's rows. Refuse and say so instead.
+    expect(() => initDatabase(dbPath)).toThrow(/unsupported schema version \(1\)/);
+    expect(() => initDatabase(dbPath)).toThrow(dbPath);
 
-    const workflowRunsSql = resetDb
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
-      .get() as { sql: string };
-    expect(workflowRunsSql.sql).not.toContain("REFERENCES sessions");
+    const untouched = new Database(dbPath);
+    expect(rowCount(untouched, "user_preferences")).toBe(1);
+    expect(
+      untouched.prepare("SELECT version FROM schema_version").get() as { version: number },
+    ).toEqual({ version: 1 });
+    untouched.close();
 
-    const storage = new MemoryStorage(resetDb);
-    expect(() =>
-      storage.insertWorkflowRun({
-        sessionId: "test-session",
-        workflowType: "portfolio_builder",
-        inputSlotsJson: "{}",
-        resolvedSlotsJson: "{}",
-        defaultsUsedJson: "[]",
-      }),
-    ).not.toThrow();
-
-    resetDb.close();
     rmSync(base, { recursive: true, force: true });
   });
 
@@ -947,4 +944,165 @@ describe("v6 → v7 local automation migration", () => {
     migrated.close();
     rmSync(base, { recursive: true, force: true });
   });
+});
+
+/**
+ * Builds a current-shape database, seeds durable user rows, then stamps it with
+ * `version` so the migration ladder has to walk it forward again.
+ */
+function seedLegacyStateDb(dbPath: string, version: number): void {
+  const seeded = initDatabase(dbPath);
+  seeded.exec(`
+    INSERT INTO instruments (symbol, asset_type, provider, last_resolved_at, created_at, updated_at)
+      VALUES ('NVDA', 'equity', 'yahoo', '2026-01-01', '2026-01-01', '2026-01-01');
+    INSERT INTO watchlists (name, is_default, created_at, updated_at)
+      VALUES ('Default', 1, '2026-01-01', '2026-01-01');
+    INSERT INTO watchlist_items (watchlist_id, instrument_id, created_at, updated_at)
+      VALUES (1, 1, '2026-01-01', '2026-01-01');
+    INSERT INTO portfolios (name, base_currency, is_default, created_at, updated_at)
+      VALUES ('Main', 'USD', 1, '2026-01-01', '2026-01-01');
+    INSERT INTO portfolio_lots (portfolio_id, instrument_id, quantity, avg_cost, currency, created_at, updated_at)
+      VALUES (1, 1, 10, 100.5, 'USD', '2026-01-01', '2026-01-01');
+    INSERT INTO alert_rules (scope_type, instrument_id, condition_type, condition_version, condition_json, timeframe, created_at, updated_at)
+      VALUES ('instrument', 1, 'price_above', 1, '{"threshold":200}', '1d', '2026-01-01', '2026-01-01');
+    INSERT INTO user_preferences (namespace, key, value_json, confidence, source, created_at, updated_at)
+      VALUES ('global', 'risk_profile', '"balanced"', 'high', 'explicit', '2026-01-01', '2026-01-01');
+    DELETE FROM schema_version;
+    INSERT INTO schema_version (version) VALUES (${version});
+  `);
+  seeded.close();
+}
+
+function expectSeededRowsIntact(db: Database.Database): void {
+  expect(rowCount(db, "instruments")).toBe(1);
+  expect(rowCount(db, "watchlists")).toBe(1);
+  expect(rowCount(db, "watchlist_items")).toBe(1);
+  expect(rowCount(db, "portfolios")).toBe(1);
+  expect(rowCount(db, "portfolio_lots")).toBe(1);
+  expect(rowCount(db, "alert_rules")).toBe(1);
+  expect(rowCount(db, "user_preferences")).toBe(1);
+}
+
+/**
+ * Wraps a real database so a chosen statement throws, simulating a crash in the
+ * middle of a migration step.
+ */
+function withInjectedFailure(
+  db: Database.Database,
+  shouldFail: (sql: string) => boolean,
+): StateDatabase {
+  const failure = (): never => {
+    throw new Error("injected migration failure");
+  };
+  const wrapper: StateDatabase = {
+    prepare(source: string) {
+      if (shouldFail(source)) {
+        return { run: failure, get: failure, all: failure } as never;
+      }
+      return db.prepare(source) as never;
+    },
+    transaction<Result>(fn: () => Result): () => Result {
+      return db.transaction(fn);
+    },
+    exec(source: string) {
+      if (shouldFail(source)) failure();
+      db.exec(source);
+      return wrapper;
+    },
+    pragma(source: string, options?: { simple?: boolean }) {
+      return db.pragma(source, options);
+    },
+    close() {
+      db.close();
+      return wrapper;
+    },
+  };
+  return wrapper;
+}
+
+/**
+ * Fails the statement that stamps the new schema version, i.e. the last thing a
+ * migration step does. A non-atomic ladder has already applied that step's DDL
+ * and cleared the old version row by then.
+ */
+function isSchemaVersionStamp(sql: string): boolean {
+  return /schema_version/i.test(sql) && /^\s*(insert|update)\b/i.test(sql);
+}
+
+describe("migration atomicity", () => {
+  it("preserves user rows and the schema version when a migration step fails midway", () => {
+    const base = mkdtempSync(join(tmpdir(), "opencandle-migration-crash-"));
+    const dbPath = join(base, "state.db");
+    seedLegacyStateDb(dbPath, 8);
+
+    const crashing = new Database(dbPath);
+    crashing.pragma("foreign_keys = ON");
+    expect(() =>
+      initializeStateDatabase(withInjectedFailure(crashing, isSchemaVersionStamp)),
+    ).toThrow("injected migration failure");
+    crashing.close();
+
+    // Nothing may have moved: the version row and every user row survive.
+    const afterCrash = new Database(dbPath);
+    expect(getSchemaVersion(afterCrash)).toBe(8);
+    expectSeededRowsIntact(afterCrash);
+    afterCrash.close();
+
+    // The next clean boot finishes the migration with the data still there.
+    const recovered = initDatabase(dbPath);
+    expect(getSchemaVersion(recovered)).toBe(9);
+    expectSeededRowsIntact(recovered);
+    recovered.close();
+
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  it("refuses to reset a database that has OpenCandle tables but no readable schema version", () => {
+    const base = mkdtempSync(join(tmpdir(), "opencandle-migration-no-version-"));
+    const dbPath = join(base, "state.db");
+    seedLegacyStateDb(dbPath, 9);
+
+    const stripped = new Database(dbPath);
+    stripped.exec("DELETE FROM schema_version");
+    stripped.close();
+
+    expect(() => initDatabase(dbPath)).toThrow(/schema version/i);
+    expect(() => initDatabase(dbPath)).toThrow(dbPath);
+
+    const untouched = new Database(dbPath);
+    expectSeededRowsIntact(untouched);
+    untouched.close();
+
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  it("still initializes a brand-new empty database file", () => {
+    const base = mkdtempSync(join(tmpdir(), "opencandle-migration-fresh-"));
+    const dbPath = join(base, "state.db");
+
+    const empty = new Database(dbPath);
+    empty.close();
+
+    const fresh = initDatabase(dbPath);
+    expect(getSchemaVersion(fresh)).toBe(9);
+    expect(getTableNames(fresh)).toContain("watchlists");
+    fresh.close();
+
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  for (const version of [3, 4, 5, 6, 7, 8]) {
+    it(`migrates a v${version} database to the current schema with user rows intact`, () => {
+      const base = mkdtempSync(join(tmpdir(), `opencandle-migration-v${version}-`));
+      const dbPath = join(base, "state.db");
+      seedLegacyStateDb(dbPath, version);
+
+      const migrated = initDatabase(dbPath);
+      expect(getSchemaVersion(migrated)).toBe(9);
+      expectSeededRowsIntact(migrated);
+      migrated.close();
+
+      rmSync(base, { recursive: true, force: true });
+    });
+  }
 });

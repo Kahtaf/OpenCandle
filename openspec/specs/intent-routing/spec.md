@@ -234,7 +234,7 @@ The resolved turn context SHALL carry planning identifiers for planning version,
 #### Scenario: Existing routing behavior is preserved
 
 - **WHEN** planning identifiers are added to resolved turn context
-- **THEN** existing route kind, workflow dispatch, clarification, pass-through, legacy route compatibility, tool bundle selection, and slot provenance behavior continue to work
+- **THEN** existing route kind, workflow dispatch, clarification, pass-through, tool bundle selection, and slot provenance behavior continue to work
 
 ### Requirement: Planning Selection Uses Manifest Validation
 
@@ -300,7 +300,7 @@ The routing layer SHALL expose enough prior-turn context for the planner to dete
 
 ### Requirement: Route Capability Manifest
 
-The system SHALL define a route capability manifest that is the source of truth for route kinds, supported workflows, required slots, allowed tool bundles, memory scopes, prompt playbooks, and legacy route mappings.
+The system SHALL define a route capability manifest that is the source of truth for route kinds, supported workflows, required slots, allowed tool bundles, memory scopes, and prompt playbooks.
 
 #### Scenario: Router prompt is generated from manifest
 
@@ -314,12 +314,12 @@ The system SHALL define a route capability manifest that is the source of truth 
 
 ### Requirement: Deterministic Router as Post-Processor
 
-Deterministic routing code SHALL NOT make the primary route decision. Deterministic code SHALL validate and normalize the LLM output, enforce manifest constraints, compute missing required slots, and produce diagnostics for any correction. Deterministic safety nets — acronym disambiguation via `symbol-disambiguator`, symbol preflight and provider invalid-symbol handling, compare clarification aborts, router validation-failure recovery, and tool validation — SHALL remain active on LLM router output.
+Deterministic routing code SHALL NOT make the primary route decision. Deterministic code SHALL validate and normalize the LLM output, enforce manifest constraints, compute missing required slots, and produce diagnostics for any correction. Deterministic safety nets — acronym disambiguation via `symbol-disambiguator`, symbol preflight and provider invalid-symbol handling, compare clarification aborts, the minimal router-failure fallback, and tool validation — SHALL remain active on LLM router output. No deterministic keyword classifier SHALL run alongside the router.
 
 #### Scenario: LLM route remains primary
 
 - **WHEN** the router emits valid `routeKind: "agent_task"`
-- **THEN** deterministic code does not override it with a legacy keyword route
+- **THEN** deterministic code does not reclassify the turn
 
 #### Scenario: Invalid route kind is corrected
 
@@ -328,8 +328,13 @@ Deterministic routing code SHALL NOT make the primary route decision. Determinis
 
 #### Scenario: Deterministic safety nets survive rules-router removal
 
-- **WHEN** the legacy rules router is removed as a dispatch path
-- **THEN** acronym disambiguation via `symbol-disambiguator`, workflow symbol preflight, provider/tool validation, compare clarification aborts, and router validation-failure recovery continue to run against LLM router output
+- **WHEN** the legacy rules router is removed entirely, dispatch path and enrichment safety net alike
+- **THEN** acronym disambiguation via `symbol-disambiguator`, workflow symbol preflight, provider/tool validation, compare clarification aborts, and the minimal router-failure fallback continue to run against LLM router output
+
+#### Scenario: Persistent router failure degrades gracefully
+
+- **WHEN** the router returns unparseable output on both the first attempt and the retry
+- **THEN** the turn resolves to `routeKind: "agent_task"` with workflow `general_finance_qa`, entities from deterministic entity extraction, and a `router_validation_failed` diagnostic
 
 ### Requirement: Single LLM Router Call per Turn
 
@@ -358,7 +363,7 @@ The system SHALL invoke a single LLM-based router call on every user turn before
 #### Scenario: Router output is structured and validated
 
 - **WHEN** the router returns a response
-- **THEN** the response is parsed and validated against the defined JSON schema; on validation failure, one retry is attempted with error feedback; on persistent failure, the router emits a minimal fallback output (`route: "fallback"`, extracted symbols only, empty slots, empty preference_updates, empty missing_required)
+- **THEN** the response is parsed and validated against the defined JSON schema; on validation failure, one retry is attempted with error feedback; on persistent failure, the router emits a minimal fallback output (`routeKind: "agent_task"`, extracted symbols only, empty slots, empty preference_updates, empty missing_required)
 
 ### Requirement: Rules Router Removal Requires Acceptance Evidence
 

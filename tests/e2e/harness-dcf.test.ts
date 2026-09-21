@@ -12,18 +12,27 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadEnv } from "../../src/config.js";
+
+// Read `.env` exactly as the CLI does before deciding whether credentials are
+// present. Without this the run exited 0 with a "skipping" line whenever the
+// keys lived in `.env` rather than the shell, so an e2e that never executed
+// read as a pass.
+loadEnv();
 
 const LLM_ENV_VARS = ["GOOGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
-const hasLlm = LLM_ENV_VARS.some((name) => !!process.env[name]);
-if (!hasLlm) {
-  console.log(
-    `Skipping harness-dcf e2e: no LLM credential in env (need one of ${LLM_ENV_VARS.join(", ")}).`,
+const missingCredentials = [
+  ...(LLM_ENV_VARS.some((name) => !!process.env[name])
+    ? []
+    : [`an LLM credential (one of ${LLM_ENV_VARS.join(", ")})`]),
+  ...(process.env.ALPHA_VANTAGE_API_KEY ? [] : ["ALPHA_VANTAGE_API_KEY (compute_dcf needs it)"]),
+];
+if (missingCredentials.length > 0) {
+  console.error(
+    `harness-dcf e2e cannot run: missing ${missingCredentials.join(" and ")}. ` +
+      "Set them in the shell or in .env.",
   );
-  process.exit(0);
-}
-if (!process.env.ALPHA_VANTAGE_API_KEY) {
-  console.log("Skipping harness-dcf e2e: ALPHA_VANTAGE_API_KEY not set (compute_dcf needs it).");
-  process.exit(0);
+  process.exit(1);
 }
 
 interface Trace {

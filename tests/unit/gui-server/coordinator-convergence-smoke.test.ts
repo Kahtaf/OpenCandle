@@ -18,6 +18,10 @@ import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/serve
 import type { WsHub } from "../../../gui/server/ws-hub.js";
 
 describe("GUI/TUI coordinator convergence smoke", () => {
+  // Spawns a real child process that freshly imports
+  // @earendil-works/pi-coding-agent to prove cross-process convergence; that
+  // spawn+import cost can exceed vitest's default 5s test timeout under a
+  // loaded machine even though it stays under a second when idle.
   it("streams a GUI-owned coordinator prompt and a separate TUI-side reader sees the same transcript", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-wp7-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-wp7-sessions-"));
@@ -115,7 +119,7 @@ describe("GUI/TUI coordinator convergence smoke", () => {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 });
 
 const tuiReaderScript = `

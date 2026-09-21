@@ -29,7 +29,8 @@ export interface InteractionTrace {
  * opencandle-router-prefs-dropped, opencandle-disclaimer, opencandle-turn-gap,
  * opencandle-workflow). Drain occurs before `trace.json` or eval traces are
  * written. See
- * openspec/changes/router-context-and-observability/design.md Decision 6. */
+ * openspec/specs/test-harness-observability/spec.md (folded from the
+ * now-archived router-context-and-observability change) Decision 6. */
 export interface CustomEntryTrace {
   customType: string;
   data: unknown;

@@ -3,7 +3,7 @@
   "priorTurns": [
     {
       "role": "assistant",
-      "text": "Got it — based on your profile I've been sizing positions aggressively."
+      "text": "Got it \u2014 based on your profile I've been sizing positions aggressively."
     }
   ],
   "profileSnapshot": {
@@ -11,7 +11,6 @@
   },
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "entities": {
       "symbols": [],
       "riskProfile": "conservative"

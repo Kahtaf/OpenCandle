@@ -39,13 +39,7 @@ describe("eval front door dispatch table", () => {
       "product",
       "competitive",
       "competitive:frozen",
-      "competitive:analyze",
       "router-live",
-      "replay:product",
-      "replay:competitive",
-      "scorecard",
-      "prompt-policy",
-      "prompt-policy:parity",
       "release",
     ]);
   });
@@ -53,7 +47,7 @@ describe("eval front door dispatch table", () => {
   it("resolves suite ids to the delegated command without reimplementing suite logic", () => {
     expect(resolveEvalCommand("cases", [])).toMatchObject({
       command: "vitest",
-      args: ["run", "--config", "vitest.config.evals.ts"],
+      args: ["run", "--project", "evals"],
       env: {},
     });
     expect(resolveEvalCommand("product", [])).toMatchObject({
@@ -68,30 +62,6 @@ describe("eval front door dispatch table", () => {
     expect(resolveEvalCommand("router-live", [])).toMatchObject({
       command: "tsx",
       args: ["tests/scripts/run-live-router-eval.ts"],
-    });
-    expect(resolveEvalCommand("replay:product", [])).toMatchObject({
-      command: "tsx",
-      args: ["tests/scripts/run-main-branch-product-replay.ts"],
-    });
-    expect(
-      resolveEvalCommand("replay:competitive", ["--current-report", "now.json"]),
-    ).toMatchObject({
-      command: "tsx",
-      args: ["tests/scripts/run-main-branch-competitive-replay.ts", "--current-report", "now.json"],
-      env: {},
-    });
-    expect(resolveEvalCommand("scorecard", ["--product-replay", "product.json"])).toMatchObject({
-      command: "tsx",
-      args: ["tests/scripts/build-oc-superiority-scorecard.ts", "--product-replay", "product.json"],
-      env: {},
-    });
-    expect(resolveEvalCommand("prompt-policy", [])).toMatchObject({
-      command: "tsx",
-      args: ["tests/scripts/run-prompt-policy-manifest.ts"],
-    });
-    expect(resolveEvalCommand("prompt-policy:parity", [])).toMatchObject({
-      command: "tsx",
-      args: ["tests/scripts/run-prompt-policy-ref-parity.ts"],
     });
   });
 
@@ -135,23 +105,6 @@ describe("eval front door dispatch table", () => {
     ).toEqual({
       OPENCANDLE_ROUTER_PROVIDER: "google",
       OPENCANDLE_ROUTER_MODEL: "gemini",
-    });
-    expect(resolveEvalCommand("replay:product", ["--base-ref", "main"]).env).toEqual({
-      PRODUCT_REPLAY_BASE_REF: "main",
-    });
-    expect(
-      resolveEvalCommand("prompt-policy", ["--ids", "a,b", "--limit", "1", "--strict"]).env,
-    ).toEqual({
-      PROMPT_POLICY_IDS: "a,b",
-      PROMPT_POLICY_LIMIT: "1",
-      PROMPT_POLICY_STRICT: "1",
-    });
-    expect(
-      resolveEvalCommand("prompt-policy:parity", ["--base-ref", "main", "--current-ref", "HEAD"])
-        .env,
-    ).toEqual({
-      PROMPT_POLICY_BASE_REF: "main",
-      PROMPT_POLICY_CURRENT_REF: "HEAD",
     });
   });
 

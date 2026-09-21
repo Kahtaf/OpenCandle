@@ -5,7 +5,6 @@ import { stripNonContract } from "../../evals/router-live-contract.js";
 function output(overrides: Partial<RouterOutput>): RouterOutput {
   return {
     routeKind: "workflow_dispatch",
-    route: "workflow",
     workflow: "compare_assets",
     entities: { symbols: [] },
     slots: {},
@@ -74,7 +73,6 @@ describe("router-live contract normalization", () => {
     const normalized = stripNonContract(
       output({
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["QQQ", "SPY"], timeHorizon: "long", catalystSymbols: [] },
       }),
@@ -105,7 +103,6 @@ describe("router-live contract normalization", () => {
     const normalized = stripNonContract(
       output({
         routeKind: "agent_task",
-        route: "fallback",
         workflow: "general_finance_qa",
         entities: { symbols: ["SPY"], compareMetrics: ["interest_rates"] },
         tool_bundles: ["core_market", "macro"],

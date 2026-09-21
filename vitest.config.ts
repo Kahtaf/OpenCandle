@@ -1,11 +1,23 @@
 import { defineConfig } from "vitest/config";
+import {
+  agentToolsProject,
+  evalsProject,
+  guiBrowserProject,
+  guiReleaseProject,
+  siteProject,
+  unitProject,
+} from "./vitest.projects.js";
 
 export default defineConfig({
   test: {
-    globals: true,
-    environment: "node",
-    include: ["tests/unit/**/*.test.ts"],
-    setupFiles: ["tests/setup/browser-shims.ts"],
+    projects: [
+      unitProject,
+      siteProject,
+      agentToolsProject,
+      evalsProject,
+      guiBrowserProject,
+      guiReleaseProject,
+    ],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

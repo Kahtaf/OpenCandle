@@ -1,8 +1,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+
+const nodeBinDir = dirname(process.execPath);
 
 const helperPath = resolve(".agents/skills/autoreview/scripts/autoreview");
 const opencandlePromptPath = resolve(".agents/skills/autoreview/references/opencandle-review.md");
@@ -193,6 +195,80 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("executable not found: codex");
+  });
+
+  it("skips a node_modules/.bin shim and resolves the global engine binary from PATH", () => {
+    // Reproduces the real npm bug: `npm run review:pr` prepends node_modules/.bin
+    // for the cwd *and every ancestor directory* to PATH (verified: a worktree
+    // nested under the main checkout still sees the main checkout's
+    // node_modules/.bin). A devDependency (e.g. @agentclientprotocol/codex-acp
+    // pulling in an old @openai/codex) can then shadow the user's real global
+    // `codex` even when that node_modules/.bin lives outside the reviewed
+    // repo/worktree root, so repo-containment alone does not catch it.
+    dir = mkdtempSync(join(tmpdir(), "autoreview-nodemodulesbin-"));
+    const repoDir = join(dir, "repo");
+    // Simulate an ancestor directory's node_modules/.bin (outside the repo
+    // root, the way the main checkout's node_modules/.bin sits above a
+    // worktree) so this test fails if the fix only checked repo containment.
+    const shadowNodeModulesBin = join(dir, "node_modules", ".bin");
+    const globalBin = join(dir, "globalbin");
+    mkdirSync(repoDir);
+    mkdirSync(shadowNodeModulesBin, { recursive: true });
+    mkdirSync(globalBin);
+    for (const tool of ["git", "python3"]) {
+      const real = execFileSync("which", [tool], { encoding: "utf8" }).trim();
+      writeFileSync(join(globalBin, tool), `#!/bin/sh\nexec "${real}" "$@"\n`);
+      chmodSync(join(globalBin, tool), 0o755);
+    }
+    git(repoDir, "init", "--quiet");
+    git(repoDir, "checkout", "--quiet", "-B", "main");
+    git(repoDir, "config", "user.name", "Autoreview Test");
+    git(repoDir, "config", "user.email", "autoreview-test@example.com");
+    writeFileSync(join(repoDir, "app.js"), "export const value = 1;\n");
+    git(repoDir, "add", "app.js");
+    git(repoDir, "commit", "--quiet", "-m", "initial");
+
+    writeFileSync(
+      join(shadowNodeModulesBin, "codex"),
+      "#!/bin/sh\necho 'shadowed node_modules/.bin codex must not run' >&2\nexit 99\n",
+    );
+    chmodSync(join(shadowNodeModulesBin, "codex"), 0o755);
+
+    const fakeCodex = join(globalBin, "codex");
+    writeFileSync(
+      fakeCodex,
+      `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const outputIndex = args.indexOf("--output-last-message");
+const outputPath = args[outputIndex + 1];
+const report = {
+  findings: [],
+  overall_correctness: "patch is correct",
+  overall_explanation: "Global codex ran, not the node_modules/.bin shim.",
+  overall_confidence: 0.9
+};
+fs.writeFileSync(outputPath, JSON.stringify(report));
+`,
+    );
+    chmodSync(fakeCodex, 0o755);
+
+    const result = spawnSync(
+      helperPath,
+      ["--mode", "commit", "--commit", "HEAD", "--no-web-search"],
+      {
+        cwd: repoDir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${shadowNodeModulesBin}:${globalBin}:${nodeBinDir}:/bin:/usr/bin`,
+        },
+      },
+    );
+
+    expect(result.stderr).not.toContain("shadowed node_modules/.bin codex must not run");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("clean");
   });
 
   it("keeps out-of-scope findings as advisories in the report and JSON output", () => {

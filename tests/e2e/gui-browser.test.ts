@@ -503,7 +503,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("link", { name: "Portfolios" }).click();
     await mocked.waitForURL("**/portfolios", { timeout: 5_000 });
     await expectVisible(mocked.getByRole("heading", { name: "Portfolios" }));
-    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("button", { name: "Add holding" }).first().click();
     await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
     const alcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
     await expectVisible(alcoaOption);
@@ -528,7 +528,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("link", { name: "Reports" }));
     await mocked.goto(`${guiUrl}/portfolios`, { waitUntil: "networkidle" });
-    await mocked.getByRole("button", { name: "Add holding" }).click();
+    await mocked.getByRole("button", { name: "Add holding" }).first().click();
     await mocked.getByRole("combobox", { name: "Search ticker or company" }).fill("Alcoa");
     const mobileAlcoaOption = mocked.getByRole("option", { name: /AA Alcoa Corp\./ });
     await expectVisible(mobileAlcoaOption);
@@ -1007,7 +1007,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await expectVisible(mocked.getByText("Delayed prompt"));
-    await expectVisible(mocked.getByText("Working"));
+    await expectVisible(mocked.getByText("Request received…"));
     await expect(mocked.getByText("Delayed answer").count()).resolves.toBe(0);
 
     await mocked.evaluate(() => window.__releaseDelayedRun?.());
@@ -1182,6 +1182,12 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   it("disables empty-state suggestions while home waits for a fresh session", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
+      // A fresh home session is only prepared for a session the server has
+      // actually persisted to disk (shouldStartFreshHomeSession checks
+      // gui.currentSessionPersisted); a session with entries that never
+      // reports itself as persisted stays on its transcript instead of
+      // clearing to the empty-state suggestions this test exercises.
+      sessionPersisted: true,
       entries: [
         {
           type: "message",
@@ -1193,18 +1199,51 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     });
     await mocked.addInitScript(() => {
       window.__fetchCount = 0;
-      window.fetch = () => {
+      window.fetch = (input) => {
         window.__fetchCount += 1;
+        const url = String(input);
+        if (url.endsWith("/api/session/new")) {
+          // The pending-fresh-session effect calls this for real while the
+          // stale transcript is hidden. Hold it open so the test can assert
+          // the disabled window before letting it resolve to a genuinely
+          // empty session -- otherwise the empty-state suggestions this
+          // test checks would fall back to the stale transcript (a broken
+          // creation) or flip enabled again (an instant one) before the
+          // assertions below run.
+          return new Promise((resolve) => {
+            window.__releaseFreshSession = () =>
+              resolve(
+                new Response(
+                  JSON.stringify({
+                    role: "writer",
+                    sessionId: "fresh-session",
+                    sessionPersisted: true,
+                    coordination: { sessionId: "fresh-session", status: "ready" },
+                    catalog: { tools: [], workflows: [], providers: [] },
+                    modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+                    askUserPrompts: [],
+                    sessions: [],
+                    snapshot: { sessionId: "fresh-session", entries: [], events: [] },
+                  }),
+                  { status: 200, headers: { "content-type": "application/json" } },
+                ),
+              );
+          });
+        }
         return Promise.resolve(new Response("", { status: 204 }));
       };
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
     const suggestion = mocked.getByRole("button", { name: "What is NVDA trading at?" });
+    await expectVisible(suggestion);
+    const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
     await expect(suggestion.isDisabled()).resolves.toBe(true);
     await suggestion.click({ force: true });
     await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(baselineFetchCount);
+
+    await mocked.evaluate(() => window.__releaseFreshSession?.());
+    await expect(suggestion.isDisabled()).resolves.toBe(false);
     await mocked.close();
   }, 30_000);
 
@@ -1309,7 +1348,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const tuiSequence = opencandleEntrySequence(tui.agentTrace.customEntries ?? []);
     expect(tuiSequence).toContain("opencandle-analyst-step");
 
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    // Not the home route: "/" auto-starts a fresh session whenever the current
+    // one has content (shouldStartFreshHomeSession), and earlier tests in this
+    // file leave content behind. That request is dispatched from a React effect
+    // after the WebSocket boot message, so `networkidle` does not wait for it —
+    // it can land after this test creates its own session and replace the very
+    // session the run below is dispatched to. Settings is a plain route that
+    // never resets the session, so the run's session stays put.
+    await page.goto(`${guiUrl}/settings`, { waitUntil: "networkidle" });
     const newSession = await page.evaluate(async () => {
       const response = await fetch("/api/session/new", { method: "POST" });
       if (!response.ok) throw new Error(`new session failed: ${response.status}`);
@@ -1318,6 +1364,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const sessionId = stringValue(recordValue(newSession).sessionId);
     expect(sessionId).toBeTruthy();
 
+    await page.goto(`${guiUrl}/sessions/${encodeURIComponent(sessionId)}`, {
+      waitUntil: "networkidle",
+    });
     const guiRunEvents = await runGuiChat(page, sessionId, parityPrompt);
     const guiSnapshot = await fetchGuiSessionSnapshot(page, sessionId);
     const guiEntries = arrayValue(recordValue(guiSnapshot).entries);
@@ -1359,20 +1408,19 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     expect(analystStageCount).toBeGreaterThan(0);
 
     const dashboard = recordValue(recordValue(guiSnapshot).state);
-    // FINDING (2026-07-04): the /analyze transform path emits no
-    // "opencandle-workflow" entry (only router-dispatch paths in
-    // src/pi/opencandle-extension.ts do), so the projector's analysis
-    // tracking — activeAnalyses during the run, recentResearch after —
-    // never sees comprehensive analysis at all. Emitting that entry is an
-    // ask-first extension change; until then the truthful projection
-    // contract for a completed /analyze run is "no tracked analyses", and
-    // the analystsDone-from-entries math is owned by the projector unit
-    // tests over real entry shapes.
+    // The 2026-07-04 finding recorded here ("/analyze emits no
+    // opencandle-workflow entry, so the projector never sees comprehensive
+    // analysis") no longer holds: the transform path emits that entry, and a
+    // run that reaches its terminal answer is moved out of activeAnalyses into
+    // recentResearch. The analystsDone-from-entries math stays owned by the
+    // projector unit tests over real entry shapes.
     expect(arrayValue(dashboard.activeAnalyses)).toHaveLength(0);
     const recentResearch = arrayValue(dashboard.recentResearch).map(recordValue);
-    expect(
-      recentResearch.find((entry) => stringValue(entry.workflow) === "comprehensive_analysis"),
-    ).toBeUndefined();
+    const completedAnalysis = recentResearch.find(
+      (entry) => stringValue(entry.workflow) === "comprehensive_analysis",
+    );
+    expect(completedAnalysis).toBeDefined();
+    expect(stringValue(recordValue(completedAnalysis).sessionId)).toBe(sessionId);
 
     const screenshot = await page.screenshot({ fullPage: true });
     writeParityEvidence("gui-tui-parity.json", {
@@ -1790,7 +1838,20 @@ async function installMockSocket(
             type: "boot",
             role: mockOverrides.role ?? "writer",
             supportsSessionActions: mockOverrides.supportsSessionActions ?? true,
+            sessionPersisted: mockOverrides.sessionPersisted ?? false,
             sessionId: bootSessionId,
+            // Mirrors the real GUI server's coordinationStateForSession: a
+            // follower process never proxies market-state mutations to
+            // another process's writer (only chat-run requests are
+            // proxied), so it reports coordination.marketStateWritable=false unless a
+            // test overrides it. supportsSessionActions stays true for a
+            // follower because its chat prompts still queue behind the
+            // writer -- see actionSurfaceRole() in runtime-transport.js.
+            coordination: mockOverrides.coordination ?? {
+              sessionId: bootSessionId,
+              status: mockOverrides.role === "follower" ? "syncing" : "ready",
+              marketStateWritable: mockOverrides.role !== "follower",
+            },
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
               requirement: "ready",
@@ -1801,6 +1862,11 @@ async function installMockSocket(
           this.emit({
             type: "state.snapshot",
             sessionId: bootSessionId,
+            // Mirrors the real server's buildStateSnapshot(), which also
+            // reports sessionPersisted: useGuiConnection's state.snapshot
+            // handler re-derives currentSessionPersisted from this message
+            // and would otherwise clobber the value the boot message set.
+            sessionPersisted: mockOverrides.sessionPersisted ?? false,
             state: mockOverrides.dashboard ?? {
               watchlist: [],
               activeAnalyses: [],

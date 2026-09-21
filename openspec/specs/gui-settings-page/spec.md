@@ -1,7 +1,7 @@
 # gui-settings-page Specification
 
 ## Purpose
-TBD - created by archiving change add-gui-settings-page. Update Purpose after archive.
+Define the GUI's dedicated Settings page: its route and sidebar entry, its section-rail layout, and the Model, Data providers, Notifications & automation, and Data & privacy sections, plus how the hosted runtime status pill and the sidebar header render alongside it.
 ## Requirements
 ### Requirement: Settings page route and navigation
 

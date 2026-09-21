@@ -1,8 +1,13 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { buildDispatchedPrompt, parseChatRunBody } from "../../../gui/server/http-routes.js";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildDispatchedPrompt,
+  disposeAfterSettled,
+  parseChatRunBody,
+} from "../../../gui/server/http-routes.js";
 import { shouldPersistOriginalInputMarker } from "../../../gui/shared/chat-run-input.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
@@ -218,5 +223,103 @@ describe("GUI chat-run body parsing", () => {
     [{ prompt: "x", attachments: [{ kind: "watchlist" }] }, "watchlist attachment id is required"],
   ])("rejects invalid bodies with a specific reason", (body, error) => {
     expect(parseChatRunBody(body)).toEqual({ ok: false, error });
+  });
+});
+
+describe("disposeAfterSettled", () => {
+  // Regression coverage for the GUI/TUI parity gap: a chat run against a
+  // non-current session creates an ephemeral AgentSession via
+  // createSessionForManager and used to dispose it synchronously in the
+  // request's finally block, right after the request's own first-step
+  // settle-wait (promptAndSettle) returned. A multi-step workflow
+  // (comprehensive_analysis, options_screener, ...) that session dispatched
+  // keeps sending itself further steps well after that point; disposing
+  // immediately tore it down silently mid-workflow, with no error or trace
+  // entry (runner.start() resolves status "cancelled", which the coordinator
+  // only logs for "completed"/"failed").
+  it("disposes immediately when the session exposes no settlement signal", async () => {
+    const dispose = vi.fn();
+    await disposeAfterSettled({ session: { dispose } as unknown as AgentSession });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves without throwing for a null session (the common current-session case)", async () => {
+    await expect(disposeAfterSettled(null)).resolves.toBeUndefined();
+  });
+
+  it("resolves only after waitForSettled resolves and dispose has run", async () => {
+    const dispose = vi.fn();
+    let resolveSettled: () => void = () => {};
+    const waitForSettled = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSettled = resolve;
+        }),
+    );
+    const disposal = disposeAfterSettled({
+      session: { dispose } as unknown as AgentSession,
+      waitForSettled,
+    });
+    let resolved = false;
+    void disposal.then(() => {
+      resolved = true;
+    });
+
+    expect(waitForSettled).toHaveBeenCalledTimes(1);
+    // A still-running background workflow must not be torn out from under
+    // itself, and the returned promise must not resolve before disposal.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(dispose).not.toHaveBeenCalled();
+    expect(resolved).toBe(false);
+
+    resolveSettled();
+    await disposal;
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(resolved).toBe(true);
+  });
+
+  it("resolves and still disposes when waiting for settlement rejects", async () => {
+    const dispose = vi.fn();
+    const waitForSettled = vi.fn(() => Promise.reject(new Error("boom")));
+
+    await expect(
+      disposeAfterSettled({ session: { dispose } as unknown as AgentSession, waitForSettled }),
+    ).resolves.toBeUndefined();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the deferred disposal when a session stops making progress", async () => {
+    vi.useFakeTimers();
+    try {
+      const dispose = vi.fn();
+      const unsubscribe = vi.fn();
+      let resolveSettled: () => void = () => {};
+      const waitForSettled = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSettled = resolve;
+          }),
+      );
+      const session = {
+        dispose,
+        subscribe: () => unsubscribe,
+      } as unknown as AgentSession;
+      let resolved = false;
+      const disposal = disposeAfterSettled({ session, waitForSettled }).then(() => {
+        resolved = true;
+      });
+
+      // A hung session must not hold the writer lock forever: once the stall
+      // window passes with no session progress, disposal still runs.
+      await vi.advanceTimersByTimeAsync(121_000);
+      await disposal;
+      expect(resolved).toBe(true);
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      resolveSettled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

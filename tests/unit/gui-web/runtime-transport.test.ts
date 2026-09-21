@@ -21,6 +21,20 @@ describe("loopback runtime transport", () => {
     expect(actionSurfaceRole("offline", false)).toBe("offline");
   });
 
+  it("treats a hosted follower as writer when coordination reports it writable (the unconditional hosted forwarding case)", () => {
+    expect(actionSurfaceRole("follower", true, { marketStateWritable: true })).toBe("writer");
+    expect(actionSurfaceRole("follower", true, undefined)).toBe("writer");
+  });
+
+  it("keeps a local follower read-only even though its chat prompts still queue behind the writer", () => {
+    // The local runtime only proxies chat-run requests cross-process, not
+    // direct tool/market-state mutations, so it reports
+    // coordination.marketStateWritable: false for a non-writer process while still
+    // reporting supportsSessionActions: true so the chat composer stays
+    // usable (see coordinationStateForSession in gui/server/ws-hub.ts).
+    expect(actionSurfaceRole("follower", true, { marketStateWritable: false })).toBe("follower");
+  });
+
   it("uses the existing bootstrap, session, tool, and run contracts", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {

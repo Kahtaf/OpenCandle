@@ -40,7 +40,6 @@ OpenCandle areas compared against those patterns include:
 
 - `src/pi/opencandle-extension.ts`
 - `src/system-prompt.ts`
-- `src/routing/classify-intent.ts`
 - `src/routing/slot-resolver.ts`
 - `src/workflows/portfolio-builder.ts`
 - `src/workflows/options-screener.ts`

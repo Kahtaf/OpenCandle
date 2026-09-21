@@ -1,7 +1,7 @@
 # installable-pwa Specification
 
 ## Purpose
-TBD - created by archiving change browser-hosted-pwa. Update Purpose after archive.
+Define what makes hosted OpenCandle an installable app: an installable shell, a service worker that caches only static application assets (never user data or API responses), update handling that preserves durable in-progress work, and a UI that stays usable across installed viewport sizes.
 ## Requirements
 ### Requirement: Hosted OpenCandle is installable
 

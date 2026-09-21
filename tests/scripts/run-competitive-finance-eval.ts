@@ -19,12 +19,14 @@ import {
   getEnvApiKey,
   getModel,
   type Model,
+  type ProviderHeaders,
   registerBuiltInApiProviders,
 } from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
+  type AdapterBinaryResolution,
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
   buildComparisonJudgeRetryPrompt,
@@ -42,11 +44,15 @@ import {
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
   fixedPromptFromEnv,
+  formatAdapterBinaryCommand,
   formatCompetitiveReportAnalysisMarkdown,
   frozenCompetitivePanelFromEnv,
   type GeneratedFinancePrompt,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveAdapterBinary,
+  resolveClaudeCodeExecutableEnv,
+  resolveCodexPathEnv,
   resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
@@ -72,7 +78,9 @@ interface CompetitiveRunResult {
 interface ResolvedModel {
   model: Model<Api>;
   apiKey?: string;
-  headers?: Record<string, string>;
+  // Pi's own header type: a null value means "drop this header", which
+  // completeSimple understands and Record<string, string> cannot express.
+  headers?: ProviderHeaders;
 }
 
 interface CompetitorRunner {
@@ -97,14 +105,21 @@ type AcpxAgent = "claude" | "codex" | "gemini";
 
 loadEnv();
 
-const DEFAULT_ACPX_COMMAND = join(process.cwd(), "node_modules", ".bin", "acpx");
+// None of acpx, the Codex ACP adapter, or the Claude ACP adapter are
+// repo-local devDependencies. `npm run <script>` prepends the invoking
+// project's node_modules/.bin to PATH for every child process, so a
+// repo-local install of an adapter that bundles its own pinned CLI (Codex
+// ACP bundles `@openai/codex`) would silently shadow the operator's global,
+// logged-in CLI with a stale bundled one. Instead every adapter is resolved
+// at call time: an explicit env override, then a global install on PATH
+// (skipping node_modules/.bin), then `npx --yes <package>@<pinned range>` on
+// demand, which resolves into npm's own npx cache rather than this repo's
+// node_modules. See resolveAdapterBinary/resolveCodexPathEnv in
+// tests/evals/competitive-finance.ts.
+const ACPX_NPX_PACKAGE_SPEC = "acpx@^0.13.2";
+const CODEX_ACP_NPX_PACKAGE_SPEC = "@agentclientprotocol/codex-acp@^1.7.0";
+const CLAUDE_ACP_NPX_PACKAGE_SPEC = "@agentclientprotocol/claude-agent-acp@^0.70.0";
 const DEFAULT_COMPETITOR_CWD = join(tmpdir(), "oc-competitive-agents");
-const DEFAULT_CLAUDE_AGENT_COMMAND = join(
-  process.cwd(),
-  "node_modules",
-  ".bin",
-  "claude-agent-acp",
-);
 const DEFAULT_GEMINI_AGENT_COMMAND = "gemini --acp --skip-trust";
 
 const asOfDate = new Date().toISOString().slice(0, 10);
@@ -502,9 +517,10 @@ function runAcpx(
   prompt: string,
   options: { env?: Record<string, string>; model?: string; timeout?: number } = {},
 ): string {
-  const command = process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND ?? DEFAULT_ACPX_COMMAND;
+  const acpx = resolveAcpxLaunch();
   const agentCommand = resolveAgentCommand(agent);
   const args = [
+    ...acpx.args,
     "--cwd",
     competitorCwd,
     "--format",
@@ -518,36 +534,95 @@ function runAcpx(
     String(numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS", 900)),
   ];
   if (options.model) args.push("--model", options.model);
-  if (agentCommand) {
-    args.push("--agent", agentCommand, "exec");
-  } else {
-    args.push(agent, "exec");
+  args.push("--agent", agentCommand, "exec");
+  try {
+    return runCli(acpx.command, args, {
+      cwd: competitorCwd,
+      input: prompt,
+      timeout: options.timeout ?? numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
+      env: {
+        ...defaultAgentEnv(agent),
+        ...options.env,
+      },
+    });
+  } catch (error) {
+    throw new Error(describeAgentLaunchFailure(agent, acpx, agentCommand, error));
   }
-  return runCli(command, args, {
-    cwd: competitorCwd,
-    input: prompt,
-    timeout: options.timeout ?? numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
-    env: {
-      ...defaultAgentEnv(agent),
-      ...options.env,
-    },
+}
+
+/** Resolves how to invoke acpx itself: env override, global install, npx fallback. */
+function resolveAcpxLaunch(): AdapterBinaryResolution {
+  return resolveAdapterBinary({
+    overrideCommand: process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND,
+    globalBinName: "acpx",
+    npxPackageSpec: ACPX_NPX_PACKAGE_SPEC,
+    findGlobalExecutable: findExecutable,
   });
 }
 
-function resolveAgentCommand(agent: AcpxAgent): string | undefined {
+function resolveAgentCommand(agent: AcpxAgent): string {
   const specific = process.env[`OPENCANDLE_COMPETITIVE_${agent.toUpperCase()}_AGENT_COMMAND`];
   if (specific) return specific;
-  if (agent === "claude") return DEFAULT_CLAUDE_AGENT_COMMAND;
   if (agent === "gemini") return DEFAULT_GEMINI_AGENT_COMMAND;
-  return undefined;
+  const spec =
+    agent === "codex"
+      ? { globalBinName: "codex-acp", npxPackageSpec: CODEX_ACP_NPX_PACKAGE_SPEC }
+      : { globalBinName: "claude-agent-acp", npxPackageSpec: CLAUDE_ACP_NPX_PACKAGE_SPEC };
+  return formatAdapterBinaryCommand(
+    resolveAdapterBinary({ ...spec, findGlobalExecutable: findExecutable }),
+  );
 }
 
 function defaultAgentEnv(agent: AcpxAgent): Record<string, string> {
-  if (agent === "claude" && !process.env.CLAUDE_CODE_EXECUTABLE) {
-    const claudeExecutable = findExecutable("claude");
-    return claudeExecutable ? { CLAUDE_CODE_EXECUTABLE: claudeExecutable } : {};
+  if (agent === "claude") {
+    return resolveClaudeCodeExecutableEnv({
+      existingExecutable: process.env.CLAUDE_CODE_EXECUTABLE,
+      findGlobalExecutable: findExecutable,
+    });
+  }
+  if (agent === "codex") {
+    return resolveCodexPathEnv({
+      existingCodexPath: process.env.CODEX_PATH,
+      findGlobalExecutable: findExecutable,
+    });
   }
   return {};
+}
+
+/**
+ * Preflight (and any later failure) must explain a skip in one actionable
+ * line instead of a silent skip: name what is missing and how to install it.
+ */
+function describeAgentLaunchFailure(
+  agent: AcpxAgent,
+  acpx: AdapterBinaryResolution,
+  agentCommand: string,
+  error: unknown,
+): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  const hints: string[] = [];
+  if (acpx.source === "npx") {
+    hints.push(
+      "acpx is not installed globally; install it with `npm install -g acpx` for faster, offline-capable runs, or ensure npx has network access to fetch it on demand.",
+    );
+  }
+  if (agent === "codex" && !process.env.CODEX_PATH && !findExecutable("codex")) {
+    hints.push(
+      "No global `codex` CLI was found on PATH; install/log in to Codex (https://github.com/openai/codex) so the Codex baseline drives your own account, or set OPENCANDLE_COMPETITIVE_CODEX_AGENT_COMMAND to a working codex-acp launch command.",
+    );
+  }
+  if (agent === "claude" && !process.env.CLAUDE_CODE_EXECUTABLE && !findExecutable("claude")) {
+    hints.push(
+      "No global `claude` CLI was found on PATH; install/log in to Claude Code (npm install -g @anthropic-ai/claude-code) or set OPENCANDLE_COMPETITIVE_CLAUDE_AGENT_COMMAND to a working claude-agent-acp launch command.",
+    );
+  }
+  if (agent === "gemini" && !findExecutable("gemini")) {
+    hints.push(
+      "No global `gemini` CLI was found on PATH; install it (npm install -g @google/gemini-cli) or set OPENCANDLE_COMPETITIVE_GEMINI_AGENT=api with GEMINI_API_KEY/GOOGLE_API_KEY to skip the CLI path entirely.",
+    );
+  }
+  const hint = hints.length > 0 ? ` (${hints.join(" ")})` : "";
+  return `${agent} baseline via "${agentCommand}" failed: ${reason}${hint}`;
 }
 
 function runCli(

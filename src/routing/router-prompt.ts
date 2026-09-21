@@ -9,7 +9,7 @@ import type { RouterInputContext } from "./router-types.js";
  * `target_price`). A future `/forget` command is the designated scrubbing
  * primitive for removing or masking matching entries from the session branch
  * so they no longer reach the router. See
- * `openspec/changes/router-context-and-observability/` for the follow-up.
+ * `openspec/specs/test-harness-observability/` for the follow-up.
  */
 
 function renderCatalog(): string {
@@ -36,7 +36,7 @@ function renderCatalog(): string {
 
 function renderRouteKinds(): string {
   return Object.values(ROUTE_CAPABILITY_MANIFEST)
-    .map((route) => `- "${route.routeKind}" -> legacy route "${route.legacyRoute}"`)
+    .map((route) => `- "${route.routeKind}"`)
     .join("\n");
 }
 
@@ -72,7 +72,6 @@ const SCHEMA_SPEC = `You MUST respond with a SINGLE JSON object and nothing else
 
 interface RouterOutput {
   routeKind: "workflow_dispatch" | "agent_task" | "clarification" | "pass_through";
-  route: "workflow" | "fallback";
   workflow?: "portfolio_builder" | "options_screener" | "compare_assets" | "single_asset_analysis" | "watchlist_or_tracking" | "general_finance_qa";
   entities: {
     symbols: string[];               // UPPERCASE tickers the user mentioned or implied
@@ -115,7 +114,6 @@ const ROUTING_RULES = `Routing rules:
 - Choose routeKind = "agent_task" for in-scope finance work that should be answered by the main agent, including simple data fetches like "AAPL quote" and open-ended questions like "entry levels on ASTS for 6 months".
 - Choose routeKind = "clarification" when required slots are missing (e.g. options workflow needs a symbol, portfolio needs a budget). List specific slot names in missing_required. The main agent will use ask_user to collect them.
 - Choose routeKind = "pass_through" when the request is outside OpenCandle's finance task surface.
-- Set legacy route = "workflow" only for routeKind = "workflow_dispatch"; otherwise set legacy route = "fallback".
 - DO NOT invent a "direct_tool" route. Tool execution belongs to the main agent.
 - For covered call prompts, distinguish the owned underlying from catalyst tickers. Put the owned symbol first in symbols, set heldSymbol to the owned symbol, put event/context tickers in catalystSymbols, set workflow="options_screener", and preserve costBasis if stated.
 - For protective put prompts, treat the owned/held ticker as the option-chain underlying, set optionStrategy="protective_put", direction="bearish", and preserve shareQuantity if stated. This is a hedge on an existing long share position, not a bullish call screen.

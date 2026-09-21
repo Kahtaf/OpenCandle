@@ -471,6 +471,29 @@ describe("GUI server route guards", () => {
     expect(acceptedBlock).toContain("options.syncCurrentWriterLockScope?.()");
   });
 
+  it("holds run ownership until the deferred session disposal finishes", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const handlerStart = source.indexOf("async function streamAcceptedSseChatRun");
+    const handlerEnd = source.indexOf("// A dispatched multi-step workflow", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+    const finallyStart = handlerSource.indexOf("} finally {");
+    const finallyEnd = handlerSource.indexOf("return actionAccepted;", finallyStart);
+    const finallyBlock = handlerSource.slice(finallyStart, finallyEnd);
+
+    // The HTTP response and live subscription still end immediately, but the
+    // busy guard, heartbeat, and writer lock must outlive a still-running
+    // deferred workflow so a second request cannot write concurrently.
+    expect(finallyBlock).toContain("unsubscribeLive();");
+    expect(finallyBlock).toContain(
+      "void disposeAfterSettled(createdSession).finally(releaseRunOwnership);",
+    );
+    expect(finallyBlock).toContain("res.end();");
+    expect(finallyBlock).not.toContain("activeRunSessionIds.delete(sessionId)");
+    expect(finallyBlock).not.toContain("clearInterval(lockHeartbeat)");
+    expect(finallyBlock).not.toContain("releaseWriterLock(acquiredLockScope)");
+    expect(handlerSource).toContain("const releaseRunOwnership = () => {");
+  });
+
   it("does not mint legacy chat action ids on the server", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
 

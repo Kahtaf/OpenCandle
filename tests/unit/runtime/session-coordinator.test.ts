@@ -356,6 +356,29 @@ function fakeQueueContext(isIdle: () => boolean, entries: SessionEntry[] = []) {
   };
 }
 
+/**
+ * Queue context shaped like Pi's real `ExtensionContext`: every session-bound
+ * accessor runs the runner's stale assertion, so reading it after the session
+ * has been replaced throws instead of returning a value.
+ */
+function staleAwareQueueContext(assertActive: () => void, entries: SessionEntry[]) {
+  return {
+    isIdle: () => {
+      assertActive();
+      return false;
+    },
+    hasPendingMessages: () => {
+      assertActive();
+      return false;
+    },
+    ui: { notify: vi.fn() },
+    get sessionManager() {
+      assertActive();
+      return fakeSessionManager(entries);
+    },
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   clearRunContext();
@@ -462,6 +485,95 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       status: "completed",
     });
     await completion;
+  });
+
+  it("ends an interrupted workflow as a failed run while the replaced session context is still usable", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    // Pi invalidates an extension context when the outgoing session is
+    // disposed, which happens strictly after its awaited `session_shutdown`
+    // handler returns. `stale` models exactly that boundary.
+    let stale = false;
+    const assertActive = () => {
+      if (stale) {
+        throw new Error(
+          "This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession().",
+        );
+      }
+    };
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        assertActive();
+        entries.push(userTextEntry(prompt));
+      }),
+      appendEntry: vi.fn(() => assertActive()),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      staleAwareQueueContext(assertActive, entries) as never,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    // Pi's documented replacement lifecycle: `session_shutdown` is awaited
+    // before the outgoing session is disposed.
+    const shutdown = coord.endActiveWorkflowForSessionShutdown("session_replaced");
+    await vi.advanceTimersByTimeAsync(200);
+    await shutdown;
+    stale = true;
+
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "comprehensive_analysis",
+      status: "failed",
+      reason: "session_replaced",
+    });
+    // An interrupted run must not queue further prompts into a session that is
+    // about to be disposed.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    await expect(coord.waitForActiveWorkflow()).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(500);
+  });
+
+  it("records an interrupted workflow when the session is disposed without a shutdown handoff", async () => {
+    vi.useFakeTimers();
+    const database = initDatabase(":memory:");
+    const coord = new SessionCoordinator({ stateDatabaseFactory: () => database });
+    coord.initSession("stale-session");
+    const entries: SessionEntry[] = [];
+    let stale = false;
+    const assertActive = () => {
+      if (stale) {
+        throw new Error("This extension ctx is stale after session replacement or reload.");
+      }
+    };
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        assertActive();
+        entries.push(userTextEntry(prompt));
+      }),
+      appendEntry: vi.fn(() => assertActive()),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      staleAwareQueueContext(assertActive, entries) as never,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    const runId = coord.getRunner().getActiveRun()?.runId ?? "";
+    stale = true;
+
+    const settled = coord.waitForActiveWorkflow();
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(settled).resolves.toBeUndefined();
+    const events = database
+      .prepare("SELECT event_type FROM workflow_events WHERE run_id = ?")
+      .all(runId) as Array<{ event_type: string }>;
+    expect(events.map((event) => event.event_type)).toContain("workflow_cancelled");
+    database.close();
   });
 
   it("does not crash the runtime when a completed workflow has a stale Pi context", async () => {
@@ -1786,7 +1898,6 @@ function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {
     },
     {
       routeKind,
-      route: "fallback",
       workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
       entities: { symbols: [] },
       slots: {},

@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "workflow": "single_asset_analysis",
     "entities": {
       "symbols": [

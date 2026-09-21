@@ -183,6 +183,35 @@ describe("opencandle extension", () => {
     );
   });
 
+  it("retires an in-flight workflow on session_shutdown before Pi disposes the session", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const ctx: FakeCommandContext = {
+      isIdle: () => false,
+      ui: { notify: vi.fn() },
+    };
+    await fake.commands.get("analyze")!.handler("NVDA", ctx);
+    await vi.advanceTimersByTimeAsync(50);
+    const promptsBeforeShutdown = fake.sendUserMessage.mock.calls.length;
+
+    const shutdownHandler = fake.handlers.get("session_shutdown")?.[0];
+    expect(shutdownHandler).toBeDefined();
+    const shutdown = shutdownHandler!({ type: "session_shutdown", reason: "new" }, ctx);
+    await vi.advanceTimersByTimeAsync(200);
+    await shutdown;
+
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "comprehensive_analysis",
+      status: "failed",
+      reason: "session_replaced",
+    });
+    // Nothing more may be queued into a session that is about to be disposed.
+    expect(fake.sendUserMessage.mock.calls.length).toBe(promptsBeforeShutdown);
+    await vi.runAllTimersAsync();
+    expect(fake.sendUserMessage.mock.calls.length).toBe(promptsBeforeShutdown);
+  });
+
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
@@ -454,7 +483,7 @@ describe("opencandle extension", () => {
     it("records workflow runs after router dispatch", async () => {
       const fake = createFakeApi();
       const workflowOutput = {
-        route: "workflow",
+        routeKind: "workflow_dispatch",
         workflow: "portfolio_builder",
         entities: { symbols: [], budget: 10_000 },
         slots: {
@@ -493,7 +522,7 @@ describe("opencandle extension", () => {
     it("injects memory context into system prompt after router preference writes", async () => {
       const fake = createFakeApi();
       const fallbackOutput = {
-        route: "fallback",
+        routeKind: "agent_task",
         entities: { symbols: [] },
         slots: {},
         preference_updates: [
@@ -591,7 +620,7 @@ describe("opencandle extension", () => {
     }
 
     const workflowOutput: RouterOutput = {
-      route: "workflow",
+      routeKind: "workflow_dispatch",
       workflow: "portfolio_builder",
       entities: { symbols: [], budget: 10_000 },
       slots: {
@@ -604,7 +633,7 @@ describe("opencandle extension", () => {
     };
 
     const fallbackOutput: RouterOutput = {
-      route: "fallback",
+      routeKind: "agent_task",
       entities: { symbols: ["ASTS"], timeHorizon: "6mo" },
       slots: {
         symbols: { value: ["ASTS"], source: "user", confidence: "high" },
@@ -620,46 +649,6 @@ describe("opencandle extension", () => {
     // manager stub. An empty branch is the right default — these fixtures
     // simulate a fresh turn, not a multi-turn conversation.
     const emptySessionManager = { getBranch: () => [], getSessionId: () => "sid" };
-
-    it.each(["length", "error", "aborted"] as const)(
-      "restores the pre-route active tools after a terminal %s turn",
-      async (stopReason) => {
-        vi.stubEnv("OPENCANDLE_TOOL_SCOPE_MODE", "enforce");
-        resetConfigCache();
-        const fake = createFakeApi();
-        const baselineTools = ["get_stock_quote", "get_crypto_price"];
-        (fake.api.getAllTools as ReturnType<typeof vi.fn>).mockReturnValue(
-          getOpenCandleToolDefinitions(),
-        );
-        (fake.api.getActiveTools as ReturnType<typeof vi.fn>).mockReturnValue(baselineTools);
-        openCandleExtension(fake.api, { routerLlmClient: mockClient(fallbackOutput) });
-
-        const inputHandler = fake.handlers.get("input")?.[0];
-        await inputHandler!(
-          { type: "input", text: "What is happening with ASTS?", source: "interactive" },
-          {
-            isIdle: () => true,
-            ui: { notify: vi.fn() },
-            model: { id: "m" },
-            sessionManager: emptySessionManager,
-          },
-        );
-
-        expect(fake.api.setActiveTools).toHaveBeenCalled();
-        const turnEndHandler = fake.handlers.get("turn_end")?.[0];
-        await turnEndHandler!(
-          {
-            type: "turn_end",
-            turnIndex: 0,
-            message: { role: "assistant", content: [], stopReason },
-            toolResults: [],
-          },
-          {},
-        );
-
-        expect(fake.api.setActiveTools).toHaveBeenLastCalledWith(baselineTools);
-      },
-    );
 
     it("returns a transform result when router dispatches a workflow", async () => {
       const fake = createFakeApi();
@@ -691,7 +680,6 @@ describe("opencandle extension", () => {
     it("dispatches portfolio workflows using budget supplied only by router slots", async () => {
       const slotOnlyBudgetOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "portfolio_builder",
         entities: { symbols: [] },
         slots: {
@@ -733,7 +721,6 @@ describe("opencandle extension", () => {
     it("dispatches options workflows using a symbol supplied only by router slots", async () => {
       const slotOnlySymbolOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "options_screener",
         entities: { symbols: [], direction: "bullish" },
         slots: {
@@ -775,7 +762,6 @@ describe("opencandle extension", () => {
     it("dispatches compare workflows using symbols supplied only by router slots", async () => {
       const slotOnlySymbolsOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: [] },
         slots: {
@@ -820,7 +806,6 @@ describe("opencandle extension", () => {
     it("preflights compare workflow symbols before dispatch", async () => {
       const compareOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["AAPL", "XXFAKEXX", "MSFT"] },
         slots: {},
@@ -873,7 +858,6 @@ describe("opencandle extension", () => {
     it("aborts compare workflow dispatch when preflight leaves too few symbols", async () => {
       const compareOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["ZZZBAD", "XXFAKEXX"] },
         slots: {},
@@ -962,7 +946,6 @@ describe("opencandle extension", () => {
     it("does not record pass-through turns as finance workflow history", async () => {
       const passThroughOutput: RouterOutput = {
         routeKind: "pass_through",
-        route: "fallback",
         entities: { symbols: [] },
         slots: {},
         preference_updates: [],
@@ -1032,7 +1015,6 @@ describe("opencandle extension", () => {
     it("logs router symbol drops as custom entries", async () => {
       const symbolDropOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["IV", "ASTS"] },
         slots: {},
@@ -1078,7 +1060,6 @@ describe("opencandle extension", () => {
     it("does not reintroduce dropped LLM symbols from router slots", async () => {
       const symbolDropOutput: RouterOutput = {
         routeKind: "workflow_dispatch",
-        route: "workflow",
         workflow: "compare_assets",
         entities: { symbols: ["IV", "ASTS"] },
         slots: {

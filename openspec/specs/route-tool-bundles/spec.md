@@ -1,7 +1,10 @@
 # route-tool-bundles Specification
 
 ## Purpose
-TBD - created by archiving change typed-finance-router. Update Purpose after archive.
+Name the finance tool bundles OpenCandle recognises and define how each turn's
+resolved route selects them. Bundle selection is advisory: it shapes the
+system prompt the main agent sees. It does not gate tool execution.
+
 ## Requirements
 ### Requirement: Route Tool Bundle Policy
 
@@ -11,55 +14,32 @@ The system SHALL define named tool bundles and SHALL select allowed bundles from
 
 - **WHEN** the user asks "build me an options setup" without a symbol
 - **THEN** the selected tool bundle includes `ask_user`
-- **AND** options market-data tools are not invoked until the missing symbol is collected
 
 #### Scenario: Macro question receives macro tools
 
 - **WHEN** the user asks "what does CPI imply for rates?"
 - **THEN** the selected tool bundles include macro data tools
-- **AND** unrelated options-chain tools are not active unless another selected bundle requires them
 
 #### Scenario: Simple quote receives core market tools
 
 - **WHEN** the user asks "AAPL quote"
 - **THEN** the selected tool bundles include quote or symbol lookup tools needed for the request
-- **AND** unrelated provider tools are not active
 
 #### Scenario: Pass-through receives no finance bundle
 
 - **WHEN** the user asks an out-of-scope non-finance request
 - **THEN** no finance tool bundle is selected
 
-### Requirement: Pi Active Tools Are Applied Per Turn
+### Requirement: Selected Bundles Shape the Prompt, Not Tool Execution
 
-When Pi active-tool control is available, the system SHALL snapshot the current active tools, apply the route-selected active tool set for the turn, and restore the previous active tool set after the agent or workflow finishes.
+Selected bundles SHALL be recorded on the resolved turn context and rendered into the assembled system prompt. The system SHALL NOT narrow Pi's active tool set, block out-of-bundle tool calls, or otherwise prevent the main agent from calling any registered tool.
 
-#### Scenario: Active tools are narrowed for agent task
+#### Scenario: A turn with no finance bundle says so in the prompt
 
-- **WHEN** `routeKind` is `"agent_task"` and selected bundles resolve to a subset of registered tools
-- **THEN** `pi.setActiveTools(...)` is called with that subset before the main agent runs
+- **WHEN** the resolved turn context resolves to an empty active tool set
+- **THEN** the assembled prompt tells the agent no finance tools are needed for the turn instead of listing the tool catalog
 
-#### Scenario: Active tools are restored
+#### Scenario: An out-of-bundle tool call still runs
 
-- **WHEN** a routed turn completes or errors
-- **THEN** the previously active Pi tool set is restored
-
-#### Scenario: Missing Pi active-tool support degrades visibly
-
-- **WHEN** the runtime cannot apply active tools
-- **THEN** the resolved turn context records a diagnostic and the eval report marks tool-scope enforcement as unavailable
-
-### Requirement: Tool Scope Is Observable Before Enforcement
-
-The system SHALL support an observe/report mode for route tool bundles that records selected bundles, active tool names, and attempted out-of-bundle tool calls without blocking execution.
-
-#### Scenario: Out-of-bundle call is reported
-
-- **WHEN** observe/report mode is enabled and the agent calls a tool outside the selected bundle
-- **THEN** the trace records the attempted tool name and the bundle that excluded it
-
-#### Scenario: Enforcement can be enabled after eval coverage
-
-- **WHEN** enforcement mode is enabled and the agent attempts an out-of-bundle tool call
-- **THEN** the call is blocked or rejected with a diagnostic visible in the trace
-
+- **WHEN** the agent calls a tool that no selected bundle contains
+- **THEN** the call executes normally and nothing is blocked

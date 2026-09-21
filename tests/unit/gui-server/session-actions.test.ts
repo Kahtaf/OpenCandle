@@ -35,6 +35,43 @@ describe("GUI session actions", () => {
     });
   });
 
+  it("waits through a comprehensive-analysis workflow's full idle grace instead of settling on its first step", async () => {
+    // Regression coverage for the GUI/TUI parity gap: the default settle
+    // idle grace (tuned for an ordinary single-turn reply) elapsed in the
+    // gap between one workflow step's turn going idle and the runner
+    // sending the next step's prompt, so promptAndSettle (and the chat-run
+    // endpoint built on it) resolved after only the first step.
+    vi.useFakeTimers();
+    try {
+      const entries = [{ id: "before" }, { id: "after" }];
+      const runSession = {
+        prompt: vi.fn(async () => undefined),
+        subscribe: vi.fn(() => () => undefined),
+        isStreaming: false,
+        pendingMessageCount: 0,
+        sessionManager: {
+          getEntries: vi.fn(() => entries),
+        },
+      } as unknown as AgentSession;
+
+      let settled = false;
+      const settling = promptAndSettle(runSession, "analyze NVDA", new Set(["before"])).then(() => {
+        settled = true;
+      });
+
+      // An ordinary single-turn reply would already be considered settled
+      // well before this point (the default idle grace is far shorter).
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await settling;
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renames a Pi session by appending session_info so the TUI session list sees it", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));

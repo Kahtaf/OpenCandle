@@ -3,7 +3,7 @@
   "priorTurns": [
     {
       "role": "user",
-      "text": "I'm holding $500k-$1M in SPY — how's it positioned relative to the broad market?"
+      "text": "I'm holding $500k-$1M in SPY \u2014 how's it positioned relative to the broad market?"
     },
     {
       "role": "assistant",
@@ -13,7 +13,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "route": "fallback",
     "entities": {
       "symbols": [
         "QQQ",
@@ -27,7 +26,7 @@
       "core_market"
     ],
     "diagnostics": [],
-    "reasoning": "dollar-phrase preservation — the prior turn's $500k-$1M holding is a PII-bucketed balance, not a portfolio budget; it must not leak into a budget slot. QQQ is the current-turn subject; SPY is carried as prior context in entities only"
+    "reasoning": "dollar-phrase preservation \u2014 the prior turn's $500k-$1M holding is a PII-bucketed balance, not a portfolio budget; it must not leak into a budget slot. QQQ is the current-turn subject; SPY is carried as prior context in entities only"
   },
   "tags": [
     "dollar-phrase-preservation",

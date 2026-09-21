@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "pass_through",
-    "route": "fallback",
     "entities": {
       "symbols": []
     },

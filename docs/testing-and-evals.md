@@ -51,10 +51,7 @@ Do not commit generated traces or local market-state files from this smoke.
 ```bash
 npm run test:e2e
 npm run test:e2e:cli
-npm run test:e2e:credential-prompt
-npm run test:e2e:credential-snooze
-npm run test:e2e:credential-soft-fallback
-npm run test:e2e:credential-per-workflow-cap
+npm run test:e2e:credential
 npm run test:e2e:harness-dcf
 ```
 
@@ -80,17 +77,11 @@ npm run eval -- release
 
 | Suite | Delegates to | Key options |
 |-------|--------------|-------------|
-| `cases` | `vitest run --config vitest.config.evals.ts` | `--tier usually`, `--known-fail e1`, `--known-fail e2` |
+| `cases` | `vitest run --project evals` | `--tier usually`, `--known-fail e1`, `--known-fail e2` |
 | `product` | `tests/scripts/run-product-evals.ts` | `--case <id>`, `--family <name>`, `--include-opt-in`, `--limit <n>` |
 | `competitive` | `tests/scripts/run-competitive-finance-eval.ts` | `--provider <id>`, `--model <id>`, `--count <n>`, `--seed <seed>` |
 | `competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | `--provider <id>`, `--model <id>` |
-| `competitive:analyze` | `tests/scripts/analyze-competitive-finance-report.ts` | optional report path |
 | `router-live` | `tests/scripts/run-live-router-eval.ts` | `--provider <id>`, `--model <id>` |
-| `replay:product` | `tests/scripts/run-main-branch-product-replay.ts` | `--base-ref <ref>` |
-| `replay:competitive` | `tests/scripts/run-main-branch-competitive-replay.ts` | forwards `--current-report`, `--base-report`, `--unsupported-base-reason`, `--current-ref`, `--base-ref` |
-| `scorecard` | `tests/scripts/build-oc-superiority-scorecard.ts` | forwards `--product-replay`, `--competitive-replay`, `--prompt-policy` |
-| `prompt-policy` | `tests/scripts/run-prompt-policy-manifest.ts` | `--ids <csv>`, `--limit <n>`, `--strict` |
-| `prompt-policy:parity` | `tests/scripts/run-prompt-policy-ref-parity.ts` | `--base-ref <ref>`, `--current-ref <ref>` |
 | `release` | `router-live`, `cases`, `product`, `competitive:frozen` | continues past failures and exits non-zero if any suite fails |
 
 For release preparation, run the full manual eval cadence:
@@ -137,7 +128,7 @@ Each run writes a timestamped `*_product-evals.json` report under `tests/evals/r
 
 The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins. Generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
 
-Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude and Codex baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner resolved on demand (a global install on PATH, else fetched via `npx`; it is not a repo devDependency); the Gemini baseline calls the Google API directly when a Google key is configured. Unavailable baselines are recorded as skipped, with an actionable reason (what's missing and how to install it) rather than a silent skip, unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 
 ```bash
 npm run eval -- competitive
@@ -159,7 +150,7 @@ Useful knobs (all optional):
 - `OPENCANDLE_COMPETITIVE_PANEL=frozen`: rerun the fixed historical-loss panel instead of generating prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
 - `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
-- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
+- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides (each defaults to a global install on PATH, else `npx --yes <package>@<pinned range>`), timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls. See `docs/internal/competitive-benchmarking.md` for the exact resolution order and the `CODEX_PATH`/`CLAUDE_CODE_EXECUTABLE` env vars the runner sets so each ACP adapter drives your own global CLI/account instead of a bundled one.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window (ms) used by the competitive eval runner when it calls the shared harness.
 
 Do not commit raw transcripts or one-off run reports; treat run files as local evidence.

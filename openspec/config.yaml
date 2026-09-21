@@ -1,5 +1,9 @@
 schema: spec-driven
 
+# Archived changes are not kept under openspec/changes/archive/ in this repo.
+# Once a change ships and its spec deltas are folded into openspec/specs/,
+# the change proposal is deleted; its full history remains in git log.
+
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.

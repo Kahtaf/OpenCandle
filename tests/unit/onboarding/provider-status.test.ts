@@ -21,8 +21,6 @@ const DEFAULT_EMPTY_CONFIG = {
   exaApiKey: undefined,
   finnhubApiKey: undefined,
   lseApiKey: undefined,
-  routerMode: "llm",
-  toolScopeMode: "observe",
   sentiment: undefined,
 } satisfies Config;
 

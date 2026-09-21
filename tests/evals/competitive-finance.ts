@@ -651,20 +651,97 @@ export function selectCliFailureMessage(options: {
   return `exit status ${options.status ?? "unknown"}`;
 }
 
+/**
+ * `npm run <script>` prepends the invoking project's `node_modules/.bin` to
+ * `process.env.PATH` for the whole script, including any child processes it
+ * spawns. That silently shadows a same-named global binary (e.g. a stale
+ * pinned Codex CLI pulled in transitively by an ACP adapter devDependency)
+ * with a repo-local one. Baseline agent subprocesses must never resolve a
+ * `node_modules/.bin` entry, from any depth, so this strips them out
+ * wherever they appear in an inherited PATH rather than merely avoiding
+ * adding a new one.
+ */
+export function stripNodeModulesBinSegments(pathValue: string): string {
+  return pathValue
+    .split(":")
+    .filter((segment) => segment.length > 0 && !/(?:^|\/)node_modules\/\.bin\/?$/.test(segment))
+    .join(":");
+}
+
 export function buildPortableAgentPath(env: {
   PATH?: string;
   HOME?: string;
   execPath?: string;
-  cwd?: string;
 }): string {
   const parts = [
-    `${env.cwd ?? process.cwd()}/node_modules/.bin`,
     env.HOME ? `${env.HOME}/.local/bin` : "",
     env.execPath ? dirname(env.execPath) : "",
     "/opt/homebrew/bin",
-    env.PATH ?? "",
+    stripNodeModulesBinSegments(env.PATH ?? ""),
   ];
   return parts.filter(Boolean).join(":");
+}
+
+/**
+ * Resolves how to launch an on-demand CLI/ACP-adapter binary (acpx itself,
+ * or a specific ACP adapter such as codex-acp/claude-agent-acp) without
+ * requiring it to be installed as a repo-local devDependency:
+ *
+ * 1. An explicit caller override (env var) always wins.
+ * 2. A globally installed binary discovered on PATH (the caller's
+ *    `findGlobalExecutable` must itself resolve PATH without
+ *    `node_modules/.bin` entries — see `buildPortableAgentPath`).
+ * 3. `npx --yes <package>@<pinned range>` as a last resort, which resolves
+ *    into npm's own npx cache rather than the project's `node_modules`.
+ */
+export interface AdapterBinaryResolution {
+  command: string;
+  args: string[];
+  source: "override" | "global" | "npx";
+}
+
+export function resolveAdapterBinary(options: {
+  overrideCommand?: string;
+  globalBinName: string;
+  npxPackageSpec: string;
+  findGlobalExecutable: (name: string) => string | undefined;
+}): AdapterBinaryResolution {
+  const override = options.overrideCommand?.trim();
+  if (override) return { command: override, args: [], source: "override" };
+  const global = options.findGlobalExecutable(options.globalBinName);
+  if (global) return { command: global, args: [], source: "global" };
+  return { command: "npx", args: ["--yes", options.npxPackageSpec], source: "npx" };
+}
+
+export function formatAdapterBinaryCommand(resolution: AdapterBinaryResolution): string {
+  return [resolution.command, ...resolution.args].join(" ");
+}
+
+/**
+ * The `@agentclientprotocol/codex-acp` adapter honors `CODEX_PATH` and, when
+ * unset, falls back to whatever Codex CLI it bundles as its own transitive
+ * dependency (a version pin that drifts from the adapter). Forcing
+ * `CODEX_PATH` to a global `codex` binary (resolved off a PATH with no
+ * `node_modules/.bin` entries) guarantees the adapter drives the user's own
+ * Codex install and its auth/config, not a bundled copy.
+ */
+export function resolveCodexPathEnv(options: {
+  existingCodexPath?: string;
+  findGlobalExecutable: (name: string) => string | undefined;
+}): Record<string, string> {
+  if (options.existingCodexPath) return {};
+  const codexPath = options.findGlobalExecutable("codex");
+  return codexPath ? { CODEX_PATH: codexPath } : {};
+}
+
+/** Same reasoning as `resolveCodexPathEnv`, for the Claude ACP adapter. */
+export function resolveClaudeCodeExecutableEnv(options: {
+  existingExecutable?: string;
+  findGlobalExecutable: (name: string) => string | undefined;
+}): Record<string, string> {
+  if (options.existingExecutable) return {};
+  const claudeExecutable = options.findGlobalExecutable("claude");
+  return claudeExecutable ? { CLAUDE_CODE_EXECUTABLE: claudeExecutable } : {};
 }
 
 export function selectDefaultCompetitiveModel<T extends CompetitiveModelCandidate>(options: {
@@ -689,7 +766,7 @@ export function competitivePreflightTimeoutMs(env: Record<string, string | undef
 }
 
 export function selectCompetitiveCodexModel(env: Record<string, string | undefined>): string {
-  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark";
+  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.6-terra";
 }
 
 export function selectCompetitiveGeminiBaseline(env: Record<string, string | undefined>): {

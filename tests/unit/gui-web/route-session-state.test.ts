@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chatRunSessionTarget,
+  resolveSessionScopedCoordination,
   routeSessionView,
   sessionIdFromPath,
   shouldStartFreshHomeSession,
@@ -216,6 +217,31 @@ describe("route session state", () => {
         canStartFreshHomeSession: false,
       }),
     ).toBe(false);
+  });
+
+  it("uses coordination that matches the active session", () => {
+    const coordination = { sessionId: "session-a", marketStateWritable: false, ownerKind: "tui" };
+    expect(resolveSessionScopedCoordination(coordination, "session-a")).toBe(coordination);
+  });
+
+  it("ignores coordination left over from a different, no-longer-active session", () => {
+    // Regression coverage: visiting a saved session another process owns
+    // (/sessions/session-a, reporting coordination for session-a) and then
+    // navigating to a page keyed off a different session (for example
+    // Watchlists after starting a fresh chat) must not keep treating that
+    // new session as read-only just because session-a's stale coordination
+    // object is still sitting in state.
+    const staleCoordination = {
+      sessionId: "session-a",
+      marketStateWritable: false,
+      ownerKind: "tui",
+    };
+    expect(resolveSessionScopedCoordination(staleCoordination, "session-b")).toBeUndefined();
+  });
+
+  it("treats missing coordination as not session-scoped", () => {
+    expect(resolveSessionScopedCoordination(null, "session-a")).toBeUndefined();
+    expect(resolveSessionScopedCoordination(undefined, "session-a")).toBeUndefined();
   });
 });
 

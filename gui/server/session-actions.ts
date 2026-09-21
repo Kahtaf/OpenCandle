@@ -8,6 +8,7 @@ import type {
 import type { ModelSetupState } from "./model-setup.js";
 import { type PromptObservation, selectReplayPrompt } from "./prompt-observation.js";
 import {
+  settleIdleGraceMsForPrompt,
   waitForNewEntryId,
   waitForResolvedToolCalls,
   waitForSessionTurnSettlement,
@@ -241,7 +242,10 @@ export async function promptAndSettle(
   options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> },
 ): Promise<void> {
   await runSession.prompt(prompt, options);
-  await settleWithEventProgress(runSession);
+  await settleWithEventProgress(
+    runSession,
+    settleIdleGraceMsForPrompt(prompt, runSession.sessionManager.getEntries(), beforeIds),
+  );
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
@@ -254,18 +258,30 @@ export async function promptAndSettle(
  * Settle wait fed by a session-event counter: a single long model generation
  * keeps isStreaming/pendingMessageCount frozen for its whole duration, and
  * without an activity signal the stall detector killed healthy long turns.
+ *
+ * `idleGraceMs` widens the default idle window for a dispatched multi-step
+ * workflow (see settleIdleGraceMsForPrompt): the gap between one step's
+ * turn going idle and the workflow runner sending the next step's prompt
+ * can easily exceed the default grace, which is tuned for an ordinary
+ * single-turn reply.
  */
-async function settleWithEventProgress(runSession: AgentSession): Promise<void> {
+async function settleWithEventProgress(
+  runSession: AgentSession,
+  idleGraceMs?: number,
+): Promise<void> {
   let progressToken = 0;
   const unsubscribe = runSession.subscribe(() => {
     progressToken += 1;
   });
   try {
-    await waitForSessionTurnSettlement(() => ({
-      isStreaming: runSession.isStreaming,
-      pendingMessageCount: runSession.pendingMessageCount,
-      progressToken,
-    }));
+    await waitForSessionTurnSettlement(
+      () => ({
+        isStreaming: runSession.isStreaming,
+        pendingMessageCount: runSession.pendingMessageCount,
+        progressToken,
+      }),
+      idleGraceMs !== undefined ? { idleGraceMs } : undefined,
+    );
   } finally {
     unsubscribe();
   }

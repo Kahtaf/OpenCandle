@@ -48,7 +48,7 @@ const SUITES: EvalSuite[] = [
       } else if (options["known-fail"]) {
         throw new Error(`Unknown known-fail "${options["known-fail"]}". Expected e1 or e2.`);
       }
-      return command("cases", "vitest", ["run", "--config", "vitest.config.evals.ts"], env);
+      return command("cases", "vitest", ["run", "--project", "evals"], env);
     },
   },
   {
@@ -113,17 +113,6 @@ const SUITES: EvalSuite[] = [
     },
   },
   {
-    id: "competitive:analyze",
-    description: "Analyze a competitive report",
-    envFlags: [],
-    resolve(argv) {
-      return command("competitive:analyze", "tsx", [
-        "tests/scripts/analyze-competitive-finance-report.ts",
-        ...argv,
-      ]);
-    },
-  },
-  {
     id: "router-live",
     description: "Live router fixture eval",
     envFlags: ["OPENCANDLE_ROUTER_PROVIDER", "OPENCANDLE_ROUTER_MODEL"],
@@ -133,69 +122,6 @@ const SUITES: EvalSuite[] = [
         ...valueEnv(options, "provider", "OPENCANDLE_ROUTER_PROVIDER"),
         ...valueEnv(options, "model", "OPENCANDLE_ROUTER_MODEL"),
       });
-    },
-  },
-  {
-    id: "replay:product",
-    description: "Replay product evals against a base ref",
-    envFlags: ["PRODUCT_REPLAY_BASE_REF"],
-    resolve(argv) {
-      const options = parseOptions(argv);
-      return command("replay:product", "tsx", ["tests/scripts/run-main-branch-product-replay.ts"], {
-        ...valueEnv(options, "base-ref", "PRODUCT_REPLAY_BASE_REF"),
-      });
-    },
-  },
-  {
-    id: "replay:competitive",
-    description: "Compare competitive reports against a base report",
-    envFlags: [],
-    resolve(argv) {
-      return command("replay:competitive", "tsx", [
-        "tests/scripts/run-main-branch-competitive-replay.ts",
-        ...argv,
-      ]);
-    },
-  },
-  {
-    id: "scorecard",
-    description: "Build the OC superiority scorecard",
-    envFlags: [],
-    resolve(argv) {
-      return command("scorecard", "tsx", [
-        "tests/scripts/build-oc-superiority-scorecard.ts",
-        ...argv,
-      ]);
-    },
-  },
-  {
-    id: "prompt-policy",
-    description: "Run the prompt-to-policy manifest",
-    envFlags: ["PROMPT_POLICY_IDS", "PROMPT_POLICY_LIMIT", "PROMPT_POLICY_STRICT"],
-    resolve(argv) {
-      const options = parseOptions(argv);
-      return command("prompt-policy", "tsx", ["tests/scripts/run-prompt-policy-manifest.ts"], {
-        ...valueEnv(options, "ids", "PROMPT_POLICY_IDS"),
-        ...valueEnv(options, "limit", "PROMPT_POLICY_LIMIT"),
-        ...(options.strict === "1" ? { PROMPT_POLICY_STRICT: "1" } : {}),
-      });
-    },
-  },
-  {
-    id: "prompt-policy:parity",
-    description: "Compare prompt-to-policy behavior across refs",
-    envFlags: ["PROMPT_POLICY_BASE_REF", "PROMPT_POLICY_CURRENT_REF"],
-    resolve(argv) {
-      const options = parseOptions(argv);
-      return command(
-        "prompt-policy:parity",
-        "tsx",
-        ["tests/scripts/run-prompt-policy-ref-parity.ts"],
-        {
-          ...valueEnv(options, "base-ref", "PROMPT_POLICY_BASE_REF"),
-          ...valueEnv(options, "current-ref", "PROMPT_POLICY_CURRENT_REF"),
-        },
-      );
     },
   },
   {

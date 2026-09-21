@@ -29,6 +29,7 @@ export const SECTION_ORDER = [
   "workflow-instructions",
   "memory-context",
   "provider-status",
+  "data-gaps",
   "output-format",
 ] as const;
 
@@ -42,5 +43,6 @@ export const DEFAULT_BUDGETS: Record<SectionName, number> = {
   "workflow-instructions": 18000,
   "memory-context": 2000,
   "provider-status": 500,
+  "data-gaps": 1500,
   "output-format": 2500,
 };

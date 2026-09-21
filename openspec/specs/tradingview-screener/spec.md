@@ -1,7 +1,7 @@
 # tradingview-screener Specification
 
 ## Purpose
-TBD - created by archiving change add-tradingview-provider. Update Purpose after archive.
+Define the keyless TradingView Scanner provider and the `screen_stocks` tool it backs: its filter grammar, symbol mapping, batch quoting, resilient decoding, rate limiting and caching, and read-only scope boundaries.
 ## Requirements
 ### Requirement: TradingView scanner provider (keyless)
 The system SHALL provide a `src/providers/tradingview.ts` module exposing `screenStocks(opts)` and `getQuotes(symbols)`, both issuing an unauthenticated JSON `POST` to `scanner.tradingview.com/{market}/scan2`. The provider SHALL use a shared POST-capable helper from `src/infra/http-client.ts`, call `rateLimiter.acquire("tradingview")` before each request, follow the same cache/rate-limit/stale-fallback provider pattern as `src/providers/yahoo-finance.ts`, and require **no API key, login, cookies, or browser**.

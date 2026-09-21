@@ -1,15 +1,10 @@
 import type { MemoryCategory, MemoryEntry } from "../memory/types.js";
-import {
-  buildPlanningEnvelope,
-  type PlanningBuildOptions,
-  type PlanningEnvelope,
-} from "./planning.js";
+import { buildPlanningEnvelope, type PlanningEnvelope } from "./planning.js";
 import { activeToolsForBundles, memoryScopesForRoute } from "./route-manifest.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
   RouterOutput,
-  RouterRoute,
   RouterRouteKind,
   RouterSlot,
   ToolBundleName,
@@ -38,7 +33,6 @@ export interface ResolvedTurnContext {
   userInput: string;
   priorTurns: RouterInputContext["priorTurns"];
   routeKind: RouterRouteKind;
-  legacyRoute: RouterRoute;
   workflow?: Exclude<WorkflowType, "unclassified">;
   entities: ExtractedEntities;
   slots: Record<string, RouterSlot>;
@@ -59,7 +53,6 @@ export function buildResolvedTurnContext(
     availableToolNames?: readonly string[];
     memoryEntries?: readonly MemoryEntry[];
     filteredMemory?: readonly MemoryProvenance[];
-    planning?: PlanningBuildOptions;
   } = {},
 ): ResolvedTurnContext {
   const memoryQueryPlan = buildMemoryQueryPlan(output);
@@ -72,7 +65,6 @@ export function buildResolvedTurnContext(
     userInput: input.text,
     priorTurns: input.priorTurns,
     routeKind: output.routeKind,
-    legacyRoute: output.route,
     workflow: output.workflow,
     entities: output.entities,
     slots: output.slots,
@@ -83,7 +75,7 @@ export function buildResolvedTurnContext(
     memoryProvenance,
     promptPlaybook: output.routeKind,
     diagnostics: output.diagnostics,
-    planning: buildPlanningEnvelope(input, output, options.planning),
+    planning: buildPlanningEnvelope(input, output),
   };
 }
 
