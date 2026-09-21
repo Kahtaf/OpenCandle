@@ -237,17 +237,17 @@ describe("disposeAfterSettled", () => {
   // immediately tore it down silently mid-workflow, with no error or trace
   // entry (runner.start() resolves status "cancelled", which the coordinator
   // only logs for "completed"/"failed").
-  it("disposes immediately when the session exposes no settlement signal", () => {
+  it("disposes immediately when the session exposes no settlement signal", async () => {
     const dispose = vi.fn();
-    disposeAfterSettled({ session: { dispose } as unknown as AgentSession });
+    await disposeAfterSettled({ session: { dispose } as unknown as AgentSession });
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
-  it("does nothing for a null session (the common current-session case)", () => {
-    expect(() => disposeAfterSettled(null)).not.toThrow();
+  it("resolves without throwing for a null session (the common current-session case)", async () => {
+    await expect(disposeAfterSettled(null)).resolves.toBeUndefined();
   });
 
-  it("waits for the session's own workflow to settle before disposing it", async () => {
+  it("resolves only after waitForSettled resolves and dispose has run", async () => {
     const dispose = vi.fn();
     let resolveSettled: () => void = () => {};
     const waitForSettled = vi.fn(
@@ -256,31 +256,70 @@ describe("disposeAfterSettled", () => {
           resolveSettled = resolve;
         }),
     );
-
-    disposeAfterSettled({ session: { dispose } as unknown as AgentSession, waitForSettled });
+    const disposal = disposeAfterSettled({
+      session: { dispose } as unknown as AgentSession,
+      waitForSettled,
+    });
+    let resolved = false;
+    void disposal.then(() => {
+      resolved = true;
+    });
 
     expect(waitForSettled).toHaveBeenCalledTimes(1);
     // A still-running background workflow must not be torn out from under
-    // itself just because this call is synchronous and fire-and-forget.
+    // itself, and the returned promise must not resolve before disposal.
     await Promise.resolve();
     await Promise.resolve();
     expect(dispose).not.toHaveBeenCalled();
+    expect(resolved).toBe(false);
 
     resolveSettled();
-    await Promise.resolve();
-    await Promise.resolve();
+    await disposal;
     expect(dispose).toHaveBeenCalledTimes(1);
+    expect(resolved).toBe(true);
   });
 
-  it("still disposes if waiting for settlement rejects", async () => {
+  it("resolves and still disposes when waiting for settlement rejects", async () => {
     const dispose = vi.fn();
     const waitForSettled = vi.fn(() => Promise.reject(new Error("boom")));
 
-    disposeAfterSettled({ session: { dispose } as unknown as AgentSession, waitForSettled });
-
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await expect(
+      disposeAfterSettled({ session: { dispose } as unknown as AgentSession, waitForSettled }),
+    ).resolves.toBeUndefined();
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the deferred disposal when a session stops making progress", async () => {
+    vi.useFakeTimers();
+    try {
+      const dispose = vi.fn();
+      const unsubscribe = vi.fn();
+      let resolveSettled: () => void = () => {};
+      const waitForSettled = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSettled = resolve;
+          }),
+      );
+      const session = {
+        dispose,
+        subscribe: () => unsubscribe,
+      } as unknown as AgentSession;
+      let resolved = false;
+      const disposal = disposeAfterSettled({ session, waitForSettled }).then(() => {
+        resolved = true;
+      });
+
+      // A hung session must not hold the writer lock forever: once the stall
+      // window passes with no session progress, disposal still runs.
+      await vi.advanceTimersByTimeAsync(121_000);
+      await disposal;
+      expect(resolved).toBe(true);
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      resolveSettled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

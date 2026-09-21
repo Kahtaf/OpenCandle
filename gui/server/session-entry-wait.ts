@@ -11,6 +11,11 @@ export interface WaitForSessionTurnSettlementOptions extends WaitForEntryCountOp
   idleGraceMs?: number;
 }
 
+export interface StallBoundedPromiseOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+}
+
 export interface SessionRunStatus {
   isStreaming: boolean;
   pendingMessageCount: number;
@@ -156,6 +161,47 @@ export async function waitForSessionTurnSettlement(
 
     await delay(intervalMs);
   }
+}
+
+/**
+ * Await an already-created `wait` promise, but reject if the observed
+ * progress token stops advancing for `timeoutMs`. This mirrors
+ * waitForSessionTurnSettlement's stall semantics (bounds stall, not total
+ * runtime) for callers that must not hold a writer lock forever behind a
+ * hung session, while still letting a healthy long workflow that keeps
+ * emitting session events finish.
+ */
+export async function waitWithStallGuard(
+  wait: Promise<void>,
+  getProgressToken: () => number,
+  options: StallBoundedPromiseOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const intervalMs = options.intervalMs ?? 250;
+  let finished = false;
+  const tracked = wait.finally(() => {
+    finished = true;
+  });
+  let lastToken = getProgressToken();
+  let lastProgressAt = Date.now();
+
+  const stallWatch = (async () => {
+    while (!finished) {
+      await delay(intervalMs);
+      if (finished) return;
+      const token = getProgressToken();
+      if (token !== lastToken) {
+        lastToken = token;
+        lastProgressAt = Date.now();
+        continue;
+      }
+      if (Date.now() - lastProgressAt >= timeoutMs) {
+        throw new Error("Timed out waiting for the session to settle");
+      }
+    }
+  })();
+
+  await Promise.race([tracked, stallWatch]);
 }
 
 export function findUnresolvedToolCalls(entries: SessionEntry[]): UnresolvedToolCall[] {

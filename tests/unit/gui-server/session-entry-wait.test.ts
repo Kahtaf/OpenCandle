@@ -5,6 +5,7 @@ import {
   waitForEntryCount,
   waitForNewEntryId,
   waitForSessionTurnSettlement,
+  waitWithStallGuard,
 } from "../../../gui/server/session-entry-wait.js";
 
 afterEach(() => {
@@ -173,6 +174,60 @@ describe("waitForSessionTurnSettlement", () => {
         idleGraceMs: 5,
       }),
     ).rejects.toThrow("Timed out waiting for the session turn to settle");
+  });
+});
+
+describe("waitWithStallGuard", () => {
+  it("resolves when the wrapped wait resolves", async () => {
+    await expect(
+      waitWithStallGuard(Promise.resolve(), () => 0, { timeoutMs: 50, intervalMs: 1 }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects once the progress token stops advancing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const guarded = waitWithStallGuard(new Promise<void>(() => {}), () => 0, {
+        timeoutMs: 10,
+        intervalMs: 1,
+      });
+      const expectation = expect(guarded).rejects.toThrow(
+        "Timed out waiting for the session to settle",
+      );
+      await vi.advanceTimersByTimeAsync(20);
+      await expectation;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not reject while the progress token keeps advancing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      let token = 0;
+      let resolveSettled: () => void = () => {};
+      const settled = new Promise<void>((resolve) => {
+        resolveSettled = resolve;
+      });
+      const guarded = waitWithStallGuard(settled, () => token, {
+        timeoutMs: 10,
+        intervalMs: 1,
+      });
+      for (let t = 4; t <= 44; t += 4) {
+        setTimeout(() => {
+          token += 1;
+        }, t);
+      }
+      setTimeout(() => {
+        resolveSettled();
+      }, 48);
+      await vi.advanceTimersByTimeAsync(60);
+      await expect(guarded).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -58,7 +58,7 @@ import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
-import { waitForNewEntryId } from "./session-entry-wait.js";
+import { waitForNewEntryId, waitWithStallGuard } from "./session-entry-wait.js";
 import { listDisplaySessions } from "./session-list.js";
 import { fetchTickerLineSparkline } from "./ticker-line-sparkline.js";
 import { buildCatalog } from "./tool-metadata.js";
@@ -761,15 +761,27 @@ async function streamAcceptedSseChatRun({
   }
 
   activeRunSessionIds.add(sessionId);
-  let createdSession: { session: AgentSession } | null = null;
+  let createdSession: {
+    session: AgentSession;
+    waitForSettled?: () => Promise<void>;
+  } | null = null;
+  let runOwnershipReleased = false;
+  // The busy guard, heartbeat, and writer lock are one unit of run
+  // ownership: release them together, exactly once, and only after the
+  // deferred session disposal has finished.
+  const releaseRunOwnership = () => {
+    if (runOwnershipReleased) return;
+    runOwnershipReleased = true;
+    activeRunSessionIds.delete(sessionId);
+    if (lockHeartbeat) clearInterval(lockHeartbeat);
+    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+  };
   try {
     createdSession = useCurrentSession
       ? null
       : await options.createSessionForManager(runSessionManager);
   } catch (error) {
-    activeRunSessionIds.delete(sessionId);
-    if (lockHeartbeat) clearInterval(lockHeartbeat);
-    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    releaseRunOwnership();
     const message = error instanceof Error ? error.message : String(error);
     writeJson(res, { error: message }, 500);
     return false;
@@ -920,11 +932,8 @@ async function streamAcceptedSseChatRun({
     }
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
   } finally {
-    activeRunSessionIds.delete(sessionId);
     unsubscribeLive();
-    disposeAfterSettled(createdSession);
-    if (lockHeartbeat) clearInterval(lockHeartbeat);
-    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    void disposeAfterSettled(createdSession).finally(releaseRunOwnership);
     res.end();
   }
   return actionAccepted;
@@ -941,18 +950,47 @@ async function streamAcceptedSseChatRun({
 // "completed"/"failed") once its session is pulled out from under it. Wait
 // for the session to actually settle before disposing, without blocking
 // this request's own response on a workflow that can run for minutes.
+//
+// The returned promise resolves only after session.dispose() has run so the
+// caller can keep run ownership -- the busy-session guard, the writer-lock
+// heartbeat, and the writer lock itself -- until the deferred disposal has
+// finished, rather than releasing them while the workflow is still writing.
 export function disposeAfterSettled(
   createdSession: { session: AgentSession; waitForSettled?: () => Promise<void> } | null,
-): void {
-  if (!createdSession) return;
+): Promise<void> {
+  if (!createdSession) return Promise.resolve();
   const { session, waitForSettled } = createdSession;
   if (!waitForSettled) {
     session.dispose();
-    return;
+    return Promise.resolve();
   }
-  void waitForSettled()
+  const progress = trackSessionProgress(session);
+  return waitWithStallGuard(waitForSettled(), progress.getToken)
     .catch(() => {})
-    .finally(() => session.dispose());
+    .finally(() => {
+      progress.stop();
+      session.dispose();
+    });
+}
+
+// Session events are the only activity signal that distinguishes a live
+// long-running workflow from a hung one; they reset the stall guard's clock
+// so a healthy workflow can run for as long as it keeps making progress.
+function trackSessionProgress(session: AgentSession): {
+  getToken: () => number;
+  stop: () => void;
+} {
+  if (typeof session.subscribe !== "function") {
+    return { getToken: () => 0, stop: () => {} };
+  }
+  let token = 0;
+  const unsubscribe = session.subscribe(() => {
+    token += 1;
+  });
+  return {
+    getToken: () => token,
+    stop: () => unsubscribe(),
+  };
 }
 
 class SessionActionNotAdmitted extends Error {}
