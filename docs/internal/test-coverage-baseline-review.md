@@ -230,3 +230,53 @@ The sole covered-count loss is `gui/server/local-session-coordinator.ts`. ROOT `
 Limitations preserved unchanged: the browser lane stays informational/non-gating and does not feed `scripts/coverage-baseline.json` or `coverage:check`; `gui-web`, `gui-hosted`, and `ui-package` keep their named browser-runtime limitation; the child-process lane remains unmerged. `EXCLUSIONS` and the default `1e-6` tolerance are unchanged (no exclusions or tolerance loosening).
 
 Handoff for this re-measurement: `/tmp/oc-candidate-baseline.md`.
+
+## 8. Post-clear measured baseline reconciliation (latest review)
+
+Date: 2026-09-24. Input: canonical ROOT `coverage/coverage-summary.json` (460/460 files) from the Node 24 release-gate run in `/tmp/oc-final2-release-check.log`. The gate passed typecheck/lint/tests, the GUI and hosted lanes (`HOSTED_PWA_SMOKE PASS`), then stopped at `coverage:check`: the committed `70ac0956` baseline predates the clear/restore fix, so the intentional deletion read as a denominator-sign regression. No test rerun, no live call, no production/test edit, no ROOT write.
+
+Regenerated only `scripts/coverage-baseline.json` in this worktree with the ROOT reporter CLI:
+
+```bash
+node /Users/kahtaf/Documents/workspace/opencandle/scripts/coverage-report.mjs \
+  --repo-root /Users/kahtaf/Documents/workspace/opencandle \
+  --input /Users/kahtaf/Documents/workspace/opencandle/coverage/coverage-summary.json \
+  --baseline /private/tmp/oc-test-trust-measurement/scripts/coverage-baseline.json \
+  --update-baseline      # then the same invocation with --check → exit 0
+```
+
+CLI runtime: Node **v24.21.0** (direct binary, matching the gate's Node 24 raw). Fresh overall totals match the gate's recorded merged totals exactly: lines **17627/22469**, functions **4079/5212**, branches **15186/22750**; statements **19219/25358**. `--check` is green, 460/460 files instrumented, all surfaces `measured:true`, no unmeasured surface, `EXCLUSIONS` and the default `1e-6` tolerance unchanged.
+
+### Metric diff vs the committed 70ac baseline (`/tmp/oc-post-clear-diff.log`)
+
+Exactly two files changed. No file was added or removed (`removed: 0`, `added: 0`); every other file metric record is unchanged. The only covered-count loss is the intentional deletion; the only gain is exercised routing.
+
+| file | lines | functions | branches | statements | class |
+| --- | --- | --- | --- | --- | --- |
+| `src/routing/planning.ts` | 98/100 → 99/101 | 18/18 (unchanged) | 126/135 → 130/139 | 109/112 → 110/113 | **gain** — held-shares protection routing |
+| `gui/hosted/src/runtime/browser-runtime-host.js` | 547/756 → 546/755 | 99/125 (unchanged) | 365/647 → 366/645 | 573/830 → 572/828 | **intentional deletion** — eager clear/restore boot |
+
+Surface effect: `core` lines 8941/10069 → 8942/10070, branches 7274/9530 → 7278/9534, statements 9737/11286 → 9738/11287; `gui-hosted` lines 1972/2844 → 1971/2843, branches 1417/2401 → 1418/2399, statements 2087/3132 → 2086/3130. Overall: lines and functions unchanged, branches covered **+5** / total +2, statements total **−1**. **No unrelated covered loss and no removed file** in any untouched file.
+
+### Source/test evidence
+
+- **Held-shares protection routing gain (accepted).** Source `15387655` ("fix: preserve protective-put planning and evidence-limited advice") added `putsProtectionWithHeldShares` to `isOptionsStrategyPrompt` in `src/routing/planning.ts`: held/position words plus puts/protection in either order. Tests added in the same commit: `tests/unit/routing/planning.test.ts` › "routes held-share downside-protection put prompts to options strategy after a minimal fallback route" (plus the companion `tests/unit/prompts/context-builder.test.ts` and `tests/unit/prompts/policy-cards.test.ts` assertions added with planning; the router `023` fixture change was a separate correction commit). The measured numerator rises by exactly the exercised new alternatives (+1 line, +4 branches, +1 statement); this is public routing behaviour, not metric-only tests.
+- **Removed hosted guard (intentional).** Source `b194b932` ("fix: reload cleared hosted state without an eager runtime boot") deleted the single line `if (navigator.onLine) await this.ensureBooted();` from `hosted.data.clear_all` in `gui/hosted/src/runtime/browser-runtime-host.js`; the durable `this.clearAll()` remains and the caller's reload owns the next boot. Test evidence: `tests/unit/gui-hosted/hosted-data-actions.test.ts` › describe `"hosted clear all runtime lifecycle"` — a held `WebContainerImpl.boot()` no longer blocks `actions.clearAll()`/`reload()`, and a failed durable clear still does not reload.
+
+### Removed hosted guard — exact numerator/denominator accounting
+
+Raw V8 comparison of the pre-change merged run (`coverage/merged/coverage-final.json`) against the fresh `coverage/coverage-final.json`, line-shift-aware across the added comments, removes exactly one branch map site — `if@L305 hits=[0,1]` — and adds none. The deleted `if` accounts for the entire hosted denominator shrink (1 line, 2 branches, 2 statements), and the numerator is not inflated anywhere:
+
+- **lines 547/756 → 546/755 (−1/−1):** the deleted `if` line was executed, so one covered line and one denominator line leave together.
+- **statements 573/830 → 572/828 (−1/−2):** two statements are removed — the executed `if` test (covered and total each −1) and the `ensureBooted()` call body the unit lane never reached (covered 0, total −1). So the numerator falls by the one covered statement and the denominator by both removed statements.
+- **branches 365/647 → 366/645 (+1/−2):** the deleted `if` contributed its two arms `[0,1]` — one covered (the skip/false arm), one uncovered (eager boot). The same commit's new lifecycle cases construct the real host twice, and exactly two previously-unhit arms elsewhere flip `0→positive` (`cond-expr@L52` and `if@L1204`, fresh `if@L1208`); every other changed hit is a magnitude increase on an already-covered arm. Net numerator is therefore **+1** while the denominator is **−2**. The numerator inside the deleted region only decreases; nothing is manufactured.
+
+### Retained original flake uncertainty
+
+The clear/restore fix's own handoff (`/tmp/oc-hosted-clear-handoff.md`) records that the original ~120 s stall was **not conclusively reproduced**; the eager-reboot link is the leading hypothesis, not a reproduced trace. This reconciliation accepts the measured deletion and the fresh green `--check`, but does **not** upgrade that uncertainty to proof. The section 5b option-chain wall-clock note remains a historical **resolved** item (fixed upstream with `fakeDate` and market-session cases, no longer a delta); the only unresolved items are the browser/child measurement gaps and the initial hosted flake's precise trigger.
+
+### Gate status
+
+**No claim that the full release passed.** The 70ac baseline is what blocked the latest release gate; this worktree baseline is the reconciliation artifact and the latest gate has not been re-run end to end (fresh full rerun pending). `--check` is green only against the regenerated baseline, 460/460 files, no exclusions or tolerance change, left uncommitted on `test-trust/measurement`.
+
+Handoff for this reconciliation: `/tmp/oc-post-clear-baseline.md`.

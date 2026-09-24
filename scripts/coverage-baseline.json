@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T21:24:01.691Z",
+  "generatedAt": "2026-09-24T22:52:16.334Z",
   "command": "npm run test:coverage",
   "metricOrder": ["lines", "functions", "branches", "statements"],
   "surfaces": {
@@ -9,10 +9,10 @@
       "expectedFileCount": 204,
       "missingFiles": [],
       "totals": {
-        "lines": [8941, 10069],
+        "lines": [8942, 10070],
         "functions": [1881, 2035],
-        "branches": [7274, 9530],
-        "statements": [9737, 11286]
+        "branches": [7278, 9534],
+        "statements": [9738, 11287]
       },
       "files": {
         "src/analysts/contracts.ts": [65, 65, 13, 13, 49, 51, 71, 71],
@@ -120,7 +120,7 @@
         "src/routing/fund-symbols.ts": [4, 4, 3, 3, 4, 4, 4, 4],
         "src/routing/horizon.ts": [5, 5, 1, 1, 8, 8, 7, 7],
         "src/routing/index.ts": [0, 0, 0, 0, 0, 0, 0, 0],
-        "src/routing/planning.ts": [98, 100, 18, 18, 126, 135, 109, 112],
+        "src/routing/planning.ts": [99, 101, 18, 18, 130, 139, 110, 113],
         "src/routing/route-manifest.ts": [58, 59, 12, 12, 60, 69, 69, 71],
         "src/routing/router-llm-client.ts": [25, 27, 6, 6, 18, 23, 25, 28],
         "src/routing/router-prompt.ts": [16, 18, 10, 11, 9, 12, 21, 23],
@@ -514,10 +514,10 @@
       "expectedFileCount": 25,
       "missingFiles": [],
       "totals": {
-        "lines": [1972, 2844],
+        "lines": [1971, 2843],
         "functions": [387, 543],
-        "branches": [1417, 2401],
-        "statements": [2087, 3132]
+        "branches": [1418, 2399],
+        "statements": [2086, 3130]
       },
       "files": {
         "gui/hosted/runtime/browser-hosted-gui-runtime.ts": [390, 486, 80, 108, 154, 266, 403, 527],
@@ -546,7 +546,7 @@
         "gui/hosted/src/runtime/browser-runtime-coordinator.js": [
           362, 480, 70, 87, 260, 392, 386, 534
         ],
-        "gui/hosted/src/runtime/browser-runtime-host.js": [547, 756, 99, 125, 365, 647, 573, 830]
+        "gui/hosted/src/runtime/browser-runtime-host.js": [546, 755, 99, 125, 366, 645, 572, 828]
       }
     },
     "ui-package": {
