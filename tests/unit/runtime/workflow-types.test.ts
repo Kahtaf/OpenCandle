@@ -84,10 +84,4 @@ describe("createWorkflowRun", () => {
     expect(run.status).toBe("pending");
     expect(run.stepOutputs.size).toBe(0);
   });
-
-  it("assigns unique run IDs", () => {
-    const run1 = createWorkflowRun("run-a", "portfolio_builder", []);
-    const run2 = createWorkflowRun("run-b", "portfolio_builder", []);
-    expect(run1.runId).not.toBe(run2.runId);
-  });
 });

@@ -1,53 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
-import { getLseFinancials } from "../../../src/providers/lse.js";
-import { getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetConfigCache } from "../../../src/config.js";
+import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
-
-const configMock = vi.hoisted(() => ({
-  alphaVantageApiKey: "test-key" as string | undefined,
-  lseApiKey: undefined as string | undefined,
-}));
-const budgetMock = vi.hoisted(() => ({ overSoftThreshold: false }));
-const providerMock = vi.hoisted(() => ({
-  staleProviders: new Set<string>(),
-  timestamps: new Map<string, string>(),
-}));
-
-vi.mock("../../../src/config.js", () => ({
-  getConfig: () => ({ ...configMock }),
-}));
-vi.mock("../../../src/infra/lse-byte-budget.js", () => ({
-  isOverSoftThreshold: () => budgetMock.overSoftThreshold,
-}));
-vi.mock("../../../src/providers/wrap-provider.js", () => ({
-  wrapProvider: async (_name: string, fn: () => Promise<unknown>) => {
-    try {
-      return {
-        status: "ok",
-        data: await fn(),
-        ...(providerMock.staleProviders.has(_name) ? { stale: true } : {}),
-        ...(providerMock.timestamps.has(_name)
-          ? { timestamp: providerMock.timestamps.get(_name) }
-          : {}),
-      };
-    } catch (err) {
-      return { status: "unavailable", reason: err instanceof Error ? err.message : String(err) };
-    }
-  },
-}));
-vi.mock("../../../src/providers/alpha-vantage.js", () => ({
-  getOverview: vi.fn(),
-  getFinancials: vi.fn(),
-}));
-vi.mock("../../../src/providers/lse.js", () => ({
-  getLseFinancials: vi.fn(),
-}));
-vi.mock("../../../src/providers/yahoo-finance.js", () => ({
-  getQuote: vi.fn(),
-  getYahooFinancials: vi.fn(),
-}));
+import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
+import cashFlowFixture from "../../fixtures/alphavantage/AAPL-cash-flow.json";
+import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
+import lseBalance from "../../fixtures/lse/financial-reports-AAPL-balance.json";
+import lseCashflow from "../../fixtures/lse/financial-reports-AAPL-cashflow.json";
+import lseIncome from "../../fixtures/lse/financial-reports-AAPL-income.json";
+import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
+import yahooFundamentals from "../../fixtures/yahoo-finance2/fundamentals-timeseries-AAPL.json";
 
 describe("computeDCF", () => {
   const baseParams = {
@@ -193,279 +160,391 @@ describe("computeDCF", () => {
   });
 });
 
-describe("compute_dcf tool guards", () => {
-  const statement: FinancialStatement = {
-    fiscalDate: "2025-09-30",
-    revenue: 400e9,
-    grossProfit: 180e9,
-    operatingIncome: 120e9,
-    netIncome: 100e9,
-    eps: 6.5,
-    totalAssets: 365e9,
-    totalLiabilities: 308e9,
-    totalEquity: 57e9,
-    operatingCashFlow: 120e9,
-    freeCashFlow: 100e9,
-    totalDebt: 30e9,
-    cashAndEquivalents: 90e9,
-  };
-  const quote = {
+// ---------------------------------------------------------------------------
+// compute_dcf tool — drives the registered tool through the real providers
+// (Alpha Vantage / LSE / Yahoo), wrapProvider, cache, and rate limiter using
+// fixture HTTP responses. No provider module is mocked. This follows the
+// tests/AGENTS.md convention of mocking globalThis.fetch with fixture JSON.
+// ---------------------------------------------------------------------------
+
+const AV_FINANCIALS_KEY = "av:financials:AAPL";
+const YAHOO_FINANCIALS_KEY = "yahoo:financials:AAPL";
+
+function lseReportKey(reportType: "income" | "balance" | "cashflow"): string {
+  return `lse:financial_reports:${new URLSearchParams({
     symbol: "AAPL",
-    price: 200,
-    change: 0,
-    changePercent: 0,
-    open: 200,
-    high: 200,
-    low: 200,
-    previousClose: 200,
-    volume: 1_000,
-    marketCap: 0,
-    pe: null,
-    week52High: 210,
-    week52Low: 150,
-    timestamp: 0,
-    currency: "USD",
-  };
+    report_type: reportType,
+    period: "FY",
+  })}`;
+}
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function lseIncomeWithoutStatementShares(): typeof lseIncome {
+  return lseIncome.map((row) => {
+    const data = JSON.parse(row.data) as Record<string, unknown>;
+    delete data.weightedAverageShsOut;
+    return { ...row, data: JSON.stringify(data) };
+  }) as typeof lseIncome;
+}
+
+const staleStatement: FinancialStatement = {
+  fiscalDate: "2025-09-27",
+  revenue: 416_161_000_000,
+  grossProfit: 195_201_000_000,
+  operatingIncome: 133_050_000_000,
+  netIncome: 112_010_000_000,
+  eps: 7.49,
+  totalAssets: 359_241_000_000,
+  totalLiabilities: 285_508_000_000,
+  totalEquity: 73_733_000_000,
+  operatingCashFlow: 111_482_000_000,
+  freeCashFlow: 98_767_000_000,
+  totalDebt: 112_377_000_000,
+  cashAndEquivalents: 35_934_000_000,
+  sharesOutstanding: 14_948_500_000,
+};
+
+interface FetchState {
+  lse: "fixtures" | "fail" | "incomplete";
+  av: "fixtures" | "fail" | "overview-missing";
+  yahooFinancials: "fixture" | "fail";
+  quote: "fixture" | "zero-price" | "zero-market-cap";
+  lseIncome: typeof lseIncome;
+  balance: typeof balanceFixture;
+  calls: string[];
+}
+
+let state: FetchState;
+let openCandleHome: string;
+
+function handleFetch(input: RequestInfo | URL): Promise<Response> {
+  const url =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  state.calls.push(url);
+
+  // yahoo-finance2's optional version notice hits the npm registry.
+  if (url.includes("registry.npmjs.org"))
+    return Promise.resolve(jsonResponse({ version: "4.0.2" }));
+
+  if (url.includes("query1.finance.yahoo.com/ws/fundamentals-timeseries")) {
+    if (state.yahooFinancials === "fail") return Promise.resolve(jsonResponse({}, 500));
+    return Promise.resolve(jsonResponse(yahooFundamentals));
+  }
+
+  if (url.includes("/v8/finance/chart/")) {
+    const quote = structuredClone(quoteFixture);
+    if (state.quote === "zero-price") quote.chart.result[0].meta.regularMarketPrice = 0;
+    if (state.quote === "zero-market-cap") quote.chart.result[0].meta.marketCap = 0;
+    return Promise.resolve(jsonResponse(quote));
+  }
+
+  // yahoo-finance2 extended-hours quote; a failure here is swallowed by the
+  // provider's enrichment step, leaving the chart quote intact.
+  if (url.includes("finance/quote")) {
+    return Promise.resolve(jsonResponse({ quoteResponse: { result: [], error: null } }));
+  }
+
+  if (url.includes("www.alphavantage.co")) {
+    const fn = new URL(url).searchParams.get("function");
+    if (fn === "OVERVIEW") {
+      if (state.av === "overview-missing") return Promise.resolve(jsonResponse({}));
+      return Promise.resolve(
+        jsonResponse({ Symbol: "AAPL", Name: "Apple Inc.", MarketCapitalization: "3000000000000" }),
+      );
+    }
+    if (state.av === "fail") return Promise.resolve(jsonResponse({}, 400));
+    if (fn === "INCOME_STATEMENT") return Promise.resolve(jsonResponse(incomeFixture));
+    if (fn === "BALANCE_SHEET") return Promise.resolve(jsonResponse(state.balance));
+    if (fn === "CASH_FLOW") return Promise.resolve(jsonResponse(cashFlowFixture));
+  }
+
+  if (url.includes("api.londonstrategicedge.com")) {
+    const reportType = new URL(url).searchParams.get("report_type");
+    if (state.lse === "fail")
+      return Promise.resolve(jsonResponse({ detail: "Invalid API key" }, 400));
+    if (state.lse === "incomplete") {
+      return Promise.resolve(
+        reportType === "income" ? jsonResponse(state.lseIncome) : jsonResponse([]),
+      );
+    }
+    const fixture =
+      reportType === "income"
+        ? state.lseIncome
+        : reportType === "balance"
+          ? lseBalance
+          : lseCashflow;
+    return Promise.resolve(jsonResponse(fixture));
+  }
+
+  if (url.includes("fc.yahoo.com") || url.includes("getcrumb")) {
+    return Promise.resolve(jsonResponse({}, 500));
+  }
+
+  return Promise.resolve(jsonResponse({ error: `unexpected fetch: ${url}` }, 404));
+}
+
+function textContent(result: { content: Array<{ type: string; text?: string }> }): string {
+  const first = result.content[0];
+  if (first?.type !== "text" || first.text === undefined) throw new Error("expected text content");
+  return first.text;
+}
+
+function toolDetails(result: { details?: any }): any {
+  return result.details;
+}
+
+describe("compute_dcf tool (real providers over fixture HTTP)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    providerMock.staleProviders.clear();
-    providerMock.timestamps.clear();
-    configMock.alphaVantageApiKey = "test-key";
-    configMock.lseApiKey = undefined;
-    budgetMock.overSoftThreshold = false;
-    vi.mocked(getLseFinancials).mockResolvedValue([statement]);
-    vi.mocked(getFinancials).mockResolvedValue([statement]);
-    vi.mocked(getYahooFinancials).mockRejectedValue(new Error("Yahoo financials unavailable"));
-    vi.mocked(getQuote).mockResolvedValue(quote);
+    cache.clear();
+    rateLimiter.configure("yahoo", 1000, 1000);
+    rateLimiter.configure("alphavantage", 1000, 1000);
+    rateLimiter.configure("lse", 1000, 1000);
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-dcf-"));
+    vi.stubEnv("OPENCANDLE_HOME", openCandleHome);
+    vi.stubEnv("ALPHA_VANTAGE_API_KEY", "av-test-key");
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    state = {
+      lse: "fixtures",
+      av: "fixtures",
+      yahooFinancials: "fixture",
+      quote: "fixture",
+      lseIncome,
+      balance: structuredClone(balanceFixture),
+      calls: [],
+    };
+    vi.stubGlobal("fetch", vi.fn(handleFetch));
   });
 
-  it("uses Yahoo quote market cap and skips Alpha Vantage overview when deriving shares", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-
-    const result = await dcfTool.execute("t", { symbol: "AAPL" });
-
-    expect(getOverview).not.toHaveBeenCalled();
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.details).not.toBeNull();
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    resetConfigCache();
+    cache.clear();
+    rmSync(openCandleHome, { recursive: true, force: true });
   });
 
-  it("uses fresh LSE statements without calling Alpha Vantage or Yahoo statements", async () => {
-    configMock.lseApiKey = "lse-test-key";
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+  function alphavantageCalled(): boolean {
+    return state.calls.some((url) => url.includes("www.alphavantage.co"));
+  }
 
-    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+  function yahooFinancialsCalled(): boolean {
+    return state.calls.some((url) => url.includes("fundamentals-timeseries"));
+  }
 
-    expect(getLseFinancials).toHaveBeenCalledWith("AAPL");
-    expect(getFinancials).not.toHaveBeenCalled();
-    expect(getYahooFinancials).not.toHaveBeenCalled();
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.content[0].text).toContain("Financial statements source: London Strategic Edge");
-  });
-
-  it("falls through unavailable LSE to the existing Alpha Vantage then Yahoo chain", async () => {
-    configMock.lseApiKey = "lse-test-key";
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getLseFinancials).mockRejectedValue(new Error("LSE unavailable"));
-    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
-
-    const result = await dcfTool.execute("t", { symbol: "AAPL" });
-
-    expect(getLseFinancials).toHaveBeenCalledOnce();
-    expect(getFinancials).toHaveBeenCalledOnce();
-    expect(getYahooFinancials).toHaveBeenCalledOnce();
-    expect(vi.mocked(getLseFinancials).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(getFinancials).mock.invocationCallOrder[0],
+  function overviewCalled(): boolean {
+    return state.calls.some(
+      (url) => url.includes("www.alphavantage.co") && url.includes("OVERVIEW"),
     );
-    expect(vi.mocked(getFinancials).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(getYahooFinancials).mock.invocationCallOrder[0],
+  }
+
+  function callIndex(fragment: string): number {
+    return state.calls.findIndex((url) => url.includes(fragment));
+  }
+
+  it("uses the fresh LSE statement set without calling Alpha Vantage or Yahoo statements", async () => {
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(textContent(result)).toContain("Financial statements source: London Strategic Edge");
+    expect(toolDetails(result)).not.toBeNull();
+    expect(alphavantageCalled()).toBe(false);
+    expect(yahooFinancialsCalled()).toBe(false);
+  });
+
+  it("derives shares from the quote market cap without calling the Alpha Vantage overview", async () => {
+    state.lseIncome = lseIncomeWithoutStatementShares();
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(textContent(result)).toContain("Financial statements source: London Strategic Edge");
+    expect(toolDetails(result)?.currentPrice).toBe(178.72);
+    expect(Number.isFinite(toolDetails(result)?.intrinsicValue)).toBe(true);
+    expect(overviewCalled()).toBe(false);
+  });
+
+  it("uses financial-statement shares when the quote market cap is unavailable", async () => {
+    state.quote = "zero-market-cap";
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(toolDetails(result)).not.toBeNull();
+    expect(textContent(result)).toContain("Financial statements source: London Strategic Edge");
+    expect(overviewCalled()).toBe(false);
+  });
+
+  it("falls through an unavailable LSE to Alpha Vantage and then to Yahoo", async () => {
+    state.lse = "fail";
+    state.av = "fail";
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(textContent(result)).toContain("Financial statements source: Yahoo Finance");
+    expect(toolDetails(result)).not.toBeNull();
+    expect(callIndex("api.londonstrategicedge.com")).toBeGreaterThanOrEqual(0);
+    expect(callIndex("www.alphavantage.co")).toBeGreaterThan(
+      callIndex("api.londonstrategicedge.com"),
     );
-    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
+    expect(callIndex("fundamentals-timeseries")).toBeGreaterThan(callIndex("www.alphavantage.co"));
   });
 
-  it("falls through an empty LSE statement set to Alpha Vantage", async () => {
-    configMock.lseApiKey = "lse-test-key";
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getLseFinancials).mockResolvedValue([]);
+  it("treats an LSE statement set with no complete statements as unavailable and falls back to Alpha Vantage", async () => {
+    state.lse = "incomplete";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(getFinancials).toHaveBeenCalledOnce();
-    expect(result.content[0].text).toContain("Financial statements source: Alpha Vantage");
+    expect(textContent(result)).toContain("Financial statements source: Alpha Vantage");
+    expect(toolDetails(result)).not.toBeNull();
   });
 
-  it("refuses the existing stale-only statements path after stale LSE", async () => {
-    configMock.lseApiKey = "lse-test-key";
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
-    providerMock.staleProviders.add("lse");
-    providerMock.staleProviders.add("alphavantage");
-    providerMock.staleProviders.add("yahoo");
-    providerMock.timestamps.set("lse", "2026-07-01T12:00:00.000Z");
-    providerMock.timestamps.set("alphavantage", "2026-07-01T13:00:00.000Z");
-    providerMock.timestamps.set("yahoo", "2026-07-01T14:00:00.000Z");
+  it("falls back to fresh Yahoo financial statements when Alpha Vantage is unavailable", async () => {
+    state.lse = "fail";
+    state.av = "fail";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(getLseFinancials).toHaveBeenCalledOnce();
-    expect(getFinancials).toHaveBeenCalledOnce();
-    expect(getYahooFinancials).toHaveBeenCalledOnce();
-    expect(result.content[0].text).toContain("DCF valuation unavailable");
-    expect(result.content[0].text).toContain(
-      "Yahoo Finance returned stale cached financial statements",
-    );
-    expect(result.content[0].text).toContain("2026-07-01T14:00:00.000Z");
-    expect(result.content[0].text).not.toContain("Intrinsic Value:");
-    expect(result.details).toBeNull();
-  });
-
-  it("falls back to Yahoo financial statements when Alpha Vantage financials are unavailable", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
-
-    const result = await dcfTool.execute("t", { symbol: "AAPL" });
-
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
-    expect(result.details).not.toBeNull();
+    expect(textContent(result)).toContain("Financial statements source: Yahoo Finance");
+    expect(yahooFinancialsCalled()).toBe(true);
   });
 
   it("reaches Yahoo financial statements when no Alpha Vantage key is configured", async () => {
-    configMock.alphaVantageApiKey = undefined;
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
+    vi.stubEnv("ALPHA_VANTAGE_API_KEY", "");
+    resetConfigCache();
+    state.lse = "fail";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(getFinancials).not.toHaveBeenCalled();
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
-    expect(result.details).not.toBeNull();
+    expect(textContent(result)).toContain("Financial statements source: Yahoo Finance");
+    expect(alphavantageCalled()).toBe(false);
   });
 
   it("falls back to fresh Yahoo financial statements when Alpha Vantage returns stale cache", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
-    providerMock.staleProviders.add("alphavantage");
-    providerMock.timestamps.set("alphavantage", "2026-07-01T14:30:00.000Z");
+    state.lse = "fail";
+    state.av = "fail";
+    cache.set(AV_FINANCIALS_KEY, [staleStatement], -1);
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
-    expect(result.details).not.toBeNull();
+    expect(textContent(result)).toContain("Financial statements source: Yahoo Finance");
+    expect(toolDetails(result)).not.toBeNull();
   });
 
   it("refuses stale Alpha Vantage financial statements when no fresh Yahoo fallback is available", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getYahooFinancials).mockRejectedValue(new Error("Yahoo financials unavailable"));
-    providerMock.staleProviders.add("alphavantage");
-    providerMock.timestamps.set("alphavantage", "2026-07-01T14:30:00.000Z");
+    state.lse = "fail";
+    state.av = "fail";
+    state.yahooFinancials = "fail";
+    cache.set(AV_FINANCIALS_KEY, [staleStatement], -1);
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.content[0].text).toContain("DCF valuation unavailable");
-    expect(result.content[0].text).toContain("Alpha Vantage: stale cached financial statements");
-    expect(result.content[0].text).toContain("2026-07-01T14:30:00.000Z");
-    expect(result.content[0].text).not.toContain("Intrinsic Value:");
-    expect(result.details).toBeNull();
+    expect(textContent(result)).toContain("Alpha Vantage: stale cached financial statements");
+    expect(textContent(result)).toMatch(/from \d{4}-\d{2}-\d{2}T/);
+    expect(textContent(result)).not.toContain("Intrinsic Value:");
+    expect(toolDetails(result)).toBeNull();
   });
 
-  it("refuses stale cached Yahoo financial statements for DCF fallback", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
-    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
-    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
-    providerMock.staleProviders.add("yahoo");
-    providerMock.timestamps.set("yahoo", "2026-07-01T14:30:00.000Z");
+  it("refuses stale cached Yahoo financial statements for the DCF fallback", async () => {
+    state.lse = "fail";
+    state.av = "fail";
+    state.yahooFinancials = "fail";
+    cache.set(YAHOO_FINANCIALS_KEY, [staleStatement], -1);
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.content[0].text).toContain("DCF valuation unavailable");
-    expect(result.content[0].text).toContain("stale cached financial statements");
-    expect(result.content[0].text).toContain("2026-07-01T14:30:00.000Z");
-    expect(result.content[0].text).not.toContain("Intrinsic Value:");
-    expect(result.details).toBeNull();
+    expect(textContent(result)).toContain(
+      "Yahoo Finance returned stale cached financial statements",
+    );
+    expect(textContent(result)).toMatch(/from \d{4}-\d{2}-\d{2}T/);
+    expect(textContent(result)).not.toContain("Intrinsic Value:");
+    expect(toolDetails(result)).toBeNull();
   });
 
-  it("uses financial statement shares when market cap is unavailable", async () => {
-    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
-    vi.mocked(getYahooFinancials).mockResolvedValue([
-      { ...statement, sharesOutstanding: 15_000_000_000 },
-    ]);
+  it("refuses the stale-only statement chain after LSE, Alpha Vantage, and Yahoo are all stale", async () => {
+    state.lse = "fail";
+    state.av = "fail";
+    state.yahooFinancials = "fail";
+    cache.set(lseReportKey("income"), lseIncome, -1);
+    cache.set(lseReportKey("balance"), lseBalance, -1);
+    cache.set(lseReportKey("cashflow"), lseCashflow, -1);
+    cache.set(AV_FINANCIALS_KEY, [staleStatement], -1);
+    cache.set(YAHOO_FINANCIALS_KEY, [staleStatement], -1);
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(getOverview).not.toHaveBeenCalled();
-    expect(result.content[0].text).toContain("Intrinsic Value:");
-    expect(result.details).not.toBeNull();
+    expect(textContent(result)).toContain(
+      "Yahoo Finance returned stale cached financial statements",
+    );
+    expect(textContent(result)).toMatch(/from \d{4}-\d{2}-\d{2}T/);
+    expect(textContent(result)).not.toContain("Intrinsic Value:");
+    expect(toolDetails(result)).toBeNull();
   });
 
   it("requires a positive current quote price even when statement shares are available", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ ...quote, price: 0 });
-    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
-    vi.mocked(getYahooFinancials).mockResolvedValue([
-      { ...statement, sharesOutstanding: 15_000_000_000 },
-    ]);
+    state.quote = "zero-price";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.content[0].text).toMatch(/current stock price|current quote price/i);
-    expect(result.content[0].text).not.toContain("Current Price: $0.00");
-    expect(result.details).toBeNull();
+    expect(textContent(result)).toMatch(/current stock price|current quote price/i);
+    expect(textContent(result)).not.toContain("Current Price: $0.00");
+    expect(toolDetails(result)).toBeNull();
   });
 
   it("refuses per-share output when shares outstanding cannot be derived", async () => {
-    vi.mocked(getOverview).mockResolvedValue({ marketCap: 0 } as never);
+    state.lseIncome = lseIncomeWithoutStatementShares();
+    state.quote = "zero-market-cap";
+    state.av = "overview-missing";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.content[0].text).toMatch(/cannot compute|shares outstanding/i);
-    expect(result.content[0].text).not.toContain("Intrinsic Value:");
-    expect(result.details).toBeNull();
+    expect(textContent(result)).toMatch(/cannot compute|shares outstanding/i);
+    expect(textContent(result)).not.toContain("Intrinsic Value:");
+    expect(toolDetails(result)).toBeNull();
   });
 
-  it("uses signed net debt so net cash raises the intrinsic value", async () => {
-    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
+  it("applies signed net debt so net cash raises the intrinsic value", async () => {
+    state.lse = "fail";
+    state.balance = structuredClone(balanceFixture);
+    state.balance.annualReports[0].shortLongTermDebtTotal = "30000000000";
+    state.balance.annualReports[0].cashAndCashEquivalentsAtCarryingValue = "90000000000";
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    // statement has 30B debt vs 90B cash → net cash of 60B must be added.
-    expect(result.details?.netDebt).toBe(-60e9);
+    // 30B debt vs 90B cash → net cash of 60B must be added.
+    expect(toolDetails(result)?.netDebt).toBe(-60_000_000_000);
   });
 
-  it("omits net debt adjustment when debt and cash fields are unavailable", async () => {
-    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
-    vi.mocked(getFinancials).mockResolvedValue([
-      {
-        ...statement,
-        totalDebt: undefined,
-        cashAndEquivalents: undefined,
-      },
-    ]);
+  it("omits the net debt adjustment when debt and cash fields are unavailable", async () => {
+    state.lse = "fail";
+    state.balance = structuredClone(balanceFixture);
+    for (const report of state.balance.annualReports) {
+      (report as Record<string, unknown>).shortLongTermDebtTotal = undefined;
+      (report as Record<string, unknown>).cashAndCashEquivalentsAtCarryingValue = undefined;
+    }
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(result.details?.netDebt).toBe(0);
-    expect(result.details?.warnings).toContain(
+    expect(toolDetails(result)?.netDebt).toBe(0);
+    expect(toolDetails(result)?.warnings).toContain(
       "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
     );
-    expect(result.content[0].text).toMatch(/Net debt adjustment omitted/i);
+    expect(textContent(result)).toMatch(/Net debt adjustment omitted/i);
   });
 
   it("rejects an invalid terminal spread before computing", async () => {
-    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
-
     const result = await dcfTool.execute("t", {
       symbol: "AAPL",
       discount_rate: 0.03,
       terminal_growth: 0.05,
     });
 
-    expect(result.content[0].text).toMatch(/terminal growth.*discount rate|Gordon Growth/i);
-    expect(result.content[0].text).not.toContain("Intrinsic Value:");
-    expect(result.details).toBeNull();
+    expect(textContent(result)).toMatch(/terminal growth.*discount rate|Gordon Growth/i);
+    expect(textContent(result)).not.toContain("Intrinsic Value:");
+    expect(toolDetails(result)).toBeNull();
   });
 });
 
