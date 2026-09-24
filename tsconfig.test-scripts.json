@@ -4,6 +4,16 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["tests/scripts/run-competitive-finance-eval.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "tests/scripts/run-evals.ts",
+    "tests/scripts/run-product-evals.ts",
+    "tests/scripts/run-live-router-eval.ts",
+    "tests/scripts/run-competitive-finance-eval.ts",
+    "tests/e2e/live-canary-results.ts",
+    "tests/e2e/provider-release-smoke.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

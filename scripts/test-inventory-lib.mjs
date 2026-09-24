@@ -15,12 +15,21 @@ export const DEFAULT_BOUNDARY = "unknown";
 export const REVIEWED_DISPOSITION = "pending-review";
 
 /**
- * Route registry. Every executable suite surface must appear here so route
- * completeness is checkable and so each case can carry its gate routing.
+ * Route registry. Every executable suite surface appears here exactly once, so
+ * route completeness is checkable and each case carries its route identity.
+ *
+ * Gate membership is NOT stored here. Each route lists the package-script
+ * `gateSteps` it participates in; `deriveRouteGateMembership` maps those steps
+ * through `scripts/test-gate-policy.json` (the single gate-policy source of
+ * truth). `manualCommands` are opt-in and never claim a gate; `liveCommands`
+ * are live/canary commands explicitly outside every gate.
  *
  * `collectionMode: "runtime"` means the suite registers tests dynamically (or
  * behind an env gate) and vitest's static parser cannot see them; collecting
  * those requires `--staticParse=false` and never executes a test body.
+ *
+ * `nature` is "deterministic", "live", "mixed", or "unknown" for a surface not
+ * yet reviewed. It is a description, not a boundary classification.
  */
 export const VITEST_ROUTES = [
   {
@@ -32,8 +41,10 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "unit",
-    inDefaultGates: true,
-    gateCommands: ["npm test", "npm run gates", "npm run gates:full", "npm run release:check"],
+    nature: "deterministic",
+    gateSteps: ["test"],
+    manualCommands: [],
+    liveCommands: [],
     description: "Default unit suite mirrored from src/.",
   },
   {
@@ -45,8 +56,10 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "unit",
-    inDefaultGates: false,
-    gateCommands: ["npm run test:site", "npm run gates:full", "npm run release:check"],
+    nature: "deterministic",
+    gateSteps: ["test:site"],
+    manualCommands: [],
+    liveCommands: [],
     description: "Public docs site build-contract tests.",
   },
   {
@@ -58,8 +71,10 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "unit",
-    inDefaultGates: true,
-    gateCommands: ["npm run test:agent-tools", "npm run gates", "npm run gates:full"],
+    nature: "deterministic",
+    gateSteps: ["test:agent-tools"],
+    manualCommands: [],
+    liveCommands: [],
     description: "Repo-maintainer and agent helper tests.",
   },
   {
@@ -71,8 +86,10 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "live-service",
-    inDefaultGates: false,
-    gateCommands: ["npm run eval -- cases", "npm run eval -- release"],
+    nature: "live",
+    gateSteps: [],
+    manualCommands: ["eval -- cases", "eval -- release"],
+    liveCommands: [],
     description:
       "Agent/session eval cases. Tier and known-fail flags gate which cases register; collection must not run the eval bodies.",
   },
@@ -85,10 +102,46 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "browser",
-    inDefaultGates: false,
+    nature: "live",
     env: { OPENCANDLE_GUI_BROWSER: "1" },
-    gateCommands: ["npm run test:gui:browser"],
-    description: "Local GUI browser smoke suite, gated by OPENCANDLE_GUI_BROWSER=1.",
+    gateSteps: [],
+    manualCommands: ["test:gui:browser"],
+    liveCommands: [],
+    description:
+      "Local GUI browser suite. Now the live set only (the mocked set moved out); opt-in via OPENCANDLE_GUI_BROWSER=1 and not part of any gate.",
+  },
+  {
+    id: "gui-integration",
+    label: "Root Vitest project: gui-integration",
+    collector: "vitest",
+    collectionMode: "runtime",
+    project: "gui-integration",
+    config: "vitest.config.ts",
+    cwd: null,
+    boundaryHint: "browser",
+    nature: "deterministic",
+    env: { OPENCANDLE_GUI_INTEGRATION: "1" },
+    gateSteps: ["test:gui:integration"],
+    manualCommands: [],
+    liveCommands: [],
+    description:
+      "Deterministic browser integration lane: the real GUI bundle is served from an isolated local server (temporary home, blanked credentials, OS port) while HTTP/WS/SSE are mocked inside the page, so it never calls a model or the public internet. Activation is env-gated by OPENCANDLE_GUI_INTEGRATION=1, which this route supplies for collection; required by gates:full and release:check.",
+  },
+  {
+    id: "gui-journey",
+    label: "Root Vitest project: gui-journey",
+    collector: "vitest",
+    collectionMode: "runtime",
+    project: "gui-journey",
+    config: "vitest.config.ts",
+    cwd: null,
+    boundaryHint: "browser",
+    nature: "deterministic",
+    gateSteps: ["test:gui:journey"],
+    manualCommands: [],
+    liveCommands: [],
+    description:
+      "Full-stack deterministic GUI journeys: a real Playwright browser drives the real gui/server child and session loop, with only external HTTP (model provider, Yahoo, Ticker Line, Google Fonts) replaced by local fixtures. It has no activation env gate; required by gates:full and release:check.",
   },
   {
     id: "gui-release",
@@ -99,10 +152,13 @@ export const VITEST_ROUTES = [
     config: "vitest.config.ts",
     cwd: null,
     boundaryHint: "browser",
-    inDefaultGates: false,
+    nature: "mixed",
     env: { OPENCANDLE_GUI_RELEASE_SMOKE: "1" },
-    gateCommands: ["npm run test:gui:release-smoke", "npm run gates:full", "npm run release:check"],
-    description: "GUI release-gate smoke suite, gated by OPENCANDLE_GUI_RELEASE_SMOKE=1.",
+    gateSteps: ["test:gui:release-smoke"],
+    manualCommands: [],
+    liveCommands: [],
+    description:
+      "GUI release-gate smoke suite. Real browser, credential-blanked cold home, local probe stub; gated by OPENCANDLE_GUI_RELEASE_SMOKE=1 and required by gates:full and release:check.",
   },
   {
     id: "relay",
@@ -113,8 +169,10 @@ export const VITEST_ROUTES = [
     config: "workers/provider-relay/vitest.config.ts",
     cwd: "workers/provider-relay",
     boundaryHint: "unit",
-    inDefaultGates: true,
-    gateCommands: ["npm run relay:test", "npm run gates", "npm run gates:full"],
+    nature: "deterministic",
+    gateSteps: ["relay:test"],
+    manualCommands: [],
+    liveCommands: [],
     description: "Separate workspace vitest config for the provider relay worker.",
   },
 ];
@@ -129,18 +187,27 @@ export const STATIC_ROUTES = [
     config: null,
     cwd: null,
     boundaryHint: "live-service",
-    inDefaultGates: false,
-    gateCommands: [
-      "npm run test:e2e",
-      "npm run test:e2e:cli",
-      "npm run test:e2e:credential",
-      "npm run test:e2e:providers",
-      "npm run test:e2e:harness-dcf",
+    nature: "live",
+    gateSteps: [],
+    manualCommands: [
+      "test:e2e",
+      "test:e2e:cli",
+      "test:e2e:credential",
+      "test:e2e:providers",
+      "test:e2e:harness-dcf",
     ],
+    liveCommands: ["test:providers:release"],
     description:
-      "Plain `npx tsx` e2e scripts with their own pass/fail reporters, outside every vitest project.",
+      "Plain `npx tsx` e2e scripts with their own pass/fail reporters, outside every vitest project. `test:providers:release` is the live provider-release canary (tests/e2e/provider-release-smoke.ts); it is live and not in any gate.",
     staticPatterns: ["tests/e2e/*.ts"],
-    staticExclude: ["tests/e2e/gui-browser.test.ts", "tests/e2e/gui-release-smoke.test.ts"],
+    staticExclude: [
+      "tests/e2e/gui-browser.test.ts",
+      "tests/e2e/gui-release-smoke.test.ts",
+      "tests/e2e/gui-integration.test.ts",
+      "tests/e2e/gui-integration-lifecycle.test.ts",
+      "tests/e2e/gui-session-journey.test.ts",
+      "tests/e2e/live-canary-results.ts",
+    ],
   },
   {
     id: "hosted",
@@ -151,10 +218,12 @@ export const STATIC_ROUTES = [
     config: null,
     cwd: null,
     boundaryHint: "browser",
-    inDefaultGates: false,
-    gateCommands: ["npm run test:gui:hosted", "npm run relay:smoke:browser", "npm run gates:full"],
+    nature: "mixed",
+    gateSteps: ["test:gui:hosted"],
+    manualCommands: [],
+    liveCommands: ["relay:smoke:browser"],
     description:
-      "Hosted GUI browser/WebContainer e2e script (`test:browser`) and the provider-relay browser live-smoke harness; neither is a vitest surface.",
+      "Hosted surface split in two: the deterministic hosted PWA/WebContainer e2e (`test:gui:hosted`, in gates:full and release:check) and the provider-relay browser live-smoke (`relay:smoke:browser`), which is live and is NOT claimed by gates:full.",
     staticPatterns: [
       "gui/hosted/tests/*.e2e.mjs",
       "workers/provider-relay/scripts/browser-live-smoke*.ts",
@@ -170,12 +239,10 @@ export const STATIC_ROUTES = [
     config: null,
     cwd: null,
     boundaryHint: "live-service",
-    inDefaultGates: false,
-    gateCommands: [
-      "npm run eval -- product",
-      "npm run eval -- competitive",
-      "npm run eval -- router-live",
-    ],
+    nature: "live",
+    gateSteps: [],
+    manualCommands: ["eval -- product", "eval -- competitive", "eval -- router-live"],
+    liveCommands: [],
     description:
       "Product, competitive, and live-router eval definitions driven by their own tsx runners.",
     staticPatterns: [
@@ -189,6 +256,66 @@ export const STATIC_ROUTES = [
 export const ALL_ROUTES = [...VITEST_ROUTES, ...STATIC_ROUTES];
 
 /**
+ * Gate membership is derived from the repo's single gate-policy file, not
+ * copied into this registry. The policy is owned by the gate-policy workstream
+ * (`scripts/test-gate.mjs`); this module only reads it.
+ */
+export const GATE_POLICY_PATH = "scripts/test-gate-policy.json";
+export const GATE_NAMES = ["core", "full", "release"];
+export const ROUTE_NATURES = ["deterministic", "live", "mixed", "unknown"];
+
+export function validateGatePolicy(policy) {
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+    throw new Error("gate policy must be an object keyed by gate name");
+  }
+  for (const gate of GATE_NAMES) {
+    const steps = policy[gate];
+    if (!Array.isArray(steps) || steps.length === 0) {
+      throw new Error(`gate policy "${gate}" must be a non-empty array`);
+    }
+    if (steps.some((step) => typeof step !== "string" || step.trim() === "")) {
+      throw new Error(`gate policy "${gate}" must contain only non-empty script names`);
+    }
+  }
+  return policy;
+}
+
+export function loadGatePolicy(text) {
+  return validateGatePolicy(JSON.parse(text));
+}
+
+export function policyStepNames(policy) {
+  const names = new Set();
+  for (const gate of GATE_NAMES) {
+    for (const step of policy[gate] ?? []) names.add(step);
+  }
+  return names;
+}
+
+export function gateNamesForSteps(policy, steps = []) {
+  return GATE_NAMES.filter((gate) => (policy[gate] ?? []).some((step) => steps.includes(step)));
+}
+
+function commandDisplay(command) {
+  return /^(npm|node|tsx|npx)\s/.test(command) ? command : `npm run ${command}`;
+}
+
+/** Derive a route's gate membership from the policy; never store gate names in the registry. */
+export function deriveRouteGateMembership(route, policy) {
+  const gateSteps = route.gateSteps ?? [];
+  const gates = gateNamesForSteps(policy, gateSteps);
+  return {
+    gateSteps,
+    gates,
+    inDefaultGates: gates.includes("core"),
+    gateCommands: gateSteps.map((step) => `npm run ${step}`),
+    manualCommands: (route.manualCommands ?? []).map(commandDisplay),
+    liveCommands: (route.liveCommands ?? []).map(commandDisplay),
+    nature: route.nature ?? "unknown",
+  };
+}
+
+/**
  * Ambient env flags that change which tests register. They are stripped from
  * the inherited process env before every collection spawn so an inventory run
  * is reproducible regardless of the caller's shell; only the route/variant
@@ -200,6 +327,7 @@ export const CONTROLLED_ENV_KEYS = [
   "OPENCANDLE_RUN_KNOWN_FAIL_EVALS",
   "OPENCANDLE_EVAL_KNOWN_FAIL_E2",
   "OPENCANDLE_GUI_BROWSER",
+  "OPENCANDLE_GUI_INTEGRATION",
   "OPENCANDLE_GUI_RELEASE_SMOKE",
 ];
 
@@ -324,13 +452,15 @@ function mocksHeuristicForFile(file, readFile, cache) {
 }
 
 function recordForCollectionCase(raw, context) {
-  const { route, repoRoot, variantId, env, readFile, mockCache, reviewedOverrides } = context;
+  const { route, repoRoot, variantId, env, readFile, mockCache, reviewedOverrides, memberships } =
+    context;
   const file = relativeRepoPath(repoRoot, raw.file);
   const name = typeof raw.name === "string" ? raw.name : String(raw.name ?? "");
   const identityBase = caseIdentityBase(route.id, file, name);
   const provisional = { id: identityBase, identityBase };
   const boundary = classifyBoundary(provisional, reviewedOverrides);
   const reviewed = boundary.boundarySource === "reviewed";
+  const membership = memberships.get(route.id);
   return {
     identityBase,
     file,
@@ -339,12 +469,14 @@ function recordForCollectionCase(raw, context) {
     collector: route.collector,
     project: raw.projectName ?? route.project ?? null,
     collectionMode: route.collectionMode,
+    nature: membership.nature,
     location: raw.location ?? null,
     ...boundary,
     reviewedDisposition: reviewed ? "reviewed" : REVIEWED_DISPOSITION,
     mocksHeuristic: mocksHeuristicForFile(file, readFile, mockCache),
-    gateRouting: route.gateCommands,
-    inDefaultGates: route.inDefaultGates,
+    gateRouting: membership.gateCommands,
+    gateNames: membership.gates,
+    inDefaultGates: membership.inDefaultGates,
     skipFlags: [],
     knownFail: false,
     activationVariants: [variantId],
@@ -353,9 +485,10 @@ function recordForCollectionCase(raw, context) {
 }
 
 function staticRecordForFile(entry, context) {
-  const { route, readFile, mockCache } = context;
+  const { route, readFile, mockCache, memberships } = context;
   const file = relativeRepoPath(context.repoRoot, entry.file);
   const id = `${route.id}::${file}`;
+  const membership = memberships.get(route.id);
   return {
     id,
     file,
@@ -363,14 +496,16 @@ function staticRecordForFile(entry, context) {
     collector: route.collector,
     project: null,
     collectionMode: "static",
+    nature: membership.nature,
     boundary: DEFAULT_BOUNDARY,
     boundaryHint: route.boundaryHint,
     boundarySource: "unreviewed",
     needsHumanReview: true,
     reviewedDisposition: REVIEWED_DISPOSITION,
     mocksHeuristic: mocksHeuristicForFile(file, readFile, mockCache),
-    gateRouting: route.gateCommands,
-    inDefaultGates: route.inDefaultGates,
+    gateRouting: membership.gateCommands,
+    gateNames: membership.gates,
+    inDefaultGates: membership.inDefaultGates,
     caseIdentity: "file-level",
     note: "Not runtime-collected in Phase 1; case identities need this suite's own runner.",
   };
@@ -385,6 +520,8 @@ function defaultReadFile(file) {
  *
  * `collections` entries: { routeId, variantId, env, cases, error? }.
  * `staticFiles` entries: { routeId, file }.
+ * `policy` is the parsed `scripts/test-gate-policy.json`; gate membership is
+ * derived from it rather than stored in the registry.
  */
 export function buildInventory({
   collections = [],
@@ -393,9 +530,14 @@ export function buildInventory({
   generatedAt = new Date().toISOString(),
   readFile = defaultReadFile,
   reviewedOverrides = {},
+  policy = { core: [], full: [], release: [] },
+  policyDigest = null,
 } = {}) {
+  const memberships = new Map(
+    ALL_ROUTES.map((route) => [route.id, deriveRouteGateMembership(route, policy)]),
+  );
   const mockCache = new Map();
-  const context = { repoRoot, readFile, mockCache, reviewedOverrides };
+  const context = { repoRoot, readFile, mockCache, reviewedOverrides, memberships };
   const routeStats = new Map();
   const caseGroups = new Map();
   const caseOrder = [];
@@ -474,7 +616,9 @@ export function buildInventory({
         needsHumanReview: true,
         reviewedDisposition: REVIEWED_DISPOSITION,
         gateRouting: [],
+        gateNames: [],
         inDefaultGates: false,
+        nature: "unknown",
         caseIdentity: "file-level",
         mocksHeuristic: { level: "source-unavailable", signals: [] },
       };
@@ -486,6 +630,7 @@ export function buildInventory({
     const stats = routeStats.get(route.id) ?? { errors: [] };
     const routeCases = cases.filter((entry) => entry.suiteRoute === route.id);
     const files = new Set(routeCases.map((entry) => entry.file));
+    const membership = memberships.get(route.id);
     return {
       id: route.id,
       label: route.label,
@@ -495,8 +640,13 @@ export function buildInventory({
       config: route.config ?? null,
       cwd: route.cwd ?? null,
       boundaryHint: route.boundaryHint,
-      inDefaultGates: route.inDefaultGates,
-      gateCommands: route.gateCommands,
+      nature: membership.nature,
+      gateSteps: membership.gateSteps,
+      gateNames: membership.gates,
+      inDefaultGates: membership.inDefaultGates,
+      gateCommands: membership.gateCommands,
+      manualCommands: membership.manualCommands,
+      liveCommands: membership.liveCommands,
       caseCount: routeCases.length,
       fileCount: files.size,
       errors: stats.errors,
@@ -504,6 +654,9 @@ export function buildInventory({
   });
 
   const reviewedCases = cases.filter((entry) => entry.reviewedDisposition === "reviewed").length;
+  const machineBoundaryHints = cases.filter(
+    (entry) => entry.boundarySource === "unreviewed",
+  ).length;
 
   return {
     schemaVersion: INVENTORY_SCHEMA_VERSION,
@@ -511,6 +664,11 @@ export function buildInventory({
     phase: INVENTORY_PHASE,
     generatedAt,
     generator: "scripts/test-inventory.mjs",
+    gatePolicy: {
+      path: GATE_POLICY_PATH,
+      digest: policyDigest,
+      note: "Gate membership is derived from this policy at collection time; the file is owned by the gate-policy workstream and is not edited here.",
+    },
     routes,
     totals: {
       collectedCases: cases.length,
@@ -521,20 +679,34 @@ export function buildInventory({
     reviewStatus: {
       reviewedCases,
       pendingReviewCases: cases.length - reviewedCases,
-      note: "Phase 1 is inventory only. boundary stays unknown and reviewedDisposition stays pending-review until a human records a per-case classification; boundaryHint on the route is a triage aid, not a review.",
+      machine: {
+        reviewedCases: 0,
+        pendingReviewCases: cases.length,
+        signals: ["mocks-source-heuristic", "route-default-boundary-hint"],
+        note: "Machine signals are heuristics over source text and route metadata; none of them is a review.",
+      },
+      human: {
+        reviewedCases,
+        ledgers: [],
+        note: "No human review ledger is attached. boundary stays unknown and reviewedDisposition stays pending-review until a human records a per-case classification.",
+      },
+      pendingBoundaryHints: machineBoundaryHints,
+      note: "Phase 1 is inventory only. boundaryHint on a route is a triage aid, never proof of review.",
     },
     cases,
     staticInventory,
     limitations: [
-      "Eval, GUI browser, and GUI release suites register tests dynamically or behind env gates, so they are runtime-collected with --staticParse=false. Collection imports modules but never executes a test body.",
+      "Vitest suites are runtime-collected with --staticParse=false because tests register dynamically or behind env gates. Collection imports modules but never executes a test body.",
       "Skipped tests are not reported by `vitest list`; skip flags are derived from the eval env variant that made a case register.",
       "Standalone tests/e2e, hosted browser scripts, and non-vitest eval manifests are recorded at file level and labeled static; their individual case identities require each suite's own runner.",
       "Mocks are a text heuristic over each test file and are not a reviewed determination that a test is safe to delete, move, or trust.",
+      "gui-integration is a deterministic browser lane whose real GUI bundle is served from an isolated local server while HTTP/WS/SSE are mocked in the page; its route env supplies OPENCANDLE_GUI_INTEGRATION=1 so collection matches the gate command instead of silently collecting zero cases.",
+      "gui-journey is a deterministic full-stack lane: real browser, real gui/server child, and real session loop, with only external HTTP fixture-backed. It has no activation env gate, so its route env is empty.",
     ],
   };
 }
 
-export function validateInventory(inventory) {
+export function validateInventory(inventory, { policy } = {}) {
   const errors = [];
   const warnings = [];
   if (!inventory || typeof inventory !== "object") {
@@ -551,6 +723,7 @@ export function validateInventory(inventory) {
 
   const knownRouteIds = new Set(ALL_ROUTES.map((route) => route.id));
   const seenRoutes = new Set(inventory.routes.map((route) => route.id));
+  const policySteps = policy ? policyStepNames(policy) : null;
   for (const id of knownRouteIds) {
     if (!seenRoutes.has(id)) errors.push(`missing-route:${id}`);
   }
@@ -558,6 +731,14 @@ export function validateInventory(inventory) {
     if (!knownRouteIds.has(route.id)) errors.push(`unknown-route:${route.id}`);
     if (Array.isArray(route.errors) && route.errors.length > 0) {
       errors.push(`collection-error:${route.id}`);
+    }
+    if (route.nature && !ROUTE_NATURES.includes(route.nature)) {
+      errors.push(`unknown-route-nature:${route.id}`);
+    }
+    if (policySteps) {
+      for (const step of route.gateSteps ?? []) {
+        if (!policySteps.has(step)) errors.push(`unknown-gate-step:${step}`);
+      }
     }
   }
 

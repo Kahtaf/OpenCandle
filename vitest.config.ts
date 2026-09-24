@@ -3,6 +3,8 @@ import {
   agentToolsProject,
   evalsProject,
   guiBrowserProject,
+  guiIntegrationProject,
+  guiJourneyProject,
   guiReleaseProject,
   siteProject,
   unitProject,
@@ -22,6 +24,8 @@ export default defineConfig({
       agentToolsProject,
       evalsProject,
       guiBrowserProject,
+      guiIntegrationProject,
+      guiJourneyProject,
       guiReleaseProject,
     ],
     coverage: {
@@ -51,8 +55,11 @@ export default defineConfig({
         "**/*.{test,spec}.{ts,tsx,js,jsx}", // test files, not production source
         "**/*.config.{ts,js,mjs,cjs}", // tooling configuration
       ],
-      reporter: ["text-summary", "json-summary", "lcov"],
-      reportsDirectory: "coverage",
+      // `json` writes coverage/unit/coverage-final.json, the raw Istanbul map
+      // that scripts/coverage-merge.mjs merges with the relay lane. The other
+      // reporters keep this lane's own human-readable report.
+      reporter: ["text-summary", "json", "json-summary", "lcov"],
+      reportsDirectory: "coverage/unit",
     },
   },
 });

@@ -1,5 +1,125 @@
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { CompletionReportCase } from "./completion-report.js";
 import type { FinalAnswerAssertionResult } from "./prompt-policy-assertions.js";
+
+/**
+ * Narrow release escape hatch for prompt/competitor cache reuse. With
+ * `OPENCANDLE_COMPETITIVE_NO_CACHE=1` the competitive cache is empty, so a
+ * release run cannot treat a cached competitor answer or prompt metadata as a
+ * fresh observation. Ordinary (non-release) discovery runs keep their existing
+ * cache behavior unchanged.
+ */
+export function selectCompetitiveReportCache<T>(env: NodeJS.ProcessEnv, load: () => T[]): T[] {
+  return env.OPENCANDLE_COMPETITIVE_NO_CACHE === "1" ? [] : load();
+}
+
+export const COMPETITOR_SKIP_METADATA_VERSION = 1;
+export const COMPETITOR_SKIP_METADATA_SUFFIX = ".competitors.json";
+
+// Closed known competitor ids plus a conservative fallback shape; a name that
+// is neither is rejected rather than carried as opaque release evidence.
+const KNOWN_COMPETITOR_IDS = new Set(["claude", "codex", "gemini"]);
+const SAFE_COMPETITOR_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+
+export interface CompetitorSkipMetadata {
+  version: 1;
+  suite: string;
+  skipped: Array<{ id: string; reason: string }>;
+}
+
+/**
+ * Same-run competitor skip metadata, written beside the completion report.
+ * Only `id` and a bounded `reason` are ever persisted; competitor answers,
+ * prompts, and credentials never enter this file. The reader treats an absent
+ * file as unknown, and a malformed one as an explicit error.
+ */
+export function competitorSkipMetadataPath(completionPath: string): string {
+  return `${completionPath}${COMPETITOR_SKIP_METADATA_SUFFIX}`;
+}
+
+function safeCompetitorId(raw: unknown): string {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (id === "") throw new Error("competitor skip metadata entry has no id");
+  if (!KNOWN_COMPETITOR_IDS.has(id) && !SAFE_COMPETITOR_ID.test(id)) {
+    throw new Error(`competitor skip metadata entry has an unsafe id: ${id}`);
+  }
+  return id;
+}
+
+function requiredReason(raw: unknown, id: string): string {
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new Error(`competitor skip metadata entry "${id}" has no reason`);
+  }
+  return truncateReason(raw);
+}
+
+/** Writer-side strictness: malformed runner input fails instead of being guessed. */
+export function buildCompetitorSkipMetadata(
+  suite: string,
+  skipped: readonly { id?: unknown; reason?: unknown }[],
+): CompetitorSkipMetadata {
+  const entries = skipped.map((skip) => {
+    const id = safeCompetitorId(skip?.id);
+    return { id, reason: requiredReason(skip?.reason, id) };
+  });
+  return { version: COMPETITOR_SKIP_METADATA_VERSION, suite, skipped: entries };
+}
+
+/**
+ * Strict reader. Returns null when the record is malformed, the suite does not
+ * match the caller's expected suite, or any entry has an unsafe id or a missing
+ * / non-string reason — malformed evidence is never softened into a generic
+ * reason.
+ */
+export function parseCompetitorSkipMetadata(
+  value: unknown,
+  expectedSuite: string,
+): Array<{ id: string; reason: string }> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    record.version !== COMPETITOR_SKIP_METADATA_VERSION ||
+    record.suite !== expectedSuite ||
+    !Array.isArray(record.skipped)
+  ) {
+    return null;
+  }
+  const entries: Array<{ id: string; reason: string }> = [];
+  for (const raw of record.skipped) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+    const entry = raw as Record<string, unknown>;
+    try {
+      const id = safeCompetitorId(entry.id);
+      entries.push({ id, reason: requiredReason(entry.reason, id) });
+    } catch {
+      return null;
+    }
+  }
+  return entries;
+}
+
+export function writeCompetitorSkipMetadata(
+  completionPath: string,
+  suite: string,
+  skipped: readonly { id?: unknown; reason?: unknown }[],
+): string {
+  const path = competitorSkipMetadataPath(completionPath);
+  mkdirSync(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(
+      temporary,
+      `${JSON.stringify(buildCompetitorSkipMetadata(suite, skipped), null, 2)}\n`,
+      "utf-8",
+    );
+    renameSync(temporary, path);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
+  return path;
+}
 
 /**
  * Builds the required completion case for a frozen competitive prompt.

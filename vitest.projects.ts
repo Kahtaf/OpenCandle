@@ -55,6 +55,23 @@ export const guiBrowserProject: ViteUserConfig = {
   },
 };
 
+// Deterministic browser lane: serves the real GUI bundle from an isolated local
+// server but mocks HTTP/WS/SSE in the page, so it needs no model credentials.
+// The lifecycle file proves the isolated server cleans up its process group and
+// temporary home on both graceful stop and failed startup.
+export const guiIntegrationProject: ViteUserConfig = {
+  test: {
+    name: "gui-integration",
+    globals: true,
+    include: [
+      "tests/e2e/gui-integration.test.ts",
+      "tests/e2e/gui-integration-lifecycle.test.ts",
+    ],
+    testTimeout: 60_000,
+    hookTimeout: 120_000,
+  },
+};
+
 export const guiReleaseProject: ViteUserConfig = {
   test: {
     name: "gui-release",
@@ -62,5 +79,20 @@ export const guiReleaseProject: ViteUserConfig = {
     include: ["tests/e2e/gui-release-smoke.test.ts"],
     testTimeout: 90_000,
     hookTimeout: 45_000,
+  },
+};
+
+// Full-stack deterministic GUI journeys: a real Playwright browser against a
+// real `gui/server/server.ts` child with local external-HTTP fixtures. Serial
+// because the suite owns one server child and one browser.
+export const guiJourneyProject: ViteUserConfig = {
+  test: {
+    name: "gui-journey",
+    globals: true,
+    environment: "node",
+    include: ["tests/e2e/gui-session-journey.test.ts"],
+    testTimeout: 180_000,
+    hookTimeout: 120_000,
+    fileParallelism: false,
   },
 };

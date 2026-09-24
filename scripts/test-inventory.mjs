@@ -16,6 +16,7 @@
 // `vitest list` still only collects, it does not execute.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +25,10 @@ import {
   assertNoSecretLikeValues,
   buildCollectionEnv,
   buildInventory,
+  deriveRouteGateMembership,
   EVAL_ENV_VARIANTS,
+  GATE_POLICY_PATH,
+  loadGatePolicy,
   STATIC_ROUTES,
   VITEST_ROUTES,
   validateInventory,
@@ -33,6 +37,13 @@ import {
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const DEFAULT_SPAWN_TIMEOUT_MS = 600_000;
+
+function loadPolicyFromRepo() {
+  const path = resolve(repoRoot, GATE_POLICY_PATH);
+  const text = readFileSync(path, "utf8");
+  const digest = `sha256:${createHash("sha256").update(text).digest("hex")}`;
+  return { policy: loadGatePolicy(text), digest };
+}
 
 function parseArgs(argv) {
   const options = {
@@ -75,21 +86,27 @@ function printHelp() {
 
   node scripts/test-inventory.mjs                 collect + write validation-output/test-inventory.json
   node scripts/test-inventory.mjs --stdout        collect + print JSON, write nothing
-  node scripts/test-inventory.mjs --routes        print the route registry
+  node scripts/test-inventory.mjs --routes        print the route registry + derived gate membership
   node scripts/test-inventory.mjs --check <file>  validate an existing inventory
   node scripts/test-inventory.mjs --from <dir>    read captured per-route JSON instead of spawning
   node scripts/test-inventory.mjs --out <file>    output path under validation-output/
   node scripts/test-inventory.mjs --timeout-ms <n> per-spawn timeout in ms (default ${DEFAULT_SPAWN_TIMEOUT_MS})
   node scripts/test-inventory.mjs --force         allow overwriting a non-inventory target
 
-Incomplete collection makes the command exit non-zero even though the partial
-JSON is still written to validation-output/ for diagnosis.`);
+Gate membership is derived from ${GATE_POLICY_PATH} (read-only, owned by the
+gate workstream), not stored in the route registry. Incomplete collection makes
+the command exit non-zero even though the partial JSON is still written to
+validation-output/ for diagnosis.`);
 }
 
-function printRoutes() {
+function printRoutes(policy) {
   for (const route of ALL_ROUTES) {
-    const gates = route.gateCommands.join("; ");
-    console.log(`${route.id}\t${route.collector}\t${route.collectionMode}\t${gates}`);
+    const membership = deriveRouteGateMembership(route, policy);
+    const gates = membership.gates.length > 0 ? membership.gates.join(",") : "no-gate";
+    const commands = membership.gateCommands.join("; ");
+    console.log(
+      `${route.id}\t${route.collector}\t${route.collectionMode}\t${membership.nature}\t${gates}\t${commands}`,
+    );
   }
 }
 
@@ -199,7 +216,7 @@ function readRepoFile(file) {
   return readFileSync(resolve(repoRoot, file), "utf8");
 }
 
-function build({ from, timeoutMs }) {
+function build({ from, timeoutMs, policy, policyDigest }) {
   const { collections, staticFiles } = collect({ from, timeoutMs });
   const generatedAt = new Date().toISOString();
   const inventory = buildInventory({
@@ -208,8 +225,10 @@ function build({ from, timeoutMs }) {
     repoRoot,
     generatedAt,
     readFile: readRepoFile,
+    policy,
+    policyDigest,
   });
-  const validation = validateInventory(inventory);
+  const validation = validateInventory(inventory, { policy });
   return { inventory, validation };
 }
 
@@ -226,7 +245,7 @@ function writeInventory(inventory, out, force) {
   return target.path;
 }
 
-function checkInventory(path) {
+function checkInventory(path, policy) {
   const raw = readFileSync(path, "utf8");
   let parsed;
   try {
@@ -234,7 +253,7 @@ function checkInventory(path) {
   } catch (error) {
     throw new Error(`invalid JSON: ${error.message}`);
   }
-  const validation = validateInventory(parsed);
+  const validation = validateInventory(parsed, { policy });
   const secrets = assertNoSecretLikeValues(raw);
   if (validation.errors.length > 0 || !secrets.ok) {
     const reasons = [...validation.errors, ...secrets.findings.map((f) => `secret-like:${f}`)];
@@ -250,8 +269,11 @@ function summarize(inventory) {
       `${inventory.totals.staticEntries} static entries, ${inventory.totals.routes} routes`,
   );
   for (const route of inventory.routes) {
+    const gates = route.gateNames.length > 0 ? route.gateNames.join(",") : "no-gate";
     const error = route.errors.length > 0 ? ` ERROR ${route.errors.join("; ")}` : "";
-    console.log(`  ${route.id}: ${route.caseCount} cases (${route.collectionMode})${error}`);
+    console.log(
+      `  ${route.id}: ${route.caseCount} cases (${route.collectionMode}, ${route.nature}, ${gates})${error}`,
+    );
   }
 }
 
@@ -267,18 +289,21 @@ function main() {
     printHelp();
     return 0;
   }
+  const { policy, digest } = loadPolicyFromRepo();
   if (options.mode === "routes") {
-    printRoutes();
+    printRoutes(policy);
     return 0;
   }
   if (options.mode === "check") {
     if (!options.checkPath) throw new Error("--check requires a path");
-    checkInventory(options.checkPath);
+    checkInventory(options.checkPath, policy);
     return 0;
   }
   const { inventory, validation } = build({
     from: options.from,
     timeoutMs: options.timeoutMs,
+    policy,
+    policyDigest: digest,
   });
   if (options.mode === "stdout") {
     console.log(JSON.stringify(inventory, null, 2));

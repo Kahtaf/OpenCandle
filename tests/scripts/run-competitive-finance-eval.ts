@@ -25,7 +25,11 @@ import {
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
-import { completionCaseForPrompt } from "../evals/competitive-completion.js";
+import {
+  completionCaseForPrompt,
+  selectCompetitiveReportCache,
+  writeCompetitorSkipMetadata,
+} from "../evals/competitive-completion.js";
 import {
   type AdapterBinaryResolution,
   analyzeCompetitiveReport,
@@ -150,7 +154,7 @@ mkdirSync(competitorCwd, { recursive: true });
 registerBuiltInApiProviders();
 const modelRuntime = await ModelRuntime.create();
 const modelRegistry = new ModelRegistry(modelRuntime);
-const competitorAnswerCache = loadCompetitiveReportCache();
+const competitorAnswerCache = selectCompetitiveReportCache(process.env, loadCompetitiveReportCache);
 const judgeModel = await resolveModelWithAuth(
   requestedProvider,
   requestedModelId,
@@ -371,7 +375,15 @@ if (frozenPanel) {
       },
     }),
   );
-  if (completionPath) console.log(`Completion report: ${completionPath}`);
+  if (completionPath) {
+    console.log(`Completion report: ${completionPath}`);
+    const metadataPath = writeCompetitorSkipMetadata(
+      completionPath,
+      "competitive:frozen",
+      preflight.skipped,
+    );
+    console.log(`Competitor skip metadata: ${metadataPath}`);
+  }
 }
 const frozenCaseFailures = frozenPanel
   ? completionCases.filter((testCase) => testCase.status === "failed")

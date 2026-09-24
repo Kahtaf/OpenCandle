@@ -6,6 +6,7 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it } from "vitest";
 import { resetConfigCache } from "../../../src/config.js";
 import { listApiKeyProviders } from "../../../src/onboarding/providers.js";
+import exaMcpFixture from "../../fixtures/exa/mcp-json-response.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-journey-quote.json";
 import { runOpenCandleSession } from "../../harness/opencandle-runner.js";
 import { installDeterministicFetchGuard } from "../../helpers/deterministic-fetch-guard.js";
@@ -380,6 +381,119 @@ describe("deterministic fixture-scripted agent/session journey", () => {
       expect(result.agentTrace.finalText.toLowerCase()).toContain("unavailable");
       expect(result.agentTrace.finalText).not.toMatch(/\$\s?\d/);
       expect(result.agentTrace.finalText).not.toContain(String(QUOTE_PRICE));
+
+      expect(guard.unrecognizedUrls).toEqual([]);
+    } finally {
+      restoreAgentDir();
+      restoreProviderKeys();
+      harness.cleanup();
+    }
+  });
+
+  it("records a real brave soft-degradation turn gap when web search falls back", {
+    timeout: 30_000,
+  }, async () => {
+    const harness = createHarness();
+    const restoreProviderKeys = isolateDataProviderKeys();
+    const restoreAgentDir = isolatePiAgentDir(harness.agentDir);
+    const modelServer = await startDeterministicModelServer((request) => {
+      const serialized = JSON.stringify(request.messages);
+      if (serialized.includes("routing agent")) {
+        return { kind: "text", text: JSON.stringify(ROUTER_RESPONSE) };
+      }
+      if (serialized.includes("Write a 4-8 word title")) {
+        return { kind: "text", text: "Web search fallback" };
+      }
+      if (request.messages.some((message) => message.role === "tool")) {
+        return {
+          kind: "text",
+          text: "Web search used the keyless fallback because Brave is not connected; the result came from the fallback source.",
+        };
+      }
+      return {
+        kind: "tool_call",
+        id: "call-journey-search",
+        name: "search_web",
+        arguments: {
+          query: "Fed rate decision",
+          category: "news",
+          freshness: "day",
+          limit: 5,
+          provider: "exa",
+        },
+      };
+    });
+    activeModelServers.push(modelServer);
+    const guard = installDeterministicFetchGuard([
+      { prefix: modelServer.baseUrl, passthrough: true },
+      { prefix: "https://mcp.exa.ai/", json: exaMcpFixture },
+      { prefix: "https://api.exa.ai/", status: 404 },
+      { prefix: "https://api.search.brave.com/", status: 404 },
+      { prefix: "https://duckduckgo.com/", status: 404 },
+      { prefix: "https://html.duckduckgo.com/", status: 404 },
+      { prefix: "https://links.duckduckgo.com/", status: 404 },
+    ]);
+    activeFetchGuards.push(guard);
+
+    try {
+      const modelRuntime = await createJourneyModelRuntime(modelServer.baseUrl);
+      const sessionManager = SessionManager.create(process.cwd(), harness.sessionDir);
+
+      const result = await runOpenCandleSession({
+        prompt: "Search for the latest Fed rate decision.",
+        cwd: process.cwd(),
+        openCandleHome: harness.openCandleHome,
+        modelRuntime,
+        sessionManager,
+        defaultProvider: PROVIDER_ID,
+        defaultModel: MODEL_ID,
+        settleGraceMs: 1000,
+        timeoutMs: 30_000,
+      });
+
+      expect(result.agentTrace.toolSequence).toEqual(["search_web"]);
+      const searchResult = result.agentTrace.turns[0]?.toolCalls[0]?.result as
+        | { content?: Array<{ text?: string }> }
+        | undefined;
+      const searchText = searchResult?.content?.[0]?.text ?? "";
+
+      // The real registered tool result carries the genuine soft-degraded tags
+      // emitted by buildSoftDegradedPrefix (Brave unconfigured, Exa keyless).
+      // Both distinct providers must be present in the tool text.
+      expect(searchText).toContain("OPENCANDLE_SOFT_DEGRADED");
+      expect(searchText).toContain("provider=brave");
+      expect(searchText).toContain("provider=exa");
+
+      // The real turn interceptor recorded the degradation and flushed a real
+      // opencandle-turn-gap entry carrying provider metadata.
+      const customEntryTypes = (result.agentTrace.customEntries ?? []).map(
+        (entry) => entry.customType,
+      );
+      const gap = result.agentTrace.customEntries?.find(
+        (entry) => entry.customType === "opencandle-turn-gap",
+      );
+      expect(
+        gap,
+        `opencandle-turn-gap missing; custom entries were ${JSON.stringify(customEntryTypes)}`,
+      ).toBeDefined();
+      const annotation = (gap?.data as { annotation?: string } | undefined)?.annotation ?? "";
+      expect(annotation).toContain("OPENCANDLE_SKIPPED");
+      // Independent expectations: every distinct soft-degraded provider in the
+      // real tool result must survive into the real runtime annotation.
+      expect(annotation).toContain("provider=brave");
+      expect(annotation).toContain("provider=exa");
+      expect(annotation).toContain("reason=credential_not_provided");
+
+      // Persisted across session reopen, not just in memory.
+      const sessionFile = sessionManager.getSessionFile();
+      expect(sessionFile).toBeDefined();
+      const reopened = SessionManager.open(sessionFile as string);
+      const persistedGap = reopened
+        .getEntries()
+        .find((entry) => (entry as { customType?: string }).customType === "opencandle-turn-gap");
+      expect(persistedGap).toBeDefined();
+      expect(JSON.stringify(persistedGap)).toContain("provider=brave");
+      expect(JSON.stringify(persistedGap)).toContain("provider=exa");
 
       expect(guard.unrecognizedUrls).toEqual([]);
     } finally {

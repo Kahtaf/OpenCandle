@@ -1,21 +1,37 @@
 name: Publish
 
+# Tag-only trigger. `scripts/release.mjs` prepares and commits the candidate,
+# runs release:check, prepares the exact package, and runs fresh live release
+# evals against that candidate, then tags and pushes only if all proof passes.
+# This workflow re-proves the tagged commit and publishes the exact tarball,
+# verifying it in the same shell step immediately before `npm publish`. It
+# accepts no dispatch inputs and consumes no external artifact.
 on:
   push:
     tags:
       - "v*"
 
+# Global default is read-only. The publish job opts into the two write
+# permissions it needs; no other job or step can write.
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # This workflow only declares the environment name. Repository settings must
+    # create the `release` environment protection (required reviewers and any
+    # tag/branch restrictions); the workflow cannot create or verify it.
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged candidate
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -30,7 +46,7 @@ jobs:
       - name: Install Chromium for GUI smoke tests
         run: npx playwright-core install --with-deps chromium
 
-      - name: Verify release tag
+      - name: Verify tag matches package version
         run: |
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "::error::Publish must run from a v* tag"
@@ -43,11 +59,125 @@ jobs:
             exit 1
           fi
 
-      - name: Run release checks
+      - name: Verify candidate commit is reachable from origin/main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tagged commit is not reachable from origin/main"
+            exit 1
+          fi
+
+      # No API/secret environment here: the static gate must pass on its own.
+      - name: Run release checks without secrets
         run: npm run release:check
 
-      - name: Publish to npm
-        run: npm publish --access public --provenance
+      # Prepare the exact publishable package once, before the fresh evals, so
+      # no expensive build happens after the freshness evidence is produced.
+      - name: Prepare release package
+        run: node scripts/release-package.mjs prepare --out validation-output/release-package
+
+      # Live provider smoke shares the trusted publish workflow, runs on the
+      # same exact candidate, and stays outside the deterministic gate policy.
+      # Data-provider secrets are scoped to this step only.
+      - name: Run provider release smoke
+        run: npm run test:providers:release
+        env:
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+
+      # Fresh live evals are the last meaningful proof and the provenance
+      # source. Secrets are scoped to this single step only, and the eval runs
+      # against the exact tagged candidate.
+      - name: Run fresh live release evals
+        run: npm run eval -- release
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+
+      # Aggregate the exact-candidate evidence into one compact descriptive
+      # summary (not release authorization) after evals, before upload/publish.
+      - name: Write compact release summary
+        run: node scripts/release-summary.mjs --package-dir validation-output/release-package
+
+      # Bounded schema reports plus the exact tested tarball only; raw
+      # `.completion.json` files and Vitest reporter traces/logs are never
+      # uploaded. `if: always()` preserves failure evidence, and `warn` avoids
+      # masking the original failure when an earlier stage produced no proof.
+      # Uploaded reports are evidence only, never authority: the publish step
+      # re-verifies the exact tarball hash, candidate, and version in-workflow.
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence
+          path: |
+            validation-output/release-evals/**/release-evidence.json
+            validation-output/release-evals/**/release-eval-summary.json
+            validation-output/release-evals/**/release-eval-incomplete.json
+            validation-output/release-evals/**/attempts.jsonl
+            validation-output/release-package/package-proof.json
+            validation-output/release-package/*.tgz
+            validation-output/provider-release/**/summary.json
+            validation-output/gates/*.json
+            validation-output/release-summary/**/summary.json
+            validation-output/release-summary/**/summary.md
+            coverage/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Verify the package proof and hash, then publish the exact tarball named
+      # by the validated proof, in one shell step with no gap for edits.
+      - name: Publish exact verified tarball to npm
+        run: |
+          set -euo pipefail
+          proof_dir="validation-output/release-package"
+          node scripts/release-package.mjs verify --dir "$proof_dir"
+          tarball="$(PROOF_DIR="$proof_dir" node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { validatePackageProof } from "./scripts/release-lib.mjs";
+            const dir = process.env.PROOF_DIR;
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            const proof = JSON.parse(readFileSync(join(dir, "package-proof.json"), "utf8"));
+            const meta = validatePackageProof(proof, {
+              packageName: pkg.name,
+              packageVersion: pkg.version,
+              candidateCommit: process.env.GITHUB_SHA,
+            });
+            if (!meta.ok) {
+              console.error(meta.error);
+              process.exit(1);
+            }
+            const sha256 = createHash("sha256")
+              .update(readFileSync(join(dir, meta.tarball)))
+              .digest("hex");
+            const result = validatePackageProof(proof, {
+              packageName: pkg.name,
+              packageVersion: pkg.version,
+              candidateCommit: process.env.GITHUB_SHA,
+              sha256,
+            });
+            if (!result.ok) {
+              console.error(result.error);
+              process.exit(1);
+            }
+            process.stdout.write(join(dir, result.tarball));
+          ')"
+          test -f "$tarball"
+          npm publish "$tarball" --ignore-scripts --access public --provenance
 
       - name: Create GitHub Release
         env:

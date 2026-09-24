@@ -34,7 +34,16 @@ export interface ModelChatRequest {
 }
 
 export type ModelScriptedReply =
-  | { kind: "text"; text: string }
+  | {
+      kind: "text";
+      text: string;
+      /**
+       * Optional mid-stream hold. The server flushes the first half of the text,
+       * awaits this, then flushes the remainder. A caller that aborts the HTTP
+       * request while paused produces a socket-close acknowledgement.
+       */
+      pause?: Promise<void>;
+    }
   | {
       kind: "tool_call";
       id: string;
@@ -42,13 +51,37 @@ export type ModelScriptedReply =
       arguments: Record<string, unknown>;
     };
 
-export type ModelScript = (request: ModelChatRequest) => ModelScriptedReply;
+export type ModelScript = (
+  request: ModelChatRequest,
+) => ModelScriptedReply | Promise<ModelScriptedReply>;
+
+/**
+ * Per-request lifecycle handle. `settled` resolves on the first of a completed
+ * response body or a closed socket, so a caller waiting for a held request to
+ * finish does not hang when cancellation physically aborts the HTTP request
+ * (the server's write may never complete). `aborted` is the stronger signal
+ * that the socket closed before the scripted response finished, i.e. an
+ * upstream cancellation actually tore the request down.
+ */
+export interface ModelRequestSettlement {
+  request: ModelChatRequest;
+  /** Resolves when the scripted response body finished writing. */
+  completed: Promise<void>;
+  /** Resolves when the request socket closed (client abort or normal end). */
+  closed: Promise<void>;
+  /** Resolves when the socket closed before the response finished (upstream abort). */
+  aborted: Promise<void>;
+  /** Resolves on the first of `completed` or `closed`. */
+  settled: Promise<void>;
+}
 
 export interface DeterministicModelServer {
   /** Base URL to register as the provider `baseUrl` (includes `/v1`). */
   readonly baseUrl: string;
   /** Every parsed chat-completion request the runtime sent, in order. */
   readonly requests: ModelChatRequest[];
+  /** Per-request lifecycle handles in request order. */
+  readonly settlements: ModelRequestSettlement[];
   stop(): Promise<void>;
 }
 
@@ -56,8 +89,9 @@ export async function startDeterministicModelServer(
   script: ModelScript,
 ): Promise<DeterministicModelServer> {
   const requests: ModelChatRequest[] = [];
+  const settlements: ModelRequestSettlement[] = [];
   const server = createServer((req, res) => {
-    void handleRequest(req.url, req, res, script, requests);
+    void handleRequest(req.url, req, res, script, requests, settlements);
   });
 
   server.listen(0, "127.0.0.1");
@@ -67,6 +101,7 @@ export async function startDeterministicModelServer(
   return {
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     requests,
+    settlements,
     async stop() {
       await closeServer(server);
     },
@@ -79,6 +114,7 @@ async function handleRequest(
   res: ServerResponse,
   script: ModelScript,
   requests: ModelChatRequest[],
+  settlements: ModelRequestSettlement[],
 ): Promise<void> {
   if (req.method !== "POST" || !url?.endsWith("/chat/completions")) {
     res.writeHead(404, { "Content-Type": "application/json" });
@@ -97,29 +133,88 @@ async function handleRequest(
   }
 
   requests.push(parsed);
-  const reply = script(parsed);
+  const { settlement, complete, abort, state } = createSettlement(parsed, res);
+  settlements.push(settlement);
 
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  writeScriptedReply(res, reply);
-  res.end();
+  try {
+    const reply = await script(parsed);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    await writeScriptedReply(res, reply);
+    res.end();
+    state.finishedNormally = true;
+  } catch {
+    // The socket may have been aborted while the script or a mid-stream pause
+    // was pending; the `closed`/`aborted` acknowledgements already resolved.
+  } finally {
+    if (state.finishedNormally) complete();
+    else abort();
+  }
 }
 
-function writeScriptedReply(res: ServerResponse, reply: ModelScriptedReply): void {
+function createSettlement(
+  request: ModelChatRequest,
+  res: ServerResponse,
+): {
+  settlement: ModelRequestSettlement;
+  complete: () => void;
+  abort: () => void;
+  state: { finishedNormally: boolean };
+} {
+  let complete!: () => void;
+  const completed = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  let close!: () => void;
+  const closed = new Promise<void>((resolve) => {
+    close = resolve;
+  });
+  let abort!: () => void;
+  const aborted = new Promise<void>((resolve) => {
+    abort = resolve;
+  });
+  const state = { finishedNormally: false };
+  res.once("close", () => {
+    close();
+    if (!state.finishedNormally) abort();
+  });
+  return {
+    settlement: {
+      request,
+      completed,
+      closed,
+      aborted,
+      settled: Promise.race([completed, closed]),
+    },
+    complete,
+    abort,
+    state,
+  };
+}
+
+async function writeScriptedReply(res: ServerResponse, reply: ModelScriptedReply): Promise<void> {
   const id = "chatcmpl-deterministic-journey";
   const base = { id, object: "chat.completion.chunk", created: 1, model: "oc-journey-model" };
 
   if (reply.kind === "text") {
     // Split the text so the journey also exercises multi-delta assembly.
     const midpoint = Math.max(1, Math.floor(reply.text.length / 2));
-    for (const piece of [reply.text.slice(0, midpoint), reply.text.slice(midpoint)]) {
-      if (piece.length === 0) continue;
+    const first = reply.text.slice(0, midpoint);
+    const second = reply.text.slice(midpoint);
+    if (first.length > 0) {
       writeSse(res, {
         ...base,
-        choices: [{ index: 0, delta: { content: piece }, finish_reason: null }],
+        choices: [{ index: 0, delta: { content: first }, finish_reason: null }],
+      });
+    }
+    if (reply.pause) await reply.pause;
+    if (second.length > 0) {
+      writeSse(res, {
+        ...base,
+        choices: [{ index: 0, delta: { content: second }, finish_reason: null }],
       });
     }
     writeSse(res, { ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });

@@ -11,8 +11,12 @@ import {
   buildInventory,
   CONTROLLED_ENV_KEYS,
   classifyBoundary,
+  deriveRouteGateMembership,
   detectMockSignals,
   EVAL_ENV_VARIANTS,
+  loadGatePolicy,
+  ROUTE_NATURES,
+  routeById,
   STATIC_ROUTES,
   VITEST_ROUTES,
   validateInventory,
@@ -22,6 +26,20 @@ import sample from "./fixtures/test-inventory-sample.json";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const cliPath = resolve(repoRoot, "scripts/test-inventory.mjs");
+const realPolicyPath = resolve(repoRoot, "scripts/test-gate-policy.json");
+const realPolicy = loadGatePolicy(readFileSync(realPolicyPath, "utf8"));
+const packageJson = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
+
+/** Extract the inline `NAME=value` env assignments from an npm script string. */
+function scriptEnvAssignments(script: string): Record<string, string> {
+  const assignments: Record<string, string> = {};
+  for (const match of script.matchAll(/\b([A-Z][A-Z0-9_]+)=([^\s&;]+)/g)) {
+    assignments[match[1]] = match[2];
+  }
+  return assignments;
+}
 
 const tempRoots: string[] = [];
 
@@ -79,6 +97,8 @@ function buildSampleInventory(overrides: Record<string, unknown> = {}) {
     repoRoot,
     generatedAt: "2026-01-01T00:00:00.000Z",
     readFile: () => "import { vi } from 'vitest';\nvi.mock('./dependency.js');\n",
+    policy: realPolicy,
+    policyDigest: "sha256:fixture",
     ...overrides,
   });
 }
@@ -225,10 +245,161 @@ describe("buildCollectionEnv", () => {
   });
 });
 
+describe("gate policy derivation", () => {
+  const fixturePolicy = {
+    core: ["check", "test"],
+    full: ["check", "test", "test:site", "test:gui:integration"],
+    release: ["check", "test", "test:site", "test:gui:integration", "test:packed-install"],
+  };
+
+  it("derives gate names from the policy instead of the registry", () => {
+    expect(
+      deriveRouteGateMembership({ id: "a", gateSteps: ["test"] }, fixturePolicy),
+    ).toMatchObject({ gates: ["core", "full", "release"], inDefaultGates: true });
+    expect(
+      deriveRouteGateMembership({ id: "b", gateSteps: ["test:gui:integration"] }, fixturePolicy),
+    ).toMatchObject({ gates: ["full", "release"], inDefaultGates: false });
+    expect(deriveRouteGateMembership({ id: "c", gateSteps: [] }, fixturePolicy)).toMatchObject({
+      gates: [],
+      inDefaultGates: false,
+      gateCommands: [],
+    });
+  });
+
+  it("keeps opt-in manual and live commands out of gate membership", () => {
+    const membership = deriveRouteGateMembership(
+      {
+        id: "d",
+        nature: "mixed",
+        gateSteps: ["test:site"],
+        manualCommands: ["test:e2e"],
+        liveCommands: ["relay:smoke:browser"],
+      },
+      fixturePolicy,
+    );
+    expect(membership.gateCommands).toEqual(["npm run test:site"]);
+    expect(membership.manualCommands).toEqual(["npm run test:e2e"]);
+    expect(membership.liveCommands).toEqual(["npm run relay:smoke:browser"]);
+  });
+
+  it("every registered gate step exists in the real gate policy", () => {
+    const policySteps = new Set([...realPolicy.core, ...realPolicy.full, ...realPolicy.release]);
+    for (const route of ALL_ROUTES) {
+      for (const step of route.gateSteps ?? []) {
+        expect(policySteps).toContain(step);
+      }
+    }
+  });
+
+  it("flags a registry step that drifted out of the policy", () => {
+    const inventory = buildSampleInventory();
+    const drifted = {
+      ...inventory,
+      routes: inventory.routes.map((route: { id: string; gateSteps: string[] }) =>
+        route.id === "unit" ? { ...route, gateSteps: ["test:does-not-exist"] } : route,
+      ),
+    };
+    expect(validateInventory(drifted, { policy: realPolicy }).errors).toContain(
+      "unknown-gate-step:test:does-not-exist",
+    );
+  });
+});
+
+describe("gui route activation contract", () => {
+  it("gives gui-integration the env its npm gate command sets", () => {
+    const route = routeById("gui-integration");
+    expect(route).not.toBeNull();
+    expect(route?.nature).toBe("deterministic");
+    expect(route?.env).toEqual({ OPENCANDLE_GUI_INTEGRATION: "1" });
+    // The route env must mirror the command that actually enables the spec:
+    // without it, `describe.skipIf(!runGuiIntegration)` collects zero cases.
+    expect(scriptEnvAssignments(packageJson.scripts["test:gui:integration"])).toEqual(route?.env);
+  });
+
+  it("leaves gui-journey ungated and deterministic, matching its npm command", () => {
+    const route = routeById("gui-journey");
+    expect(route).not.toBeNull();
+    expect(route?.nature).toBe("deterministic");
+    expect(route?.env ?? {}).toEqual({});
+    expect(scriptEnvAssignments(packageJson.scripts["test:gui:journey"])).toEqual({});
+  });
+
+  it("treats the gui-integration flag as controlled so ambient values cannot leak", () => {
+    expect(CONTROLLED_ENV_KEYS).toContain("OPENCANDLE_GUI_INTEGRATION");
+    const enabled = buildCollectionEnv(
+      { PATH: "/bin", OPENCANDLE_GUI_INTEGRATION: "ambient" },
+      routeById("gui-integration")?.env ?? {},
+    );
+    expect(enabled.OPENCANDLE_GUI_INTEGRATION).toBe("1");
+    expect(enabled.PATH).toBe("/bin");
+    const cleared = buildCollectionEnv(
+      { PATH: "/bin", OPENCANDLE_GUI_INTEGRATION: "1" },
+      routeById("gui-journey")?.env ?? {},
+    );
+    expect(cleared.OPENCANDLE_GUI_INTEGRATION).toBeUndefined();
+  });
+});
+
+describe("route registry shape", () => {
+  it("registers the integration and journey projects with their gate steps", () => {
+    const guiIntegration = VITEST_ROUTES.find((route) => route.id === "gui-integration");
+    const guiJourney = VITEST_ROUTES.find((route) => route.id === "gui-journey");
+    expect(guiIntegration?.gateSteps).toEqual(["test:gui:integration"]);
+    expect(guiJourney?.gateSteps).toEqual(["test:gui:journey"]);
+    expect(realPolicy.full).toEqual(
+      expect.arrayContaining(["test:gui:integration", "test:gui:journey"]),
+    );
+    expect(realPolicy.release).toEqual(
+      expect.arrayContaining(["test:gui:integration", "test:gui:journey"]),
+    );
+  });
+
+  it("marks gui-browser live and keeps every route nature in the registry vocabulary", () => {
+    const guiBrowser = VITEST_ROUTES.find((route) => route.id === "gui-browser");
+    expect(guiBrowser?.nature).toBe("live");
+    for (const route of ALL_ROUTES) {
+      expect(ROUTE_NATURES).toContain(route.nature);
+    }
+  });
+
+  it("excludes the new vitest files and the live-canary helper from the standalone glob", () => {
+    const e2e = STATIC_ROUTES.find((route) => route.id === "e2e");
+    expect(e2e?.staticExclude).toEqual(
+      expect.arrayContaining([
+        "tests/e2e/gui-integration.test.ts",
+        "tests/e2e/gui-integration-lifecycle.test.ts",
+        "tests/e2e/gui-session-journey.test.ts",
+        "tests/e2e/live-canary-results.ts",
+      ]),
+    );
+    // The live canary script itself stays inventoried.
+    expect(e2e?.staticExclude).not.toContain("tests/e2e/provider-release-smoke.ts");
+    expect(e2e?.liveCommands).toContain("test:providers:release");
+  });
+
+  it("distinguishes hosted deterministic from hosted live and never gates the relay live smoke", () => {
+    const hosted = STATIC_ROUTES.find((route) => route.id === "hosted");
+    expect(hosted?.gateSteps).toEqual(["test:gui:hosted"]);
+    expect(hosted?.liveCommands).toContain("relay:smoke:browser");
+    expect(hosted?.nature).toBe("mixed");
+    const membership = deriveRouteGateMembership(hosted ?? {}, realPolicy);
+    expect(membership.gateCommands).not.toContain("npm run relay:smoke:browser");
+  });
+
+  it("reports machine review separately from the empty human ledger", () => {
+    const inventory = buildSampleInventory();
+    expect(inventory.reviewStatus.machine.reviewedCases).toBe(0);
+    expect(inventory.reviewStatus.human.reviewedCases).toBe(0);
+    expect(inventory.reviewStatus.human.ledgers).toEqual([]);
+    expect(inventory.reviewStatus.reviewedCases).toBe(0);
+    expect(inventory.gatePolicy.path).toBe("scripts/test-gate-policy.json");
+  });
+});
+
 describe("validateInventory", () => {
   it("accepts the sample inventory and reports route completeness", () => {
     const inventory = buildSampleInventory();
-    const result = validateInventory(inventory);
+    const result = validateInventory(inventory, { policy: realPolicy });
     expect(result.errors).toEqual([]);
     expect(result.ok).toBe(true);
     for (const route of [...VITEST_ROUTES, ...STATIC_ROUTES]) {
@@ -242,7 +413,9 @@ describe("validateInventory", () => {
       ...inventory,
       routes: inventory.routes.filter((entry: { id: string }) => entry.id !== "site"),
     };
-    expect(validateInventory(missingSite).errors).toContain("missing-route:site");
+    expect(validateInventory(missingSite, { policy: realPolicy }).errors).toContain(
+      "missing-route:site",
+    );
 
     const weird = {
       ...inventory,
@@ -255,7 +428,9 @@ describe("validateInventory", () => {
         },
       ],
     };
-    expect(validateInventory(weird).errors).toContain("unknown-case-route:bogus");
+    expect(validateInventory(weird, { policy: realPolicy }).errors).toContain(
+      "unknown-case-route:bogus",
+    );
   });
 
   it("flags incomplete collection so the CLI can exit non-zero", () => {
@@ -264,7 +439,9 @@ describe("validateInventory", () => {
         collection.routeId === "unit" ? { ...collection, error: "timed out" } : collection,
       ),
     });
-    expect(validateInventory(inventory).errors).toContain("collection-error:unit");
+    expect(validateInventory(inventory, { policy: realPolicy }).errors).toContain(
+      "collection-error:unit",
+    );
   });
 
   it("stays extensible: registry-derived routes validate before they collect cases", () => {
@@ -284,7 +461,7 @@ describe("validateInventory", () => {
     });
     expect(empty.routes).toHaveLength(ALL_ROUTES.length);
     expect(empty.routes.every((route: { caseCount: number }) => route.caseCount === 0)).toBe(true);
-    expect(validateInventory(empty).errors).toEqual([]);
+    expect(validateInventory(empty, { policy: realPolicy }).errors).toEqual([]);
   });
 });
 

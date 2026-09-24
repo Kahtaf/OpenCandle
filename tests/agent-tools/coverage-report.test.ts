@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -457,5 +457,64 @@ describe("coverage report baseline handling", () => {
     const rejected = run(["--check"]);
     expect(rejected.status).toBe(2);
     expect(`${rejected.stdout}${rejected.stderr}`).toMatch(/rejected|schemaVersion|surfaces/i);
+  });
+
+  it("never evaluates an informational merged report against the node baseline", () => {
+    const root = makeTempRoot("opencandle-coverage-info-");
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src", "a.ts"), "export const a = 1;\n");
+    const summaryPath = join(root, "merged-summary.json");
+    const baselinePath = join(root, "baseline.json");
+    const outputPath = join(root, "merged-report.txt");
+    const metadataPath = join(root, "metadata.json");
+    const scriptPath = resolve(repoRoot, "scripts/coverage-report.mjs");
+
+    const run = (args: string[]) =>
+      spawnSync(
+        process.execPath,
+        [
+          scriptPath,
+          "--repo-root",
+          root,
+          "--input",
+          summaryPath,
+          "--baseline",
+          baselinePath,
+          ...args,
+        ],
+        { encoding: "utf8" },
+      );
+
+    // Node baseline: a.ts at 80%.
+    writeFileSync(summaryPath, JSON.stringify({ [join(root, "src", "a.ts")]: fileEntry([8, 10]) }));
+    expect(run(["--update-baseline"]).status).toBe(0);
+
+    // A merged report whose ratio dropped would fail a node-baseline check.
+    writeFileSync(summaryPath, JSON.stringify({ [join(root, "src", "a.ts")]: fileEntry([2, 10]) }));
+    expect(run(["--check"]).status).toBe(1);
+
+    writeFileSync(
+      metadataPath,
+      JSON.stringify({
+        runtime: { node: "22.23.0", v8: "12.4.254.21-node.56" },
+        build: { assets: ["index-abc.js"] },
+        browser: { versions: ["153.0.8010.53"] },
+      }),
+    );
+
+    const informational = run([
+      "--informational",
+      "--output",
+      outputPath,
+      "--metadata",
+      metadataPath,
+    ]);
+    expect(informational.status, informational.stderr).toBe(0);
+    expect(informational.stdout).toMatch(/informational/i);
+    expect(informational.stdout).not.toMatch(/regressions against baseline/i);
+    const written = readFileSync(outputPath, "utf8");
+    expect(written).toMatch(/informational/i);
+    expect(written).toMatch(/22\.23\.0/);
+    expect(written).toMatch(/153\.0\.8010\.53/);
   });
 });

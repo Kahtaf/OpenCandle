@@ -55,28 +55,33 @@ export const SURFACES = [
     id: "gui-web",
     label: "Local GUI web app (gui/web/src/)",
     include: ["gui/web/src/**"],
+    // Measured only from actual hits: the in-process Node run executes part of
+    // this surface and the merged browser lane (scripts/coverage-browser.mjs)
+    // augments it; some runtime paths stay an explicit gap even when merged.
     limitation:
-      "browser runtime; executed by browser/component tests, not by the in-process Node coverage run",
+      "browser runtime; partially executed by the in-process Node run, augmented by the browser lane when merged",
   },
   {
     id: "gui-hosted",
     label: "Hosted GUI + browser runtime (gui/hosted/src, gui/hosted/runtime/)",
     include: ["gui/hosted/src/**", "gui/hosted/runtime/**"],
     limitation:
-      "browser/WebContainer runtime; only the subset exercised by in-process tests is measured here",
+      "browser/WebContainer runtime; in-process tests plus the browser lane when merged measure only a subset",
   },
   {
     id: "ui-package",
     label: "Shared UI package (packages/ui/src/)",
     include: ["packages/ui/src/**"],
-    limitation: "React components render in browser/component tests, not the in-process Node run",
+    limitation:
+      "React components; partially executed by the in-process Node run and augmented by the browser lane when merged",
   },
   {
     id: "provider-relay",
     label: "Provider relay worker (workers/provider-relay/src/)",
     include: ["workers/provider-relay/src/**"],
-    limitation:
-      "separate relay workspace (`npm run relay:test`); not merged into the root in-process run",
+    // Measured: the relay workspace lane is merged into this report by
+    // scripts/coverage-merge.mjs, so it is no longer a measurement gap.
+    limitation: null,
   },
 ];
 
@@ -638,7 +643,9 @@ function formatMetric(metric) {
 /** Render the compact per-surface human report. */
 export function formatReport(current, comparison) {
   const lines = [];
-  lines.push("# Coverage by production surface (in-process Node unit run)");
+  lines.push(
+    "# Coverage by production surface (merged Node + relay lanes; browser lane when merged)",
+  );
   lines.push("");
   lines.push(
     "surface                  lines               functions            branches             files",
@@ -763,9 +770,12 @@ export function parseArgs(argv) {
   const options = {
     updateBaseline: false,
     check: false,
+    informational: false,
     json: false,
     coveragePath: join("coverage", "coverage-summary.json"),
     baselinePath: join("scripts", "coverage-baseline.json"),
+    outputPath: null,
+    metadataPath: null,
     repoRoot: process.cwd(),
     tolerancePoints: DEFAULT_TOLERANCE_POINTS,
   };
@@ -783,11 +793,21 @@ export function parseArgs(argv) {
       case "--check":
         options.check = true;
         break;
+      case "--informational":
+        options.informational = true;
+        break;
       case "--json":
         options.json = true;
         break;
+      case "--input":
       case "--coverage":
         options.coveragePath = next();
+        break;
+      case "--output":
+        options.outputPath = next();
+        break;
+      case "--metadata":
+        options.metadataPath = next();
         break;
       case "--baseline":
         options.baselinePath = next();
@@ -815,6 +835,37 @@ function resolveFrom(root, path) {
   return isAbsolute(path) ? path : join(root, path);
 }
 
+/** Render the browser lane's recorded runtime/build/browser provenance. */
+function formatProvenance(metadata) {
+  const runtime = metadata.runtime ?? {};
+  const lines = [
+    "",
+    "## Provenance",
+    "",
+    `runtime: node ${runtime.node ?? "unknown"} (v8 ${runtime.v8 ?? "unknown"}, ${
+      runtime.platform ?? "?"
+    } ${runtime.arch ?? "?"})`,
+  ];
+  if (metadata.browser?.versions?.length) {
+    lines.push(`browser: ${metadata.browser.versions.join(", ")}`);
+  }
+  if (metadata.tools && Object.keys(metadata.tools).length > 0) {
+    lines.push(
+      `tools: ${Object.entries(metadata.tools)
+        .map(([name, version]) => `${name}@${version}`)
+        .join(", ")}`,
+    );
+  }
+  if (metadata.build?.assets?.length) {
+    lines.push(
+      `build assets: ${metadata.build.assets
+        .map((asset) => `${asset.file}@${String(asset.sha256).slice(0, 12)}`)
+        .join(", ")}`,
+    );
+  }
+  return lines.join("\n");
+}
+
 function main() {
   let options;
   try {
@@ -839,6 +890,30 @@ function main() {
     expectedFiles: listExpectedFiles({ repoRoot: options.repoRoot }),
     repoRoot: options.repoRoot,
   });
+
+  if (options.informational) {
+    const parts = [
+      "# Informational merged report (Node + relay + browser lane) — not gated against the Node baseline",
+      "",
+      formatReport(current, null),
+    ];
+    if (options.metadataPath) {
+      const metadataPath = resolveFrom(options.repoRoot, options.metadataPath);
+      if (existsSync(metadataPath)) {
+        parts.push(formatProvenance(JSON.parse(readFileSync(metadataPath, "utf8"))));
+      } else {
+        parts.push(`\n## Provenance\n\nmetadata not found: ${metadataPath}`);
+      }
+    }
+    const text = parts.join("\n");
+    console.log(text);
+    if (options.outputPath) {
+      const outputPath = resolveFrom(options.repoRoot, options.outputPath);
+      mkdirSync(dirname(outputPath), { recursive: true });
+      writeFileSync(outputPath, `${text}\n`, "utf8");
+    }
+    process.exit(0);
+  }
 
   if (options.updateBaseline) {
     const baseline = baselineFromSummary(current, {

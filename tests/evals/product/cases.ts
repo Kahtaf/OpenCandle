@@ -255,7 +255,7 @@ function makeCase(
   id: string,
   templateId: string,
   overrides: Pick<ProductEvalCase, "prompt"> &
-    Partial<Omit<ProductEvalCase, "id" | "templateId" | "family" | "dimensions" | "prompt">>,
+    Partial<Omit<ProductEvalCase, "id" | "templateId" | "family" | "prompt">>,
 ): ProductEvalCase {
   const template = PRODUCT_SCENARIO_TEMPLATES.find((candidate) => candidate.id === templateId);
   if (!template) throw new Error(`Unknown product eval template: ${templateId}`);
