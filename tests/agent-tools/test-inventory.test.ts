@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ALL_ROUTES,
   assertNoSecretLikeValues,
@@ -534,5 +534,76 @@ describe("CLI read-only behaviour", () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/collection-error:/);
+  });
+});
+
+describe("Windows-safe npx collection", () => {
+  /**
+   * Run the real CLI in-process under a simulated Windows platform. Only the
+   * npm-entrypoint probe and the child-process boundary are mocked; the route
+   * runner, `buildNpmInvocation`, and option forwarding stay real. On POSIX the
+   * bare `npx` and the node + JS-entrypoint forms are identical, so the
+   * simulation is the only way to observe the wiring on a non-Windows host.
+   */
+  it("spawns npx through buildNpmInvocation with the node JS entrypoint", async () => {
+    const calls: Array<{ command: string; args: string[]; options: Record<string, unknown> }> = [];
+    const spawnMock = vi.fn((command: string, args: string[], options: Record<string, unknown>) => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: "[]", stderr: "", signal: null, error: undefined };
+    });
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+
+    vi.resetModules();
+    vi.doMock("node:child_process", () => ({ spawnSync: spawnMock }));
+    vi.doMock("node:fs", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:fs")>();
+      return {
+        ...actual,
+        existsSync: (path: string) =>
+          String(path).endsWith("npx-cli.js") || actual.existsSync(path),
+      };
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      process.argv = [process.execPath, cliPath, "--stdout"];
+      await import(pathToFileURL(cliPath).href);
+    } finally {
+      log.mockRestore();
+      error.mockRestore();
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
+      vi.doUnmock("node:child_process");
+      vi.doUnmock("node:fs");
+      vi.resetModules();
+    }
+
+    expect(calls.length).toBeGreaterThan(0);
+    // Every collection spawn must resolve npx to `process.execPath` plus the
+    // JavaScript entrypoint, never the bare npx (the .cmd shim on Windows).
+    for (const call of calls) {
+      expect(call.command).toBe(process.execPath);
+      expect(call.args[0]).toMatch(/npx-cli\.js$/);
+    }
+    expect(calls[0].args.slice(1)).toEqual([
+      "vitest",
+      "list",
+      "--json",
+      "--project",
+      "unit",
+      "--staticParse=false",
+    ]);
+    expect(calls[0].options).toMatchObject({
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 600_000,
+      killSignal: "SIGKILL",
+    });
   });
 });

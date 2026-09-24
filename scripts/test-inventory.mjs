@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildNpmInvocation } from "./npm-command.mjs";
 import {
   ALL_ROUTES,
   assertNoSecretLikeValues,
@@ -150,7 +151,8 @@ function runVitestList(route, env, timeoutMs) {
   if (route.project) args.push("--project", route.project);
   if (route.collectionMode === "runtime") args.push("--staticParse=false");
   const cwd = route.cwd ? resolve(repoRoot, route.cwd) : repoRoot;
-  const result = spawnSync("npx", args, {
+  const { command, args: commandArgs } = buildNpmInvocation("npx", args);
+  const result = spawnSync(command, commandArgs, {
     cwd,
     env: buildCollectionEnv(process.env, route.env ?? {}, env),
     encoding: "utf8",
