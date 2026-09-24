@@ -225,9 +225,12 @@ describe("GUI session journey", () => {
     // is mid native answer stream, then passively disconnect. This is the
     // preserved behavior: only explicit Stop cancels.
     await startNewSession(page);
+    // Capture the hold baseline before submitting: the request can reach the
+    // gate during the submit round-trip, so a post-submit baseline would wait
+    // for a second request that never arrives.
+    const waitCountBefore = answerHold.waitCount;
     await submitPrompt(page, STREAM_HOLD_PROMPT);
     const runSessionId = sessionIdFromUrl(page);
-    const waitCountBefore = answerHold.waitCount;
     await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
     await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
     const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
@@ -266,10 +269,11 @@ describe("GUI session journey", () => {
 
     // Start a run whose router response is held so the run is genuinely active.
     await startNewSession(page);
+    // Baseline before submit: the held router request can start during submit.
+    const waitCountBefore = routerHold.waitCount;
     const runActionId = await submitPromptAndCaptureRunActionId(page, CANCEL_PROMPT);
     expect(runActionId).toMatch(/^chat-/);
     const cancelledSessionId = sessionIdFromUrl(page);
-    const waitCountBefore = routerHold.waitCount;
     await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
     await waitForCondition(() => routerHold.waitCount > waitCountBefore, 10_000);
     const heldSettlement = heldModelSettlement(harness, "Hold the NVDA router", "router");
@@ -355,10 +359,11 @@ describe("GUI session journey", () => {
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
 
     await startNewSession(page);
+    // Baseline before submit: the native answer request can start during submit.
+    const waitCountBefore = answerHold.waitCount;
     const runActionId = await submitPromptAndCaptureRunActionId(page, STREAM_HOLD_PROMPT);
     expect(runActionId).toMatch(/^chat-/);
     const cancelledSessionId = sessionIdFromUrl(page);
-    const waitCountBefore = answerHold.waitCount;
     await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
     await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
 
@@ -414,10 +419,11 @@ describe("GUI session journey", () => {
     quoteHoldActive.value = true;
     const nvdaRequestsBefore = nvdaQuoteRequests(harness);
     await startNewSession(page);
+    // Baseline before submit: the held tool fetch can open during submit.
+    const waitCountBefore = toolHold.waitCount;
     const runActionId = await submitPromptAndCaptureRunActionId(page, TOOL_HOLD_PROMPT);
     expect(runActionId).toMatch(/^chat-/);
     const cancelledSessionId = sessionIdFromUrl(page);
-    const waitCountBefore = toolHold.waitCount;
     await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
     await waitForCondition(() => toolHold.waitCount > waitCountBefore, 10_000);
 

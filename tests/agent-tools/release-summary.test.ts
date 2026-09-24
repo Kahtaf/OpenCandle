@@ -272,7 +272,10 @@ function seedEvals(
   writeJson(repo.root, `${runDir}/release-eval-summary.json`, summary);
 }
 
-function seedPackage(repo: CandidateRepo, { tamperSha = false } = {}): void {
+function seedPackage(
+  repo: CandidateRepo,
+  { tamperSha = false, testedAt = RECENT }: { tamperSha?: boolean; testedAt?: string } = {},
+): void {
   const dir = "validation-output/release-package";
   const tarball = `${repo.name}-${repo.version}.tgz`;
   const bytes = Buffer.from("fake tarball bytes");
@@ -285,7 +288,7 @@ function seedPackage(repo: CandidateRepo, { tamperSha = false } = {}): void {
     packageVersion: repo.version,
     tarball,
     sha256: tamperSha ? "0".repeat(64) : sha256(bytes),
-    testedAt: RECENT,
+    testedAt,
     node: "22.23.0",
     platform: "darwin",
     smokePassed: true,
@@ -303,11 +306,18 @@ function seedCoverage(repo: CandidateRepo): void {
   });
 }
 
-function seedAll(repo: CandidateRepo): void {
-  seedGate(repo);
-  seedProvider(repo);
-  seedEvals(repo);
-  seedPackage(repo);
+/**
+ * Seed every artifact for one candidate. Unit tests pin the injected clock to
+ * `NOW`, so their default `RECENT` fixtures stay fixed and deterministic. The
+ * real CLI test overrides the reference with its own invocation time: the CLI
+ * reads `Date.now()` and enforces a 24h freshness window, so a frozen fixture
+ * date would silently expire the day after it was written.
+ */
+function seedAll(repo: CandidateRepo, startedAt = RECENT): void {
+  seedGate(repo, { startedAt });
+  seedProvider(repo, { startedAt, finishedAt: startedAt });
+  seedEvals(repo, { startedAt });
+  seedPackage(repo, { testedAt: startedAt });
   seedCoverage(repo);
 }
 
@@ -815,7 +825,9 @@ describe("buildReleaseSummary", () => {
 
   it("runs as a CLI and rejects unknown arguments", () => {
     const repo = makeCandidate();
-    seedAll(repo);
+    // The CLI ignores the test's injected clock and reads Date.now() directly,
+    // so seed its fixtures relative to this invocation instead of RECENT.
+    seedAll(repo, new Date(Date.now() - 30 * 60 * 1000).toISOString());
     const script = fileURLToPath(new URL("../../scripts/release-summary.mjs", import.meta.url));
 
     const run = spawnSync(

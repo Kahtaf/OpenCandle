@@ -954,6 +954,52 @@ describe("sessionEntriesToChatEvents", () => {
       events.filter((event) => event.type === "message.created" && event.role === "user"),
     ).toHaveLength(0);
   });
+
+  it("replays an attachment-bearing cancelled turn from the original input, then a plain turn with no leak", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("original-cancel", "opencandle-user-input", {
+          original: "am I too concentrated?",
+          attachments: [{ kind: "portfolio", label: "Portfolio" }],
+        }),
+        customEntry("cancel-3", "opencandle-run-cancelled", {
+          // The marker stores the expanded workflow prompt, not the user's words.
+          text: "Current date: 2026-07-15 Analyze the attached portfolio for concentration risk...",
+        }),
+        messageEntry("plain-user", {
+          role: "user",
+          content: "What is NVDA trading at?",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const userMessages = events.filter(
+      (event) => event.type === "message.created" && event.role === "user",
+    );
+    expect(userMessages.map((event) => event.messageId)).toEqual([
+      "cancelled-user-cancel-3",
+      "plain-user",
+    ]);
+
+    const cancelled = events.find(
+      (event) =>
+        event.type === "message.completed" && event.messageId === "cancelled-user-cancel-3",
+    );
+    expect(cancelled).toMatchObject({
+      content: [{ type: "text", text: "am I too concentrated?" }],
+      attachments: [{ kind: "portfolio", label: "Portfolio" }],
+    });
+
+    const plain = events.find(
+      (event) => event.type === "message.completed" && event.messageId === "plain-user",
+    );
+    expect(plain).toMatchObject({
+      content: [{ type: "text", text: "What is NVDA trading at?" }],
+    });
+    expect(plain).not.toHaveProperty("attachments");
+  });
 });
 
 function messageEntry(id: string, message: Message): SessionEntry {

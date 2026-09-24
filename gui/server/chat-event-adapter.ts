@@ -77,7 +77,14 @@ export function sessionEntriesToChatEvents(
     if (isCustomEntry(entry, "opencandle-run-cancelled")) {
       lastEntryWasUserMessage = false;
       const details = customEntryData(entry);
-      const originalText = stringField(details, "text");
+      // The marker's `text` is the expanded workflow prompt. When the early
+      // input hook recorded the user's own words in an `opencandle-user-input`
+      // marker, prefer that original text and attachments, then clear them so
+      // they cannot leak onto the next user turn.
+      const originalText = pendingOriginalInput ?? stringField(details, "text");
+      const originalAttachments = pendingOriginalAttachments;
+      pendingOriginalInput = null;
+      pendingOriginalAttachments = [];
       if (originalText) {
         const cancelledUserId = `cancelled-user-${entry.id}`;
         events.push({
@@ -92,6 +99,7 @@ export function sessionEntriesToChatEvents(
           sessionId: options.sessionId,
           messageId: cancelledUserId,
           content: [{ type: "text", text: originalText }],
+          ...(originalAttachments.length > 0 ? { attachments: originalAttachments } : {}),
           seq: seq++,
         });
       }

@@ -30,6 +30,32 @@ const CANDIDATE = {
 };
 
 /**
+ * Explicit default-tier child env for the real placeholder spawn. Inheriting
+ * `process.env` would let an ambient `EVAL_TIER=usually` (or an opt-in flag)
+ * run live cases inside a default-tier proof. Blanking the keys rather than
+ * deleting them also stops the child's `loadEnv()` from restoring them, and
+ * blanking the model credentials keeps a regressed case off a live model.
+ */
+function defaultTierPlaceholderEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  for (const key of [
+    "EVAL_TIER",
+    "OPENCANDLE_LIVE_MULTI_TURN_EVAL",
+    "OPENCANDLE_RUN_KNOWN_FAIL_EVALS",
+    "OPENCANDLE_EVAL_KNOWN_FAIL_E2",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "OPENROUTER_API_KEY",
+    "TYPESAFE_API_KEY",
+  ]) {
+    env[key] = "";
+  }
+  return env;
+}
+
+/**
  * Minimal explicit config for the out-of-discovery fixture. Written to a temp
  * dir with an absolute root so no default project include ever picks it up.
  */
@@ -312,10 +338,24 @@ describe("canonical vitest case ids", () => {
       "tests/evals/cases/live-multi-turn-coreference.eval.ts",
     ];
     const outputFile = join(mkdtempSync(join(tmpdir(), "oc-placeholders-")), "report.json");
+    // A caller may export usually-tier activation; the spawn must defuse it
+    // itself and run the real child at default tier.
+    const hostileAmbient: NodeJS.ProcessEnv = {
+      ...process.env,
+      EVAL_TIER: "usually",
+      OPENCANDLE_LIVE_MULTI_TURN_EVAL: "1",
+      OPENCANDLE_RUN_KNOWN_FAIL_EVALS: "1",
+      OPENCANDLE_EVAL_KNOWN_FAIL_E2: "1",
+    };
     const run = spawnSync(
       "vitest",
       ["run", "--project", "evals", ...files, "--reporter=json", `--outputFile=${outputFile}`],
-      { cwd: REPO_ROOT, env: process.env, encoding: "utf-8", timeout: 180_000 },
+      {
+        cwd: REPO_ROOT,
+        env: defaultTierPlaceholderEnv(hostileAmbient),
+        encoding: "utf-8",
+        timeout: 180_000,
+      },
     );
     expect(run.status).toBe(0);
     const payload = JSON.parse(readFileSync(outputFile, "utf-8")) as {
