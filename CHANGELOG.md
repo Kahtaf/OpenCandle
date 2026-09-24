@@ -17,6 +17,8 @@
 - When more than one data source falls back in a single turn, the recorded data-gap note now names every affected source instead of only the first.
 - A chat stopped before the model replies now saves the original prompt and a stopped marker to the session file, so a reload shows the cancelled turn and its text instead of losing them.
 - Starting a new chat, opening another session, or deleting the current one while GUI work is still answering no longer cancels that run; the GUI reports the session as busy instead.
+- Cancelling a run that had a staged attachment no longer replays that attachment into the next turn.
+- Release checks now run through a portable JavaScript entry point instead of a platform shell command, so they work on Windows as well as macOS and Linux.
 
 ## [0.15.0] - 2026-09-21
 
