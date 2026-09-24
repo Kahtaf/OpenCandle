@@ -54,36 +54,37 @@ describe("local session coordinator", () => {
     expect(source).toContain("return actionAccepted;");
   });
 
-  it("queues a second chat prompt until the active run finishes", async () => {
+  it("rejects a second distinct chat prompt instead of queueing it, and never runs it", async () => {
     const coordinator = createLocalSessionCoordinator();
     let finishFirst!: () => void;
-    const order: string[] = [];
     const firstRun = coordinator.runSessionAction(
       chatAction({ actionId: "action-1" }),
       () =>
         new Promise((resolve) => {
-          order.push("first-started");
-          finishFirst = () => {
-            order.push("first-finished");
-            resolve({ accepted: true });
-          };
+          finishFirst = () => resolve({ accepted: true });
         }),
     );
+    const secondHandler = vi.fn(async () => ({ accepted: true }));
 
     const secondRun = coordinator.runSessionAction(
       chatAction({ actionId: "action-2" }),
-      async () => {
-        order.push("second-started");
-        return { accepted: true };
-      },
+      secondHandler,
     );
 
+    // The rejection is immediate: the second handler is never invoked while the
+    // first run is still active.
     await Promise.resolve();
-    expect(order).toEqual(["first-started"]);
+    expect(secondHandler).not.toHaveBeenCalled();
+
     finishFirst();
     await expect(firstRun).resolves.toMatchObject({ ok: true, duplicate: false });
-    await expect(secondRun).resolves.toMatchObject({ ok: true, duplicate: false });
-    expect(order).toEqual(["first-started", "first-finished", "second-started"]);
+    await expect(secondRun).resolves.toEqual({
+      ok: false,
+      code: "session_busy",
+      message: "OpenCandle is still working in this session. Try again when it finishes.",
+    });
+    // Even after the first run settles, the rejected action is never replayed.
+    expect(secondHandler).not.toHaveBeenCalled();
   });
 
   it("keeps non-chat run actions fail-fast while a chat prompt is active", async () => {
@@ -107,6 +108,60 @@ describe("local session coordinator", () => {
       code: "session_busy",
       message: "OpenCandle is still working in this session. Try again when it finishes.",
     });
+    finishFirst();
+    await firstRun;
+  });
+
+  it("rejects a chat prompt while a tool.invoke run is active", async () => {
+    const coordinator = createLocalSessionCoordinator();
+    let finishTool!: () => void;
+    const toolRun = coordinator.runSessionAction(
+      chatAction({ actionId: "tool-1", actionType: "tool.invoke" }),
+      () =>
+        new Promise((resolve) => {
+          finishTool = () => resolve({ accepted: true });
+        }),
+    );
+    const chatHandler = vi.fn(async () => ({ accepted: true }));
+
+    const chatRun = await coordinator.runSessionAction(
+      chatAction({ actionId: "action-2" }),
+      chatHandler,
+    );
+
+    expect(chatRun).toEqual({
+      ok: false,
+      code: "session_busy",
+      message: "OpenCandle is still working in this session. Try again when it finishes.",
+    });
+    expect(chatHandler).not.toHaveBeenCalled();
+    finishTool();
+    await toolRun;
+  });
+
+  it("allows run.cancel while a chat prompt is active", async () => {
+    const coordinator = createLocalSessionCoordinator();
+    let finishFirst!: () => void;
+    const firstRun = coordinator.runSessionAction(
+      chatAction({ actionId: "action-1" }),
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ accepted: true });
+        }),
+    );
+    const cancelHandler = vi.fn(async () => ({ cancelled: true }));
+
+    const cancelRun = await coordinator.runSessionAction(
+      chatAction({
+        actionId: "stop-1",
+        actionType: "run.cancel",
+        payload: { targetActionId: "action-1" },
+      }),
+      cancelHandler,
+    );
+
+    expect(cancelRun).toEqual({ ok: true, duplicate: false, result: { cancelled: true } });
+    expect(cancelHandler).toHaveBeenCalledTimes(1);
     finishFirst();
     await firstRun;
   });

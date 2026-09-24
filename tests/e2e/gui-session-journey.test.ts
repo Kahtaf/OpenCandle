@@ -48,6 +48,9 @@ import {
  */
 
 let harness: GuiJourneyHarness;
+// A distinct prompt that must never run: it is POSTed while a held run owns the
+// session, so admission must reject it rather than queue it.
+const DISTINCT_CHAT_PROMPT = "A distinct second chat that must never run.";
 // Holds are per-case; a fresh set is created in `beforeEach`.
 let routerHold = createHoldGate();
 let answerHold = createHoldGate();
@@ -279,6 +282,17 @@ describe("GUI session journey", () => {
     const heldSettlement = heldModelSettlement(harness, "Hold the NVDA router", "router");
     expect(heldSettlement).toBeDefined();
 
+    // A distinct second chat prompt while this run is active is rejected with
+    // 409 session_busy by the real server. It must not be queued to execute
+    // after the first run settles.
+    const secondChat = await postChatRun(page, cancelledSessionId, {
+      actionId: `chat-queued-${Date.now()}`,
+      prompt: DISTINCT_CHAT_PROMPT,
+    });
+    expect(secondChat.status).toBe(409);
+    expect(secondChat.json).toMatchObject({ code: "session_busy" });
+    expect(String(secondChat.json.error)).toContain("still working");
+
     try {
       // A stale target while the run is active is acknowledged without
       // cancelling: the Stop must name the run it is actually stopping.
@@ -340,6 +354,18 @@ describe("GUI session journey", () => {
           10_000,
         ),
       ).toBe(true);
+
+      // The rejected second prompt never ran: no queued invocation reached the
+      // model or produced a second user turn once the first run settled.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(
+        harness.modelServer.requests.some((request) =>
+          JSON.stringify(request.messages).includes(DISTINCT_CHAT_PROMPT),
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(harness.readSessionEntries(cancelledSessionId))).not.toContain(
+        DISTINCT_CHAT_PROMPT,
+      );
 
       // The owning server is free again: a subsequent prompt runs to completion.
       await startNewSession(page);
@@ -644,6 +670,31 @@ async function postRunCancel(
         json = (await response.json()) as Record<string, unknown>;
       } catch {
         // A pre-patch server serves a non-JSON 404; the caller asserts on it.
+      }
+      return { status: response.status, json };
+    },
+    { sessionId, body },
+  );
+}
+
+/** Posts a chat run over the trusted browser session, using the real runs route. */
+async function postChatRun(
+  page: Page,
+  sessionId: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  return page.evaluate(
+    async ({ sessionId: id, body: requestBody }) => {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      let json: Record<string, unknown> = {};
+      try {
+        json = (await response.json()) as Record<string, unknown>;
+      } catch {
+        // A rejected run may not carry JSON; the caller asserts on the status.
       }
       return { status: response.status, json };
     },
