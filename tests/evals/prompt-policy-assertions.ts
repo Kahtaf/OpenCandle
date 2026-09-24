@@ -145,6 +145,103 @@ function asksForTickerClarification(trace: EvalTrace): boolean {
   );
 }
 
+// Only puts, put options/contracts, or plain contracts count as the hedge unit.
+// An intervening adjective ("4 call contracts") or generic "options" must not.
+const HEDGE_PUT_UNIT = "(?:puts?|put\\s+(?:option\\s+)?contracts?|put\\s+options?|contracts?)";
+const HEDGE_OWNED_SHARES =
+  /(?<![\d.])450(?![\d.])\s*[- ]?\s*(?:shares?|sh\b)|\bfour\s+hundred(?:\s+and)?\s+fifty\s+shares?\b/;
+const HEDGE_RESIDUAL_QUALIFIER =
+  /\b(?:residual|remainder|remaining|leftover|unhedged|uncovered|unprotected|not hedged|not covered)\b/;
+// Actual excess/overhedge semantics only: bare rounding/fractional language is
+// not an explanation of the 50 shares of excess exposure.
+const HEDGE_EXCESS_QUALIFIER =
+  /\b(?:excess|extra|surplus|additional|over-?hedg\w*|over-?expos\w*|over-?cover\w*|beyond|above your|more\s+(?:shares?|than|exposure|protection))\b/;
+// Downside-protection floor mechanics: the literal floor word, or an explicit
+// bounded equivalent (protected from falling below the strike minus premium,
+// protection begins at/below, caps losses at). Deliberately not a blanket
+// "protection"/"risk" match.
+const HEDGE_FLOOR_MECHANICS =
+  /\b(?:hedge|effective|downside)?\s*floor\b|\bprotected from (?:falling|dropping|declining|slipping) below\b|\bprotection (?:begins|starts|kicks in)(?: only)? (?:at|below|around|once)\b|\bdownside protection (?:begins|starts|level|at|below|once)\b|\bcaps? (?:your )?(?:losses|downside|risk|exposure) (?:at|below|around)\b|\b(?:strike|price)\s*(?:minus|[-–])\s*(?:the\s+)?premium\b/i;
+
+// Normal Markdown bold emphasis around a number must not change sizing, e.g.
+// "buy **4** put contracts" or "**5** puts". Strip paired ** / __ markers from
+// the matching copy only; unmatched markers are left untouched.
+function stripMarkdownEmphasis(text: string): string {
+  return text.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, "$2");
+}
+
+// A put quantity tied to its option unit, so numbered-list digits ("4."),
+// unrelated figures (strikes, dates), call contracts, and generic options do
+// not satisfy the sizing. The trailing boundary keeps "4 putative" out.
+function hasHedgePutQuantity(text: string, digit: string, word: string): boolean {
+  const digitPattern = new RegExp(`(?<![\\d.])${digit}(?![\\d.])\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  const wordPattern = new RegExp(`\\b${word}\\b\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  return digitPattern.test(text) || wordPattern.test(text);
+}
+
+// A 50-share quantity stated with its share unit (not the "50" inside 450/"$50"
+// premium/50 delta) and a residual or excess qualifier in the same context.
+function hasFiftyShareMentionNear(text: string, qualifier: RegExp): boolean {
+  const pattern =
+    /(?<![\d.])(?:50|fifty)(?:-(?:share|shares)\b|\s+(?:[a-z][a-z-]*\s+){0,2}(?:share|shares)\b)/gi;
+  for (const match of text.matchAll(pattern)) {
+    const start = Math.max(0, match.index - 100);
+    const end = Math.min(text.length, match.index + match[0].length + 100);
+    if (qualifier.test(text.slice(start, end))) return true;
+  }
+  return false;
+}
+
+function evaluateHedgeSizingFromShares(text: string): {
+  passed: boolean;
+  reason: string;
+  deterministic: boolean;
+} {
+  const normalized = stripMarkdownEmphasis(text);
+  const ownedShares = HEDGE_OWNED_SHARES.test(normalized);
+  const fourUnits = hasHedgePutQuantity(normalized, "4", "four");
+  const fiveUnits = hasHedgePutQuantity(normalized, "5", "five");
+  const residual = hasFiftyShareMentionNear(normalized, HEDGE_RESIDUAL_QUALIFIER);
+  const excess = hasFiftyShareMentionNear(normalized, HEDGE_EXCESS_QUALIFIER);
+
+  if (!ownedShares) {
+    return {
+      passed: false,
+      reason:
+        "expected the sized hedge to reference the owned 450 shares (digits or words), not a different position",
+      deterministic: true,
+    };
+  }
+  if (fourUnits && residual && fiveUnits && !excess) {
+    return {
+      passed: false,
+      reason:
+        "expected a reconciled sizing: a 4-put/50-share-residual recommendation and a 5-contract recommendation contradict without an explicit excess explanation",
+      deterministic: true,
+    };
+  }
+  if (fourUnits && residual) {
+    return {
+      passed: true,
+      reason: "observed 4 put contracts with the 50-share residual made explicit",
+      deterministic: true,
+    };
+  }
+  if (fiveUnits && excess) {
+    return {
+      passed: true,
+      reason: "observed 5 put contracts with the 50-share excess or overhedge made explicit",
+      deterministic: true,
+    };
+  }
+  return {
+    passed: false,
+    reason:
+      "expected a put/contract quantity for the owned 450 shares with an explicit 50-share residual or an explained 50-share excess/overhedge; incidental digits, call contracts, generic options, or unqualified 500-share coverage do not count",
+    deterministic: true,
+  };
+}
+
 function evaluateManifestAssertion(
   assertion: string,
   trace: EvalTrace,
@@ -386,10 +483,25 @@ function evaluateManifestAssertion(
     return forbids(/bullish call|bull call|call spread|covered call/);
   }
   if (lowerAssertion.includes("sizes hedge from 450 shares")) {
-    return requires(/450/, /\b4\b|four/, /50|residual|unhedged|round/);
+    return evaluateHedgeSizingFromShares(text);
   }
   if (lowerAssertion.includes("hedge floor, premium")) {
-    return requires(/hedge floor|floor/, /premium/, /delta|theta|greeks?/, /liquidity/, /risk/);
+    const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/, /risk/);
+    if (!base.passed) return base;
+    if (!HEDGE_FLOOR_MECHANICS.test(text)) {
+      return {
+        passed: false,
+        reason:
+          "expected explicit downside-protection floor mechanics, such as shares protected from falling below the strike minus premium or protection beginning at/below a strike",
+        deterministic: true,
+      };
+    }
+    return {
+      passed: true,
+      reason:
+        "observed premium, Greeks, liquidity, risk, and explicit downside-protection floor mechanics",
+      deterministic: true,
+    };
   }
   if (
     lowerAssertion.includes("bottom-line portfolio risk/reward") ||
