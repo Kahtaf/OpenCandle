@@ -4,13 +4,13 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { buildNpmInvocation } from "./npm-command.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const keepTemp = process.env.OPENCANDLE_KEEP_PACK_SMOKE === "1";
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 export function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -181,6 +181,28 @@ function capture(command, args, options = {}) {
   return result.stdout.trim();
 }
 
+// npm/npx run through their JavaScript entrypoint (see npm-command.mjs) so the
+// `shell: false` spawn above stays safe on Windows.
+function runNpm(args, options) {
+  const invocation = buildNpmInvocation("npm", args);
+  return run(invocation.command, invocation.args, options);
+}
+
+function captureNpm(args, options) {
+  const invocation = buildNpmInvocation("npm", args);
+  return capture(invocation.command, invocation.args, options);
+}
+
+function runNpx(args, options) {
+  const invocation = buildNpmInvocation("npx", args);
+  return run(invocation.command, invocation.args, options);
+}
+
+function captureNpx(args, options) {
+  const invocation = buildNpmInvocation("npx", args);
+  return capture(invocation.command, invocation.args, options);
+}
+
 async function waitForHealth(url, timeoutMs) {
   const startedAt = Date.now();
   let lastError;
@@ -240,15 +262,37 @@ function forceKillProcessTree(child) {
   }
 }
 
-async function smokeGui(packageDir, env, registerChild) {
+/**
+ * Launch target for the installed CLI. POSIX keeps the `node_modules/.bin`
+ * shim so the smoke still proves the install shim works. Windows cannot spawn
+ * the `.cmd` shim under `shell: false` (same hardening as npm.cmd), so resolve
+ * the installed package.json `bin` JavaScript entrypoint and run it through
+ * `process.execPath` instead.
+ */
+export function resolveInstalledCli(packageDir, manifest, platform = process.platform) {
+  if (platform !== "win32") {
+    return { command: join(packageDir, "node_modules", ".bin", "opencandle"), args: [] };
+  }
+
+  const bin = manifest?.bin;
+  const relativeBin = typeof bin === "string" ? bin : bin?.[manifest.name];
+  if (typeof relativeBin !== "string" || relativeBin.length === 0) {
+    throw new Error("Packed package.json does not declare an opencandle bin entry");
+  }
+
+  const packageRoot = join(packageDir, "node_modules", manifest.name);
+  const script = resolve(packageRoot, relativeBin);
+  const escaped = relative(packageRoot, script);
+  if (escaped.startsWith("..") || isAbsolute(escaped)) {
+    throw new Error(`Packed bin entry escapes the package directory: ${relativeBin}`);
+  }
+  return { command: process.execPath, args: [script] };
+}
+
+async function smokeGui(packageDir, env, manifest, registerChild) {
   const port = String(19_000 + Math.floor(Math.random() * 20_000));
-  const bin = join(
-    packageDir,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "opencandle.cmd" : "opencandle",
-  );
-  const child = spawn(bin, ["gui"], {
+  const cli = resolveInstalledCli(packageDir, manifest);
+  const child = spawn(cli.command, [...cli.args, "gui"], {
     cwd: packageDir,
     env: {
       ...env,
@@ -335,15 +379,15 @@ export async function main(argv = process.argv.slice(2)) {
       }
       console.log(`Using explicit tarball ${tarballPath}`);
     } else {
-      run(npmCommand, ["run", "prepare"]);
-      const packOutput = capture(npmCommand, ["pack", "--json", "--pack-destination", packDir]);
+      runNpm(["run", "prepare"]);
+      const packOutput = captureNpm(["pack", "--json", "--pack-destination", packDir]);
       const tarballName = packFilenameFromJson(packOutput);
       tarballPath = join(packDir, tarballName);
       assertUsableTarball(tarballPath);
     }
 
     const hashBefore = sha256File(tarballPath);
-    run(npmCommand, ["install", "--no-audit", "--no-fund", tarballPath], { cwd: packageDir });
+    runNpm(["install", "--no-audit", "--no-fund", tarballPath], { cwd: packageDir });
 
     const packedPackageJson = JSON.parse(
       readFileSync(join(packageDir, "node_modules", rootManifest.name, "package.json"), "utf8"),
@@ -379,13 +423,13 @@ export async function main(argv = process.argv.slice(2)) {
     // A fresh consumer home has no model credentials, so doctor reports
     // blocked health and exits 1 by contract; the JSON status assertion
     // below is the strong gate on that state.
-    run(npxCommand, ["--no-install", "opencandle", "doctor"], {
+    runNpx(["--no-install", "opencandle", "doctor"], {
       cwd: packageDir,
       env,
       allowedExitCodes: [0, 1],
     });
 
-    const version = capture(npxCommand, ["--no-install", "opencandle", "--version"], {
+    const version = captureNpx(["--no-install", "opencandle", "--version"], {
       cwd: packageDir,
       env,
     });
@@ -395,7 +439,7 @@ export async function main(argv = process.argv.slice(2)) {
       );
     }
 
-    const help = capture(npxCommand, ["--no-install", "opencandle", "--help"], {
+    const help = captureNpx(["--no-install", "opencandle", "--help"], {
       cwd: packageDir,
       env,
     });
@@ -403,7 +447,7 @@ export async function main(argv = process.argv.slice(2)) {
       throw new Error("Packed CLI help did not include usage information");
     }
 
-    const doctorJson = capture(npxCommand, ["--no-install", "opencandle", "doctor", "--json"], {
+    const doctorJson = captureNpx(["--no-install", "opencandle", "doctor", "--json"], {
       cwd: packageDir,
       env,
       allowedExitCodes: [0, 1],
@@ -417,7 +461,7 @@ export async function main(argv = process.argv.slice(2)) {
         `Expected fresh packed CLI doctor status blocked, received ${doctorReport.status}`,
       );
     }
-    await smokeGui(packageDir, env, (child) => {
+    await smokeGui(packageDir, env, packedPackageJson, (child) => {
       guiChild = child;
     });
 

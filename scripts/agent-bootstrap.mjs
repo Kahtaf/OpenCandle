@@ -12,6 +12,7 @@ import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getUnsupportedNodeVersionMessage } from "./check-node-version-lib.mjs";
+import { buildNpmInvocation } from "./npm-command.mjs";
 
 const proofCommand = "npm run gates";
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
@@ -109,8 +110,8 @@ function prepareDependencies(root, options) {
   }
   if (!installNeeded) return "ok";
 
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  const result = spawnSync(npmCommand, ["ci"], { cwd: root, stdio: "inherit" });
+  const invocation = buildNpmInvocation("npm", ["ci"]);
+  const result = spawnSync(invocation.command, invocation.args, { cwd: root, stdio: "inherit" });
   return result.status === 0 ? "installed" : "failed";
 }
 

@@ -13,10 +13,10 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { buildNpmInvocation } from "./npm-command.mjs";
 import { assertUsableTarball, packFilenameFromJson, sha256File } from "./packed-install-smoke.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const smokeScriptPath = join(defaultRoot, "scripts", "packed-install-smoke.mjs");
 const proofFilename = "package-proof.json";
 const generatedTarballPattern = /\.tgz$/i;
@@ -50,6 +50,18 @@ function capture(command, args, options = {}) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
   }
   return result.stdout;
+}
+
+// npm runs through its JavaScript entrypoint (see npm-command.mjs) so the
+// `shell: false` spawn above stays safe on Windows.
+function runNpm(args, options) {
+  const invocation = buildNpmInvocation("npm", args);
+  return run(invocation.command, invocation.args, options);
+}
+
+function captureNpm(args, options) {
+  const invocation = buildNpmInvocation("npm", args);
+  return capture(invocation.command, invocation.args, options);
 }
 
 export function parseReleasePackageArgs(args) {
@@ -331,9 +343,8 @@ export function runPrepare({ root = defaultRoot, out = "validation-output/releas
   const outDir = resolveOutDir(root, out);
   resetGeneratedOutputDir(outDir);
 
-  run(npmCommand, ["run", "prepare"], { cwd: root });
-  const packOutput = capture(
-    npmCommand,
+  runNpm(["run", "prepare"], { cwd: root });
+  const packOutput = captureNpm(
     ["pack", "--ignore-scripts", "--json", "--pack-destination", outDir],
     { cwd: root },
   );

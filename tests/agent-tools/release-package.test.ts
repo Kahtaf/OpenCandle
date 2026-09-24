@@ -754,7 +754,7 @@ describe("release package prepare ordering", () => {
     const source = readFileSync(releasePackageScript, "utf8");
 
     const snapshot = source.indexOf("const candidateCommit = readGitHead(root)");
-    const build = source.indexOf('run(npmCommand, ["run", "prepare"]');
+    const build = source.indexOf('runNpm(["run", "prepare"]');
     const smoke = source.indexOf("smokeScriptPath,");
     const headCheck = source.indexOf("assertHeadUnchanged(root, candidateCommit)");
     const commit = source.indexOf("commitPackageProof({ dir: outDir");

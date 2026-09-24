@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { win32 } from "node:path";
+
 export function getNativeDependencyErrorMessage(
   error: unknown,
   dependencyName: string,
@@ -16,12 +19,44 @@ export function getNativeDependencyErrorMessage(
   );
 }
 
+/**
+ * Resolve how to invoke npm without a shell. POSIX uses the real `npm`
+ * executable. Windows cannot spawn the `npm.cmd` shim under `shell: false`
+ * (Node's .cmd/.bat hardening), so run npm's JavaScript entrypoint through
+ * `process.execPath`. `npm_execpath` is preferred when present; the standard
+ * Node install layout is the standalone fallback for runtimes that do not
+ * inherit it (for example a globally installed OpenCandle CLI).
+ */
+function resolveNpmRunner(): { command: string; args: string[] } {
+  if (process.platform !== "win32") {
+    return { command: "npm", args: [] };
+  }
+
+  const candidates: string[] = [];
+  if (process.env.npm_execpath) {
+    candidates.push(process.env.npm_execpath);
+  }
+  candidates.push(
+    win32.join(win32.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+  );
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return { command: process.execPath, args: [candidate] };
+    }
+  }
+
+  throw new Error(
+    `Cannot locate the npm JavaScript entrypoint on Windows; refusing to run the npm.cmd shim without a shell. Tried:\n- ${candidates.join("\n- ")}`,
+  );
+}
+
 export async function rebuildNativeDependency(dependencyName: string): Promise<void> {
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const npm = resolveNpmRunner();
   const { spawn } = await import("node:child_process");
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(npmCommand, ["rebuild", dependencyName], {
+    const child = spawn(npm.command, [...npm.args, "rebuild", dependencyName], {
       stdio: "inherit",
     });
 

@@ -14,6 +14,8 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { buildNpmInvocation } from "./npm-command.mjs";
+
 const GATE_KEYS = ["core", "full", "release"];
 const DEFAULT_POLICY_PATH = fileURLToPath(new URL("./test-gate-policy.json", import.meta.url));
 
@@ -131,7 +133,12 @@ function writeGateReport({ gate, result, startedAt, finishedAt, before, after, o
 
 export function runGate(
   gate,
-  { policy = loadGatePolicy(), spawn = defaultSpawn, log = console.log } = {},
+  {
+    policy = loadGatePolicy(),
+    spawn = defaultSpawn,
+    log = console.log,
+    npmArgv = (args) => buildNpmInvocation("npm", args),
+  } = {},
 ) {
   const steps = resolveGateSteps(gate, policy);
   const results = [];
@@ -139,7 +146,8 @@ export function runGate(
   for (const step of steps) {
     log(`\n▶ npm run ${step}`);
     const startedAt = Date.now();
-    const outcome = spawn("npm", ["run", step], { shell: false }) ?? {};
+    const invocation = npmArgv(["run", step]);
+    const outcome = spawn(invocation.command, invocation.args, { shell: false }) ?? {};
     const durationMs = Date.now() - startedAt;
     const status = outcome.status ?? null;
     const signal = outcome.signal ?? null;

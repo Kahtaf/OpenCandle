@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { buildNpmInvocation } from "../../scripts/npm-command.mjs";
 import {
   handleGateResult,
   loadGatePolicy,
@@ -14,6 +15,7 @@ import {
 
 const policyPath = fileURLToPath(new URL("../../scripts/test-gate-policy.json", import.meta.url));
 const testGatePath = fileURLToPath(new URL("../../scripts/test-gate.mjs", import.meta.url));
+const npmCommandPath = fileURLToPath(new URL("../../scripts/npm-command.mjs", import.meta.url));
 
 const tempRoots: string[] = [];
 
@@ -91,11 +93,47 @@ describe("runGate", () => {
       return { status: 0, signal: null };
     };
 
-    const result = runGate("core", { policy: makePolicy(), spawn, log: () => {} });
+    const result = runGate("core", {
+      policy: makePolicy(),
+      spawn,
+      log: () => {},
+      npmArgv: (args) => buildNpmInvocation("npm", args, { platform: "linux" }),
+    });
 
     expect(result.ok).toBe(true);
     expect(calls.map((call) => call.command)).toEqual(EXPECTED_CORE.map(() => "npm"));
     expect(calls.map((call) => call.args)).toEqual(EXPECTED_CORE.map((name) => ["run", name]));
+    for (const call of calls) expect(call.shell).toBe(false);
+  });
+
+  it("resolves npm through Node's JavaScript entrypoint on Windows without a shell", () => {
+    const calls: Array<{ command: string; args: string[]; shell: unknown }> = [];
+    const spawn = (command: string, args: string[], options: { shell?: unknown }) => {
+      calls.push({ command, args, shell: options?.shell });
+      return { status: 0, signal: null };
+    };
+    const execPath = "C:\\Program Files\\nodejs\\node.exe";
+    const npmExecPath = "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js";
+
+    const result = runGate("core", {
+      policy: makePolicy(),
+      spawn,
+      log: () => {},
+      npmArgv: (args) =>
+        buildNpmInvocation("npm", args, {
+          platform: "win32",
+          execPath,
+          env: { npm_execpath: npmExecPath },
+          exists: () => true,
+        }),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]).toEqual({
+      command: execPath,
+      args: [npmExecPath, "run", "check"],
+      shell: false,
+    });
     for (const call of calls) expect(call.shell).toBe(false);
   });
 
@@ -194,6 +232,7 @@ describe("test-gate CLI report", () => {
       JSON.stringify({ core: ["check"], full: ["check"], release: ["check"] }),
     );
     writeFileSync(join(dir, "test-gate.mjs"), readFileSync(testGatePath, "utf8"));
+    writeFileSync(join(dir, "npm-command.mjs"), readFileSync(npmCommandPath, "utf8"));
     git(dir, ["add", "-A"]);
     git(dir, ["commit", "-q", "-m", "init"]);
     return dir;
