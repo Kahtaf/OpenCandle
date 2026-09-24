@@ -25,6 +25,7 @@ import {
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
+import { completionCaseForPrompt } from "../evals/competitive-completion.js";
 import {
   type AdapterBinaryResolution,
   analyzeCompetitiveReport,
@@ -60,6 +61,11 @@ import {
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../evals/competitive-finance.js";
+import {
+  buildCompletionReport,
+  type CompletionReportCase,
+  writeCompletionReport,
+} from "../evals/completion-report.js";
 import {
   evaluateFinalAnswerAssertion,
   type FinalAnswerAssertionResult,
@@ -104,6 +110,8 @@ interface CompetitorRunOptions {
 type AcpxAgent = "claude" | "codex" | "gemini";
 
 loadEnv();
+
+const startedAt = new Date().toISOString();
 
 // None of acpx, the Codex ACP adapter, or the Claude ACP adapter are
 // repo-local devDependencies. `npm run <script>` prepends the invoking
@@ -218,6 +226,7 @@ if (
 }
 
 const results: CompetitiveRunResult[] = [];
+const completionCases: CompletionReportCase[] = [];
 for (const prompt of prompts.slice(0, promptCount)) {
   console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
   const openCandleTrace = await runOpenCandle(prompt.prompt);
@@ -280,6 +289,12 @@ for (const prompt of prompts.slice(0, promptCount)) {
       `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
     );
   }
+  // Only the frozen release panel has manifest-required hard assertions. A
+  // generated/fixed discovery run is not made to fail just because no frozen
+  // manifest exists; it is excluded from this completion helper entirely.
+  if (frozenPanel) {
+    completionCases.push(completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults));
+  }
   const judgment = await completeComparisonJudgment(
     buildComparisonJudgePrompt({
       prompt,
@@ -337,20 +352,38 @@ for (const competitor of allCompetitors) {
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
 console.log(`Analysis: ${analysisPath}`);
-const deterministicHardFailures = results.flatMap((result) =>
-  (result.hardAssertionResults ?? []).filter(
-    (assertion) => assertion.deterministic && !assertion.passed,
-  ),
-);
-if (frozenPanel && deterministicHardFailures.length > 0) {
-  console.error(
-    `\nFrozen panel FAILED ${deterministicHardFailures.length} deterministic hard assertion(s):`,
+// Optional competitor skips stay separate from the required prompt outcomes:
+// they are recorded in the main report's `skippedCompetitors` field and never
+// turn a prompt case into a pass or fail. The completion report is frozen-panel
+// evidence only; generated/fixed discovery runs are excluded from it.
+if (frozenPanel) {
+  const completionPath = writeCompletionReport(
+    buildCompletionReport({
+      suite: "competitive:frozen",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      cases: completionCases,
+      settings: {
+        provider: judgeModel.model.provider,
+        model: judgeModel.model.id,
+        mode: "frozen",
+        seed,
+      },
+    }),
   );
-  for (const failure of deterministicHardFailures) {
-    console.error(`- ${failure.assertion}: ${failure.reason}`);
+  if (completionPath) console.log(`Completion report: ${completionPath}`);
+}
+const frozenCaseFailures = frozenPanel
+  ? completionCases.filter((testCase) => testCase.status === "failed")
+  : [];
+if (frozenCaseFailures.length > 0) {
+  console.error(`\nFrozen panel FAILED ${frozenCaseFailures.length} required prompt case(s):`);
+  for (const failure of frozenCaseFailures) {
+    console.error(`- ${failure.id}: ${failure.reason}`);
   }
   // A generous LLM judge must not be the only gate on a loss-class
-  // regression; the frozen run fails on its own manifest contracts.
+  // regression; the frozen run fails on its own manifest contracts, including
+  // a required assertion with no deterministic checker.
   process.exit(1);
 }
 process.exit(competitiveBenchmarkExitCode());

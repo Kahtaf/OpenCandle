@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { PRODUCT_EVAL_CASES, PRODUCT_SCENARIO_TEMPLATES } from "../../evals/product/cases.js";
 import { productEvalExitCode } from "../../evals/product/reporting.js";
 import { scoreProductEvalCase, summarizeProductEvalResults } from "../../evals/product/scorer.js";
-import type { ProductEvalCase } from "../../evals/product/types.js";
+import type {
+  ProductEvalCase,
+  ProductEvalCaseResult,
+  ProductEvalReport,
+} from "../../evals/product/types.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
@@ -18,6 +22,43 @@ function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
     askUserTranscript: [],
     text: "",
     ...overrides,
+  };
+}
+
+// Fixtures are constructed explicitly per case, not derived from one another
+// by spreading a "valid" base. Each report declares its own summary counts, so
+// an invalid fixture cannot accidentally inherit a consistent summary.
+function caseResult(input: {
+  id: string;
+  passed: boolean | undefined;
+  mandatoryFailure: boolean | undefined;
+}): ProductEvalCaseResult {
+  return {
+    id: input.id,
+    family: "single_asset",
+    prompt: `prompt for ${input.id}`,
+    score: input.passed === true ? 1 : 0,
+    passed: input.passed as boolean,
+    mandatoryFailure: input.mandatoryFailure as boolean,
+    dimensions: [],
+  };
+}
+
+function reportFixture(input: {
+  results: ProductEvalCaseResult[];
+  caseCount: number;
+  passed: number;
+  failed: number;
+}): ProductEvalReport {
+  return {
+    generatedAt: "2026-07-05T00:00:00.000Z",
+    aggregate: input.caseCount > 0 ? input.passed / input.caseCount : 0,
+    caseCount: input.caseCount,
+    passed: input.passed,
+    failed: input.failed,
+    byFamily: {},
+    byDimension: {},
+    results: input.results,
   };
 }
 
@@ -714,9 +755,122 @@ describe("product eval scoring", () => {
     ).toMatchObject({ passed: true });
   });
 
-  it("maps failed product eval reports to a failing process exit code", () => {
-    expect(productEvalExitCode({ failed: 0 })).toBe(0);
-    expect(productEvalExitCode({ failed: 1 })).toBe(1);
+  it("passes only an internally consistent product eval report with completed cases", () => {
+    const valid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(valid)).toBe(0);
+  });
+
+  it("fails a product eval report with a nonzero failed count", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: false, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 1,
+      failed: 1,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails an empty product eval report instead of reading zero failures as success", () => {
+    const invalid = reportFixture({ results: [], caseCount: 0, passed: 0, failed: 0 });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report whose failed count hides a failed result", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: false, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report whose counts are inconsistent with its results", () => {
+    const results = [
+      caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+      caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+    ];
+
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 3, passed: 2, failed: 0 })),
+    ).toBe(1);
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 2, passed: 1, failed: 0 })),
+    ).toBe(1);
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 2, passed: 2, failed: 1 })),
+    ).toBe(1);
+  });
+
+  it("fails a report with a result that has no completed pass/fail outcome", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: undefined, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report with an empty or whitespace-only result id", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "   ", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report with duplicate result ids", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a mandatory dimension failure even when the passed flag is incorrectly true", () => {
+    const invalid = reportFixture({
+      results: [caseResult({ id: "case-a", passed: true, mandatoryFailure: true })],
+      caseCount: 1,
+      passed: 1,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
   });
 });
 

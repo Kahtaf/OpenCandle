@@ -6,6 +6,7 @@ import {
   diffRunReports,
   RELEASE_SEQUENCE,
   type ResolvedEvalCommand,
+  resolveChildExitCode,
   resolveEvalCommand,
   type SuiteResult,
   snapshotRunReports,
@@ -44,6 +45,9 @@ function runRelease(argv: string[]): number {
   console.log("\n--- Eval Release Summary ---");
   for (const row of summary.rows) {
     console.log(`${row.suite.padEnd(22)} ${row.status} exit=${row.exitCode}`);
+  }
+  for (const problem of summary.problems) {
+    console.error(`release incomplete: ${problem}`);
   }
 
   appendRunIndexEntry({
@@ -86,9 +90,8 @@ function runResolved(resolved: ResolvedEvalCommand): number {
   });
   if (result.error) {
     console.error(result.error.message);
-    return 1;
   }
-  return result.status ?? 1;
+  return resolveChildExitCode(result);
 }
 
 function printResolved(resolved: ResolvedEvalCommand): void {

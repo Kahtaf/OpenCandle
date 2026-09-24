@@ -6,6 +6,8 @@ import {
   appendRunIndexEntry,
   diffRunReports,
   listEvalSuites,
+  RELEASE_SEQUENCE,
+  resolveChildExitCode,
   resolveEvalCommand,
   summarizeReleaseResults,
 } from "../../scripts/run-evals-table.js";
@@ -121,6 +123,88 @@ describe("eval front door dispatch table", () => {
       { suite: "cases", status: "FAIL", exitCode: 1 },
       { suite: "product", status: "PASS", exitCode: 0 },
     ]);
+  });
+
+  it("requires exactly one zero-exit result for every release sequence suite", () => {
+    const result = summarizeReleaseResults(
+      RELEASE_SEQUENCE.map((suite) => ({ suite, exitCode: 0 })),
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.problems).toEqual([]);
+    expect(result.rows.map((row) => row.status)).toEqual(RELEASE_SEQUENCE.map(() => "PASS"));
+  });
+
+  it("rejects an empty release result set as a false green", () => {
+    const result = summarizeReleaseResults([]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.problems).toContain("no suite results were provided");
+  });
+
+  it("rejects a partial release result set that omits a required suite", () => {
+    const result = summarizeReleaseResults([
+      { suite: "router-live", exitCode: 0 },
+      { suite: "cases", exitCode: 0 },
+      { suite: "product", exitCode: 0 },
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.problems).toContain('missing result for suite "competitive:frozen"');
+  });
+
+  it("rejects duplicate suite results even when every exit code is zero", () => {
+    const result = summarizeReleaseResults([
+      { suite: "router-live", exitCode: 0 },
+      { suite: "cases", exitCode: 0 },
+      { suite: "cases", exitCode: 0 },
+      { suite: "product", exitCode: 0 },
+      { suite: "competitive:frozen", exitCode: 0 },
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.problems).toContain('duplicate results for suite "cases" (2 found)');
+  });
+
+  it("rejects an unexpected suite that reports success", () => {
+    const result = summarizeReleaseResults([
+      ...RELEASE_SEQUENCE.map((suite) => ({ suite, exitCode: 0 })),
+      { suite: "ghost", exitCode: 0 },
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.problems).toContain('unexpected suite "ghost"');
+  });
+
+  it("rejects non-integer exit codes instead of treating them as clean exits", () => {
+    const result = summarizeReleaseResults([
+      { suite: "router-live", exitCode: Number.NaN },
+      { suite: "cases", exitCode: 0 },
+      { suite: "product", exitCode: 1.5 },
+      { suite: "competitive:frozen", exitCode: 0 },
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.rows.find((row) => row.suite === "router-live")?.status).toBe("FAIL");
+    expect(result.rows.find((row) => row.suite === "product")?.status).toBe("FAIL");
+  });
+});
+
+describe("child spawn exit codes", () => {
+  it("treats clean, non-zero, signaled, and errored spawn results honestly", () => {
+    expect(resolveChildExitCode({ status: 0, signal: null })).toBe(0);
+    expect(resolveChildExitCode({ status: 2, signal: null })).toBe(2);
+    // spawnSync reports a null status when a child is killed by a signal or
+    // times out; that must never be mistaken for a clean exit.
+    expect(resolveChildExitCode({ status: null, signal: "SIGTERM" })).toBe(1);
+    expect(resolveChildExitCode({ status: null, signal: null })).toBe(1);
+    expect(
+      resolveChildExitCode({ status: null, signal: null, error: new Error("ETIMEDOUT") }),
+    ).toBe(1);
+  });
+
+  it("does not mask a contradictory non-null signal behind a zero status", () => {
+    expect(resolveChildExitCode({ status: 0, signal: "SIGKILL" })).toBe(1);
   });
 });
 
