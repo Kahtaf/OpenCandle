@@ -18,7 +18,8 @@
 - A chat stopped before the model replies now saves the original prompt and a stopped marker to the session file, so a reload shows the cancelled turn and its text instead of losing them.
 - Starting a new chat, opening another session, or deleting the current one while GUI work is still answering no longer cancels that run; the GUI reports the session as busy instead.
 - Cancelling a run that had a staged attachment no longer replays that attachment into the next turn.
-- Release checks now run through a portable JavaScript entry point instead of a platform shell command, so they work on Windows as well as macOS and Linux.
+- Release and build subprocesses now invoke npm without a shell on Windows, avoiding failures when launching npm.cmd.
+- Starting a second chat while a run is active no longer queues a prompt that would run after the run stops.
 
 ## [0.15.0] - 2026-09-21
 

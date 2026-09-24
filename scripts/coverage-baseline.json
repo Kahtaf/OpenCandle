@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T20:52:43.201Z",
+  "generatedAt": "2026-09-24T21:24:01.691Z",
   "command": "npm run test:coverage",
   "metricOrder": ["lines", "functions", "branches", "statements"],
   "surfaces": {
@@ -9,10 +9,10 @@
       "expectedFileCount": 204,
       "missingFiles": [],
       "totals": {
-        "lines": [8921, 10059],
-        "functions": [1877, 2034],
-        "branches": [7266, 9526],
-        "statements": [9717, 11276]
+        "lines": [8941, 10069],
+        "functions": [1881, 2035],
+        "branches": [7274, 9530],
+        "statements": [9737, 11286]
       },
       "files": {
         "src/analysts/contracts.ts": [65, 65, 13, 13, 49, 51, 71, 71],
@@ -31,7 +31,7 @@
         "src/infra/index.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/infra/lse-byte-budget.ts": [23, 23, 8, 8, 12, 13, 25, 25],
         "src/infra/market-calendar.ts": [65, 66, 17, 18, 25, 29, 72, 73],
-        "src/infra/native-dependencies.ts": [11, 30, 2, 7, 6, 16, 11, 32],
+        "src/infra/native-dependencies.ts": [31, 40, 6, 8, 14, 20, 31, 42],
         "src/infra/node-version.ts": [11, 11, 3, 3, 11, 12, 13, 14],
         "src/infra/open-url.ts": [14, 14, 3, 3, 6, 6, 14, 14],
         "src/infra/opencandle-paths.ts": [17, 18, 9, 10, 5, 6, 18, 19],
@@ -228,20 +228,20 @@
       "totals": {
         "lines": [1585, 2231],
         "functions": [325, 436],
-        "branches": [1203, 1897],
-        "statements": [1730, 2509]
+        "branches": [1201, 1896],
+        "statements": [1729, 2508]
       },
       "files": {
         "gui/server/ask-user-bridge.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "gui/server/automation-heartbeat.ts": [29, 30, 8, 9, 17, 21, 32, 34],
         "gui/server/background-quotes.ts": [25, 30, 7, 10, 17, 23, 28, 35],
-        "gui/server/chat-event-adapter.ts": [192, 202, 24, 25, 146, 195, 203, 222],
+        "gui/server/chat-event-adapter.ts": [195, 205, 24, 25, 150, 199, 206, 225],
         "gui/server/durable-session-persist.ts": [12, 18, 2, 2, 7, 8, 16, 22],
         "gui/server/gui-session-manager.ts": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/server/history-snapshot-store.ts": [20, 21, 5, 5, 11, 12, 22, 23],
         "gui/server/http-routes.ts": [336, 621, 46, 74, 280, 608, 354, 685],
         "gui/server/invoke-tool.ts": [118, 131, 23, 23, 123, 158, 130, 149],
-        "gui/server/local-session-coordinator.ts": [41, 41, 8, 8, 26, 26, 45, 45],
+        "gui/server/local-session-coordinator.ts": [38, 38, 8, 8, 20, 21, 41, 41],
         "gui/server/market-indices-api.ts": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/server/market-indices-snapshot-store.ts": [30, 30, 11, 11, 18, 20, 36, 36],
         "gui/server/market-state-api.ts": [132, 135, 34, 35, 85, 102, 147, 158],

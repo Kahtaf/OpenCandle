@@ -1,24 +1,26 @@
 # Test trust implementation — 2026-09-24
 
 Status: implementation record on the integrated tree, uncommitted. Recorded milestones, not live
-state. This is not a release attestation and does not claim the full release rehearsal has run.
+state. This is not a release attestation and does not claim the final review or the live release
+rehearsal has run.
 
 ## Recorded milestones
 
-- Root full gate: **PASS** (`/tmp/oc-final-gates-full.log`, 263.2 s).
-- First advisory review (full gate): **PASS** (`/tmp/oc-final-autoreview.log`, 270 s). Review is
-  **not claimed clean**; the second cycle is pending.
+- Root full gate: **PASS**, passed three times (`/tmp/oc-final-gates-full.log`, 263.2 s; latest
+  `/tmp/oc-final-autoreview2.log`, 272.8 s).
+- Advisory reviews: first `/tmp/oc-final-autoreview.log` (270 s) with 5 findings; second raised 2
+  findings, both fixed. Review is **not claimed clean**; the final review runs after `release:check`.
+- ReactDoctor second review: **PASS**, 0 errors / 0 warnings, 6 changed files
+  (`/tmp/oc-react-doctor-direct.json`).
 - Gated Node+relay coverage baseline integrated; `coverage:check` **passed** with final branches
-  **15175/22745** (clock fix) — `/tmp/oc-final-baseline-check.log`.
+  **15175/22745** (clock fix) — `/tmp/oc-final-baseline-check.log`. Root candidate coverage is
+  recorded at `/tmp/oc-candidate-coverage-node.log` (result not yet recorded).
 - Browser lanes: **35 passed** — **27 GUI integration** cases (collected under
-  `OPENCANDLE_GUI_INTEGRATION=1`, a stale flag having produced a false zero) plus **8 deterministic
-  real-server journeys**. Merge is informational and retains Node hit counts.
-- ReactDoctor direct: `ok:true`, 0 errors, 0 warnings (`/tmp/oc-react-doctor-direct.json`; the
-  launcher's first-run 127 was an env resolution issue).
+  `OPENCANDLE_GUI_INTEGRATION=1`) plus **8 deterministic real-server journeys**. Merge is
+  informational and retains Node hit counts.
 - Inventory recorded milestone: **4373 cases / 390 files / 27 integration / 8 journeys / unit 3913 /
-  agent-tools 279** (`/tmp/oc-final-inventory2.log`), predating one adapter-case addition and new npm
-  helper cases — a recorded milestone, not asserted current. Final counts belong in the final report.
-- Candidate evidence path: `validation-output/release-summary`.
+  agent-tools 279** (`/tmp/oc-final-inventory2.log`), not asserted current.
+- Authoritative final result path: `validation-output/release-summary`.
 
 ## What changed
 
@@ -38,8 +40,12 @@ state. This is not a release attestation and does not claim the full release reh
 - The deterministic GUI integration lane collects its real 27 cases; the 8-case real-server journey
   suite passes in normal and shuffled order and covers early-Stop durability, passive navigation,
   native-stream Stop, and held-tool Stop.
-- The first-review attachment cancel-replay leak is fixed: cancelling a run with a staged attachment
-  no longer carries that attachment into the next turn (25 adapter tests + the 8 journeys).
+- The attachment cancel-replay leak is fixed: cancelling a run with a staged attachment no longer
+  carries that attachment into the next turn (25 adapter tests + the 8 journeys).
+- The second-review admission fix is in: the local session coordinator rejects distinct chat/tool
+  admissions while a run is active, so a second chat cannot queue a prompt that would run after Stop,
+  while same-action dedupe and the Stop/ask-user bypass are preserved (11 coordinator tests + 8 real
+  journeys, 35 s — `/tmp/oc-review-admission.md`).
 
 ### Fault and eval-harness rejection proof
 - 8/8 critical mutations killed, 0 survived (`docs/internal/test-fault-proof-2026-09-24.md`).
@@ -47,14 +53,10 @@ state. This is not a release attestation and does not claim the full release reh
   actual child-process proof; the CLI freshness fixture now uses a relative clock without adding
   helper tests.
 - Scorer/eval-harness rejection contracts are proven by bounded tests:
-  `tests/unit/evals/release-eval-evidence.test.ts` (canonical release env, child crash/signal,
-  timeout, zero-exit with no completion report, first missing report blocked and preserved across a
-  green rerun, stale-report window, candidate fingerprint change, partial case selection, malformed
-  competitor metadata, honest failure without credentials),
-  `tests/unit/evals/competitive-metadata.test.ts` (bounded id/reason round-trip, strict malformed
-  rejection), `tests/agent-tools/live-canary-results.test.ts` (nonzero core pass required, skips
-  block, unique summaries, credential redaction), and `tests/agent-tools/release-summary.test.ts`
-  (29 tests; release-evidence checks, not authorization).
+  `tests/unit/evals/release-eval-evidence.test.ts`,
+  `tests/unit/evals/competitive-metadata.test.ts`, `tests/agent-tools/live-canary-results.test.ts`,
+  and `tests/agent-tools/release-summary.test.ts` (29 tests; release-evidence checks, not
+  authorization).
 
 ### Release gate
 - One checked-in policy drives `gates`/`gates:full`/`release:check` through `scripts/test-gate.mjs`
@@ -63,7 +65,9 @@ state. This is not a release attestation and does not claim the full release reh
   `scripts/release-evidence.mjs`; stale, mismatched, skipped, or retry-after-failure evidence is
   rejected. `scripts/release-package.mjs` proves the published tarball.
 - Release checks now run through a portable JavaScript entry point rather than a platform shell
-  command, so the Windows `npm.cmd` `shell:false` path and its same-gate consumers work.
+  command; the Windows `npm.cmd` path is complete, including the native-dep repair and the local
+  release runner, and the release-lib real-default npm runner goes through the safe helper (5
+  focused tests, 50 with readiness).
 - The compact release summary is a new fail-closed feature. The proposed evidence **waiver was NOT
   implemented**; strict blocking is the recorded deviation.
 - Operational summary: `docs/internal/release-enforcement.md`.
@@ -108,14 +112,16 @@ low-value cleanup plus new proof, not bulk removal.
 | Proof | Link |
 | --- | --- |
 | Root full gate | `/tmp/oc-final-gates-full.log` |
-| First advisory review | `/tmp/oc-final-autoreview.log` |
+| Advisory reviews | `/tmp/oc-final-autoreview.log`, `/tmp/oc-final-autoreview2.log` |
+| Admission-fix worker | `/tmp/oc-review-admission.md` |
+| Candidate Node coverage | `/tmp/oc-candidate-coverage-node.log` |
 | Integrated baseline `--check` | `/tmp/oc-final-baseline-check.log` |
 | Browser lanes (integration + journeys) | `/tmp/oc-close-browser-coverage.log` |
 | GUI journeys, normal + shuffled | `/tmp/oc-journey-final3-normal.log`, `/tmp/oc-journey-final3-shuffled.log` |
 | Harness lifecycle | `/tmp/oc-close-harness-lifecycle-test.log` |
 | Hosted deterministic smoke | `/tmp/oc-hosted-integrated-smoke.log` |
 | Provider release smoke | `/tmp/oc-provider-live-smoke.log` |
-| ReactDoctor direct | `/tmp/oc-react-doctor-direct.json` |
+| ReactDoctor | `/tmp/oc-react-doctor-direct.json` |
 | Inventory milestone | `/tmp/oc-final-inventory2.log` |
 | Fault proof | `docs/internal/test-fault-proof-2026-09-24.md` |
 | Audit ledgers | `docs/internal/test-audit-*-ledger.md` |
@@ -123,13 +129,19 @@ low-value cleanup plus new proof, not bulk removal.
 
 ## Review findings and pending
 
-- First advisory review produced **11 batches / 5 confirmed findings**: attachment cancel-replay leak
-  (fixed: 25 adapter tests + 8 journeys), hold-counter race (fixed), unit placeholder ambient-flag
-  isolation (fixed with a child-process proof), CLI freshness relative clock (fixed without extra
-  helper tests), and the Windows `shell:false`/`npm.cmd` helper plus same-gate consumers (fix in
-  progress). The **second review cycle is pending; review is not claimed clean**.
-- Candidate `release:check` and live `eval -- release` rehearsal are pending; final candidate
-  evidence path is `validation-output/release-summary`.
+- First advisory review: **11 batches / 5 confirmed findings** — attachment cancel-replay leak,
+  hold-counter race, unit placeholder ambient-flag isolation, CLI freshness relative clock, and the
+  Windows `shell:false`/`npm.cmd` helper plus same-gate consumers. All fixed; the Windows path is
+  complete including native-dep repair and the local release runner.
+- Second advisory review: **2 confirmed findings**, both fixed — the release-lib real-default npm
+  runner now goes through the safe helper (5 focused tests, 50 with readiness), and the local session
+  coordinator rejects distinct chat/tool admissions while active while preserving same-action dedupe
+  and the Stop/ask-user bypass (11 coordinator tests + 8 journeys, 35 s).
+- The **Stop-line critical release blocker** required this second review patch cycle and is resolved;
+  no further broad search is planned.
+- Candidate `release:check` and live `eval -- release` rehearsal are pending; the final review runs
+  after `release:check` without a redundant full gate. The authoritative final result is
+  `validation-output/release-summary`. **Live and review-clean are not claimed prematurely.**
 - Release-environment required-reviewer protection remains unverified (GitHub 404).
 - WebContainer and Node child-process lanes are unmeasured; the hosted lane has network dependence
   and its live stages were SKIP (no credentials).

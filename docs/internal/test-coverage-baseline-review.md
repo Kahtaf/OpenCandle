@@ -198,3 +198,35 @@ Genuine holes already flagged in section 4 (router abort edge paths, `getSession
 - Baseline is **uncommitted** on `test-trust/measurement` (`leave-uncommitted`, no PR). Parent integrates only after the browser lane is green and the final source is frozen.
 - No production edits, no test additions, no root writes; only the worktree baseline and this review note were written.
 - Handoff: `/tmp/oc-close-baseline.md`.
+
+## 7. Post-review re-measurement against the final canonical ROOT coverage (Node 24 direct binary)
+
+Date: 2026-09-24. Input: canonical ROOT `coverage/coverage-summary.json` from the completed Node lane (`/tmp/oc-candidate-coverage-node.log`: `vitest run --project unit --coverage` + relay workspace, merged by `coverage-merge.mjs`; raw log totals lines 17627/22469). Runtime: **node v24.21.0 invoked directly** (`PATH=/Users/kahtaf/.npm/_npx/387698761821791d/node_modules/node/bin:$PATH node …`), **not** a nested `npm exec`. No full test rerun, no production/test edit, no ROOT write.
+
+Regenerated with `scripts/coverage-report.mjs --repo-root <ROOT> --input <ROOT>/coverage/coverage-summary.json --baseline <worktree>/scripts/coverage-baseline.json --update-baseline`, then the same invocation with `--check` → **exit 0**, 460/460 files, all surfaces measured, no unmeasured surface.
+
+| surface | lines | functions | branches | files |
+| --- | --- | --- | --- | --- |
+| core | 88.80% (8941/10069) | 92.43% (1881/2035) | 76.33% (7274/9530) | 204/204 |
+| gui-server | 71.04% (1585/2231) | 74.54% (325/436) | 63.34% (1201/1896) | 31/31 |
+| gui-shared | 92.40% (474/513) | 96.26% (103/107) | 78.93% (397/503) | 12/12 |
+| gui-web | 66.92% (4313/6445) | 64.99% (1305/2008) | 56.67% (4539/8010) | 174/174 |
+| gui-hosted | 69.34% (1972/2844) | 71.27% (387/543) | 59.02% (1417/2401) | 25/25 |
+| ui-package | 100.00% (28/28) | 100.00% (13/13) | 95.00% (38/40) | 12/12 |
+| provider-relay | 92.63% (314/339) | 92.86% (65/70) | 85.60% (315/368) | 2/2 |
+
+Overall: lines **78.45% (17627/22469)**, functions **78.26% (4079/5212)**, branches **66.73% (15181/22748)**, statements **75.78% (19219/25359)**. Delta vs the §5b baseline (17607/22459 lines, 4075/5211 funcs, 15175/22745 branches): **+20/+10 lines, +4/+1 functions, +6/+3 branches**.
+
+Three per-file deltas, all in files changed after the prior measurement:
+
+| file | change (covered/total) | direction |
+| --- | --- | --- |
+| `src/infra/native-dependencies.ts` | lines 11/30→31/40; funcs 2/7→6/8; branches 6/16→14/20; stmts 11/32→31/42 | **gain** — Windows JS runner now covered by 6 real public-function tests |
+| `gui/server/chat-event-adapter.ts` | lines 192/202→195/205; branches 146/195→150/199; stmts 203/222→206/225 | **gain** — adapter now consumes the original attachment cancel state |
+| `gui/server/local-session-coordinator.ts` | lines 41/41→38/38; branches 26/26→20/21; stmts 45/45→41/41 | **loss, confirmed deletion** |
+
+The sole covered-count loss is `gui/server/local-session-coordinator.ts`. ROOT `git diff` confirms the queue branch was deleted: `queueChatPrompt` / `previousRun` / `await previousRun` removed, and the guard changed from `runAdmissionAction && !queueChatPrompt && sessionRunTails.has(...)` to `runAdmissionAction && sessionRunTails.has(...)`, so a second chat is now rejected while a run is in flight. Line and statement denominators shrink with the code (41→38, 45→41) — a real removal, not an exclusion and not a coverage hole. **No unexplained loss in any untouched file.** The one residual uncovered branch is exact and understood: `gui/server/local-session-coordinator.ts` branch 8 at line 86, `hits [16,0]` — the **false** side of `sessionRunTails.get(action.sessionId) === runTail`. That path was reachable only when a queued `chat.prompt` overwrote the session run tail; under the new no-concurrent-admission invariant the tail cannot be replaced while a run is active, so the false side is now unreachable through the public admission contract. The guard is retained as defensive code; this is **not** missing busy/cancel behaviour and **not** a coverage hole.
+
+Limitations preserved unchanged: the browser lane stays informational/non-gating and does not feed `scripts/coverage-baseline.json` or `coverage:check`; `gui-web`, `gui-hosted`, and `ui-package` keep their named browser-runtime limitation; the child-process lane remains unmerged. `EXCLUSIONS` and the default `1e-6` tolerance are unchanged (no exclusions or tolerance loosening).
+
+Handoff for this re-measurement: `/tmp/oc-candidate-baseline.md`.
