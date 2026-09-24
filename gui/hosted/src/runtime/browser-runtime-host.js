@@ -301,8 +301,12 @@ class BrowserRuntimeHost {
         if (navigator.onLine) await this.ensureBooted();
         return { modelSetup: this.getModelSetup() };
       case "hosted.data.clear_all":
+        // Every caller reloads the page after this resolves, so that reload
+        // owns the next boot. An eager reboot here would hold the completed
+        // clear hostage to a WebContainer start that is about to be discarded;
+        // a slow or failed boot would leave the user on the old page with the
+        // device already cleared.
         await this.clearAll();
-        if (navigator.onLine) await this.ensureBooted();
         return { cleared: true };
       case "hosted.runtime.prepare_update":
         await waitFor(

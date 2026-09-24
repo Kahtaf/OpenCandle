@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHostedDataActions } from "../../../gui/hosted/src/hosted-data-actions.js";
+import { createBrowserRuntimeHost } from "../../../gui/hosted/src/runtime/browser-runtime-host.js";
 
 type Command = { type: string; archive?: string };
 
@@ -140,3 +141,74 @@ describe("hosted data actions", () => {
     ).rejects.toThrow("Unsupported hosted archive version");
   });
 });
+
+describe("hosted clear all runtime lifecycle", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reloads after a successful clear without waiting on an eager runtime boot", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const boot = vi.fn(() => new Promise<never>(() => {}));
+    const clearDurableData = vi.fn(async () => {});
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: { clearAll: clearDurableData },
+      WebContainerImpl: { boot },
+    });
+    const { env } = fakeEnv();
+    const actions = createHostedDataActions(host, env);
+
+    // The durable clear is complete, but a fresh WebContainer boot is held.
+    // Clearing on this device must still reach the reload that gives the user
+    // an empty, key-free profile; the next boot belongs to that reload.
+    const outcome = await Promise.race([
+      actions.clearAll().then(() => "settled"),
+      new Promise((resolve) => setTimeout(() => resolve("held"), 1_000)),
+    ]);
+
+    expect(outcome).toBe("settled");
+    expect(clearDurableData).toHaveBeenCalledTimes(1);
+    expect(env.reload).toHaveBeenCalledTimes(1);
+    expect(boot).not.toHaveBeenCalled();
+    expect(host.bootPromise).toBeNull();
+  });
+
+  it("does not reload when the durable clear fails", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        clearAll: vi.fn(async () => {
+          throw new Error("Browser storage is unavailable");
+        }),
+      },
+      WebContainerImpl: { boot: vi.fn(() => new Promise<never>(() => {})) },
+    });
+    const { env } = fakeEnv();
+    const actions = createHostedDataActions(host, env);
+
+    await expect(actions.clearAll()).rejects.toThrow("Browser storage is unavailable");
+    expect(env.reload).not.toHaveBeenCalled();
+  });
+});
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key: string) => values.get(key) ?? null,
+    key: (index: number) => [...values.keys()][index] ?? null,
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      values.set(key, String(value));
+    },
+  } as Storage;
+}
