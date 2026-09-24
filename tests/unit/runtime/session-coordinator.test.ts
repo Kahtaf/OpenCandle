@@ -868,6 +868,48 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(getProviderTracker()).toBe(newTracker);
   });
 
+  it("records a durable cancelled closure and terminal marker when cancelActiveWorkflow stops an active workflow", async () => {
+    vi.useFakeTimers();
+    const database = initDatabase(":memory:");
+    const coord = new SessionCoordinator({ stateDatabaseFactory: () => database });
+    coord.initSession("cancel-workflow-session");
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries) as never,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    const runId = coord.getRunner().getActiveRun()?.runId ?? "";
+    expect(runId).not.toBe("");
+
+    coord.cancelActiveWorkflow();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const events = database
+      .prepare("SELECT event_type FROM workflow_events WHERE run_id = ?")
+      .all(runId) as Array<{ event_type: string }>;
+    const types = events.map((event) => event.event_type);
+    // `workflow_cancelled` is the durable closure written by runner.cancel().
+    expect(types).toContain("workflow_cancelled");
+    // The transcript terminal marker must still be recorded even though the
+    // cancelled run never completes normally.
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ status: "failed", reason: "stopped" }),
+    );
+    // No later workflow step may be queued after the stop.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    database.close();
+  });
+
   it("captures tool evidence from each workflow step without leaking between steps", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();

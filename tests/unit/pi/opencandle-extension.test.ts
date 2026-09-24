@@ -12,6 +12,10 @@ import {
   saveOnboardingState,
 } from "../../../src/onboarding/state.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
+import {
+  createSessionCancellationState,
+  startSessionRun,
+} from "../../../src/pi/session-cancellation.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
@@ -555,6 +559,344 @@ describe("opencandle extension", () => {
       );
       expect(result.systemPrompt).toContain("risk_profile");
       expect(result.systemPrompt).toContain("conservative");
+    });
+  });
+
+  describe("router cancellation", () => {
+    function createCancelledRouterFake(output: unknown) {
+      const fake = createFakeApi();
+      const cancellation = createSessionCancellationState();
+      const token = startSessionRun(cancellation);
+      const routerLlmClient: RouterLlmClient = {
+        complete: async () => {
+          // Stop lands while the router await is in flight.
+          token.cancel();
+          return JSON.stringify(output);
+        },
+      };
+      return { fake, cancellation, routerLlmClient };
+    }
+
+    async function startSession(
+      fake: ReturnType<typeof createFakeApi>,
+      database: ReturnType<typeof initDatabase>,
+    ) {
+      const sessionStartHandler = fake.handlers.get("session_start")?.[0];
+      await sessionStartHandler!(
+        { type: "session_start" },
+        {
+          hasUI: false,
+          sessionManager: { getSessionId: () => "cancel-session-id" },
+          ui: { notify: vi.fn() },
+        },
+      );
+      return database;
+    }
+
+    it("suppresses preference writes and router entries when cancelled during the route await", async () => {
+      const database = initDatabase(":memory:");
+      const fallbackOutput = {
+        routeKind: "agent_task",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [
+          { key: "risk_profile", value: "conservative", confidence: "high", source: "inferred" },
+        ],
+        missing_required: [],
+        reasoning: "",
+      };
+      const { fake, cancellation, routerLlmClient } = createCancelledRouterFake(fallbackOutput);
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient,
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const result = await inputHandler!(
+        { type: "input", text: "I'm conservative", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "opencandle-run-cancelled",
+        expect.objectContaining({ text: "I'm conservative" }),
+      );
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith("opencandle-router", expect.anything());
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+        "opencandle-route-context",
+        expect.anything(),
+      );
+      const counts = database.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as {
+        n: number;
+      };
+      expect(counts.n).toBe(0);
+      database.close();
+    });
+
+    it("does not dispatch a workflow when cancelled during the route await", async () => {
+      const database = initDatabase(":memory:");
+      const workflowOutput = {
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: [], budget: 10_000 },
+        slots: { budget: { value: 10_000, source: "user", confidence: "high" } },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "",
+      };
+      const { fake, cancellation, routerLlmClient } = createCancelledRouterFake(workflowOutput);
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient,
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const result = await inputHandler!(
+        { type: "input", text: "invest $10k in balanced portfolio", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+        "opencandle-workflow",
+        expect.anything(),
+      );
+      database.close();
+    });
+
+    it("suppresses a turn whose router rejects after Stop instead of falling through to the agent", async () => {
+      const database = initDatabase(":memory:");
+      const fake = createFakeApi();
+      const cancellation = createSessionCancellationState();
+      const token = startSessionRun(cancellation);
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient: {
+          complete: async () => {
+            token.cancel();
+            throw new Error("router request aborted");
+          },
+        },
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const result = await inputHandler!(
+        { type: "input", text: "what is happening", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      // A cancelled router failure must be terminal, not fall through to the
+      // main agent (which `undefined` would do).
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "opencandle-run-cancelled",
+        expect.objectContaining({ text: "what is happening" }),
+      );
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith("opencandle-router", expect.anything());
+      database.close();
+    });
+
+    it("keeps a held router request in flight, then suppresses the turn when Stop releases it", async () => {
+      const database = initDatabase(":memory:");
+      const fallbackOutput = {
+        routeKind: "agent_task",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [
+          { key: "risk_profile", value: "conservative", confidence: "high", source: "inferred" },
+        ],
+        missing_required: [],
+        reasoning: "",
+      };
+      let releaseRouter!: (value: string) => void;
+      const heldRouter = new Promise<string>((resolve) => {
+        releaseRouter = resolve;
+      });
+      const fake = createFakeApi();
+      const cancellation = createSessionCancellationState();
+      const token = startSessionRun(cancellation);
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient: { complete: () => heldRouter },
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const pending = inputHandler!(
+        { type: "input", text: "hold then stop", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      // Stop lands while the router HTTP is still held open.
+      token.cancel();
+      releaseRouter(JSON.stringify(fallbackOutput));
+      const result = await pending;
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "opencandle-run-cancelled",
+        expect.objectContaining({ text: "hold then stop" }),
+      );
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith("opencandle-router", expect.anything());
+      const counts = database.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as {
+        n: number;
+      };
+      expect(counts.n).toBe(0);
+      database.close();
+    });
+
+    it("forwards the run AbortSignal so Stop closes a held router request", async () => {
+      const database = initDatabase(":memory:");
+      const fake = createFakeApi();
+      const cancellation = createSessionCancellationState();
+      const token = startSessionRun(cancellation);
+      let observedSignal: AbortSignal | undefined;
+      let closedByAbort = false;
+      const routerLlmClient: RouterLlmClient = {
+        complete: (_prompt, signal) => {
+          observedSignal = signal;
+          return new Promise<string>((_resolve, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => {
+                closedByAbort = true;
+                reject(Object.assign(new Error("router request aborted"), { name: "AbortError" }));
+              },
+              { once: true },
+            );
+          });
+        },
+      };
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient,
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const pending = inputHandler!(
+        { type: "input", text: "close the held router", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      // Stop must propagate to the held transport, not just flip a flag.
+      token.cancel();
+      const result = await pending;
+
+      expect(observedSignal).toBe(token.signal);
+      expect(closedByAbort).toBe(true);
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "opencandle-run-cancelled",
+        expect.objectContaining({ text: "close the held router" }),
+      );
+      database.close();
+    });
+
+    it("does not dispatch a compare workflow when Stop lands during ticker preflight", async () => {
+      const database = initDatabase(":memory:");
+      const fake = createFakeApi();
+      const cancellation = createSessionCancellationState();
+      const token = startSessionRun(cancellation);
+      let releaseSearch!: () => void;
+      const heldSearch = new Promise<void>((resolve) => {
+        releaseSearch = resolve;
+      });
+      let searchStarted!: () => void;
+      const searchInFlight = new Promise<void>((resolve) => {
+        searchStarted = resolve;
+      });
+      const compareOutput = {
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["AAPL", "MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      };
+      let coordinator: SessionCoordinator | undefined;
+      openCandleExtension(fake.api, {
+        cancellation,
+        routerLlmClient: { complete: async () => JSON.stringify(compareOutput) },
+        onCoordinatorCreated: (created) => {
+          coordinator = created;
+        },
+        symbolSearch: async (query: string) => {
+          searchStarted();
+          await heldSearch;
+          return [
+            {
+              symbol: query.toUpperCase(),
+              name: query.toUpperCase(),
+              quoteType: "EQUITY",
+              assetType: "equity",
+              exchange: "NMS",
+              provider: "yahoo" as const,
+              score: 1,
+            },
+          ];
+        },
+        stateDatabaseFactory: () => database,
+      });
+      await startSession(fake, database);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const pending = inputHandler!(
+        { type: "input", text: "compare AAPL and MSFT", source: "interactive" },
+        {
+          isIdle: () => true,
+          ui: { notify: vi.fn() },
+          sessionManager: { getBranch: () => [], getSessionId: () => "cancel-session-id" },
+        },
+      );
+
+      // Stop lands while the ticker preflight is still awaiting the resolver.
+      await searchInFlight;
+      token.cancel();
+      releaseSearch();
+      const result = await pending;
+
+      expect(result).toEqual({ action: "handled" });
+      // The workflow must never have been started after Stop, even though the
+      // outer post-await guard already returns handled.
+      expect(coordinator?.getActiveWorkflowType()).toBeUndefined();
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "opencandle-run-cancelled",
+        expect.objectContaining({ text: "compare AAPL and MSFT" }),
+      );
+      database.close();
     });
   });
 
@@ -1165,6 +1507,69 @@ describe("opencandle extension", () => {
       expect(payload.annotation).toContain("[OPENCANDLE_SKIPPED");
       expect(payload.annotation).toContain("provider=brave");
       expect(payload.annotation).toContain("provider=exa");
+    });
+
+    it("records every distinct soft-degraded provider from one multi-line tool result", async () => {
+      // Regression: one tool result may carry a soft-degraded line per provider
+      // (Brave and Exa both unconfigured). buildSoftDegradedPrefix joins them
+      // with a single newline and then a blank line before the body, so the
+      // recording pass must parse each contiguous leading tag line, not only
+      // the first tag in the block.
+      const fake = createFakeApi();
+      openCandleExtension(fake.api);
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+
+      const ctx = { ui: { notify: vi.fn() } };
+      await toolResultHandler!(
+        toolResultEvent(`${SOFT_DEGRADED_TAG_BRAVE}\n${SOFT_DEGRADED_TAG_EXA}`),
+        ctx,
+      );
+
+      const appendEntry = fake.api.appendEntry as ReturnType<typeof vi.fn>;
+      appendEntry.mockClear();
+      await turnEndHandler!({ type: "turn_end", turnIndex: 0, message: {}, toolResults: [] }, ctx);
+
+      const gapCall = appendEntry.mock.calls.find((call) => call[0] === "opencandle-turn-gap");
+      if (!gapCall) throw new Error("expected an opencandle-turn-gap appendEntry call");
+      const annotation = (gapCall[1] as { annotation: string }).annotation;
+      expect(annotation).toContain("provider=brave");
+      expect(annotation).toContain("provider=exa");
+      // One line per distinct provider: repeats are deduplicated.
+      expect(annotation.match(/provider=brave/g)).toHaveLength(1);
+      expect(annotation.match(/provider=exa/g)).toHaveLength(1);
+    });
+
+    it("ignores tag-looking body text after the leading soft-degraded block", async () => {
+      // Boundary: the recording pass reads only the leading contiguous
+      // tool-owned tag block and stops at the blank line or body. Tag-looking
+      // text in untrusted body content must never be promoted into provider
+      // metadata, so a soft-degraded tag after the separating blank line is
+      // ignored even though it is otherwise parseable.
+      const fake = createFakeApi();
+      openCandleExtension(fake.api);
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+
+      const ctx = { ui: { notify: vi.fn() } };
+      await toolResultHandler!(
+        toolResultEvent(
+          `${SOFT_DEGRADED_TAG_BRAVE}\n\n**Web Search** — 2 results\n${SOFT_DEGRADED_TAG_EXA}`,
+        ),
+        ctx,
+      );
+
+      const appendEntry = fake.api.appendEntry as ReturnType<typeof vi.fn>;
+      appendEntry.mockClear();
+      await turnEndHandler!({ type: "turn_end", turnIndex: 0, message: {}, toolResults: [] }, ctx);
+
+      const gapCall = appendEntry.mock.calls.find((call) => call[0] === "opencandle-turn-gap");
+      if (!gapCall) throw new Error("expected an opencandle-turn-gap appendEntry call");
+      const annotation = (gapCall[1] as { annotation: string }).annotation;
+      expect(annotation).toContain("provider=brave");
+      expect(annotation).not.toContain("provider=exa");
     });
 
     it("does not emit an opencandle-turn-gap entry when no degradations were recorded", async () => {

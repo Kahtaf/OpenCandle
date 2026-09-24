@@ -67,6 +67,24 @@ describe("createPiAiRouterClient", () => {
     expect(mockCompleteSimple).not.toHaveBeenCalled();
   });
 
+  it("forwards a per-call abort signal into the Pi completion options", async () => {
+    const complete = vi.fn(async () => ({
+      stopReason: "stop",
+      content: [{ type: "text", text: "shared runtime result" }],
+    }));
+    const client = createPiAiRouterClient({} as any, complete as any);
+    const controller = new AbortController();
+
+    await expect(client.complete("route this", controller.signal)).resolves.toBe(
+      "shared runtime result",
+    );
+    expect(complete).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ tools: [] }),
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it("omits temperature for Pi reasoning models", async () => {
     const complete = vi.fn(async () => ({
       stopReason: "stop",

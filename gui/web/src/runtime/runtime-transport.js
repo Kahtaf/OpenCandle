@@ -103,6 +103,12 @@ export function createLoopbackRuntimeTransport(options = {}) {
       });
     },
 
+    cancelChatRun(sessionId, body) {
+      const encoded = encodeURIComponent(String(sessionId ?? "").trim());
+      if (!encoded) throw new Error("sessionId is required");
+      return postJson(`/api/sessions/${encoded}/run-cancel`, body);
+    },
+
     getMarketState(signal) {
       return this.getJson("/api/market-state", signal);
     },

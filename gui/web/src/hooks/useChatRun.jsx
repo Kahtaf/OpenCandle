@@ -17,6 +17,34 @@ export function chatRunEndpoint(sessionId) {
   return `/api/sessions/${encodeURIComponent(targetSessionId)}/runs`;
 }
 
+export function chatRunCancelEndpoint(sessionId) {
+  const targetSessionId = normalizeSessionId(sessionId);
+  if (!targetSessionId) throw new Error("sessionId is required");
+  return `/api/sessions/${encodeURIComponent(targetSessionId)}/run-cancel`;
+}
+
+export function buildRunCancelRequestBody(sessionId, actionId, targetActionId) {
+  const expectedSessionId = normalizeSessionId(sessionId);
+  if (!expectedSessionId) throw new Error("sessionId is required");
+  const target = normalizeSessionId(targetActionId);
+  if (!target) throw new Error("targetActionId is required");
+  return { sessionId: expectedSessionId, actionId, targetActionId: target };
+}
+
+export const RUN_CANCEL_UNCONFIRMED_MESSAGE =
+  "Could not confirm the run stopped on the server. The response may still be running.";
+
+/**
+ * Returns a user-facing message when an explicit local cancellation could not
+ * be confirmed by the server, or null when it succeeded (or there was no
+ * active run). Only used for transports that expose `cancelChatRun`; the
+ * hosted transport has none and cancels through its existing stream abort.
+ */
+export function runCancelUnconfirmedMessage(result) {
+  if (result && result.ok !== false) return null;
+  return RUN_CANCEL_UNCONFIRMED_MESSAGE;
+}
+
 export function createSessionActionId(prefix = "action") {
   const random =
     globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -168,9 +196,38 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
 
   const stopRun = useCallback(
     (sessionId = activeSessionId) => {
-      abortsRef.current.get(runStateKey(sessionId))?.abort();
+      const targetSessionId = normalizeSessionId(sessionId) || normalizeSessionId(activeSessionId);
+      const key = runStateKey(targetSessionId);
+      const targetActionId = normalizeSessionId(lastRuns[key]?.actionId);
+      const cancel = transport.cancelChatRun;
+      if (targetSessionId && targetActionId && typeof cancel === "function") {
+        // Explicit, original-action-targeted cancellation to the owning server.
+        // The server matches targetActionId against the run it currently has
+        // registered, so a stale Stop can never retire a newer run. When the
+        // transport has no server-side cancel (hosted), this is skipped and
+        // only the local stream abort below applies.
+        void Promise.resolve(
+          cancel.call(
+            transport,
+            targetSessionId,
+            buildRunCancelRequestBody(
+              targetSessionId,
+              createSessionActionId("stop"),
+              targetActionId,
+            ),
+          ),
+        )
+          .then((result) => {
+            // Never leave the user believing the server stopped when the
+            // cancellation was refused (e.g. hosted has no server stop).
+            const message = runCancelUnconfirmedMessage(result);
+            if (message) setToast(message);
+          })
+          .catch(() => setToast(RUN_CANCEL_UNCONFIRMED_MESSAGE));
+      }
+      abortsRef.current.get(key)?.abort();
     },
-    [activeSessionId],
+    [activeSessionId, lastRuns, transport, setToast],
   );
 
   const retryRun = useCallback(

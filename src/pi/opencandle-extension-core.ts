@@ -54,6 +54,7 @@ import {
   buildOptionsScreenerWorkflowDefinition,
   buildPortfolioWorkflowDefinition,
 } from "../workflows/index.js";
+import type { SessionCancellationState, SessionCancellationToken } from "./session-cancellation.js";
 
 export interface OpenCandleExtensionOptions {
   modelRuntime?: ModelRuntime;
@@ -76,6 +77,12 @@ export interface OpenCandleExtensionOptions {
   toolDefaultsFactory?: SessionCoordinatorOptions["toolDefaultsFactory"];
   toolDefinitions?: readonly ToolDefinition[];
   onCoordinatorCreated?: (coordinator: SessionCoordinator) => void;
+  /**
+   * Per-session cancellation state. When supplied (by session-core), the input
+   * handler captures the current run token and abandons router-result side
+   * effects if the run is cancelled while the router await is in flight.
+   */
+  cancellation?: SessionCancellationState;
 }
 
 interface OriginalInputMarkerContext {
@@ -132,6 +139,8 @@ export default function openCandleExtension(
   // Reset on session_start; set before the (async) title call fires so
   // overlapping turn_end events cannot double-title.
   let sessionTitleAttempted = false;
+  // One terminal cancelled-turn entry per input turn, however many guards fire.
+  let cancelledInputRecorded = false;
 
   // Register tools
   for (const tool of options?.toolDefinitions ?? []) {
@@ -433,9 +442,20 @@ export default function openCandleExtension(
     // tool-result block are deduplicated by the accumulator's Set.
     for (const block of event.content) {
       if (block.type !== "text") continue;
-      const parsed = parseToolTag(block.text);
-      if (parsed?.kind === "soft_degraded") {
-        degradationAccumulator.record(parsed.provider);
+      // Tags are line-oriented and tool-owned: both real emitters prepend a
+      // contiguous block of `[OPENCANDLE_...]` lines before the blank line and
+      // body, so a tool result can carry one soft-degraded line per provider
+      // (for example Brave and Exa). Read only that leading contiguous block
+      // and stop at the first blank, non-tag, or unparseable line: tag-looking
+      // text in untrusted body content must never become provider metadata.
+      for (const rawLine of block.text.split("\n")) {
+        const line = rawLine.trim();
+        if (!line.startsWith("[OPENCANDLE_")) break;
+        const parsed = parseToolTag(line);
+        if (!parsed) break;
+        if (parsed.kind === "soft_degraded") {
+          degradationAccumulator.record(parsed.provider);
+        }
       }
     }
 
@@ -713,7 +733,16 @@ export default function openCandleExtension(
   // Input handling — the LLM router is the single production routing path.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
+    cancelledInputRecorded = false;
+    // Capture this turn's cancellation token before any async work. Stop can
+    // arrive while the router await is in flight, when no Pi agent run exists
+    // yet for AgentSession.abort() to interrupt.
+    const runToken = options?.cancellation?.current ?? null;
     coordinator.clearTickerValidationCache();
+
+    if (runToken?.isCancelled()) {
+      return abandonCancelledInput(pi, event.text);
+    }
 
     // Check for comprehensive analysis pattern before routing.
     const analysis = isAnalysisRequest(event.text);
@@ -725,13 +754,29 @@ export default function openCandleExtension(
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
-    const dispatched = await handleLlmRouterTurn(event.text, ctx);
+    const dispatched = await handleLlmRouterTurn(event.text, ctx, runToken);
+    // Final safety net: whether the router resolved, rejected, or returned
+    // false, a turn cancelled during that await must never fall through to the
+    // main agent or any later workflow side effect.
+    if (runToken?.isCancelled()) {
+      return abandonCancelledInput(pi, event.text);
+    }
     // Dispatched a workflow → the original user turn is now represented by
     // the workflow's queued prompts; tell Pi not to also forward it.
     // Fallback path (no dispatch) → let Pi pass the user turn through to the
     // main agent, which will run under the router-supplied fallback context.
     return dispatched || undefined;
   });
+
+  function abandonCancelledInput(pi: ExtensionAPI, text: string): { action: "handled" } {
+    // Record the interrupted turn as terminal so transcript consumers do not
+    // show it as completed success. No router side effects and no agent run.
+    if (!cancelledInputRecorded) {
+      pi.appendEntry("opencandle-run-cancelled", { text });
+      cancelledInputRecorded = true;
+    }
+    return { action: "handled" };
+  }
 
   /**
    * Router input handler. The router is the single source of classification
@@ -742,7 +787,8 @@ export default function openCandleExtension(
   async function handleLlmRouterTurn(
     text: string,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): Promise<{ action: "transform"; text: string } | false> {
+    runToken: SessionCancellationToken | null,
+  ): Promise<{ action: "transform"; text: string } | { action: "handled" } | false> {
     const storage = coordinator.getStorage();
     const { profileSnapshot, portfolioPositions, recentWorkflowRuns, priorTurns } =
       coordinator.buildRouterContextBase(ctx.sessionManager);
@@ -764,16 +810,34 @@ export default function openCandleExtension(
       return false;
     }
 
+    // Wrap the injected/real client so the captured run signal always reaches
+    // the transport: a Stop must close the in-flight router HTTP request, not
+    // merely set a flag that leaves the request (and run locks/cost) held.
+    const routedClient: RouterLlmClient = runToken
+      ? {
+          complete: (prompt, signal) => client.complete(prompt, signal ?? runToken.signal),
+        }
+      : client;
+
     let output: RouterOutput;
     try {
-      output = await routeLlm(input, client);
+      output = await routeLlm(input, routedClient, runToken?.signal);
     } catch (err) {
       pi.appendEntry("opencandle-router-error", {
         reason: "route_failed",
         text,
         message: err instanceof Error ? err.message : String(err),
       });
+      // A rejected router await after Stop is still a cancelled turn: never let
+      // the failure path fall through to the agent.
+      if (runToken?.isCancelled()) return abandonCancelledInput(pi, text);
       return false;
+    }
+
+    // Stop may have landed while the router await was in flight. Bail before
+    // any preference write, workflow record, context stash, or dispatch.
+    if (runToken?.isCancelled()) {
+      return abandonCancelledInput(pi, text);
     }
 
     const availableToolNames = safeGetAllToolNames();
@@ -822,7 +886,7 @@ export default function openCandleExtension(
 
     // Workflow dispatch for recognised workflows.
     if (output.routeKind === "workflow_dispatch" && output.workflow) {
-      return dispatchRouterWorkflow(output, ctx, text);
+      return dispatchRouterWorkflow(output, ctx, text, runToken);
     }
 
     if (output.routeKind === "pass_through") {
@@ -856,7 +920,11 @@ export default function openCandleExtension(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
     originalText: string,
+    runToken: SessionCancellationToken | null,
   ): Promise<{ action: "transform"; text: string } | false> {
+    const cancelled = () => runToken?.isCancelled() ?? false;
+    // Stop may have landed between the router's post-await check and here.
+    if (cancelled()) return false;
     const workflow = output.workflow;
     if (!workflow) return false;
     const storage = coordinator.getStorage();
@@ -944,7 +1012,10 @@ export default function openCandleExtension(
         workflow: "compare_assets",
         symbols: entities.symbols,
       });
-      const preflight = await preflightCompareResolution(resolution);
+      const preflight = await preflightCompareResolution(resolution, runToken);
+      // Stop may have landed during the preflight await. Do not record a
+      // fallback, stash context, or start the workflow for a cancelled run.
+      if (cancelled()) return false;
       if (!preflight) {
         coordinator.recordWorkflowRun(
           "fallback",
@@ -1023,6 +1094,7 @@ export default function openCandleExtension(
 
   async function preflightCompareResolution(
     resolution: SlotResolution<CompareAssetsSlots>,
+    runToken: SessionCancellationToken | null,
   ): Promise<{
     resolution: SlotResolution<CompareAssetsSlots>;
     dropped: Array<{ symbol: string; reason: string }>;
@@ -1031,6 +1103,9 @@ export default function openCandleExtension(
       cache: coordinator.getTickerValidationCache(),
       search: options?.symbolSearch,
     });
+    // Stop during the resolver await: skip the drop/abort entries too. The
+    // caller re-checks the token and ignores this null.
+    if (runToken?.isCancelled()) return null;
     for (const drop of result.dropped) {
       pi.appendEntry("opencandle-symbol-preflight-dropped", drop);
     }

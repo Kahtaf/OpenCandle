@@ -70,6 +70,7 @@ export function SheetContent({
   width = "md",
   handleLabel = "Panel",
   side = "center",
+  onCloseAutoFocus,
 }) {
   const { isDesktop } = useContext(SheetContext);
   if (isDesktop) {
@@ -79,6 +80,7 @@ export function SheetContent({
         <DialogPrimitive.Content
           aria-describedby={undefined}
           data-side={side}
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             side === "right"
               ? "fixed inset-y-0 right-0 z-50 flex h-dvh w-[min(400px,calc(100vw-16px))] max-w-[400px] flex-col overflow-hidden rounded-l-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-[180ms] data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-[120ms] data-[state=closed]:ease-in"
@@ -101,6 +103,7 @@ export function SheetContent({
       <Drawer.Content
         aria-describedby={undefined}
         data-side={side}
+        onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           BOTTOM_SHEET_SURFACE_CLASS,
           "md:inset-x-auto md:bottom-4 md:h-auto md:max-h-[84vh] md:rounded-xl",

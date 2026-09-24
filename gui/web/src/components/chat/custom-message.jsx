@@ -25,6 +25,17 @@ export function CustomMessage({ customType, content, details, onFixModelKey, onR
     );
   }
 
+  if (customType === "opencandle-run-cancelled") {
+    // A user-stopped run: neutral label, the terminal content, and none of the
+    // model-failure recovery controls. Never surface the internal custom type.
+    return (
+      <div className="flex max-w-[760px] flex-wrap items-start gap-2 text-sm">
+        <Badge variant="secondary">Stopped</Badge>
+        <span className="text-foreground">{textContent(content)}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex max-w-[760px] flex-wrap items-start gap-2 text-sm">
       <Badge variant="warning">{customType}</Badge>

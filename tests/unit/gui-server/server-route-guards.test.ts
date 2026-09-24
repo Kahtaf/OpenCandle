@@ -384,16 +384,31 @@ describe("GUI server route guards", () => {
       source.indexOf('sessionIdFromRoute(url.pathname, "runs")'),
       source.indexOf("serveStaticAsset(url.pathname, res, options)"),
     );
-    expect(runsRoute).toContain(
-      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true)",
+    expect(runsRoute).toMatch(
+      /handleSseChatRun\(\s*req,\s*res,\s*options,\s*activeRunSessionIds,\s*activeGuiRuns,\s*sessionManager,\s*body,\s*true\s*,?\s*\)/,
     );
     const coordinatorRoute = source.slice(
       source.indexOf('url.pathname === "/api/local-coordinator/chat-run"'),
       source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"'),
     );
-    expect(coordinatorRoute).toContain(
-      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false)",
+    expect(coordinatorRoute).toMatch(
+      /handleSseChatRun\(\s*req,\s*res,\s*options,\s*activeRunSessionIds,\s*activeGuiRuns,\s*sessionManager,\s*body,\s*false\s*,?\s*\)/,
     );
+  });
+
+  it("only cancels a run on an explicit run-cancel request, never on passive disconnect", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    // No request/response lifecycle event may trigger cancellation. A passive
+    // browser disconnect (reload/navigation) must leave the run alive.
+    expect(source).not.toMatch(/(?:req|res)\.on\(\s*["'](?:close|aborted|error)["']/);
+
+    const cancelHandler = source.slice(
+      source.indexOf("async function handleRunCancel"),
+      source.indexOf("async function proxyRunCancelToCoordinator"),
+    );
+    expect(cancelHandler).toContain("activeGuiRuns.cancel(");
+    // The only cancellation calls live in the explicit cancel handler.
+    expect(source.replace(cancelHandler, "")).not.toContain("activeGuiRuns.cancel(");
   });
 
   it("records attachment metadata in chat action envelopes without image bytes", async () => {

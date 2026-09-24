@@ -34,7 +34,7 @@ export function SessionSidebar({ collapsed, onCollapse, ...props }) {
   );
 }
 
-export function SessionDrawer({ open, onClose, ...rest }) {
+export function SessionDrawer({ open, onClose, returnFocusRef, ...rest }) {
   return (
     <Sheet
       open={open}
@@ -43,7 +43,23 @@ export function SessionDrawer({ open, onClose, ...rest }) {
         if (!nextOpen) onClose();
       }}
     >
-      <SheetContent width="sm" handleLabel="Sessions" className="p-0">
+      <SheetContent
+        width="sm"
+        handleLabel="Sessions"
+        className="p-0"
+        onCloseAutoFocus={(event) => {
+          // Radix/vaul restore focus to a Dialog.Trigger, but the mobile
+          // history drawer is opened from plain buttons in the app shell.
+          // Return focus to the element that opened it so keyboard users are
+          // not dropped onto <body>. The opener may have unmounted if the
+          // route changed while the drawer was open, so only restore when it
+          // is still connected.
+          const opener = returnFocusRef?.current;
+          if (!opener?.isConnected) return;
+          event.preventDefault();
+          opener.focus();
+        }}
+      >
         <div className="flex h-full min-h-0 flex-col">
           {/* The drawer keeps the sidebar's header grammar so New chat stays one
               tap away on a phone; the sheet supplies its own dismiss. */}

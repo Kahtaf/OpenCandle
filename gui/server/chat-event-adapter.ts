@@ -68,6 +68,45 @@ export function sessionEntriesToChatEvents(
       continue;
     }
 
+    // Durable cancelled-turn marker from the extension input hook. Without
+    // this mapping `entry.type === "custom"` is dropped and a stopped turn
+    // would leave no transcript trace to pair with the terminal run.failed.
+    // The early input hook handled the turn before Pi wrote a user message, so
+    // replay the original prompt from the marker as a stable user bubble before
+    // the stopped notice; otherwise the user's words vanish on reload.
+    if (isCustomEntry(entry, "opencandle-run-cancelled")) {
+      lastEntryWasUserMessage = false;
+      const details = customEntryData(entry);
+      const originalText = stringField(details, "text");
+      if (originalText) {
+        const cancelledUserId = `cancelled-user-${entry.id}`;
+        events.push({
+          type: "message.created",
+          sessionId: options.sessionId,
+          messageId: cancelledUserId,
+          role: "user",
+          seq: seq++,
+        });
+        events.push({
+          type: "message.completed",
+          sessionId: options.sessionId,
+          messageId: cancelledUserId,
+          content: [{ type: "text", text: originalText }],
+          seq: seq++,
+        });
+      }
+      events.push({
+        type: "custom.message",
+        sessionId: options.sessionId,
+        messageId: entry.id,
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        details,
+        seq: seq++,
+      });
+      continue;
+    }
+
     if (entry.type !== "message") {
       lastEntryWasUserMessage = false;
       continue;

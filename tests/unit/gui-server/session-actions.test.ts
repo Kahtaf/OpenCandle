@@ -12,6 +12,11 @@ import {
   renameSessionFile,
 } from "../../../gui/server/session-actions.js";
 import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
+import {
+  attachSessionCancellationState,
+  createSessionCancellationState,
+  startSessionRun,
+} from "../../../src/pi/session-cancellation.js";
 
 describe("GUI session actions", () => {
   it("threads image prompt options into the Pi session prompt", async () => {
@@ -499,7 +504,157 @@ describe("GUI session actions", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+
+  it("rejects starting a new session while the current session has an active run token", async () => {
+    const session = {} as AgentSession;
+    const state = createSessionCancellationState();
+    startSessionRun(state);
+    attachSessionCancellationState(session, state);
+    const { controller, newSession } = makeController({ session });
+
+    await expect(controller.handleNewSession()).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(newSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects starting a new session while the current session is streaming", async () => {
+    const session = { isStreaming: true, pendingMessageCount: 0 } as unknown as AgentSession;
+    const { controller, newSession } = makeController({ session });
+
+    await expect(controller.handleNewSession()).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(newSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects starting a new session while the current session has pending messages", async () => {
+    const session = { isStreaming: false, pendingMessageCount: 1 } as unknown as AgentSession;
+    const { controller, newSession } = makeController({ session });
+
+    await expect(controller.handleNewSession()).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(newSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects opening another session while the current session has an active run", async () => {
+    const session = {} as AgentSession;
+    const state = createSessionCancellationState();
+    startSessionRun(state);
+    attachSessionCancellationState(session, state);
+    const { controller, switchSession } = makeController({ session });
+
+    await expect(controller.handleOpenSession("/tmp/sessions/other.jsonl")).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(switchSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects deleting the current session while it has an active run without deleting the file", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      manager.appendMessage({ role: "user", content: "Still running" });
+      manager.appendMessage(assistantMessage("Still running response"));
+      const sessionFile = manager.getSessionFile();
+      if (!sessionFile) throw new Error("Expected session file");
+
+      const session = {} as AgentSession;
+      const state = createSessionCancellationState();
+      startSessionRun(state);
+      attachSessionCancellationState(session, state);
+      const { controller, newSession } = makeController({
+        session,
+        sessionManager: manager,
+        cwd,
+        sessionDir,
+      });
+
+      await expect(controller.handleDeleteSession({ send: vi.fn() }, sessionFile)).rejects.toThrow(
+        "Session already has an active run",
+      );
+      expect(existsSync(sessionFile)).toBe(true);
+      expect(newSession).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("still starts a fresh session when the current session is idle", async () => {
+    const { controller, newSession } = makeController({
+      session: { isStreaming: false, pendingMessageCount: 0 } as unknown as AgentSession,
+    });
+
+    await controller.handleNewSession();
+
+    expect(newSession).toHaveBeenCalledOnce();
+  });
+
+  it("still deletes a non-current saved session while the current session has an active run", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const targetManager = SessionManager.create(cwd, sessionDir);
+      targetManager.appendMessage({ role: "user", content: "Delete me" });
+      targetManager.appendMessage(assistantMessage("Deleted response"));
+      const targetFile = targetManager.getSessionFile();
+      if (!targetFile) throw new Error("Expected target session file");
+
+      const session = {} as AgentSession;
+      const state = createSessionCancellationState();
+      startSessionRun(state);
+      attachSessionCancellationState(session, state);
+      const { controller, newSession } = makeController({
+        session,
+        sessionManager: currentManager,
+        cwd,
+        sessionDir,
+      });
+
+      await controller.handleDeleteSession({ send: vi.fn() }, targetFile);
+
+      expect(existsSync(targetFile)).toBe(false);
+      expect(newSession).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
 });
+
+function makeController(
+  options: {
+    session?: AgentSession;
+    sessionManager?: SessionManager;
+    newSession?: () => Promise<{ cancelled: boolean }>;
+    switchSession?: (path: string) => Promise<{ cancelled: boolean }>;
+    cwd?: string;
+    sessionDir?: string;
+  } = {},
+) {
+  const newSession = vi.fn(options.newSession ?? (async () => ({ cancelled: false })));
+  const switchSession = vi.fn(options.switchSession ?? (async () => ({ cancelled: false })));
+  const controller = createSessionActionsController({
+    role: "writer",
+    cwd: options.cwd ?? "/tmp",
+    sessionDir: options.sessionDir ?? "/tmp/sessions",
+    getSession: () => options.session ?? ({} as AgentSession),
+    getSessionManager: () =>
+      options.sessionManager ??
+      ({ getEntries: () => [], getSessionFile: () => null } as unknown as SessionManager),
+    getModelSetupState: () => ({ requirement: "ready", providers: [], availableModels: [] }),
+    askUserBridge: { answer: () => true, cancel: () => true },
+    runtime: { newSession, switchSession },
+    sendBoot: vi.fn(),
+    broadcastState: vi.fn(),
+    broadcastSessions: vi.fn(),
+  });
+  return { controller, newSession, switchSession };
+}
 
 function assistantMessage(text: string) {
   return {

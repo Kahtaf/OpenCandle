@@ -317,6 +317,83 @@ describe("route()", () => {
     expect(result.tool_bundles).toContain("core_market");
   });
 
+  it("forwards the abort signal to the router client", async () => {
+    const seen: Array<AbortSignal | undefined> = [];
+    const client: RouterLlmClient = {
+      async complete(_prompt, signal) {
+        seen.push(signal);
+        return JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "x",
+        });
+      },
+    };
+    const controller = new AbortController();
+
+    await route(BASE_INPUT, client, controller.signal);
+
+    expect(seen).toEqual([controller.signal]);
+  });
+
+  it("does not issue a router request when the signal is already aborted", async () => {
+    let calls = 0;
+    const client: RouterLlmClient = {
+      async complete() {
+        calls += 1;
+        throw new Error("router client must not be called for an aborted signal");
+      },
+    };
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(route(BASE_INPUT, client, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(calls).toBe(0);
+  });
+
+  it("closes a held router request on abort and does not retry into a new request", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const client: RouterLlmClient = {
+      complete(_prompt, signal) {
+        calls += 1;
+        return new Promise<string>((_resolve, reject) => {
+          const onAbort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    };
+
+    const pending = route(BASE_INPUT, client, controller.signal);
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toBe(1);
+  });
+
+  it("does not retry validation after the router client reports an abort", async () => {
+    let calls = 0;
+    const client: RouterLlmClient = {
+      async complete() {
+        calls += 1;
+        throw Object.assign(new Error("router request aborted"), { name: "AbortError" });
+      },
+    };
+
+    await expect(route(BASE_INPUT, client)).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toBe(1);
+  });
+
   it("normalizes dispatchable compare workflow emitted as agent_task to workflow_dispatch", async () => {
     const result = await route(
       {

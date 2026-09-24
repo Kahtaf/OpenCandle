@@ -906,6 +906,54 @@ describe("sessionEntriesToChatEvents", () => {
 
     expect(output?.details).toEqual(details);
   });
+
+  it("surfaces a durable cancelled turn with the original prompt before the stopped notice", () => {
+    const events = sessionEntriesToChatEvents(
+      [customEntry("cancel-1", "opencandle-run-cancelled", { text: "hold then stop" })],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toEqual([
+      expect.objectContaining({ type: "session.updated", seq: 1 }),
+      {
+        type: "message.created",
+        sessionId: "s1",
+        messageId: "cancelled-user-cancel-1",
+        role: "user",
+        seq: 2,
+      },
+      {
+        type: "message.completed",
+        sessionId: "s1",
+        messageId: "cancelled-user-cancel-1",
+        content: [{ type: "text", text: "hold then stop" }],
+        seq: 3,
+      },
+      {
+        type: "custom.message",
+        sessionId: "s1",
+        messageId: "cancel-1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        details: { text: "hold then stop" },
+        seq: 4,
+      },
+    ]);
+    const userMessages = events.filter(
+      (event) => event.type === "message.created" && event.role === "user",
+    );
+    expect(userMessages).toHaveLength(1);
+  });
+
+  it("does not derive a user bubble when the cancelled marker has no text", () => {
+    const events = sessionEntriesToChatEvents(
+      [customEntry("cancel-2", "opencandle-run-cancelled", {})],
+      { sessionId: "s1", startSeq: 1 },
+    );
+    expect(
+      events.filter((event) => event.type === "message.created" && event.role === "user"),
+    ).toHaveLength(0);
+  });
 });
 
 function messageEntry(id: string, message: Message): SessionEntry {

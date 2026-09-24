@@ -855,12 +855,16 @@ export class SessionCoordinator {
   cancelActiveWorkflow(): void {
     const activeRef = this.activeWorkflowRunRef;
     if (activeRef) {
-      activeRef.active = false;
+      // Keep the ref so the workflow promise's terminal path
+      // (finishWorkflowRun) still runs: it records the durable
+      // `workflow_interrupted` closure and appends the failed terminal marker
+      // instead of leaving a silent stop with no transcript trace.
+      this.markWorkflowInterrupted(activeRef, "stopped");
       clearRunContext(activeRef.contextToken);
-      this.activeWorkflowRunRef = null;
+    } else {
+      this.runner?.cancel();
     }
     this.activeStepCapture = null;
-    this.runner?.cancel();
   }
 
   private startStepCapture(): ActiveStepCapture {

@@ -43,31 +43,55 @@ const VALID_CONFIDENCE = new Set(["high", "medium", "low"]);
  * validation failure with a corrective message. Falls back to a minimal
  * `agent_task` output on persistent failure.
  *
+ * `signal` carries the run's cancellation through to the client transport. An
+ * aborted signal must not open a new request, including the validation retry.
+ *
  * The LLM client is injected so unit tests can supply deterministic responses.
  */
 export async function route(
   input: RouterInputContext,
   client: RouterLlmClient,
+  signal?: AbortSignal,
 ): Promise<RouterOutput> {
   const prompt = buildRouterPrompt(input);
+  if (signal?.aborted) throw abortErrorFor(signal);
 
   let firstError: string | undefined;
   try {
-    const raw = await client.complete(prompt);
+    const raw = await client.complete(prompt, signal);
     return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch (err) {
+    // Never turn an abort into the validation retry: that would open a second
+    // request for a run the user already stopped.
+    if (isAbortLikeError(err, signal)) throw err;
     firstError = err instanceof Error ? err.message : String(err);
   }
+
+  if (signal?.aborted) throw abortErrorFor(signal);
 
   // Retry once with error feedback.
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
-    const raw = await client.complete(retryPrompt);
+    const raw = await client.complete(retryPrompt, signal);
     return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
-  } catch {
+  } catch (err) {
+    if (isAbortLikeError(err, signal)) throw err;
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
     return postProcessRouterOutput(input.text, minimalFallback(input.text), input);
   }
+}
+
+function isAbortLikeError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function abortErrorFor(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error) return reason;
+  const error = new Error("router LLM call aborted");
+  error.name = "AbortError";
+  return error;
 }
 
 export function validateRouterOutput(raw: string): RouterOutput {

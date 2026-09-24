@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildChatRunRequestBody,
   buildRetryChatRunOptions,
+  buildRunCancelRequestBody,
+  chatRunCancelEndpoint,
   chatRunEndpoint,
   createSessionActionId,
   isDuplicateChatRunAck,
   isSessionChangedChatRunError,
+  RUN_CANCEL_UNCONFIRMED_MESSAGE,
+  runCancelUnconfirmedMessage,
 } from "../../../gui/web/src/hooks/useChatRun.jsx";
 
 describe("chat run request helpers", () => {
@@ -107,5 +111,41 @@ describe("chat run request helpers", () => {
         actionId: "",
       }),
     ).toEqual({ sessionId: "session-1" });
+  });
+
+  it("builds a session-addressed run-cancel endpoint", () => {
+    expect(chatRunCancelEndpoint("session-1")).toBe("/api/sessions/session-1/run-cancel");
+    expect(chatRunCancelEndpoint("session/with/slash")).toBe(
+      "/api/sessions/session%2Fwith%2Fslash/run-cancel",
+    );
+    expect(() => chatRunCancelEndpoint()).toThrow("sessionId is required");
+  });
+
+  it("targets the original chat action id in a run-cancel body", () => {
+    expect(buildRunCancelRequestBody("session-1", "stop-1", "chat-1")).toEqual({
+      sessionId: "session-1",
+      actionId: "stop-1",
+      targetActionId: "chat-1",
+    });
+    expect(() => buildRunCancelRequestBody("", "stop-1", "chat-1")).toThrow(
+      "sessionId is required",
+    );
+    expect(() => buildRunCancelRequestBody("session-1", "stop-1", "")).toThrow(
+      "targetActionId is required",
+    );
+  });
+
+  it("reports an unconfirmed server stop only when cancellation is rejected or refused", () => {
+    expect(runCancelUnconfirmedMessage({ ok: true, cancelled: true, duplicate: false })).toBeNull();
+    expect(
+      runCancelUnconfirmedMessage({ ok: true, cancelled: false, reason: "no_active_run" }),
+    ).toBeNull();
+    expect(
+      runCancelUnconfirmedMessage({ ok: true, cancelled: false, reason: "stale_target" }),
+    ).toBeNull();
+    expect(runCancelUnconfirmedMessage({ ok: false, cancelled: false })).toBe(
+      RUN_CANCEL_UNCONFIRMED_MESSAGE,
+    );
+    expect(runCancelUnconfirmedMessage(undefined)).toBe(RUN_CANCEL_UNCONFIRMED_MESSAGE);
   });
 });

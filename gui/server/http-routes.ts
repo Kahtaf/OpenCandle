@@ -13,6 +13,14 @@ import {
   recordAcceptedSessionAction,
   recordPendingSessionAction,
 } from "../../src/pi/session-action-dedupe.js";
+import {
+  finishSessionRun,
+  getSessionCancellationState,
+  type SessionCancellationState,
+  type SessionCancellationToken,
+  startSessionRun,
+} from "../../src/pi/session-cancellation.js";
+import { getSessionCoordinator } from "../../src/pi/session-core.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import {
   buildDispatchedPromptFromState,
@@ -31,6 +39,7 @@ export {
 
 import { createLiveChatEventAdapter } from "../shared/live-chat-event-adapter.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
+import { persistUnflushedSession } from "./durable-session-persist.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import type {
   LocalSessionCoordinator,
@@ -57,7 +66,17 @@ import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-ap
 import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
-import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
+import {
+  applyGuiRunCancellation,
+  createGuiRunRegistry,
+  type GuiRunCancelResult,
+  type GuiRunRegistry,
+} from "./run-cancellation.js";
+import {
+  promptAndSettle,
+  type SessionActionsController,
+  SessionBusyError,
+} from "./session-actions.js";
 import { waitForNewEntryId, waitWithStallGuard } from "./session-entry-wait.js";
 import { listDisplaySessions } from "./session-list.js";
 import { fetchTickerLineSparkline } from "./ticker-line-sparkline.js";
@@ -109,10 +128,13 @@ interface GuiHttpRouteOptions {
   quoteSnapshotStore: QuoteSnapshotStore;
   indicesSnapshotStore: MarketIndicesSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
+  /** Injectable active-run registry (tests); defaults to a fresh registry. */
+  runRegistry?: GuiRunRegistry;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
   const activeRunSessionIds = new Set<string>();
+  const activeGuiRuns = options.runRegistry ?? createGuiRunRegistry();
 
   return async function handleHttpRequest(
     req: IncomingMessage,
@@ -140,7 +162,15 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         );
         return;
       }
-      await options.sessionActionsController.handleNewSession();
+      try {
+        await options.sessionActionsController.handleNewSession();
+      } catch (error) {
+        if (error instanceof SessionBusyError) {
+          writeJson(res, { error: error.message, code: error.code }, 409);
+          return;
+        }
+        throw error;
+      }
       options.wsHub.broadcastState();
       options.wsHub.broadcastSessions();
       writeJson(res, await options.wsHub.buildBootstrapPayload());
@@ -396,7 +426,33 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         return;
       }
       // allowProxy: false — this endpoint is the proxy target; re-proxying loops.
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false);
+      await handleSseChatRun(
+        req,
+        res,
+        options,
+        activeRunSessionIds,
+        activeGuiRuns,
+        sessionManager,
+        body,
+        false,
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/local-coordinator/run-cancel" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, body)) return;
+      if (String(body.actionType ?? "") !== "run.cancel") {
+        writeJson(res, { error: "Unknown coordinator action" }, 400);
+        return;
+      }
+      const sessionManager = await resolveSessionManagerById(options, String(body.sessionId ?? ""));
+      if (!sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      await handleRunCancel(res, options, activeGuiRuns, sessionManager, body, false);
       return;
     }
 
@@ -508,7 +564,31 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       }
       // allowProxy: true — forward to a live coordinator owned by another
       // process (0.11.0 authenticated local forwarding).
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true);
+      await handleSseChatRun(
+        req,
+        res,
+        options,
+        activeRunSessionIds,
+        activeGuiRuns,
+        sessionManager,
+        body,
+        true,
+      );
+      return;
+    }
+
+    const runCancelSessionId = sessionIdFromRoute(url.pathname, "run-cancel");
+    if (runCancelSessionId && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
+      const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, { ...body, sessionId: runCancelSessionId }, false))
+        return;
+      const sessionManager = await resolveSessionManagerById(options, runCancelSessionId);
+      if (!sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      await handleRunCancel(res, options, activeGuiRuns, sessionManager, body, true);
       return;
     }
 
@@ -521,6 +601,7 @@ async function handleSseChatRun(
   res: ServerResponse,
   options: GuiHttpRouteOptions,
   activeRunSessionIds: Set<string>,
+  activeGuiRuns: GuiRunRegistry,
   targetSessionManager: SessionManager | undefined,
   bodyOverride: Record<string, unknown> | undefined,
   // Explicit because both remaining callers pass a body: the browser-facing
@@ -598,6 +679,7 @@ async function handleSseChatRun(
           res,
           options,
           activeRunSessionIds,
+          activeGuiRuns,
           targetSessionManager,
           currentSessionManager,
           runSessionManager,
@@ -626,6 +708,7 @@ async function handleSseChatRun(
     res,
     options,
     activeRunSessionIds,
+    activeGuiRuns,
     targetSessionManager,
     currentSessionManager,
     runSessionManager,
@@ -671,6 +754,118 @@ async function proxyChatRunToCoordinator(
   return true;
 }
 
+/**
+ * Explicit session- and original-action-targeted cancellation. The target
+ * action id must name the run currently active for the session; a stale Stop
+ * (older action id) is acknowledged without cancelling the newer run.
+ */
+async function handleRunCancel(
+  res: ServerResponse,
+  options: GuiHttpRouteOptions,
+  activeGuiRuns: GuiRunRegistry,
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+  allowProxy: boolean,
+): Promise<void> {
+  const targetActionId = String(body.targetActionId ?? "").trim();
+  if (!targetActionId) {
+    writeJson(res, { error: "targetActionId is required" }, 400);
+    return;
+  }
+  const sessionId = runSessionManager.getSessionId();
+  if (allowProxy) {
+    const outcome = await proxyRunCancelToCoordinator(res, runSessionManager, body);
+    if (outcome === "forwarded") return;
+    if (outcome === "failed") {
+      // A live foreign owner could not be reached. Fail closed so the browser
+      // surfaces the unconfirmed-stop message instead of reading a local
+      // "no active run" as an idle success.
+      writeJson(
+        res,
+        {
+          error: "Could not reach the session owner to confirm the run stopped.",
+          code: "cancel_forward_failed",
+        },
+        503,
+      );
+      return;
+    }
+  }
+
+  const actionId = String(body.actionId ?? "").trim();
+  if (options.localSessionCoordinator) {
+    const action: SessionActionEnvelope = {
+      sessionId,
+      actionId,
+      actionType: "run.cancel",
+      payload: { targetActionId },
+      source: "browser",
+    };
+    const result = await options.localSessionCoordinator.runSessionAction(action, async () =>
+      activeGuiRuns.cancel(sessionId, targetActionId),
+    );
+    if (!result.ok) {
+      writeJson(res, { error: result.message, code: result.code }, 409);
+      return;
+    }
+    const outcome = result.result as GuiRunCancelResult;
+    writeJson(res, {
+      ok: true,
+      ...outcome,
+      ...(result.duplicate && outcome.cancelled ? { duplicate: true } : {}),
+    });
+    return;
+  }
+
+  const outcome = activeGuiRuns.cancel(sessionId, targetActionId);
+  writeJson(res, { ok: true, ...outcome });
+}
+
+/**
+ * Outcome of trying to hand a cancellation to a foreign owner.
+ * - `not_forwarded`: no live foreign owner lock; the caller may handle locally.
+ * - `forwarded`: the owner response was relayed to the client.
+ * - `failed`: a live foreign owner was identified but could not be reached.
+ */
+type RunCancelForwardOutcome = "not_forwarded" | "forwarded" | "failed";
+
+async function proxyRunCancelToCoordinator(
+  res: ServerResponse,
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+): Promise<RunCancelForwardOutcome> {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!hasLiveCoordinatorLock(lock)) return "not_forwarded";
+  const endpoint = new URL("/api/local-coordinator/run-cancel", lock.coordinatorEndpoint);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      // The owner endpoint requires the coordinator action type. Set it here,
+      // after the spread, so a caller-supplied value can never override it.
+      body: JSON.stringify({
+        ...body,
+        actionType: "run.cancel",
+        sessionId: runSessionManager.getSessionId(),
+      }),
+    });
+  } catch {
+    return "failed";
+  }
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  if (response.body) {
+    for await (const chunk of response.body) {
+      res.write(chunk);
+    }
+  }
+  res.end();
+  return "forwarded";
+}
+
 function hasLiveCoordinatorLock(
   lock: ReturnType<typeof readWriterLock>,
   staleGraceMs = 15_000,
@@ -690,6 +885,7 @@ async function streamAcceptedSseChatRun({
   res,
   options,
   activeRunSessionIds,
+  activeGuiRuns,
   targetSessionManager,
   currentSessionManager,
   runSessionManager,
@@ -700,6 +896,7 @@ async function streamAcceptedSseChatRun({
   res: ServerResponse;
   options: GuiHttpRouteOptions;
   activeRunSessionIds: Set<string>;
+  activeGuiRuns: GuiRunRegistry;
   targetSessionManager?: SessionManager;
   currentSessionManager: SessionManager;
   runSessionManager: SessionManager;
@@ -712,10 +909,21 @@ async function streamAcceptedSseChatRun({
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
     return false;
   }
+  // Register ownership before any await or session creation so a Stop that
+  // lands while the run is still being set up is remembered and applied.
+  const runHandle = activeGuiRuns.start({ sessionId, actionId });
+  if (!runHandle) {
+    // A concurrent start won admission before activeRunSessionIds was set.
+    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    return false;
+  }
+  let runCancellationState: SessionCancellationState | null = null;
+  let runToken: SessionCancellationToken | null = null;
   let dispatchedPrompt: string;
   try {
     dispatchedPrompt = await buildDispatchedPrompt(parsedRun);
   } catch (error) {
+    activeGuiRuns.finish(runHandle);
     writeJson(res, { error: error instanceof Error ? error.message : String(error) }, 400);
     return false;
   }
@@ -749,6 +957,7 @@ async function streamAcceptedSseChatRun({
       coordinatorSecret: options.localCoordinatorSecret,
     });
     if (lockResult.role !== "writer") {
+      activeGuiRuns.finish(runHandle);
       writeJson(
         res,
         { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
@@ -773,6 +982,8 @@ async function streamAcceptedSseChatRun({
     if (runOwnershipReleased) return;
     runOwnershipReleased = true;
     activeRunSessionIds.delete(sessionId);
+    activeGuiRuns.finish(runHandle);
+    if (runCancellationState && runToken) finishSessionRun(runCancellationState, runToken);
     if (lockHeartbeat) clearInterval(lockHeartbeat);
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
   };
@@ -796,6 +1007,18 @@ async function streamAcceptedSseChatRun({
   let seq = 1;
   const runId = `gui-run-${Date.now()}`;
   const runSession = createdSession?.session ?? options.getSession();
+  // Wire explicit cancellation now that the session exists. If a Stop already
+  // arrived, setApplyCancel fires immediately and the run token is cancelled
+  // before prompt() reaches the extension input hook.
+  runCancellationState = getSessionCancellationState(runSession) ?? null;
+  runToken = runCancellationState ? startSessionRun(runCancellationState) : null;
+  runHandle.setApplyCancel(() =>
+    applyGuiRunCancellation({
+      token: runToken,
+      coordinator: getSessionCoordinator(runSession),
+      session: runSession,
+    }),
+  );
   if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
@@ -879,8 +1102,24 @@ async function streamAcceptedSseChatRun({
         observation,
         promptImages.length > 0 ? { images: promptImages } : undefined,
       );
-      recordAcceptedAction();
-      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      if (runHandle.cancelRequested) {
+        // User stopped this run. Keep it terminal: the extension records an
+        // interrupted marker for routing-cancelled turns, and the cancellation
+        // callback aborts an already-active model/tool run. Do NOT record the
+        // action as accepted, so a retry is not mistaken for a duplicate.
+        clearPendingSessionAction(runSessionManager, actionId);
+        // A Stop that lands before the first assistant reply leaves Pi's
+        // SessionManager unflushed: the cancelled-turn marker is in memory
+        // only and would vanish on reload. Persist the canonical header +
+        // entries now, while writer ownership is held and before the terminal
+        // event. Errors propagate to this run's catch, which emits run.failed;
+        // the cancel POST only acknowledges delivery, not durability.
+        persistUnflushedSession(runSessionManager);
+        await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      } else {
+        recordAcceptedAction();
+        await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      }
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -902,7 +1141,18 @@ async function streamAcceptedSseChatRun({
         seq = event.seq + 1;
       }
     }
-    writeSse(res, { type: "run.completed", runId, sessionId, seq });
+    if (runHandle.cancelRequested) {
+      // Terminal, not completed success.
+      writeSse(res, {
+        type: "run.failed",
+        runId,
+        sessionId,
+        error: { message: "Run stopped." },
+        seq,
+      });
+    } else {
+      writeSse(res, { type: "run.completed", runId, sessionId, seq });
+    }
   } catch (error) {
     if (!actionAccepted) clearPendingSessionAction(runSessionManager, actionId);
     seq = liveAdapter.nextSeq();
@@ -1136,7 +1386,10 @@ export async function resolveSessionManagerById(
   return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
 }
 
-export function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs"): string {
+export function sessionIdFromRoute(
+  pathname: string,
+  action: "bootstrap" | "runs" | "run-cancel",
+): string {
   const match = pathname.match(new RegExp(`^/api/sessions/([^/]+)/${action}$`));
   if (!match) return "";
   try {
