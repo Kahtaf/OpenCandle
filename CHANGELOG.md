@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- `npm run gates`, `npm run gates:full`, and `npm run release:check` now share one checked-in, sequential proof battery that stops on the first failure, never retries, and reports each run.
+- Release preparation validates a candidate fingerprint and its eval evidence, rejecting stale, mismatched, skipped, or retry-after-failure evidence.
+- `npm run test:coverage` now measures line, function, and branch coverage per production surface and fails on a regression against the committed baseline.
+- A deterministic agent/session journey test proves a tool-backed quote answer and an honest unavailable-provider answer through the real session stack, offline.
+- Release preparation now produces a compact fail-closed summary that ties each release to exact candidate evidence, accepts a fresh success while preserving earlier history, and blocks mismatched, incomplete, skipped, failed, or expired runs.
+
+### Fixed
+
+- `npm run eval -- release` now fails on skipped or inconsistent required cases instead of reporting a false green.
+- The local GUI's mobile session drawer now returns focus to the control that opened it after Escape, a backdrop click, or close.
+- When more than one data source falls back in a single turn, the recorded data-gap note now names every affected source instead of only the first.
+- A chat stopped before the model replies now saves the original prompt and a stopped marker to the session file, so a reload shows the cancelled turn and its text instead of losing them.
+- Starting a new chat, opening another session, or deleting the current one while GUI work is still answering no longer cancels that run; the GUI reports the session as busy instead.
+
 ## [0.15.0] - 2026-09-21
 
 ### Changed

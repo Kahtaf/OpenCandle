@@ -32,7 +32,7 @@ For release-facing changes, run the same local gate that release and publish pat
 npm run release:check
 ```
 
-That command runs typecheck, `test:scripts:typecheck`, Biome CI, unit tests, `test:gui:release-smoke`, docs build, package-content validation, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. Before version or tag mutation, `scripts/release.mjs` also asks you to confirm that `npm run eval -- release` was run and its results were acceptable; `--skip-eval-confirm` is an emergency bypass.
+That command runs the shared `release` gate: typecheck and lint, unit/relay/agent-tool tests, the docs site build, GUI integration and release smoke, hosted PWA smoke, package-content validation, coverage, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. `scripts/release.mjs` commits the final version candidate first, then runs `release:check`, prepares the exact release package, runs the live provider release smoke (`npm run test:providers:release`), and reruns fresh `npm run eval -- release` against that unchanged candidate; it tags and pushes only if every proof passes. There is no eval-confirmation prompt and no bypass flag.
 
 ## First-Run Release Smoke
 

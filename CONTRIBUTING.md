@@ -42,8 +42,10 @@ npm run test:e2e:providers
 npm run lint        # biome check (CI gates on this)
 npm run typecheck   # tsc --noEmit
 npm run check       # typecheck + eval-script typecheck + relay typecheck + biome ci
-npm run gates       # check + unit tests + relay tests + agent-tool tests
-npm run gates:full  # gates + site tests + GUI release smoke + hosted GUI tests + package-contents check
+npm run gates       # core proof gate (step list: scripts/test-gate-policy.json)
+npm run gates:full  # full proof gate (step list: scripts/test-gate-policy.json)
+npm run release:check  # release proof gate (full + packed-install + docs links); deterministic
+npm run test:coverage  # Node+relay coverage ratchet; browser/combined coverage reported separately
 npm run review:pr   # repo autoreview + gates:full (run before opening or updating a PR)
 ```
 
@@ -53,7 +55,7 @@ Run `npm run gates:full` before opening or updating a PR; `npm run gates` is the
 npm run release:check
 ```
 
-See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke requires `npx playwright-core install chromium` locally. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. Before version or tag mutation, the release script asks you to confirm that `npm run eval -- release` was run and acceptable; `--skip-eval-confirm` is an emergency bypass.
+See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke and the `agent-tools` coverage-browser fixture require Chromium; install it once with `npx playwright-core install chromium` (Linux: `--with-deps`). Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. The release script commits the final version candidate first, runs `release:check`, prepares the exact release package once, runs the live provider release smoke (`npm run test:providers:release`), and reruns fresh `npm run eval -- release` against that unchanged candidate; it tags and pushes only if every proof passes. There is no eval-confirmation prompt and no `--skip-eval-confirm` bypass.
 
 ## Engineering Conventions
 
@@ -101,9 +103,9 @@ npm run release:minor
 npm run release:major
 ```
 
-The `release:*` scripts are intended for maintainers. They bump the version, update `CHANGELOG.md`, create a release commit and tag, restore the `Unreleased` section for the next cycle, and push both `main` and the release tag.
+The `release:*` scripts are intended for maintainers. They bump the version and commit the final version candidate without tagging, then run `release:check`, prepare the exact release package once, run the required live provider smoke (`npm run test:providers:release`), and run fresh `npm run eval -- release` against that unchanged commit; only if every proof passes do they tag, restore the `Unreleased` section, and push `main` and the tag. There is no eval-confirmation prompt and no `--skip-eval-confirm` bypass.
 
-The actual npm publish step runs in GitHub Actions from the pushed `v*` tag using trusted publishing. That keeps the local release flow minimal while avoiding laptop-based npm publishes.
+The actual npm publish step runs in GitHub Actions from the pushed `v*` tag using npm trusted publishing with `--provenance`, publishing the exact verified tarball. The publish job declares the `release` environment; required-reviewer protection is a repository setting that maintainers must verify, and the workflow cannot create or verify it.
 
 ## Public Agent Artifacts
 
