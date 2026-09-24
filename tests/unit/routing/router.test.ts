@@ -786,6 +786,35 @@ describe("route()", () => {
     expect(result.entities.symbols).toEqual(["AI"]);
   });
 
+  it("keeps a cashtag-positive acronym on the generic quote contract", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Get me a quote on $IV" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["IV"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "quote request with an explicit cashtag",
+        }),
+      ),
+    );
+
+    // $IV is a cashtag-positive signal: IV must survive acronym disambiguation,
+    // and a quote-only agent task needs only core_market (the 007 AAPL quote
+    // contract). A workflow label would demand the broad single_asset_analysis
+    // bundles the router does not select for a quote.
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBeUndefined();
+    expect(result.entities.symbols).toEqual(["IV"]);
+    expect(result.tool_bundles).toEqual(["core_market"]);
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "symbol_dropped" }),
+    );
+  });
+
   it("drops finance acronyms without a direct ticker signal from LLM output", async () => {
     const result = await route(
       {
