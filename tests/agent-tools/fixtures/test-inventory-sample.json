@@ -1,0 +1,109 @@
+{
+  "note": "Hand-written, independent sample of collection output shapes. It is deliberately NOT generated from this repository's real collection, so the inventory parser tests do not depend on repo test churn.",
+  "vitest": {
+    "unit": [
+      {
+        "name": "Alpha suite > parses a quote",
+        "file": "tests/unit/alpha.test.ts",
+        "projectName": "unit",
+        "location": { "line": 10, "column": 3 }
+      },
+      {
+        "name": "Alpha suite > duplicate case name",
+        "file": "tests/unit/alpha.test.ts",
+        "projectName": "unit",
+        "location": { "line": 20, "column": 5 }
+      },
+      {
+        "name": "Alpha suite > duplicate case name",
+        "file": "tests/unit/alpha.test.ts",
+        "projectName": "unit",
+        "location": { "line": 30, "column": 5 }
+      }
+    ],
+    "site": [
+      {
+        "name": "public site build > renders the docs shell",
+        "file": "tests/site/public-site-build.test.ts",
+        "projectName": "site",
+        "location": { "line": 8, "column": 3 }
+      }
+    ],
+    "agent-tools": [
+      {
+        "name": "helper contract > stays explicit",
+        "file": "tests/agent-tools/helper.test.ts",
+        "projectName": "agent-tools",
+        "location": { "line": 12, "column": 3 }
+      }
+    ],
+    "evals": {
+      "default": [
+        {
+          "name": "Data Faithfulness Evals (Always-tier) > quote-accuracy",
+          "file": "tests/evals/cases/faithfulness.eval.ts",
+          "projectName": "evals"
+        }
+      ],
+      "usually": [
+        {
+          "name": "Data Faithfulness Evals (Always-tier) > quote-accuracy",
+          "file": "tests/evals/cases/faithfulness.eval.ts",
+          "projectName": "evals"
+        },
+        {
+          "name": "Debate Evals (Usually-tier) > comprehensive-analysis",
+          "file": "tests/evals/cases/debate.eval.ts",
+          "projectName": "evals"
+        }
+      ],
+      "known-fail-e1": [
+        {
+          "name": "E1 live multi-turn coreference eval > KNOWN-FAIL E1",
+          "file": "tests/evals/cases/live-multi-turn-coreference.eval.ts",
+          "projectName": "evals"
+        }
+      ],
+      "known-fail-e2": [
+        {
+          "name": "Saved Market-State Fidelity Evals (Known-fail E2) > saved lot fidelity",
+          "file": "tests/evals/cases/saved-market-state.eval.ts",
+          "projectName": "evals"
+        }
+      ]
+    },
+    "gui-browser": [
+      {
+        "name": "GUI browser smoke > loads the app",
+        "file": "tests/e2e/gui-browser.test.ts",
+        "projectName": "gui-browser",
+        "location": { "line": 30, "column": 3 }
+      }
+    ],
+    "gui-release": [
+      {
+        "name": "GUI release-gate smoke > boots the GUI server",
+        "file": "tests/e2e/gui-release-smoke.test.ts",
+        "projectName": "gui-release",
+        "location": { "line": 60, "column": 3 }
+      }
+    ],
+    "relay": [
+      {
+        "name": "provider relay privacy audit > routes only the four endpoints",
+        "file": "tests/privacy-audit.test.ts",
+        "projectName": null,
+        "location": { "line": 14, "column": 3 }
+      }
+    ]
+  },
+  "static": {
+    "e2e": ["tests/e2e/cli.test.ts", "tests/e2e/tools.test.ts"],
+    "hosted": ["gui/hosted/tests/hosted-pwa.e2e.mjs"],
+    "eval-manifests": [
+      "tests/evals/product/cases.ts",
+      "tests/evals/competitive-finance.ts",
+      "tests/evals/router-live-contract.ts"
+    ]
+  }
+}

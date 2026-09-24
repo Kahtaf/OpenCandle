@@ -131,7 +131,10 @@
     "release:check": "npx tsc --noEmit && npm run test:scripts:typecheck && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run test:site && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major"
+    "release:major": "node scripts/release.mjs major",
+    "test:coverage": "vitest run --project unit --coverage && node scripts/coverage-report.mjs --check",
+    "coverage:baseline": "node scripts/coverage-report.mjs --update-baseline",
+    "test:inventory": "node scripts/test-inventory.mjs"
   },
   "engines": {
     "node": "^22.22.2 || >=24.0.0 <27"
@@ -161,6 +164,7 @@
     "@types/node": "^26.6.2",
     "@types/semver": "^7.8.0",
     "@types/sql.js": "^1.4.11",
+    "@vitest/coverage-v8": "^5.0.1",
     "jsdom": "^30.1.0",
     "lightweight-charts": "^5.2.1",
     "playwright-core": "^1.63.0",
