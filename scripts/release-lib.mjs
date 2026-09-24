@@ -13,6 +13,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildNpmInvocation } from "./npm-command.mjs";
 
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 const CANDIDATE_FILES = new Set(["package.json", "package-lock.json", "CHANGELOG.md"]);
@@ -364,7 +365,14 @@ export function runLocalRelease({
 
 function defaultRunner(cwd) {
   return (command, args, options = {}) => {
-    const result = spawnSync(command, args, {
+    // Windows ships npm/npx as `.cmd` shims that a `shell: false` spawn cannot
+    // execute; route them through the Node entrypoint. git/node commands and an
+    // injected runner are passed through unchanged.
+    const invocation =
+      command === "npm" || command === "npx"
+        ? buildNpmInvocation(command, args)
+        : { command, args };
+    const result = spawnSync(invocation.command, invocation.args, {
       cwd,
       encoding: "utf8",
       shell: false,
