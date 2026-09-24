@@ -717,8 +717,12 @@ function isOptionsStrategyPrompt(lower: string): boolean {
   const optionsHedge =
     /\bhedg(?:e|ing)\b.{0,80}\b(?:puts|put\s+options?|options?)\b/.test(lower) ||
     /\b(?:puts|put\s+options?|options?)\b.{0,80}\bhedg(?:e|ing)\b/.test(lower);
+  const putsProtectionWithHeldShares =
+    /\b(?:own|owns|owning|hold|holds|holding|have|has|shares?|position)\b/.test(lower) &&
+    (/\b(?:puts|put\s+options?)\b.{0,80}\bprotect(?:ion|ing)?\b/.test(lower) ||
+      /\bprotect(?:ion|ing)?\b.{0,80}\b(?:puts|put\s+options?)\b/.test(lower));
   return (
-    (explicitOptionsStrategy || optionsHedge) &&
+    (explicitOptionsStrategy || optionsHedge || putsProtectionWithHeldShares) &&
     /\b(?:own|have|shares?|position|cost\s+basis|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge|sell)\b/.test(
       lower,
     )

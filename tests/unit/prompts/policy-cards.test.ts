@@ -288,6 +288,8 @@ describe("policy cards", () => {
     expect(rendered).toContain("Do not build a new portfolio");
     expect(rendered).toContain("Structural allocation read");
     expect(rendered).toContain("rebalance");
+    // A review-only request must not be turned into a fixed adjustment section.
+    expect(rendered).not.toMatch(/use sections for[^.]*Actionable adjustment/i);
     expect(
       renderPolicyCardForPlanning({
         ...portfolioPlanning,
