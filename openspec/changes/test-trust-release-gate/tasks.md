@@ -1,13 +1,15 @@
 # Implementation tracking
 
 Approved 2026-09-24. Boxes represent verified completion, recorded from milestone logs rather than
-live state. Recorded: root full gate **PASS**, passed three times (`/tmp/oc-final-gates-full.log`
-263.2 s; latest `/tmp/oc-final-autoreview2.log` 272.8 s); ReactDoctor second review **PASS** (0 errors
-/ 0 warnings). The first advisory review raised 5 findings and the second raised 2, all now fixed.
-The candidate `release:check` + live `eval -- release` rehearsal is pending, the authoritative final
-result is generated to `validation-output/release-summary`, and the final review runs after
-`release:check` without a redundant full gate — so the review is **not** yet claimed clean. Inventory
-counts in `docs/internal/test-inventory.md` are a recorded milestone, not asserted current.
+live state. Recorded: candidate `70ac0956` RELEASE gate **PASS** (291.2 s); final full-branch autoreview
+**clean** (11 batches, 0 findings); package prepare/smoke/verify passed; 2 live provider cases passed.
+The first live `eval -- release` attempt (`2026-09-24T21-33-24-234Z-53463-c1yn0w`) **FAILED**: 31/32
+router checks, 18 required live cases passed, 15 product cases passed, 4/5 competitive hard cases
+passed, and OpenCandle won 3/5 comparisons. That attempt exposed a stale quote `023` fixture and hedge
+policy classification/scorer flaws; their corrections are under integration and a fresh candidate
+rehearsal is pending. The authoritative final result is generated only to
+`validation-output/release-summary` after checks pass, and the review is **not** yet claimed clean.
+Inventory counts in `docs/internal/test-inventory.md` are a recorded milestone, not asserted current.
 
 - [x] Record approved architecture and initial spec deltas.
 - [x] Phase 1: executable inventory and per-surface coverage baseline/reporting. **Done
@@ -30,18 +32,25 @@ counts in `docs/internal/test-inventory.md` are a recorded milestone, not assert
   from ambient flags with an actual child-process proof; the CLI freshness fixture uses a relative
   clock (no extra helper tests); the hold-counter race is fixed.
 - [ ] Phase 5: report schema, trusted candidate evidence, package identity, release/publish
-  enforcement. **Partial (2026-09-24):** full gate passed; the enforcement implementation is proven
-  by tests, including the release-lib real-default npm runner now going through the safe helper
-  (5 focused tests, 50 with readiness); the candidate `release:check` has not run.
+  enforcement. **Partial (2026-09-24):** the enforcement implementation is proven by tests, including
+  the release-lib real-default npm runner now going through the safe helper (5 focused tests, 50 with
+  readiness); candidate `70ac0956` RELEASE gate passed (291.2 s), package prepare/smoke/verify passed,
+  2 live provider cases passed, and full-branch autoreview finished clean (11 batches, 0 findings). The
+  candidate `release:check` + live `eval -- release` rehearsal is still pending because the first
+  attempt failed.
 - [ ] Phase 6: authoring/flake policy, compact release summary, candidate rehearsal. **Partial
   (2026-09-24):** the compact release summary landed with 29 tests; the evidence waiver was **not
-  implemented** (strict block is the deviation); candidate rehearsal is pending.
-- [ ] Integrated release candidate. **Full gate PASS** (three times); first advisory review PASS
-  (5 findings fixed) and second review PASS (2 findings fixed: the release-lib runner helper and the
-  coordinator admission fix). The Windows `shell:false`/`npm.cmd` path is complete, including the
-  native-dep repair and local release runner. The final review after `release:check` and the
-  candidate `release:check` + live `eval -- release` are pending, so this item and review-clean stay
-  unchecked. Authoritative final result: `validation-output/release-summary`.
+  implemented** (strict block is the deviation); the first live candidate rehearsal failed, so the
+  fresh rehearsal and final summary are pending.
+- [ ] Integrated release candidate. Candidate `70ac0956` RELEASE gate **PASS** (291.2 s); final
+  full-branch autoreview clean (11 batches, 0 findings); package prepare/smoke/verify passed; 2 live
+  provider cases passed. The first live `eval -- release` attempt failed (31/32 router checks, 18
+  required live cases passed, 15 product, 4/5 competitive hard, OpenCandle won 3/5 comparisons),
+  exposing the stale quote `023` fixture and hedge policy classification/scorer flaws; corrections are
+  under integration and a fresh candidate rehearsal is pending. The Windows `shell:false`/`npm.cmd`
+  path is complete, including the native-dep repair and local release runner. This item and
+  review-clean stay unchecked because the authoritative `validation-output/release-summary` is only
+  generated after checks pass, and no release approval is implied.
 
 ## Work log
 
@@ -50,4 +59,9 @@ counts in `docs/internal/test-inventory.md` are a recorded milestone, not assert
 - 2026-09-24: baseline integrated and `coverage:check` green; cancellation durability, attachment
   cancel-replay, and passive navigation fixed and verified; release-summary contract hardened.
 - 2026-09-24: first advisory review 5 findings and second review 2 findings fixed; Windows shell
-  path complete; final review and candidate rehearsal pending.
+  path complete.
+- 2026-09-24: candidate `70ac0956` RELEASE gate passed (291.2 s); final full-branch autoreview clean
+  (11 batches, 0 findings); package prepare/smoke/verify and 2 live provider cases passed. First live
+  candidate rehearsal failed (31/32 router checks; 18 required live cases passed; 15 product; 4/5
+  competitive hard; OpenCandle won 3/5 comparisons) due to a stale quote `023` fixture and hedge policy
+  classification/scorer flaws; corrections are under integration and a fresh rehearsal is pending.
