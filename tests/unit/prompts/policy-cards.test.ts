@@ -429,6 +429,31 @@ describe("policy cards", () => {
     ).toBe("");
   });
 
+  it("states the protective-put expiration floor contract for covered shares in the rendered policy", () => {
+    const optionsPlanning = planning({
+      taskFamily: "options_strategy",
+      commitmentMode: "decision",
+      policyCardId: "options_strategy",
+      evidencePlanId: "placeholder_options_strategy",
+      answerContractId: "options_strategy",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+    });
+
+    const rendered = renderPolicyCardForPlanning(optionsPlanning);
+
+    // The put's contractual sell right at the strike is the observable floor.
+    expect(rendered).toContain("right to sell");
+    // Net protection at expiration is the strike minus the premium paid.
+    expect(rendered).toContain("strike minus the premium");
+    // The standalone long-put loss is the premium; the combined position loss is larger.
+    expect(rendered).toContain("put leg");
+    expect(rendered).toContain("combined stock-plus-put");
+    // Extra owned shares stay exposed; excess contracts are tracked separately.
+    expect(rendered).toContain("remain fully exposed");
+  });
+
   it("renders backtest policy only after the slice leaves observe-only mode", () => {
     const backtestPlanning = planning({
       taskFamily: "backtest_review",

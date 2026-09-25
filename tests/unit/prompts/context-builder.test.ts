@@ -500,7 +500,12 @@ describe("PromptContextBuilder", () => {
     });
 
     expect(planning.policyCardId).toBe("options_strategy");
-    expect(builder.build()).toContain("Options Strategy Policy");
+    const renderedPrompt = builder.build();
+    expect(renderedPrompt).toContain("Options Strategy Policy");
+    // The fallback path still injects the real floor contract for covered shares.
+    expect(renderedPrompt).toContain("right to sell");
+    expect(renderedPrompt).toContain("strike minus the premium");
+    expect(renderedPrompt).toContain("remain fully exposed");
   });
 
   it("uses the stateful tracking policy without deleting agent-task context", () => {
