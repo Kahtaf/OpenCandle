@@ -44,6 +44,7 @@ import {
   type ComparisonJudgment,
   type CompetitorAnswer,
   competitiveBenchmarkExitCode,
+  competitiveJudgeMissingAuthMessage,
   competitivePreflightTimeoutMs,
   competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
@@ -64,7 +65,7 @@ import {
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectCompetitiveGeminiBaseline,
-  selectCompetitiveJudgeModelOverride,
+  selectCompetitiveJudgeModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
   stampComparisonJudgment,
@@ -168,16 +169,16 @@ const competitiveModel = await resolveModelWithAuth(
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
-// The comparison judge defaults to the same model; a judge-only override
-// changes the grader without changing the product under test.
-const judgeOverride = selectCompetitiveJudgeModelOverride(process.env);
-const judgeModel = judgeOverride
-  ? await resolveModelWithAuth(
-      judgeOverride.provider,
-      judgeOverride.model,
-      "Set the API key for OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER, or unset the judge override.",
-    )
-  : competitiveModel;
+// The comparison judge is independent of the model under test: the
+// calibrated default (DEFAULT_COMPETITIVE_JUDGE) unless the judge-only
+// override is set. A missing judge fails loudly; there is no fallback judge.
+const judgeSelection = selectCompetitiveJudgeModel(process.env);
+const judgeModel = await resolveModelWithAuth(
+  judgeSelection.provider,
+  judgeSelection.model,
+  competitiveJudgeMissingAuthMessage(judgeSelection),
+  { requireKnownModel: true },
+);
 const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
 // The frozen panel's loss-class contracts live in the prompt-policy
 // manifest; the frozen run must evaluate them itself instead of assuming a
@@ -409,6 +410,7 @@ if (frozenPanel) {
         model: competitiveModel.model.id,
         mode: "frozen",
         seed,
+        judge: `${judgeModel.model.provider}/${judgeModel.model.id}`,
       },
     }),
   );
@@ -440,10 +442,10 @@ process.exit(competitiveBenchmarkExitCode());
 async function completeText(
   resolvedModel: ResolvedModel,
   prompt: string,
-  options: { temperature: number; maxTokens: number },
+  options: { temperature: number | undefined; maxTokens: number },
 ): Promise<string> {
   const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_MODEL_ATTEMPTS", 3);
-  let sendTemperature = true;
+  let sendTemperature = options.temperature !== undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await completeSimple(
       resolvedModel.model,
@@ -500,7 +502,10 @@ async function completeComparisonJudgment(
             invalidResponse: lastText,
             errorMessage: lastError,
           });
-    lastText = await completeText(judgeModel, candidatePrompt, { temperature: 0, maxTokens: 3000 });
+    lastText = await completeText(judgeModel, candidatePrompt, {
+      temperature: judgeSelection.temperature,
+      maxTokens: 3000,
+    });
     try {
       return parseComparisonJudgment(lastText, { allowedWinners });
     } catch (error) {
@@ -900,8 +905,14 @@ async function resolveModelWithAuth(
   provider: string | undefined,
   modelId: string | undefined,
   missingAuthMessage: string,
+  options: { requireKnownModel?: boolean } = {},
 ): Promise<ResolvedModel> {
   const model = resolveModel(provider, modelId);
+  // An unknown provider/model pair resolves to undefined; name it instead of
+  // failing later inside the model call.
+  if (options.requireKnownModel && !model) {
+    throw new Error(`Unknown model ${provider}/${modelId}.\n${missingAuthMessage}`);
+  }
   // ModelRegistry.getApiKeyAndHeaders skips env-key fallback, so seed
   // provider env keys (e.g. GEMINI_API_KEY) as runtime AuthStorage
   // overrides when the registry has no stored credential. The override

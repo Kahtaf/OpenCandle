@@ -669,9 +669,62 @@ export function summarizeCompetitiveResults(
 }
 
 /**
- * Optional judge-only model override. By default the judge is the same model
- * as the competitive model under test (OPENCANDLE_COMPETITIVE_PROVIDER/MODEL);
- * these variables change only the judge. Both must be set together.
+ * Default comparison judge, independent of the model under test. Calibrated
+ * against the competitive-judge-v3 rubric; see
+ * docs/internal/competitive-benchmarking.md.
+ */
+export const DEFAULT_COMPETITIVE_JUDGE: Readonly<{ provider: string; model: string }> =
+  Object.freeze({ provider: "openai", model: "gpt-6-luna" });
+
+export interface CompetitiveJudgeSelection {
+  provider: string;
+  model: string;
+  /** Undefined means the judge call sends no temperature at all. */
+  temperature: number | undefined;
+}
+
+/**
+ * The comparison judge: the calibrated default unless both judge-only
+ * override variables are set. The calibrated default is a reasoning model
+ * that rejects an explicit temperature, so none is sent to it up front.
+ */
+export function selectCompetitiveJudgeModel(
+  env: Record<string, string | undefined>,
+): CompetitiveJudgeSelection {
+  const judge = selectCompetitiveJudgeModelOverride(env) ?? DEFAULT_COMPETITIVE_JUDGE;
+  const isCalibratedDefault =
+    judge.provider === DEFAULT_COMPETITIVE_JUDGE.provider &&
+    judge.model === DEFAULT_COMPETITIVE_JUDGE.model;
+  return {
+    provider: judge.provider,
+    model: judge.model,
+    temperature: isCalibratedDefault ? undefined : 0,
+  };
+}
+
+const PROVIDER_API_KEY_HINTS: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  google: "GEMINI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+};
+
+/** Loud failure text when the judge cannot be resolved or authenticated. */
+export function competitiveJudgeMissingAuthMessage(judge: {
+  provider: string;
+  model: string;
+}): string {
+  const keyHint = PROVIDER_API_KEY_HINTS[judge.provider] ?? `the API key for ${judge.provider}`;
+  return [
+    `The competitive judge ${judge.provider}/${judge.model} is not available.`,
+    `Set ${keyHint} (or configure ${judge.provider} auth in Pi), or choose another judge with OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER and OPENCANDLE_COMPETITIVE_JUDGE_MODEL.`,
+    "There is no fallback judge.",
+  ].join("\n");
+}
+
+/**
+ * Optional judge-only model override of DEFAULT_COMPETITIVE_JUDGE; these
+ * variables change only the judge, never the model under test. Both must be
+ * set together.
  */
 export function selectCompetitiveJudgeModelOverride(
   env: Record<string, string | undefined>,

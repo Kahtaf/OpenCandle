@@ -190,10 +190,10 @@ describe("canonical release environment", () => {
     expect(pinned.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS).toBe("90000");
     expect(pinned.OPENCANDLE_COMPETITIVE_AGENT_CWD).not.toBe("");
     expect(pinned.OPENCANDLE_COMPETITIVE_NO_CACHE).toBe("1");
-    // Release runs use the default judge; a local judge-only override from
-    // .env must not silently change the release report's grader.
-    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER).toBe("");
-    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_MODEL).toBe("");
+    // Release runs pin the calibrated judge by name; a local judge-only
+    // override from .env must not silently change the release report's grader.
+    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER).toBe("openai");
+    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_MODEL).toBe("gpt-6-luna");
   });
 
   it("clears inherited selectors but keeps credentials and model/provider choices", () => {
@@ -624,6 +624,7 @@ describe("release eval evidence orchestration", () => {
               model: "gpt-5",
               mode: "frozen",
               seed: "2026-07-05",
+              judge: "openai/gpt-6-luna",
             }),
           ),
         );
@@ -634,12 +635,13 @@ describe("release eval evidence orchestration", () => {
 
     expect(outcome.exitCode).toBe(0);
     const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
-    // Competitive recorded what actually ran.
+    // Competitive recorded what actually ran, including the judge.
     expect(summary.suiteSettings["competitive:frozen"]).toEqual({
       provider: "openai",
       model: "gpt-5",
       mode: "frozen",
       seed: "2026-07-05",
+      judge: "openai/gpt-6-luna",
     });
     // Router has no completion settings, so the operator selection is used.
     expect(summary.suiteSettings["router-live"]).toEqual({

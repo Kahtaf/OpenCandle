@@ -149,8 +149,8 @@ Useful knobs (all optional):
 - `COMPETITIVE_PROMPT_COUNT` / `COMPETITIVE_PROMPT_SEED`: size and reproducibility of the generated prompt set.
 - `OPENCANDLE_COMPETITIVE_PANEL=frozen`: rerun the fixed historical-loss panel instead of generating prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
-- `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: OpenCandle session, prompt-generation, and default judge model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
-- `OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER` / `OPENCANDLE_COMPETITIVE_JUDGE_MODEL`: optional judge-only override (set both); the judge's winner is advisory and never overrides a failed mandatory check.
+- `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: OpenCandle session and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
+- `OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER` / `OPENCANDLE_COMPETITIVE_JUDGE_MODEL`: judge-only override (set both). The default judge is `openai/gpt-6-luna`, chosen by calibration (see `docs/internal/competitive-benchmarking.md`); it needs `OPENAI_API_KEY` and never falls back to another judge. The judge's winner is advisory and never overrides a failed mandatory check.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides (each defaults to a global install on PATH, else `npx --yes <package>@<pinned range>`), timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls. See `docs/internal/competitive-benchmarking.md` for the exact resolution order and the `CODEX_PATH`/`CLAUDE_CODE_EXECUTABLE` env vars the runner sets so each ACP adapter drives your own global CLI/account instead of a bundled one.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window (ms) used by the competitive eval runner when it calls the shared harness.
 

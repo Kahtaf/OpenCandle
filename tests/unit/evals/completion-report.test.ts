@@ -123,6 +123,7 @@ describe("completion report shape", () => {
             model: "gemini-2.5-flash",
             mode: "frozen",
             seed: "2026-07-05",
+            judge: "openai/gpt-6-luna",
           },
         }),
       ),

@@ -31,7 +31,10 @@ import {
   competitorSkipMetadataPath,
   parseCompetitorSkipMetadata,
 } from "../evals/competitive-completion.js";
-import { FROZEN_COMPETITIVE_PANEL } from "../evals/competitive-finance.js";
+import {
+  DEFAULT_COMPETITIVE_JUDGE,
+  FROZEN_COMPETITIVE_PANEL,
+} from "../evals/competitive-finance.js";
 import {
   type CompletionReport,
   convertVitestJsonReport,
@@ -141,9 +144,10 @@ export function canonicalReleaseEnv(now: Date = new Date()): Record<string, stri
     OPENCANDLE_COMPETITIVE_NO_CACHE: "1",
     OPENCANDLE_COMPETITIVE_CACHE: "",
     OPENCANDLE_COMPETITIVE_REUSE_CACHE: "",
-    // Judge-only override off: release reports use the default judge.
-    OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: "",
-    OPENCANDLE_COMPETITIVE_JUDGE_MODEL: "",
+    // Pin the calibrated judge by name so the release record states its
+    // grader and a local judge override cannot leak in.
+    OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: DEFAULT_COMPETITIVE_JUDGE.provider,
+    OPENCANDLE_COMPETITIVE_JUDGE_MODEL: DEFAULT_COMPETITIVE_JUDGE.model,
     // Nullish-defaulted path; keep the real default so it still resolves.
     PROMPT_POLICY_MANIFEST: "docs/internal/prompt-to-policy-migration-manifest.json",
     OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS: "90000",

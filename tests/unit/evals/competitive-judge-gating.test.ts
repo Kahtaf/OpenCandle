@@ -4,9 +4,12 @@ import {
   buildComparisonJudgePrompt,
   COMPETITIVE_JUDGE_RUBRIC_VERSION,
   type ComparisonJudgment,
+  competitiveJudgeMissingAuthMessage,
+  DEFAULT_COMPETITIVE_JUDGE,
   formatCompetitiveReportAnalysisMarkdown,
   isUnsupportedTemperatureError,
   mandatoryOutcomeFromResult,
+  selectCompetitiveJudgeModel,
   selectCompetitiveJudgeModelOverride,
   stampComparisonJudgment,
   summarizeCompetitiveResults,
@@ -305,6 +308,47 @@ describe("competitive judge preference never implies correctness", () => {
     expect(() =>
       selectCompetitiveJudgeModelOverride({ OPENCANDLE_COMPETITIVE_JUDGE_MODEL: "gpt-6-luna" }),
     ).toThrow(/OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER/);
+  });
+});
+
+describe("competitive judge selection", () => {
+  it("defaults the judge to openai/gpt-6-luna, independent of the model under test", () => {
+    expect(DEFAULT_COMPETITIVE_JUDGE).toEqual({ provider: "openai", model: "gpt-6-luna" });
+    expect(
+      selectCompetitiveJudgeModel({
+        OPENCANDLE_COMPETITIVE_PROVIDER: "google",
+        OPENCANDLE_COMPETITIVE_MODEL: "gemini-2.5-flash",
+      }),
+    ).toEqual({ provider: "openai", model: "gpt-6-luna", temperature: undefined });
+  });
+
+  it("keeps the env override and sends temperature 0 to overridden judges", () => {
+    expect(
+      selectCompetitiveJudgeModel({
+        OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: "google",
+        OPENCANDLE_COMPETITIVE_JUDGE_MODEL: "gemini-2.5-flash",
+      }),
+    ).toEqual({ provider: "google", model: "gemini-2.5-flash", temperature: 0 });
+    expect(() =>
+      selectCompetitiveJudgeModel({ OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: "openai" }),
+    ).toThrow(/OPENCANDLE_COMPETITIVE_JUDGE_MODEL/);
+  });
+
+  it("omits temperature up front when the calibrated judge is pinned explicitly", () => {
+    expect(
+      selectCompetitiveJudgeModel({
+        OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: "openai",
+        OPENCANDLE_COMPETITIVE_JUDGE_MODEL: "gpt-6-luna",
+      }).temperature,
+    ).toBeUndefined();
+  });
+
+  it("names the judge and its key when judge auth is missing instead of falling back", () => {
+    const message = competitiveJudgeMissingAuthMessage(DEFAULT_COMPETITIVE_JUDGE);
+    expect(message).toContain("openai/gpt-6-luna");
+    expect(message).toContain("OPENAI_API_KEY");
+    expect(message).toContain("OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER");
+    expect(message).toMatch(/no fallback/i);
   });
 });
 

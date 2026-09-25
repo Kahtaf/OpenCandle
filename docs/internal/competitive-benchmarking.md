@@ -50,6 +50,8 @@ The runner:
 4. Uses a judge prompt to compare usefulness, correctness, evidence, clarity, and honesty about uncertainty, using the benchmark run date as the as-of date for current-data checks. The judge sees bounded tool-result excerpts and the deterministic mandatory-check results, and each judgment is stamped with the judge model and rubric version (`COMPETITIVE_JUDGE_RUBRIC_VERSION`, currently `competitive-judge-v3`; unstamped saved judgments read as `legacy`).
 5. Writes a JSON report under `tests/evals/runs/`.
 
+Why GPT-6 Luna: on a 9-item labeled calibration set under `competitive-judge-v3` (2026-09-25; 4 hedges with failed mandatory checks, 3 passing hedges, 2 fabrication traps), `gemini-2.5-flash` preferred OpenCandle on 4/4 failed-mandatory cases and made one false evidence claim, while `gpt-6-luna` preferred OpenCandle on 0/4, cited the failed check every time, made no false evidence or fabrication claims, and cost about a quarter as much per call.
+
 The judge's winner is a preference, not a correctness verdict. Summaries report preference wins separately from deterministic mandatory outcomes, and a preference win on a case whose mandatory checks failed is reported as ineligible. The release gate reads only the deterministic completion cases.
 
 Reports are ignored by git. Commit reusable code and benchmark design, not one-off run transcripts or screenshots.
@@ -96,9 +98,9 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_PROMPT_TOPIC`: optional topic for the fixed prompt. Defaults to `fixed prompt`.
 - `OPENCANDLE_COMPETITIVE_PROMPT_COMPLEXITY`: optional `simple`, `moderate`, or `complex` value for the fixed prompt. Defaults to `moderate`.
 - `OPENCANDLE_COMPETITIVE_PROMPT_FOCUS`: optional evaluation focus for the fixed prompt. Defaults to comparing OpenCandle against generic agents and identifying concrete improvements.
-- `OPENCANDLE_COMPETITIVE_PROVIDER`: model provider for OpenCandle's session, prompt generation, and (by default) judging. Defaults to a configured provider, preferring Google when available.
-- `OPENCANDLE_COMPETITIVE_MODEL`: model id for OpenCandle's session, prompt generation, and (by default) judging. Defaults to `gemini-2.5-flash` when using configured Google auth; otherwise uses the first configured model.
-- `OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER` / `OPENCANDLE_COMPETITIVE_JUDGE_MODEL`: optional judge-only override (set both). Changes the grader without changing the model under test. Release runs pin these off.
+- `OPENCANDLE_COMPETITIVE_PROVIDER`: model provider for OpenCandle's session and prompt generation. Defaults to a configured provider, preferring Google when available.
+- `OPENCANDLE_COMPETITIVE_MODEL`: model id for OpenCandle's session and prompt generation. Defaults to `gemini-2.5-flash` when using configured Google auth; otherwise uses the first configured model.
+- `OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER` / `OPENCANDLE_COMPETITIVE_JUDGE_MODEL`: judge-only override (set both). Changes the grader without changing the model under test. The default judge is `openai/gpt-6-luna` (`DEFAULT_COMPETITIVE_JUDGE`), called with no temperature and minimal reasoning; it needs `OPENAI_API_KEY` or OpenAI auth in Pi, and a run fails loudly instead of falling back to another judge. Release runs pin the judge to `openai/gpt-6-luna` explicitly, and the frozen completion report records it as the `judge` setting.
 - Claude baseline runs through `acpx --agent <claude-agent-acp launch command> exec`.
 - Codex baseline runs through `acpx --agent <codex-acp launch command> exec`.
 - Gemini baseline prefers direct Google API mode when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is available, avoiding the retired consumer Gemini CLI ACP path.

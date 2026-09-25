@@ -285,7 +285,10 @@ function seedEvals(repo: CandidateRepo, options: SeedEvalOptions = {}): void {
     requiredSuites: ["router-live", "cases", "product", "competitive:frozen"],
     notRunSuites: [],
     optionalSkips: [],
-    suiteSettings: { cases: { provider: "openai", model: "gpt-6" } },
+    suiteSettings: {
+      cases: { provider: "openai", model: "gpt-6" },
+      "competitive:frozen": { provider: "openai", model: "gpt-6", judge: "openai/gpt-6-luna" },
+    },
     competitors: null,
     competitorsKnown: false,
   };
@@ -362,7 +365,10 @@ function seedLegacyEvals(repo: CandidateRepo, options: SeedEvalOptions = {}): vo
     attemptsPath: `${runDir}/attempts.jsonl`,
     requiredSuites: ["router-live", "cases", "product", "competitive:frozen"],
     optionalSkips: [],
-    suiteSettings: { cases: { provider: "openai", model: "gpt-6" } },
+    suiteSettings: {
+      cases: { provider: "openai", model: "gpt-6" },
+      "competitive:frozen": { provider: "openai", model: "gpt-6", judge: "openai/gpt-6-luna" },
+    },
     competitors: null,
     competitorsKnown: false,
   };
@@ -471,7 +477,10 @@ describe("buildReleaseSummary", () => {
     expect(summary.deterministicGate.policyDigest).toBe(POLICY_DIGEST);
     expect(summary.coverage).toMatchObject({ available: true, label: "gate-derived" });
     expect(summary.releaseEvals.completedSuites).toBe(4);
-    expect(summary.releaseEvals.models).toEqual({ cases: { provider: "openai", model: "gpt-6" } });
+    expect(summary.releaseEvals.models).toEqual({
+      cases: { provider: "openai", model: "gpt-6" },
+      "competitive:frozen": { provider: "openai", model: "gpt-6", judge: "openai/gpt-6-luna" },
+    });
     expect(summary.providerRelease.totals).toMatchObject({ passed: 2, failed: 0, skipped: 0 });
     expect(summary.unmeasured).toMatchObject({
       childProcess: true,

@@ -48,6 +48,7 @@ const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
   "mode",
   "seed",
   "tier",
+  "judge",
 ]);
 const MAX_SETTING_VALUE_LENGTH = 200;
 const MAX_REASON_LENGTH = 1000;
@@ -81,7 +82,7 @@ function assertSafeSettings(value: unknown): asserts value is Record<string, str
   for (const [key, setting] of Object.entries(value)) {
     if (!ALLOWED_SETTING_KEYS.has(key)) {
       fail(
-        `unsupported completion report settings key "${key}" (allowed: provider, model, mode, seed, tier)`,
+        `unsupported completion report settings key "${key}" (allowed: provider, model, mode, seed, tier, judge)`,
       );
     }
     if (typeof setting !== "string") {

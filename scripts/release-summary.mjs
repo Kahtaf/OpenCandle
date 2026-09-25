@@ -58,7 +58,7 @@ const PROVIDER_REQUIRED_CASES = Object.freeze(["get_stock_quote:AAPL", "get_stoc
 const PROVIDER_REQUIRED_TOTAL = PROVIDER_REQUIRED_CASES.length;
 
 // Settings keys emitted by the validated completion report, never an open set.
-const ALLOWED_SETTING_KEYS = Object.freeze(["provider", "model", "mode", "seed", "tier"]);
+const ALLOWED_SETTING_KEYS = Object.freeze(["provider", "model", "mode", "seed", "tier", "judge"]);
 const MAX_SETTING_VALUE_LENGTH = 200;
 const MAX_SKIP_REASON_LENGTH = 1000;
 const MAX_COMPETITORS = 64;
