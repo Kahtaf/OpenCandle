@@ -24,6 +24,40 @@ export interface EvidenceRecord {
   provenance: Provenance;
 }
 
+/**
+ * Usability of a captured tool result as market evidence.
+ * `ok` means the tool returned structured data; `error` and `unavailable`
+ * results carry no usable evidence and must not satisfy evidence guards.
+ */
+export type ToolEvidenceOutcome = "ok" | "error" | "unavailable";
+
+/**
+ * Classify a tool result's usability from its runtime envelope
+ * (`{ content, details }` plus the `isError` flag). Unavailable tools return
+ * `details: null` or an empty payload; thrown failures are flagged `isError`.
+ */
+export function classifyToolOutcome(result: unknown, isError: boolean): ToolEvidenceOutcome {
+  if (isError) return "error";
+  if (!isPlainRecord(result)) return "unavailable";
+  if (!("details" in result)) {
+    // Non-envelope result (extension/legacy tools): a non-empty structured
+    // payload is usable, an empty one carries no evidence.
+    return Object.keys(result).length > 0 ? "ok" : "unavailable";
+  }
+  return hasUsableDetails(result.details) ? "ok" : "unavailable";
+}
+
+function hasUsableDetails(details: unknown): boolean {
+  if (details === null || details === undefined) return false;
+  if (Array.isArray(details)) return details.length > 0;
+  if (isPlainRecord(details)) return Object.keys(details).length > 0;
+  return false;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Successful provider result. */
 export interface ProviderResultOk<T> {
   status: "ok";

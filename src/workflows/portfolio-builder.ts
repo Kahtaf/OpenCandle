@@ -4,6 +4,7 @@ import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 import {
   buildPortfolioRepairPrompt,
+  createPortfolioEvidenceValidation,
   validatePortfolioOutput,
 } from "./portfolio-output-validation.js";
 
@@ -41,12 +42,22 @@ export function buildPortfolioWorkflowDefinition(
         {
           requiredInputs: ["symbols"],
           expectedOutputs: ["candidate_positions"],
+          outputValidation: createPortfolioEvidenceValidation({
+            step: "fetch_candidates",
+            assetScope: s.assetScope,
+          }),
         },
       ),
       promptStep("risk_review", "Review risk and diversification", riskReviewPrompt, {
-        skippable: true,
+        // Non-skippable so a failed evidence guard fails the run instead of
+        // silently advancing to synthesis without any risk evidence.
+        skippable: false,
         requiredInputs: ["candidate_positions"],
         expectedOutputs: ["risk_assessment"],
+        outputValidation: createPortfolioEvidenceValidation({
+          step: "risk_review",
+          assetScope: s.assetScope,
+        }),
       }),
       promptStep(
         "synthesize",

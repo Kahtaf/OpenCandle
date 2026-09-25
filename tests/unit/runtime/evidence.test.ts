@@ -1,7 +1,11 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
-import { isProviderOk, toEvidenceRecord } from "../../../src/runtime/evidence.js";
+import {
+  classifyToolOutcome,
+  isProviderOk,
+  toEvidenceRecord,
+} from "../../../src/runtime/evidence.js";
 import { captureToolEvidence } from "../../../src/runtime/prompt-step.js";
 
 describe("isProviderOk", () => {
@@ -69,6 +73,93 @@ describe("captureToolEvidence", () => {
 
     expect(record.value).toMatchObject({ freshness });
     expect(record.provenance.timestamp).toBe("2026-07-02T20:00:00.000Z");
+  });
+
+  it("classifies envelope payloads by their usable details", () => {
+    expect(classifyToolOutcome({ content: [], details: { price: 178.72 } }, false)).toBe("ok");
+    expect(classifyToolOutcome({ content: [], details: null }, false)).toBe("unavailable");
+    expect(classifyToolOutcome({ content: [], details: [] }, false)).toBe("unavailable");
+    expect(classifyToolOutcome({ content: [], details: {} }, false)).toBe("unavailable");
+    expect(classifyToolOutcome({ content: [], details: { price: 178.72 } }, true)).toBe("error");
+  });
+
+  it("classifies captured tool results without usable details as unavailable", () => {
+    const entries = [
+      {
+        type: "message",
+        id: "assistant-outcomes",
+        parentId: null,
+        timestamp: "2026-07-05T19:00:00.000Z",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "toolCall", id: "ok", name: "get_stock_quote", arguments: {} },
+            { type: "toolCall", id: "null", name: "get_stock_quote", arguments: {} },
+            { type: "toolCall", id: "empty", name: "get_stock_history", arguments: {} },
+            { type: "toolCall", id: "error", name: "get_stock_quote", arguments: {} },
+          ],
+        },
+      },
+      {
+        type: "message",
+        id: "res-ok",
+        parentId: "assistant-outcomes",
+        timestamp: "2026-07-05T19:00:01.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "ok",
+          toolName: "get_stock_quote",
+          details: { symbol: "VOO", price: 474.96 },
+          content: [],
+        },
+      },
+      {
+        type: "message",
+        id: "res-null",
+        parentId: "assistant-outcomes",
+        timestamp: "2026-07-05T19:00:02.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "null",
+          toolName: "get_stock_quote",
+          details: null,
+          content: [{ type: "text", text: "unavailable" }],
+        },
+      },
+      {
+        type: "message",
+        id: "res-empty",
+        parentId: "assistant-outcomes",
+        timestamp: "2026-07-05T19:00:03.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "empty",
+          toolName: "get_stock_history",
+          details: [],
+          content: [{ type: "text", text: "unavailable" }],
+        },
+      },
+      {
+        type: "message",
+        id: "res-error",
+        parentId: "assistant-outcomes",
+        timestamp: "2026-07-05T19:00:04.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "error",
+          toolName: "get_stock_quote",
+          details: { symbol: "VOO", price: 474.96 },
+          content: [{ type: "text", text: "failed" }],
+          isError: true,
+        },
+      },
+    ] as unknown as SessionEntry[];
+
+    const outcomes = captureToolEvidence(entries).map(
+      (record) => (record.value as { outcome?: string }).outcome,
+    );
+
+    expect(outcomes).toEqual(["ok", "unavailable", "unavailable", "error"]);
   });
 });
 

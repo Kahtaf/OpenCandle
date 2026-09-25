@@ -1,3 +1,6 @@
+import type { EvidenceRecord } from "../runtime/evidence.js";
+import type { PromptOutputValidation, PromptValidationContext } from "../runtime/prompt-step.js";
+
 export interface PortfolioOutputConstraints {
   positionCount: number;
   maxSinglePositionPct: number;
@@ -68,6 +71,105 @@ export function buildPortfolioRepairPrompt(
 ${errors.map((error) => `- ${error}`).join("\n")}
 
 Revise the final portfolio draft now. Return a complete replacement allocation table with exactly ${constraints.positionCount} positions from the hard asset scope "${assetScope}", no position above ${formatNumber(constraints.maxSinglePositionPct)}%, and percentages that arithmetically sum to 100%. Recalculate dollar amounts and estimated shares from the corrected percentages. Do not claim validation passed until the displayed table satisfies every check. Do not make new tool calls.`;
+}
+
+export type PortfolioEvidenceStep = "fetch_candidates" | "risk_review";
+
+export interface PortfolioEvidenceValidationOptions {
+  step: PortfolioEvidenceStep;
+  assetScope: string;
+}
+
+const PRICING_EVIDENCE_TOOLS = new Set([
+  "get_stock_quote",
+  "get_stock_history",
+  "get_crypto_price",
+  "get_crypto_history",
+  "get_price_comparison",
+]);
+
+const STOCK_RISK_EVIDENCE_TOOLS = new Set(["analyze_risk", "analyze_correlation"]);
+const CRYPTO_RISK_EVIDENCE_TOOLS = new Set([
+  "analyze_risk",
+  "analyze_correlation",
+  "get_crypto_history",
+]);
+
+/**
+ * Build an absent-evidence guard for one portfolio workflow step.
+ *
+ * The guard reads only the runtime's captured tool evidence — never the model's
+ * prose — so a plausible draft written without completed tool calls cannot
+ * advance. A failed guard consumes the coordinator's single repair budget with
+ * a corrective tool-fetch prompt; if the retry still carries no usable
+ * evidence the step fails and the run fails closed.
+ */
+export function createPortfolioEvidenceValidation(
+  options: PortfolioEvidenceValidationOptions,
+): PromptOutputValidation {
+  const requiredTools =
+    options.step === "fetch_candidates"
+      ? PRICING_EVIDENCE_TOOLS
+      : riskEvidenceTools(options.assetScope);
+
+  return {
+    validate(_rawText: string, context?: PromptValidationContext): string[] {
+      const evidence = [...(context?.currentEvidence ?? []), ...(context?.priorEvidence ?? [])];
+      if (hasUsableToolEvidence(evidence, requiredTools)) return [];
+      return [
+        options.step === "fetch_candidates"
+          ? "fetch_candidates produced no usable market price evidence from completed tool calls"
+          : "risk_review produced no usable risk or correlation evidence from completed tool calls",
+      ];
+    },
+    repairPrompt(errors: string[]): string {
+      return buildPortfolioEvidenceRepairPrompt(errors, options);
+    },
+  };
+}
+
+function riskEvidenceTools(assetScope: string): Set<string> {
+  return assetScope.toLowerCase().includes("crypto")
+    ? CRYPTO_RISK_EVIDENCE_TOOLS
+    : STOCK_RISK_EVIDENCE_TOOLS;
+}
+
+function hasUsableToolEvidence(evidence: EvidenceRecord[], tools: Set<string>): boolean {
+  for (const record of evidence) {
+    const value = isPlainRecord(record.value) ? record.value : undefined;
+    if (!value) continue;
+    // Error and unavailable tool results carry no market evidence.
+    if (value.outcome !== "ok") continue;
+    const tool = value.tool;
+    if (typeof tool === "string" && tools.has(tool)) return true;
+  }
+  return false;
+}
+
+function buildPortfolioEvidenceRepairPrompt(
+  errors: string[],
+  options: PortfolioEvidenceValidationOptions,
+): string {
+  const scope = `"${options.assetScope}"`;
+  const lines = [
+    "Your previous response was not backed by captured market evidence:",
+    ...errors.map((error) => `- ${error}`),
+    "",
+  ];
+  if (options.step === "fetch_candidates") {
+    lines.push(
+      `Call get_stock_quote for the stock or ETF candidates now (use get_crypto_price for cryptocurrency candidates), then return the complete revised candidate selection. Base every price only on a successful tool result; if a price is unavailable, say so. Do not invent or fabricate prices, and keep the hard asset scope ${scope}.`,
+    );
+  } else {
+    lines.push(
+      `Call analyze_risk for the portfolio positions and analyze_correlation across the eligible positions now (use get_crypto_history for cryptocurrency positions instead of stock-only risk tools), then return the complete revised risk review. Do not invent or fabricate volatility, drawdown, or correlation numbers, and keep the hard asset scope ${scope}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function extractAllocationRows(rawText: string): AllocationRow[] {

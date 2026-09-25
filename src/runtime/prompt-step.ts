@@ -1,6 +1,7 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { FreshnessStamp } from "../infra/freshness.js";
 import type { EvidenceRecord } from "./evidence.js";
+import { classifyToolOutcome } from "./evidence.js";
 import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
 import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
@@ -13,9 +14,22 @@ export interface PromptStep extends Omit<WorkflowStep, "status"> {
   outputValidation?: PromptOutputValidation;
 }
 
+/**
+ * Authoritative captured evidence handed to a step output validator.
+ * `currentEvidence` is captured for the step being validated (including any
+ * attempt already spent on its repair); `priorEvidence` comes from prior
+ * completed steps. Validators must never trust the model's text as proof that
+ * a tool ran.
+ */
+export interface PromptValidationContext {
+  stepType: string;
+  currentEvidence: EvidenceRecord[];
+  priorEvidence: EvidenceRecord[];
+}
+
 export interface PromptOutputValidation {
-  validate(rawText: string): string[];
-  repairPrompt(errors: string[]): string;
+  validate(rawText: string, context?: PromptValidationContext): string[];
+  repairPrompt(errors: string[], context?: PromptValidationContext): string;
 }
 
 /**
@@ -106,6 +120,10 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
       value: {
         tool,
         args: truncateToolValue(serializeToolValue(pending?.args ?? {}), 500),
+        outcome: classifyToolOutcome(
+          { details: message.details, content: message.content },
+          message.isError === true,
+        ),
         ...(freshness ? { freshness } : {}),
         resultDigest: {
           preview: truncateToolValue(serializedResult, 500),

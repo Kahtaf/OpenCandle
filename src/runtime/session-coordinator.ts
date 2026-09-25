@@ -34,6 +34,7 @@ import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type { EvidenceRecord } from "./evidence.js";
+import { classifyToolOutcome } from "./evidence.js";
 import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import {
@@ -604,7 +605,7 @@ export class SessionCoordinator {
       .start(
         definition.workflowType,
         stepDefs,
-        async (step, stepIndex, _priorEvidence, context) => {
+        async (step, stepIndex, priorStepEvidence, context) => {
           try {
             let entriesBeforeStep = entriesBeforeActivePrompt;
             const eventCapture = this.startStepCapture();
@@ -685,7 +686,12 @@ export class SessionCoordinator {
             }
 
             const outputValidation = definition.steps[stepIndex].outputValidation;
-            let validationErrors = outputValidation?.validate(rawText) ?? [];
+            const validationContext = {
+              stepType: step.stepType,
+              currentEvidence: output.evidence,
+              priorEvidence: priorStepEvidence,
+            };
+            let validationErrors = outputValidation?.validate(rawText, validationContext) ?? [];
             if (outputValidation && validationErrors.length > 0) {
               this.appendWorkflowEvent(pi, "output_validation_failed", {
                 stepType: step.stepType,
@@ -694,7 +700,10 @@ export class SessionCoordinator {
               const entriesBeforeRepair = readSessionEntries(ctx).length;
               entriesBeforeActivePrompt = entriesBeforeRepair;
               eventCapture.rawText = "";
-              const repairPrompt = outputValidation.repairPrompt(validationErrors);
+              const repairPrompt = outputValidation.repairPrompt(
+                validationErrors,
+                validationContext,
+              );
               activePrompt = repairPrompt;
               pi.sendUserMessage(repairPrompt);
               const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
@@ -705,13 +714,25 @@ export class SessionCoordinator {
               if (!repairSettled || !runRef.active) {
                 throw new Error("run_cancelled");
               }
-              stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
+              const allStepEntries = readSessionEntries(ctx);
+              stepEntries = allStepEntries.slice(entriesBeforeRepair);
               rawText = capturedText(eventCapture, stepEntries);
               output = promptStepOutput(stepIndex, step.stepType, {
-                evidence: capturedEvidence(eventCapture, stepEntries),
+                // Evidence spans the whole step (original attempt + repair);
+                // the repair-only slice would drop the original attempt's
+                // session-entry evidence. Live capture already accumulates
+                // every attempt, and the complete step slice lists each
+                // session-entry tool event once.
+                evidence: capturedEvidence(eventCapture, allStepEntries.slice(entriesBeforeStep)),
                 rawText,
               });
-              validationErrors = outputValidation.validate(rawText);
+              validationErrors = outputValidation.validate(rawText, {
+                stepType: step.stepType,
+                // Re-validation sees the complete step evidence (original
+                // attempt + repair), from live capture or session entries.
+                currentEvidence: output.evidence,
+                priorEvidence: priorStepEvidence,
+              });
               if (validationErrors.length > 0) {
                 this.appendWorkflowEvent(pi, "output_validation_failed", {
                   stepType: step.stepType,
@@ -1072,6 +1093,7 @@ function toolEvidenceRecord(input: {
     value: {
       tool: input.tool,
       args: truncateToolValue(serializeToolValue(input.args), 500),
+      outcome: classifyToolOutcome(input.result, input.isError),
       ...(freshness ? { freshness } : {}),
       resultDigest: {
         preview: truncateToolValue(serializedResult, 500),
