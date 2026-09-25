@@ -835,6 +835,107 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("accepts the full saved sentiment answer's noisy/incomplete-evidence caveat as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim 2026-09-25 live answer preserved in
+        // validation-output/sentiment-failed-answer.txt. risk_framing previously
+        // failed on the generic keyword pattern alone even though the answer
+        // names source/coverage uncertainty.
+        text:
+          '**Sentiment for "AI stocks" is currently Leaning Bullish (+0.07) based on an aggregate of Twitter, Reddit, and Web/News sentiment from the last 24 hours.**\n\n' +
+          "**Detailed Breakdown:**\n\n" +
+          "*   **Twitter:** +0.07 (Leaning Bullish) from 40 records\n" +
+          "*   **Reddit:** +0.07 (Leaning Bullish) from 95 records\n" +
+          "*   **Web/News:** +0.25 (Leaning Bullish) from 4 records\n\n" +
+          "The overall confidence in this aggregate sentiment is high (0.71), though many records were neutral or lacked keyword sentiment evidence.\n\n" +
+          "**Key Drivers:**\n\n" +
+          '*   **Positive:** Terms like "buy," "long," and "calls" were frequently associated with bullish sentiment.\n' +
+          '*   **Negative:** Terms such as "sell," "short," and "bubble" contributed to bearish sentiment.\n' +
+          "*   **Mixed:** A significant portion of the evidence showed offsetting bullish and bearish signals.\n\n" +
+          "**Data gaps:**\n" +
+          'The sentiment summary incorporates data from Twitter, Reddit, and general web/news sources, which are the primary sentiment data sources available through OpenCandle\'s tools. There are no other distinct, actively missing sentiment tools that could contribute to this specific "AI stocks" query. However, sentiment data can be noisy, and while these sources provide a good overview, they may not capture the entirety of market sentiment or less prominent discussions.',
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts independently worded noisy sentiment coverage caveats as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment sources are noisy and may not fully reflect the broader market.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails sentiment answers that lack a coverage caveat or any risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const plainBullish = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment for AI stocks is leaning bullish across Twitter and Reddit.",
+      }),
+    );
+    const neutralNoise = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment is neutral; the market noise is unrelated to this question.",
+      }),
+    );
+    const steadyPositive = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment for AI stocks is mildly positive, with steady discussion volume.",
+      }),
+    );
+    // Affirmative complete-coverage phrasing: "noisy" alone plus a coverage noun
+    // must not count without an explicit negative coverage verb.
+    const noisyCompleteCoverage = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment data is noisy but captures the full picture.",
+      }),
+    );
+
+    for (const result of [plainBullish, neutralNoise, steadyPositive, noisyCompleteCoverage]) {
+      expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+        false,
+      );
+      expect(result.passed).toBe(false);
+    }
+  });
+
   it("recognizes plural risk headings in education answers", () => {
     const educationCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "education-options-greeks",

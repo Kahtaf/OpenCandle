@@ -264,7 +264,8 @@ function passesFamilyAwareDimension(
       (/\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
         /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)) ||
       (/\b(?:missing sources?|unavailable)\b/i.test(text) &&
-        /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text))
+        /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text)) ||
+      sentimentNoiseCoverageCaveat(text)
     );
   }
   if (dimensionId === "risk_framing" && evalCase.family === "macro") {
@@ -276,6 +277,21 @@ function passesFamilyAwareDimension(
     );
   }
   return false;
+}
+
+// Sentiment answers can frame uncertainty as a data-quality limitation on the
+// sentiment/data/source signal plus an explicit *negative* coverage verb (for
+// example "may not capture", "doesn't reflect"). Both concepts must sit in the
+// same bounded sentence. Affirmative coverage ("is noisy but captures the full
+// picture") and bare coverage nouns are intentionally not accepted, so a bare
+// "noisy"/"missing"/"high confidence" mention cannot satisfy risk framing.
+function sentimentNoiseCoverageCaveat(text: string): boolean {
+  const subjectNoise =
+    "\\b(?:sentiment|data|sources?)\\b[^.!?]{0,40}?\\b(?:noisy|noise|incomplete)\\b";
+  const negativeCoverage =
+    "\\b(?:(?:(?:may|might|could|can|does|do|did)\\s+not|doesn't|don't|won't)\\s+" +
+    "(?:fully\\s+|completely\\s+|entirely\\s+)?(?:capture|reflect|represent|cover|include|account for))\\b";
+  return new RegExp(`${subjectNoise}[^.!?]{0,160}${negativeCoverage}`, "i").test(text);
 }
 
 function toolCallIsUnavailable(call: EvalTrace["toolCalls"][number]): boolean {
