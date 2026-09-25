@@ -290,7 +290,13 @@ export function postProcessRouterOutput(
       compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
-      costBasis: output.entities.costBasis ?? extracted.costBasis,
+      costBasis: resolveSupportedCostBasis(
+        text,
+        output,
+        extracted,
+        inputContext,
+        mergeSymbols(symbolsAfterAmbiguousFilter, extracted.symbols),
+      ),
       shareQuantity: output.entities.shareQuantity ?? extracted.shareQuantity,
       heldSymbol:
         extracted.heldSymbol ??
@@ -608,7 +614,7 @@ export function postProcessRouterOutput(
           reorderedSymbols.length > 1
             ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
             : undefined,
-        costBasis: extracted.costBasis ?? savedPosition?.costBasis ?? next.entities.costBasis,
+        costBasis: next.entities.costBasis ?? savedPosition?.costBasis,
         shareQuantity:
           extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
@@ -1369,6 +1375,151 @@ function readPortfolioPosition(
         }
       : {}),
   };
+}
+
+// A per-share cost basis is a user-owned fact, not any dollar figure in the
+// turn. Hypothetical, budget, target, and quoted prices must not be echoed into
+// entities.costBasis. The value is trusted only when the user's own words
+// assert ownership/entry in the current turn, or when it matches an established
+// basis for the routed symbol from a saved position or the most recent prior
+// user turn that establishes one.
+function resolveSupportedCostBasis(
+  text: string,
+  output: RouterOutput,
+  extracted: ExtractedEntities,
+  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+  symbols: string[],
+): number | undefined {
+  // Deterministic extraction goes through the same provenance check: it can
+  // match a target or counterfactual phrase the model then echoes.
+  if (extracted.costBasis !== undefined && claimsUserCostBasis(text, extracted.costBasis)) {
+    return extracted.costBasis;
+  }
+  const candidate = output.entities.costBasis;
+  if (candidate === undefined) return undefined;
+  if (claimsUserCostBasis(text, candidate)) return candidate;
+  if (matchesSavedPositionCostBasis(inputContext?.portfolioPositions, symbols, candidate)) {
+    return candidate;
+  }
+  if (matchesPriorUserCostBasis(inputContext?.priorTurns, symbols, candidate)) return candidate;
+  return undefined;
+}
+
+const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
+// Cue gaps exclude sentence terminators, commas, dollar signs, and bare
+// digits so a cue cannot reach across clauses or past an unrelated amount.
+const COST_BASIS_GAP = String.raw`[^.;?!,$\d]{0,40}`;
+const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d+\s*(?:shares?|contracts?|units?))*`;
+// Wording that turns an otherwise explicit basis/acquisition phrase into a
+// hypothetical, target, or negated statement. Deliberately conservative: an
+// unasserted basis is dropped rather than reported as the user's own.
+const COST_BASIS_UNASSERTED =
+  /\b(?:what\s+if|if\s+(?:i|we|my|the|it)\b|suppose|supposing|imagine|hypothetical|let'?s\s+say|say\s+i|assuming|assume|maybe|perhaps|might|could|would|were|target(?:ing|ed|s)?|plan(?:ning|ned|s)?|intend(?:ing|ed|s)?|hop(?:e|es|ing|ed)|looking\s+to|considering|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|wouldn'?t|couldn'?t|never|not|no\s+longer)\b/i;
+
+function hasUserCostBasisSupport(text: string, value: number): boolean {
+  const patterns = [
+    new RegExp(
+      String.raw`\b(?:cost\s*basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|basis)\b${COST_BASIS_GAP}${COST_BASIS_AMOUNT}`,
+      "i",
+    ),
+    new RegExp(
+      String.raw`\b(?:bought|purchased|acquired|paid|cost\s+(?:me|us))\b${COST_BASIS_ACQUISITION_GAP}${COST_BASIS_AMOUNT}`,
+      "i",
+    ),
+    new RegExp(
+      String.raw`\b(?:my|the)\s+(?:cost|basis|entry(?:\s*price)?|average\s+cost)\b${COST_BASIS_GAP}${COST_BASIS_AMOUNT}`,
+      "i",
+    ),
+    new RegExp(
+      String.raw`\b(?:my|the)\s+(?:position|shares?|holding|stock)\b(?:\s+(?:is|was))?\s+(?:at\s+)?${COST_BASIS_AMOUNT}`,
+      "i",
+    ),
+    new RegExp(String.raw`\bi(?:'m| am)\s+(?:in|long)\s+(?:at|@)\s*${COST_BASIS_AMOUNT}`, "i"),
+  ];
+  return patterns.some((pattern) => {
+    const match = pattern.exec(text);
+    if (!match) return false;
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    return amountsClose(parsed, value);
+  });
+}
+
+// The user's own assertion, not a hypothetical, target, or negated phrase.
+function claimsUserCostBasis(text: string, value: number): boolean {
+  return hasUserCostBasisSupport(text, value) && !hasUnassertedCostBasisClause(text, value);
+}
+
+function hasUnassertedCostBasisClause(text: string, value: number): boolean {
+  return (
+    text
+      // A period/comma is a clause boundary unless it sits between two digits
+      // (decimal point or thousands separator). So a sentence-final period after
+      // a decimal amount still splits, while the decimal and thousands
+      // separators themselves keep the amount intact.
+      .split(/[.,](?!\d)|(?<!\d)[.,]|[;?!\n]/)
+      .filter((clause) => clauseContainsAmount(clause, value))
+      .some((clause) => COST_BASIS_UNASSERTED.test(clause))
+  );
+}
+
+function clauseContainsAmount(clause: string, value: number): boolean {
+  for (const match of clause.matchAll(/(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)/g)) {
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (amountsClose(parsed, value)) return true;
+  }
+  return false;
+}
+
+function amountsClose(left: number, right: number): boolean {
+  return Number.isFinite(left) && Math.abs(left - right) <= 0.011;
+}
+
+// The most recent prior user turn that actually establishes a basis for one of
+// the routed symbols is the authority; an older basis it supersedes must not be
+// revived. Turns for unrelated symbols are skipped, not treated as authority.
+function latestPriorUserCostBasis(
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
+  symbols: string[],
+): number | undefined {
+  if (symbols.length === 0) return undefined;
+  const turns = priorTurns ?? [];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (turn.role !== "user") continue;
+    if (!extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol))) continue;
+    const established = readEstablishedCostBasis(turn.text);
+    if (established !== undefined) return established;
+  }
+  return undefined;
+}
+
+function readEstablishedCostBasis(text: string): number | undefined {
+  const asserted: number[] = [];
+  for (const match of text.matchAll(/(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)/g)) {
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (claimsUserCostBasis(text, parsed)) asserted.push(parsed);
+  }
+  return asserted.at(-1);
+}
+
+function matchesSavedPositionCostBasis(
+  positions: RouterInputContext["portfolioPositions"] | undefined,
+  symbols: string[],
+  value: number,
+): boolean {
+  return symbols.some((symbol) => {
+    const saved = readPortfolioPosition(positions, symbol);
+    return saved?.costBasis !== undefined && amountsClose(saved.costBasis, value);
+  });
+}
+
+function matchesPriorUserCostBasis(
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
+  symbols: string[],
+  value: number,
+): boolean {
+  const established = latestPriorUserCostBasis(priorTurns, symbols);
+  return established !== undefined && amountsClose(established, value);
 }
 
 function isConversationalRiskPreferenceUpdate(
