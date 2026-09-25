@@ -35,6 +35,7 @@
 - Failed eval diagnostics now redact API credentials echoed in provider rate-limit messages.
 - Product evaluations now recognize a concrete sentiment data-quality limitation (noisy sentiment, sparse coverage or sample, a low sample count, or a non-representative sample) as risk framing, so an honest data-quality caveat is no longer scored as omitting risk even when every source returned.
 - Product evaluations now also recognize a sentiment answer that explains a missing source's divergence from the sources that returned, so a "Twitter is unavailable and its sentiment may differ from other sources" gap disclosure is no longer scored as omitting risk framing.
+- Data-faithfulness scoring now scales signed bare compact and spelled-out magnitudes, including comma-grouped forms, in tool text and financial metrics (for example `3.68T`, `-3.68T`, or `3,680B`), so a market cap quoted from a tool result is grounded instead of flagged as ungrounded.
 
 ## [0.15.0] - 2026-09-21
 

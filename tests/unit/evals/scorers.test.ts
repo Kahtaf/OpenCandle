@@ -145,6 +145,24 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("yield of 3.5")).toContain(3.5);
   });
 
+  it("scales a bare compact magnitude in a financial metric without an unscaled duplicate", () => {
+    expect(extractFinancialNumbers("market cap of 3.68T")).toEqual([3.68e12]);
+  });
+
+  it("scales a bare spelled magnitude in a financial metric", () => {
+    expect(extractFinancialNumbers("Market Cap of 3.68 Trillion")).toEqual([3.68e12]);
+  });
+
+  it("emits a single signed value for a signed bare compact magnitude", () => {
+    expect(extractFinancialNumbers("market cap of -3.68T")).toEqual([-3.68e12]);
+    expect(extractFinancialNumbers("The change was -3.68T")).toEqual([-3.68e12]);
+    expect(extractFinancialNumbers("The change was +3.68T")).toEqual([3.68e12]);
+  });
+
+  it("reads a comma-grouped magnitude as one scaled value", () => {
+    expect(extractFinancialNumbers("market cap of 3,680B")).toEqual([3.68e12]);
+  });
+
   it("applies a spelled-out trillion scale to a currency amount", () => {
     expect(extractFinancialNumbers("**Market Cap:** $3.697 Trillion")).toEqual([3.697e12]);
   });
@@ -332,6 +350,44 @@ describe("extractNumbersFromObject", () => {
   it("extracts numbers from strings", () => {
     const nums = extractNumbersFromObject({ formatted: "$185.50" });
     expect(nums).toContain(185.5);
+  });
+
+  it("scales a bare compact magnitude in tool strings without an unscaled duplicate", () => {
+    const nums = extractNumbersFromObject({ text: "market capitalization of 3.68T" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("scales a bare spelled magnitude in tool strings", () => {
+    const nums = extractNumbersFromObject({ text: "market capitalization of 3.68 Trillion" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("keeps the sign on a bare signed compact magnitude in tool strings", () => {
+    const nums = extractNumbersFromObject({ text: "change of -3.68T" });
+    expect(nums).toContain(-3.68e12);
+    expect(nums).not.toContain(3.68e12);
+    expect(nums).not.toContain(-3.68);
+  });
+
+  it("reads independent currency and bare magnitudes without double counting", () => {
+    const nums = extractNumbersFromObject({ text: "Revenue $1.2B and market cap 3.68T" });
+    expect(nums).toContain(1.2e9);
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(1.2);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("reads a comma-grouped bare magnitude as one scaled value", () => {
+    const nums = extractNumbersFromObject({ text: "market cap 3,680B" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3);
+    expect(nums).not.toContain(680e9);
+  });
+
+  it("preserves a bare duration in tool strings instead of scaling it to millions", () => {
+    expect(extractNumbersFromObject({ text: "~15m delayed" })).toEqual([15]);
   });
 
   it("keeps a negative sign that precedes the dollar sign in strings", () => {
@@ -764,6 +820,79 @@ describe("market-cap scale and duration diagnostic replay", () => {
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
     expect(result.score).toBe(1.0);
+  });
+});
+
+describe("tool-string magnitude grounding", () => {
+  const response = "Market Cap $3.68 Trillion";
+  const searchResult = (text: string) => [{ name: "search_web", args: {}, result: { text } }];
+
+  it("grounds a market cap stated with a bare compact magnitude in a tool string", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails when the tool string states the same value in the wrong unit", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68B.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
+  });
+
+  it("fails when the tool string states the opposite sign", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of -3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
+  });
+
+  it("fails when the response value differs from the bare tool magnitude", () => {
+    const trace = makeTrace({
+      text: "Market Cap $4.68 Trillion",
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4680000000000");
+  });
+
+  it("grounds a negative signed bare response against matching negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "Market cap of -3.68T",
+      toolCalls: searchResult("MSFT Key Statistics: market cap -3.68T."),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a positive signed bare response against negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "Market cap of 3.68T",
+      toolCalls: searchResult("MSFT Key Statistics: market cap -3.68T."),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
   });
 });
 

@@ -10,12 +10,45 @@ const MINUS_SIGN_CHARS = new Set(["-", "\u2212", "\uFE63", "\uFF0D"]);
 const SIGN_CHAR_CLASS = "[+\\-\\u2212\\uFE63\\uFF0D]";
 
 /**
- * Magnitude suffix after a currency amount: the compact forms B/M/T or a
- * spelled-out trillion/billion/million. The spelled-out form may be separated
- * from the digits by horizontal whitespace ("$3.697 Trillion").
+ * Digits for a financial number: a comma-grouped integer with an optional
+ * decimal part. Shared by currency, bare tool-string, abbreviated, and metric
+ * parsing so a grouped magnitude such as "3,680B" is one number rather than
+ * "3" plus "680B".
+ */
+const NUMBER_DIGITS = "\\d[\\d,]*(?:\\.\\d+)?";
+
+/**
+ * Magnitude suffix after a number: the compact forms B/M/T or a spelled-out
+ * trillion/billion/million. The spelled-out form may be separated from the
+ * digits by horizontal whitespace ("$3.697 Trillion", "3.68 Trillion"). The
+ * compact, spelled, and multiplier pieces below are the single shared grammar
+ * used by currency, bare tool-string, abbreviated, and metric parsing.
  */
 const SPELLED_MAGNITUDE = "(?:[Tt]rillion|[Bb]illion|[Mm]illion)";
-const CURRENCY_MAGNITUDE = `(?:[BMTbmt]\\b|[ \\t]*${SPELLED_MAGNITUDE}\\b)`;
+const COMPACT_MAGNITUDE = "[BMTbmt]";
+const CURRENCY_MAGNITUDE = `(?:${COMPACT_MAGNITUDE}\\b|[ \\t]*${SPELLED_MAGNITUDE}\\b)`;
+
+/**
+ * Explicit duration context that makes a trailing `m`/`M` a time unit (minutes)
+ * rather than a millions magnitude: "~15m delayed", "15m ago". Outside this
+ * context a lowercase `m` remains a millions suffix; ambiguous connective words
+ * (before/after/later/left/remaining/prior) are deliberately excluded so that
+ * "raised 15M before fees" stays a money amount.
+ */
+const DURATION_AFTER = "(?:delayed|delay|ago)\\b";
+
+/**
+ * Compact magnitude after a bare number, with the duration exception applied to
+ * `m`/`M`. Shared so the response abbreviated parser and the tool-string parser
+ * recognize the same compact scale letters.
+ */
+const COMPACT_BARE_MAGNITUDE = `(?:[BTbt]\\b|[mM]\\b(?![ \\t]*${DURATION_AFTER}))`;
+
+/**
+ * Magnitude after a bare (non-currency) number: the compact forms plus the
+ * spelled-out forms. This is the tool-string counterpart of CURRENCY_MAGNITUDE.
+ */
+const BARE_MAGNITUDE = `(?:${COMPACT_BARE_MAGNITUDE}|[ \\t]*${SPELLED_MAGNITUDE}\\b)`;
 
 /**
  * A minus directly after a completed dollar amount (only horizontal whitespace
@@ -35,19 +68,21 @@ const DOLLAR_RANGE_GUARD = `(?<!${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?[\\d,]+
  * digits can never be re-matched as an unsigned substring.
  */
 const CURRENCY_PATTERN = new RegExp(
-  `(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?\\$(${SIGN_CHAR_CLASS})?(\\d[\\d,]*(?:\\.\\d+)?)(${CURRENCY_MAGNITUDE})?`,
+  `(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?\\$(${SIGN_CHAR_CLASS})?(${NUMBER_DIGITS})(${CURRENCY_MAGNITUDE})?`,
   "g",
 );
 
 /**
- * A currency amount (groups 1-4) or a plain number (groups 5-6). The ordered
- * alternation keeps a signed currency amount from being double-counted as a
- * bare unsigned number. The plain-number branch keeps its original
- * `[+-]?digits` semantics; only a sign directly after a dollar amount is
- * treated as a range separator.
+ * A currency amount (groups 1-4) or a bare number with an optional sign and
+ * magnitude (groups 5-7). The ordered alternation keeps a signed currency
+ * amount from being double-counted as a bare unsigned number. The bare-number
+ * branch keeps unary sign parsing, now scaled by the shared digit and bare
+ * magnitude grammars; only a sign directly after a dollar amount is treated as
+ * a range separator. Consuming the magnitude with the digits prevents an
+ * unscaled mantissa from being emitted beside the scaled value.
  */
 const STRING_NUMBER_PATTERN = new RegExp(
-  `${CURRENCY_PATTERN.source}|(?:${DOLLAR_RANGE_GUARD}([+-]))?(\\d+(?:\\.\\d+)?)`,
+  `${CURRENCY_PATTERN.source}|(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?(${NUMBER_DIGITS})(${BARE_MAGNITUDE})?`,
   "g",
 );
 
@@ -61,6 +96,11 @@ function magnitudeMultiplier(suffix: string | undefined): number {
   return 1;
 }
 
+/** Parse an unsigned decimal (commas allowed) scaled by an optional magnitude suffix. */
+function parseMagnitude(digits: string, suffix?: string): number {
+  return parseFloat(digits.replace(/,/g, "")) * magnitudeMultiplier(suffix);
+}
+
 /** Parse a currency amount, treating a minus before or after the `$` as negative. */
 function parseSignedCurrency(
   signBefore: string | undefined,
@@ -68,7 +108,7 @@ function parseSignedCurrency(
   digits: string,
   suffix?: string,
 ): number {
-  const magnitude = parseFloat(digits.replace(/,/g, "")) * magnitudeMultiplier(suffix);
+  const magnitude = parseMagnitude(digits, suffix);
   const negative =
     (signBefore !== undefined && MINUS_SIGN_CHARS.has(signBefore)) ||
     (signAfter !== undefined && MINUS_SIGN_CHARS.has(signAfter));
@@ -122,16 +162,28 @@ function directionForPercent(text: string, start: number, end: number): "+" | "-
 }
 
 /**
- * Explicit duration context that makes a trailing `m`/`M` a time unit (minutes)
- * rather than a millions magnitude: "~15m delayed", "15m ago". Outside this
- * context a lowercase `m` remains a millions suffix; ambiguous connective words
- * (before/after/later/left/remaining/prior) are deliberately excluded so that
- * "raised 15M before fees" stays a money amount.
+ * Bare compact magnitude in response text: "1.2B", "500M", "3.5T", "-3.68T".
+ * A currency-prefixed amount is captured in group 1 so the caller can skip it,
+ * since CURRENCY_PATTERN already consumed those digits. Groups are currency
+ * prefix (1), bare sign (2), digits (3), and compact magnitude (4); the compact
+ * grammar is shared with the tool-string parser via COMPACT_BARE_MAGNITUDE and
+ * the digits via NUMBER_DIGITS.
  */
-const DURATION_AFTER = "(?:delayed|delay|ago)\\b";
 const ABBREVIATED_LARGE_NUMBER_PATTERN = new RegExp(
-  `([+\\-\\u2212\\uFE63\\uFF0D]?\\$[+\\-\\u2212\\uFE63\\uFF0D]?)?(\\d+(?:\\.\\d+)?(?:[BTbt]\\b|[mM]\\b(?![ \\t]*${DURATION_AFTER})))`,
+  `(${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?)?(${SIGN_CHAR_CLASS})?(${NUMBER_DIGITS})(${COMPACT_BARE_MAGNITUDE})`,
   "g",
+);
+
+/**
+ * Financial metric patterns: "P/E of 28.5", "ratio of 1.2", "yield of 3.5".
+ * An optional magnitude is consumed with the number so a metric written as
+ * "market cap of 3.68T" or "market cap of 3.68 Trillion" scales once instead of
+ * also emitting an unscaled mantissa. Groups are the value (1) and an optional
+ * magnitude (2).
+ */
+const FINANCIAL_METRIC_PATTERN = new RegExp(
+  `(?:P\\/E|EPS|P\\/B|P\\/S|PEG|yield|ratio|margin|return|drawdown|volatility|beta|alpha|sharpe|VaR|market\\s+cap)\\s+(?:of\\s+|is\\s+|at\\s+|:?\\s*)([+-]?${NUMBER_DIGITS})(${CURRENCY_MAGNITUDE})?`,
+  "gi",
 );
 
 /**
@@ -163,24 +215,21 @@ export function extractFinancialNumbers(text: string): number[] {
     numbers.push(parseFloat(m[0].replace("x", "")));
   }
 
-  // Abbreviated large numbers: 1.2B, 500M, 3.5T. Currency-prefixed amounts are
-  // already consumed by CURRENCY_PATTERN, so skip them here rather than emit a
-  // second, unsigned value. A trailing `m`/`M` in explicit duration context is
-  // minutes, not a millions magnitude.
+  // Abbreviated large numbers: 1.2B, 500M, 3.5T, -3.68T. Currency-prefixed
+  // amounts are already consumed by CURRENCY_PATTERN, so skip them here rather
+  // than emit a second, unsigned value. A bare sign is applied once so a signed
+  // magnitude never also emits an unsigned duplicate. A trailing `m`/`M` in
+  // explicit duration context is minutes, not a millions magnitude.
   for (const m of text.matchAll(ABBREVIATED_LARGE_NUMBER_PATTERN)) {
     if (m[1] !== undefined) continue;
-    const raw = m[2];
-    const num = parseFloat(raw.slice(0, -1));
-    const suffix = raw.slice(-1).toUpperCase();
-    const multiplier = suffix === "T" ? 1e12 : suffix === "B" ? 1e9 : 1e6;
-    numbers.push(num * multiplier);
+    const value = parseMagnitude(m[3], m[4]);
+    const negative = m[2] !== undefined && MINUS_SIGN_CHARS.has(m[2]);
+    numbers.push(negative ? -value : value);
   }
 
-  // Financial metric patterns: "P/E of 28.5", "ratio of 1.2", "yield of 3.5"
-  for (const m of text.matchAll(
-    /(?:P\/E|EPS|P\/B|P\/S|PEG|yield|ratio|margin|return|drawdown|volatility|beta|alpha|sharpe|VaR|market\s+cap)\s+(?:of\s+|is\s+|at\s+|:?\s*)([+-]?\d+(?:\.\d+)?)/gi,
-  )) {
-    numbers.push(parseFloat(m[1]));
+  // Financial metric patterns: "P/E of 28.5", "market cap of 3.68T"
+  for (const m of text.matchAll(FINANCIAL_METRIC_PATTERN)) {
+    numbers.push(parseMagnitude(m[1], m[2]));
   }
 
   return [...new Set(numbers)];
@@ -199,11 +248,13 @@ export function extractNumbersFromObject(obj: unknown): number[] {
         const n = parseSignedCurrency(m[1], m[2], m[3], m[4]);
         if (Number.isFinite(n)) numbers.push(n);
       } else {
+        // Bare number (groups 5-7): optional sign, digits, optional shared
+        // magnitude. A magnitude suffix is consumed with the digits so the
+        // unscaled mantissa is never emitted beside the scaled value.
         const sign = m[5];
-        const magnitude = parseFloat(m[6]);
         const negative = sign !== undefined && MINUS_SIGN_CHARS.has(sign);
-        const n = negative ? -magnitude : magnitude;
-        if (Number.isFinite(n)) numbers.push(n);
+        const n = parseMagnitude(m[6], m[7]);
+        if (Number.isFinite(n)) numbers.push(negative ? -n : n);
       }
     }
   } else if (Array.isArray(obj)) {
