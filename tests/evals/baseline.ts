@@ -357,6 +357,11 @@ export function saveFailureDiagnostic(
     layers: redactLayers(result.layers),
     prompt: redactForDiagnostic(trace.prompt),
     responseText: redactForDiagnostic(trace.text),
+    // Sanitized terminal metadata explains an empty/unresolved final answer:
+    // a blank successful stop vs. an error/aborted terminal assistant message.
+    ...(trace.terminalOutcome === undefined
+      ? {}
+      : { terminalOutcome: redactForDiagnostic(trace.terminalOutcome) }),
     toolCalls,
     askUserTranscript: redactForDiagnostic(trace.askUserTranscript),
     ...(workflowDiagnostics.workflow === undefined

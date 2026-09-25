@@ -220,6 +220,9 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
       answer: interaction.answer,
     })),
     text: agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
+    ...(agentTrace.terminalOutcome === undefined
+      ? {}
+      : { terminalOutcome: agentTrace.terminalOutcome }),
     customEntries: agentTrace.customEntries,
   };
 }

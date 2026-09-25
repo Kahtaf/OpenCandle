@@ -43,6 +43,7 @@
 - Product evaluations now also recognize a sentiment answer that explains a missing source's divergence from the sources that returned, so a "Twitter is unavailable and its sentiment may differ from other sources" gap disclosure is no longer scored as omitting risk framing.
 - Data-faithfulness scoring now scales signed bare compact and spelled-out magnitudes, including comma-grouped forms, in tool text and financial metrics (for example `3.68T`, `-3.68T`, or `3,680B`), so a market cap quoted from a tool result is grounded instead of flagged as ungrounded.
 - The portfolio builder now requires captured, successful pricing tool evidence before candidate selection and captured risk or correlation evidence before the risk review, so a portfolio draft cannot complete without any successful market-data tool results.
+- Failed eval diagnostics now record the final assistant message's terminal stop reason and a sanitized error category, so an empty response is diagnosable without exposing provider error text.
 
 ## [0.15.0] - 2026-09-21
 

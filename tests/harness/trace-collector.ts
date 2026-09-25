@@ -5,7 +5,14 @@
 
 import { appendFileSync, writeFileSync } from "node:fs";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { AgentTrace, InteractionTrace, ToolCallTrace, TurnTrace } from "./types.js";
+import { terminalOutcomeFromMessage, withPromptIndex } from "./terminal-outcome.js";
+import type {
+  AgentTrace,
+  InteractionTrace,
+  TerminalOutcomeTrace,
+  ToolCallTrace,
+  TurnTrace,
+} from "./types.js";
 
 interface PendingToolCall {
   name: string;
@@ -41,6 +48,18 @@ export function createTraceCollector(
   });
   let currentTurn: TurnTrace = createTurn();
   let finalText = "";
+  let terminalOutcome: TerminalOutcomeTrace | undefined;
+
+  const recordTerminalOutcome = (message: unknown) => {
+    const outcome = terminalOutcomeFromMessage(
+      (message ?? {}) as Parameters<typeof terminalOutcomeFromMessage>[0],
+    );
+    if (!outcome) return;
+    terminalOutcome = withPromptIndex(
+      outcome,
+      options?.trackPromptIndex ? currentPromptIndex : undefined,
+    );
+  };
 
   if (options?.jsonlPath) {
     writeFileSync(options.jsonlPath, "", "utf-8");
@@ -98,7 +117,15 @@ export function createTraceCollector(
         }
         break;
       }
+      // Terminal metadata lives on the full assistant message, not the deltas.
+      // Capture it on message_end so an empty/error final answer stays
+      // diagnosable; never append the raw message (it can carry errorMessage).
+      case "message_end": {
+        recordTerminalOutcome(event.message);
+        break;
+      }
       case "turn_end": {
+        recordTerminalOutcome(event.message);
         if (currentTurn.toolCalls.length > 0 || currentTurn.text.length > 0) {
           turns.push(currentTurn);
         }
@@ -107,6 +134,12 @@ export function createTraceCollector(
         break;
       }
       case "agent_end": {
+        // Fallback for streams that only surface the run's messages here.
+        const endedMessages = Array.isArray(event.messages) ? event.messages : [];
+        const lastAssistant = [...endedMessages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        if (lastAssistant) recordTerminalOutcome(lastAssistant);
         // Push any remaining current turn
         if (currentTurn.toolCalls.length > 0 || currentTurn.text.length > 0) {
           turns.push(currentTurn);
@@ -132,6 +165,7 @@ export function createTraceCollector(
         finalText,
         toolSequence: buildToolSequence(),
         durationMs: Date.now() - startTime,
+        ...(terminalOutcome === undefined ? {} : { terminalOutcome }),
       };
     },
     setPromptIndex(promptIndex: number) {
