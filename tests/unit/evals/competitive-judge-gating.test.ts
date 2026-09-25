@@ -96,6 +96,20 @@ describe("competitive judge evidence context", () => {
     expect(judgePrompt).toContain("[truncated]");
   });
 
+  it("treats figures missing from a truncated excerpt as unverified, not fabricated", () => {
+    const judgePrompt = buildComparisonJudgePrompt({
+      prompt,
+      asOfDate: "2026-09-25",
+      openCandleTrace: trace(),
+      competitorAnswers: [competitor],
+    });
+
+    expect(judgePrompt).toMatch(
+      /excerpt is marked \[truncated\], a figure missing from it may be in the omitted part/i,
+    );
+    expect(COMPETITIVE_JUDGE_RUBRIC_VERSION).toBe("competitive-judge-v3");
+  });
+
   it("anchors dates to the as-of date and forbids calling tool-backed figures fabricated", () => {
     const judgePrompt = buildComparisonJudgePrompt({
       prompt,

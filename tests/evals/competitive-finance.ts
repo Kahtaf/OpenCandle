@@ -11,8 +11,11 @@ import type { EvalTrace } from "./types.js";
  * v2: the judge sees bounded tool-result evidence, the deterministic
  * mandatory-check results, observed-only labels on heuristic structured
  * checks, and explicit as-of-date / knowledge-cutoff guidance.
+ * v3: a figure missing from a truncated tool excerpt is unverified, not
+ * fabricated (calibration showed false "absent from evidence" claims on
+ * truncated option chains).
  */
-export const COMPETITIVE_JUDGE_RUBRIC_VERSION = "competitive-judge-v2";
+export const COMPETITIVE_JUDGE_RUBRIC_VERSION = "competitive-judge-v3";
 export const LEGACY_JUDGE_RUBRIC_VERSION = "legacy";
 
 export interface GeneratedFinancePrompt {
@@ -449,7 +452,7 @@ ${input.openCandleTrace.text}
 Generic no-tool agent answers:
 ${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated. Your training data may end before the current date, so a recent date or an unfamiliar recent value is not evidence of fabrication. A figure that matches the OpenCandle tool evidence is tool-backed, not fabricated; only call an OpenCandle figure fabricated when it is absent from or contradicts that tool evidence, and name the figure.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated. Your training data may end before the current date, so a recent date or an unfamiliar recent value is not evidence of fabrication. A figure that matches the OpenCandle tool evidence is tool-backed, not fabricated; only call an OpenCandle figure fabricated when it contradicts that tool evidence, or is absent from an excerpt that is not truncated, and name the figure. When an excerpt is marked [truncated], a figure missing from it may be in the omitted part: treat it as unverified, not fabricated or unsupported.
 
 The deterministic mandatory checks above are authoritative for the prompt's required behaviors. Do not contradict them. When one failed, say so in your reason; your preference among the answers is advisory and never makes a failed mandatory check acceptable.
 

@@ -47,7 +47,7 @@ The runner:
 1. Generates fresh finance prompts at runtime.
 2. Runs each prompt through OpenCandle with the shared in-process harness in `tests/harness/opencandle-runner.ts`.
 3. Runs the same prompt through Claude, Codex, and Gemini as generic no-tool finance agents via `acpx`.
-4. Uses a judge prompt to compare usefulness, correctness, evidence, clarity, and honesty about uncertainty, using the benchmark run date as the as-of date for current-data checks. The judge sees bounded tool-result excerpts and the deterministic mandatory-check results, and each judgment is stamped with the judge model and rubric version (`COMPETITIVE_JUDGE_RUBRIC_VERSION`; unstamped saved judgments read as `legacy`).
+4. Uses a judge prompt to compare usefulness, correctness, evidence, clarity, and honesty about uncertainty, using the benchmark run date as the as-of date for current-data checks. The judge sees bounded tool-result excerpts and the deterministic mandatory-check results, and each judgment is stamped with the judge model and rubric version (`COMPETITIVE_JUDGE_RUBRIC_VERSION`, currently `competitive-judge-v3`; unstamped saved judgments read as `legacy`).
 5. Writes a JSON report under `tests/evals/runs/`.
 
 The judge's winner is a preference, not a correctness verdict. Summaries report preference wins separately from deterministic mandatory outcomes, and a preference win on a case whose mandatory checks failed is reported as ineligible. The release gate reads only the deterministic completion cases.
