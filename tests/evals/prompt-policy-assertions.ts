@@ -171,11 +171,14 @@ const HEDGE_FLOOR_MECHANICS =
 // but an answer may instead state the concrete hazard: the put-leg premium that
 // can be lost, unprotected/remaining shares, time or premium decay, or theta
 // eroding the option's time value. A bare "tradeoff"/"consider" heading, a
-// generic "downside protection begins at the strike" floor sentence, or an
-// unrelated word such as "fall season" does not count. Deliberately small,
-// bounded phrases rather than broad stems like decline/drop/fall/erode.
+// generic "downside protection begins at the strike" floor sentence, an
+// unrelated word such as "fall season", or the protection-only floor sentences
+// "the put caps your losses at the strike" and "limits your maximum loss at the
+// strike" does not count. Loss language is deliberately bounded to the
+// premium/put/option leg, so naming a capped or limited stock loss is not
+// mistaken for a hazard.
 const HEDGE_DOWNSIDE_HAZARD =
-  /\brisks?\b|\b(?:loss|losses|lose|loses|losing)\b|\b(?:unprotected|unhedged|uncovered)\b|\b(?:time|premium|option|theta)\s+decay\b|\btheta\b[^.\n]{0,40}\b(?:erod|reduc|eats?|drains?)\w*\b|\b(?:erod|reduc)\w*\b[^.\n]{0,40}\b(?:option|time)\s+value\b/i;
+  /\brisks?\b|\b(?:unprotected|unhedged|uncovered)\b|\b(?:time|premium|option|theta)\s+decay\b|\btheta\b[^.\n]{0,40}\b(?:erod|reduc|eats?|drains?)\w*\b|\b(?:erod|reduc)\w*\b[^.\n]{0,40}\b(?:option|time)\s+value\b|\b(?:put|option)s?\b[^.\n]{0,20}\blose\b|\blose\s+(?:the\s+|your\s+|entire\s+)?premium\b|\b(?:premium|put|option)(?:\s+leg)?\s+loss(?:es)?\b|\bloss(?:es)?\s+(?:of|on|from)\s+(?:the\s+)?(?:premium|put|option|leg)\b|\bpremium\s+(?:is\s+)?(?:at\s+risk|lost)\b/i;
 
 // Normal Markdown bold emphasis around a number must not change sizing, e.g.
 // "buy **4** put contracts" or "**5** puts". Strip paired ** / __ markers from

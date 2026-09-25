@@ -556,6 +556,28 @@ describe("prompt-policy final answer assertions", () => {
     expect(result.passed).toBe(false);
     expect(result.reason).toContain("hazard");
   });
+
+  it("rejects a protection-only sentence where the put caps losses at the strike", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace("The put caps your losses at the strike; premium, delta, and liquidity are quoted."),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
+
+  it("rejects a protection-only maximum-loss sentence that names no put hazard", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The put's downside protection begins at the $350 strike and limits your maximum loss at the strike; premium, delta, and liquidity are quoted.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {
