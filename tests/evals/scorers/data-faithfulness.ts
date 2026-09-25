@@ -7,6 +7,15 @@ const RELATIVE_TOLERANCE = 0.01; // 1%
  * minus (U+2212) plus small and full-width hyphen-minus variants.
  */
 const MINUS_SIGN_CHARS = new Set(["-", "\u2212", "\uFE63", "\uFF0D"]);
+const SIGN_CHAR_CLASS = "[+\\-\\u2212\\uFE63\\uFF0D]";
+
+/**
+ * A minus directly after a completed dollar amount (only horizontal whitespace
+ * may intervene) is a range separator, not a unary sign: `$100-$200` and
+ * `$100 - $200`. A line break ends the range context, so `$100\n-$200` keeps
+ * the negative on the next line. Bare numbers are deliberately not consulted.
+ */
+const DOLLAR_RANGE_GUARD = `(?<!${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?[\\d,]+(?:\\.\\d+)?[BMTbmt]?[ \\t]*)`;
 
 /**
  * Currency amount whose sign may precede or follow the dollar sign, with an
@@ -14,16 +23,22 @@ const MINUS_SIGN_CHARS = new Set(["-", "\u2212", "\uFE63", "\uFF0D"]);
  * -$2.5B. The sign and suffix are part of the match so the digits can never be
  * re-matched as an unsigned substring.
  */
-const CURRENCY_PATTERN =
-  /([+\-\u2212\uFE63\uFF0D])?\$([+\-\u2212\uFE63\uFF0D])?(\d[\d,]*(?:\.\d+)?)([BMTbmt]\b)?/g;
+const CURRENCY_PATTERN = new RegExp(
+  `(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?\\$(${SIGN_CHAR_CLASS})?(\\d[\\d,]*(?:\\.\\d+)?)([BMTbmt]\\b)?`,
+  "g",
+);
 
 /**
- * A currency amount (groups 1-4) or a plain number (group 5). The ordered
+ * A currency amount (groups 1-4) or a plain number (groups 5-6). The ordered
  * alternation keeps a signed currency amount from being double-counted as a
- * bare unsigned number.
+ * bare unsigned number. The plain-number branch keeps its original
+ * `[+-]?digits` semantics; only a sign directly after a dollar amount is
+ * treated as a range separator.
  */
-const STRING_NUMBER_PATTERN =
-  /([+\-\u2212\uFE63\uFF0D])?\$([+\-\u2212\uFE63\uFF0D])?(\d[\d,]*(?:\.\d+)?)([BMTbmt]\b)?|([+-]?\d+(?:\.\d+)?)/g;
+const STRING_NUMBER_PATTERN = new RegExp(
+  `${CURRENCY_PATTERN.source}|(?:${DOLLAR_RANGE_GUARD}([+-]))?(\\d+(?:\\.\\d+)?)`,
+  "g",
+);
 
 /** Apply the B/M/T magnitude suffix (if any) to a currency magnitude. */
 function magnitudeMultiplier(suffix: string | undefined): number {
@@ -109,7 +124,10 @@ export function extractNumbersFromObject(obj: unknown): number[] {
         const n = parseSignedCurrency(m[1], m[2], m[3], m[4]);
         if (Number.isFinite(n)) numbers.push(n);
       } else {
-        const n = parseFloat(m[0]);
+        const sign = m[5];
+        const magnitude = parseFloat(m[6]);
+        const negative = sign !== undefined && MINUS_SIGN_CHARS.has(sign);
+        const n = negative ? -magnitude : magnitude;
         if (Number.isFinite(n)) numbers.push(n);
       }
     }

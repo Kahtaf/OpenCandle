@@ -176,6 +176,35 @@ describe("extractFinancialNumbers", () => {
   it("keeps the sign and magnitude suffix without a sign-losing duplicate", () => {
     expect(extractFinancialNumbers("The raise was -$2.5B")).toEqual([-2.5e9]);
   });
+
+  it("reads a compact currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100-$200")).toEqual([100, 200]);
+  });
+
+  it("reads a spaced currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100 - $200")).toEqual([100, 200]);
+  });
+
+  it("keeps the sign on each endpoint of a compact range", () => {
+    expect(extractFinancialNumbers("-$100-$200")).toEqual([-100, 200]);
+    expect(extractFinancialNumbers("$-100-$200")).toEqual([-100, 200]);
+  });
+
+  it("still reads a unary minus after a word as a loss", () => {
+    expect(extractFinancialNumbers("The loss was -$200")).toEqual([-200]);
+  });
+
+  it("keeps a negative on the next line separate from the preceding currency amount", () => {
+    expect(extractFinancialNumbers("$100\n-$200")).toEqual([100, -200]);
+  });
+
+  it("reads a Unicode en-dash currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100\u2013$200")).toEqual([100, 200]);
+  });
+
+  it("keeps the sign on each endpoint of a suffixed currency range", () => {
+    expect(extractFinancialNumbers("The range is $1.5M-$2M")).toEqual([1.5e6, 2e6]);
+  });
 });
 
 describe("extractNumbersFromObject", () => {
@@ -233,6 +262,28 @@ describe("extractNumbersFromObject", () => {
     expect(nums).toContain(-2.5e9);
     expect(nums).not.toContain(-2.5);
     expect(nums).not.toContain(2.5e9);
+  });
+
+  it("reads a compact currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$100-$200" })).toEqual([100, 200]);
+  });
+
+  it("reads a spaced currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$100 - $200" })).toEqual([100, 200]);
+  });
+
+  it("keeps the pre-existing sign on a bare-number sequence in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "100-200" })).toEqual([100, -200]);
+    expect(extractNumbersFromObject({ formatted: "100 -200" })).toEqual([100, -200]);
+    expect(extractNumbersFromObject({ formatted: "volume 1000 -$200" })).toEqual([1000, -200]);
+  });
+
+  it("keeps a negative on the next line separate from the preceding currency amount", () => {
+    expect(extractNumbersFromObject({ formatted: "$100\n-$200" })).toEqual([100, -200]);
+  });
+
+  it("keeps a unary negative currency string after a word", () => {
+    expect(extractNumbersFromObject({ formatted: "loss of -$200" })).toEqual([-200]);
   });
 });
 
@@ -336,6 +387,56 @@ describe("scoreDataFaithfulness", () => {
     const trace = makeTrace({
       text: "The raise was -$2.5B",
       toolCalls: [{ name: "get_fundamentals", args: {}, result: { change: -2.5e9 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a compact currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $100-$200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, high: 200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a spaced currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $100 - $200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, high: 200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("still grounds a unary negative loss after the range fix", () => {
+    const trace = makeTrace({
+      text: "The loss was -$240",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -240 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("still fails a reversed sign after the range fix", () => {
+    const trace = makeTrace({
+      text: "The value was +$240",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -240 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("240");
+  });
+
+  it("keeps a line-broken negative separate from the preceding currency amount", () => {
+    const trace = makeTrace({
+      text: "$100\n-$200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, change: -200 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
