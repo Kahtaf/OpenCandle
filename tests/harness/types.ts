@@ -103,4 +103,35 @@ export interface AgentTrace {
   retryEvents?: RetryEventTrace[];
   /** OpenCandle extension-authored custom entries, in append order. */
   customEntries?: CustomEntryTrace[];
+  /** Why a workflow failed (bounded, redacted); absent when no workflow failed. */
+  workflowFailure?: WorkflowFailureSummary;
+}
+
+/** One failed output-validation attempt of a workflow step. */
+export interface WorkflowValidationAttempt {
+  step: string;
+  /** 1 for the initial attempt, 2 after the single repair, and so on. */
+  attempt: number;
+  repairAttempted: boolean;
+  /** Redacted, truncated validation error messages. */
+  errors: string[];
+}
+
+/** One failure row from the durable workflow event log. */
+export interface WorkflowEventLogFailure {
+  eventType: string;
+  stepIndex: number;
+  step?: string;
+  error?: string;
+}
+
+/** Bounded, redacted, structured account of why a workflow failed. */
+export interface WorkflowFailureSummary {
+  workflow?: string;
+  terminalStatus?: string;
+  terminalReason?: string;
+  validationAttempts: WorkflowValidationAttempt[];
+  eventLogFailures: WorkflowEventLogFailure[];
+  /** True when attempts, errors, or event-log rows were dropped to stay bounded. */
+  truncated: boolean;
 }

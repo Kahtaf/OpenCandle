@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -327,18 +327,60 @@ describe("portfolio builder real-session evidence guard", () => {
       const modelRuntime = await createModelRuntime(modelServer.baseUrl);
       const sessionManager = SessionManager.create(process.cwd(), harness.sessionDir);
 
-      await expect(
-        runOpenCandleSession({
-          prompt: USER_PROMPT,
-          cwd: process.cwd(),
-          openCandleHome: harness.openCandleHome,
-          modelRuntime,
-          sessionManager,
-          defaultProvider: PROVIDER_ID,
-          defaultModel: MODEL_ID,
-          timeoutMs: 60_000,
-        }),
-      ).rejects.toThrow("workflow_failed");
+      const failure = await runOpenCandleSession({
+        prompt: USER_PROMPT,
+        cwd: process.cwd(),
+        openCandleHome: harness.openCandleHome,
+        modelRuntime,
+        sessionManager,
+        defaultProvider: PROVIDER_ID,
+        defaultModel: MODEL_ID,
+        timeoutMs: 60_000,
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain("workflow_failed");
+
+      // 0. The session-completion diagnostic says WHY the workflow failed: both
+      // validation attempts (initial + the single repair) with their errors, and
+      // the durable event-log step failure read before the harness home is gone.
+      const diagnosticPath = /Diagnostic: (.+)$/.exec((failure as Error).message)?.[1];
+      expect(diagnosticPath).toBeDefined();
+      const diagnostic = JSON.parse(readFileSync(diagnosticPath as string, "utf-8")) as {
+        reason: string;
+        workflowFailure?: {
+          workflow?: string;
+          terminalStatus?: string;
+          validationAttempts: Array<{
+            step: string;
+            attempt: number;
+            repairAttempted: boolean;
+            errors: string[];
+          }>;
+          eventLogFailures: Array<{ eventType: string; step?: string; error?: string }>;
+        };
+      };
+      rmSync(diagnosticPath as string, { force: true });
+      expect(diagnostic.reason).toBe("workflow_failed");
+      expect(diagnostic.workflowFailure?.workflow).toBe("portfolio_builder");
+      expect(diagnostic.workflowFailure?.terminalStatus).toBe("failed");
+      expect(
+        diagnostic.workflowFailure?.validationAttempts.map(
+          ({ step, attempt, repairAttempted }) => ({ step, attempt, repairAttempted }),
+        ),
+      ).toEqual([
+        { step: "fetch_candidates", attempt: 1, repairAttempted: false },
+        { step: "fetch_candidates", attempt: 2, repairAttempted: true },
+      ]);
+      for (const attempt of diagnostic.workflowFailure?.validationAttempts ?? []) {
+        expect(attempt.errors.join(" ")).toMatch(/no usable market price evidence/);
+      }
+      expect(diagnostic.workflowFailure?.eventLogFailures).toContainEqual(
+        expect.objectContaining({ eventType: "step_failed", step: "fetch_candidates" }),
+      );
+      expect(JSON.stringify(diagnostic)).not.toContain(TEST_MODEL_KEY);
 
       const entries = drainOpenCandleCustomEntries(sessionManager);
       const workflow = summarizeWorkflow(entries);
@@ -485,6 +527,9 @@ describe("portfolio builder real-session evidence guard", () => {
       expect(result.agentTrace.toolSequence).toEqual(["get_stock_quote", "analyze_risk"]);
       expect(workflow.validationFailedSteps).toEqual([]);
       expect(workflow.completeStatus).toBe("completed");
+      // A healthy run carries no workflow failure summary.
+      expect(result.agentTrace.workflowFailure).toBeUndefined();
+      expect(result.evalTrace.workflowFailure).toBeUndefined();
       // A healthy run emits no terminal validation-failure notice.
       expect(visibleValidationFailureMessages(sessionManager.getEntries())).toEqual([]);
       expect(

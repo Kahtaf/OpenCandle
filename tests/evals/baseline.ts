@@ -1,7 +1,8 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { redactSensitiveOutput } from "../../src/onboarding/provider-status.js";
+import { summarizeWorkflowFailure } from "../harness/workflow-failure-summary.js";
+import { redactDiagnosticString as redactSharedDiagnosticString } from "./diagnostic-redaction.js";
 import type { EvalCaseResult, EvalReport, EvalTrace } from "./types.js";
 
 const BASELINE_PATH = join(import.meta.dirname, "baseline.json");
@@ -172,22 +173,8 @@ export interface FailureDiagnosticOptions {
   now?: Date;
 }
 
-/**
- * A provider can name its own credential inside a natural-language message,
- * for example "We have detected your API key as <value> and our standard API
- * rate limit is 25 requests per day." The repo's `redactSensitiveOutput` only
- * catches `name=value` assignments, cookie headers, and credential paths, so
- * this bounded, case-insensitive phrase pass redacts just the token after
- * "API key as" and leaves the surrounding diagnostic readable.
- */
-const API_KEY_AS_PHRASE =
-  /\b(api[\s_-]?key\s+as\s+)([A-Za-z0-9_+=./-]+?)(?=[.,;:!?)\]}'"]?(?:\s|$))/gi;
-
 function redactDiagnosticString(value: string): string {
-  return redactSensitiveOutput(value.replace(API_KEY_AS_PHRASE, "$1[redacted]")).slice(
-    0,
-    MAX_DIAGNOSTIC_CHARS,
-  );
+  return redactSharedDiagnosticString(value, MAX_DIAGNOSTIC_CHARS);
 }
 
 /**
@@ -346,6 +333,8 @@ export function saveFailureDiagnostic(
   });
 
   const workflowDiagnostics = summarizeWorkflowDiagnostic(trace);
+  const workflowFailure =
+    trace.workflowFailure ?? summarizeWorkflowFailure({ customEntries: trace.customEntries });
 
   const artifact = {
     timestamp: now.toISOString(),
@@ -374,6 +363,11 @@ export function saveFailureDiagnostic(
       ? {}
       : { workflowTerminalStatus: redactForDiagnostic(workflowDiagnostics.terminalStatus) }),
     workflowValidationFailedSteps: redactForDiagnostic(workflowDiagnostics.validationFailedSteps),
+    // Why the workflow failed (validation errors per attempt, event-log step
+    // failures). Already bounded and redacted; re-redacted as defense in depth.
+    ...(workflowFailure === undefined
+      ? {}
+      : { workflowFailure: redactForDiagnostic(workflowFailure) }),
   };
   const content = `${JSON.stringify(artifact, null, 2)}\n`;
 

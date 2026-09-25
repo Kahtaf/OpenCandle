@@ -10,6 +10,7 @@ import {
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
+import { getStateDbPath } from "../../src/infra/opencandle-paths.js";
 import type {
   AnswerContractId,
   CapabilityGapId,
@@ -39,6 +40,7 @@ import {
 import { classifyTerminalError } from "./terminal-outcome.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
+import { readWorkflowFailureEvents, summarizeWorkflowFailure } from "./workflow-failure-summary.js";
 
 const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
   "options_screener",
@@ -142,13 +144,28 @@ export async function runOpenCandleSession(
       );
       customEntries.push(...drained.entries);
       customEntryOffset = drained.nextEntryOffset;
-      assertSessionCompleted({ ...collector.getTrace(), customEntries: drained.entries });
+      // The durable workflow event log lives in the harness home, which is
+      // removed in `finally`; summarize why a workflow failed while it exists.
+      const promptWorkflowFailure = summarizeWorkflowFailure({
+        customEntries: drained.entries,
+        eventLog: readWorkflowFailureEvents(getStateDbPath()),
+      });
+      assertSessionCompleted({
+        ...collector.getTrace(),
+        customEntries: drained.entries,
+        ...(promptWorkflowFailure === undefined ? {} : { workflowFailure: promptWorkflowFailure }),
+      });
     }
 
+    const workflowFailure = summarizeWorkflowFailure({
+      customEntries,
+      eventLog: readWorkflowFailureEvents(getStateDbPath()),
+    });
     const agentTrace: AgentTrace = {
       ...collector.getTrace(),
       ...(tagsPromptIndex ? { prompts } : {}),
       customEntries,
+      ...(workflowFailure === undefined ? {} : { workflowFailure }),
     };
     return {
       agentTrace,
@@ -235,6 +252,9 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
       ? {}
       : { terminalOutcome: agentTrace.terminalOutcome }),
     customEntries: agentTrace.customEntries,
+    ...(agentTrace.workflowFailure === undefined
+      ? {}
+      : { workflowFailure: agentTrace.workflowFailure }),
   };
 }
 

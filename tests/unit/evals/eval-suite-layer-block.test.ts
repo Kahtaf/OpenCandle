@@ -365,6 +365,81 @@ describe("saveFailureDiagnostic", () => {
     expect(artifact.workflowValidationFailedSteps).toEqual(["fetch_candidates"]);
   });
 
+  it("records the workflow failure reason: validation errors per attempt, bounded and redacted", () => {
+    const dir = makeTempDir();
+    const credential = "sk-live-5a4b3c2d1e0f";
+    const trace = makeTrace({
+      workflowFailure: {
+        workflow: "portfolio_builder",
+        terminalStatus: "failed",
+        validationAttempts: [
+          {
+            step: "fetch_candidates",
+            attempt: 2,
+            repairAttempted: true,
+            errors: [`no usable market price evidence (api key as ${credential})`],
+          },
+        ],
+        eventLogFailures: [],
+        truncated: false,
+      },
+    });
+
+    const path = saveFailureDiagnostic(
+      partialLayerFailure("portfolio-income-conservative"),
+      trace,
+      { dir },
+    );
+
+    const raw = readFileSync(path as string, "utf-8");
+    expect(raw).not.toContain(credential);
+    const artifact = JSON.parse(raw) as {
+      workflowFailure?: { validationAttempts: Array<{ errors: string[]; attempt: number }> };
+    };
+    expect(artifact.workflowFailure?.validationAttempts[0]?.attempt).toBe(2);
+    expect(artifact.workflowFailure?.validationAttempts[0]?.errors[0]).toContain(
+      "no usable market price evidence",
+    );
+  });
+
+  it("derives the workflow failure reason from session entries when the trace has no summary", () => {
+    const dir = makeTempDir();
+    const trace = makeTrace({
+      customEntries: [
+        {
+          customType: "opencandle-workflow-event",
+          timestamp: "2026-09-25T00:00:02.000Z",
+          data: {
+            eventType: "output_validation_failed",
+            stepType: "fetch_candidates",
+            errors: ["no usable market price evidence"],
+            repairAttempted: true,
+          },
+        },
+        {
+          customType: "opencandle-workflow-complete",
+          timestamp: "2026-09-25T00:00:03.000Z",
+          data: { workflow: "portfolio_builder", status: "failed" },
+        },
+      ],
+    });
+
+    const path = saveFailureDiagnostic(partialLayerFailure("portfolio"), trace, { dir });
+
+    const artifact = JSON.parse(readFileSync(path as string, "utf-8")) as {
+      workflowFailure?: { validationAttempts: Array<{ errors: string[] }> };
+    };
+    expect(artifact.workflowFailure?.validationAttempts[0]?.errors).toEqual([
+      "no usable market price evidence",
+    ]);
+  });
+
+  it("omits the workflow failure summary for a trace with no failed workflow", () => {
+    const dir = makeTempDir();
+    const path = saveFailureDiagnostic(partialLayerFailure("quote-accuracy"), makeTrace(), { dir });
+    expect(readFileSync(path as string, "utf-8")).not.toContain("workflowFailure");
+  });
+
   it("uses a safe, unique filename that cannot escape the diagnostics directory or overwrite", () => {
     const dir = makeTempDir();
     const now = new Date("2026-09-25T02:26:47.876Z");
