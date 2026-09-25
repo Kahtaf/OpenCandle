@@ -244,13 +244,27 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("down 2.47% up from yesterday")).toEqual([-2.47]);
   });
 
-  it("leaves trailing direction prose unsigned", () => {
+  it("leaves trailing transition verbs and up/down prose unsigned", () => {
     expect(extractFinancialNumbers("4% falling to 3%")).toEqual([4, 3]);
     expect(extractFinancialNumbers("4% down from 5%")).toEqual([4, 5]);
     expect(extractFinancialNumbers("2.47% down from yesterday")).toEqual([2.47]);
     expect(extractFinancialNumbers("2.47% up from 1.23%")).toEqual([2.47, 1.23]);
-    expect(extractFinancialNumbers("a 2% decrease")).toEqual([2]);
-    expect(extractFinancialNumbers("2% decrease")).toEqual([2]);
+    expect(extractFinancialNumbers("2.47% dropped yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("2.47% declining")).toEqual([2.47]);
+  });
+
+  it("signs a trailing change noun directly after the percent", () => {
+    expect(extractFinancialNumbers("The stock had a 2.47% decrease")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% decline")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% drop")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% fall")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% loss")).toEqual([-2.47]);
+  });
+
+  it("keeps a trailing positive change noun positive", () => {
+    expect(extractFinancialNumbers("The stock had a 2.47% increase")).toEqual([2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% gain")).toEqual([2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% rise")).toEqual([2.47]);
   });
 
   it("lets an explicit sign win over a contradictory direction word", () => {
@@ -597,6 +611,36 @@ describe("scoreDataFaithfulness", () => {
     const trace = makeTrace({
       text: "The yield was 4% falling to 3%",
       toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 3 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a trailing change noun against matching negative evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% decrease",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a trailing change noun against opposite-sign evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% decrease",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("grounds a trailing positive change noun against positive evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% gain",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);

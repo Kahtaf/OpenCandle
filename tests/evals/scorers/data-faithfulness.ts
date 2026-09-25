@@ -65,9 +65,10 @@ function parseSignedCurrency(
 
 /**
  * Unambiguous direction wording that may re-sign an unsigned percent magnitude.
- * Only a word immediately preceding the number is consulted; trailing prose is
- * deliberately not normalized, so "4% down from 5%" stays positive and an
- * unrelated phrase such as "downside risk" cannot re-sign a number.
+ * A preceding direction word always wins; trailing direction is limited to
+ * change NOUNS directly after the number ("a 2.47% decrease"). Trailing
+ * transition verbs/participles and "up"/"down" are deliberately not
+ * normalized, so "4% falling to 3%" and "4% down from 5%" stay positive.
  */
 const DIRECTION_CONNECTOR = "(?:of|by|about|around|roughly|approximately|nearly)";
 const NEGATIVE_DIRECTION_WORDS =
@@ -82,20 +83,29 @@ const POSITIVE_DIRECTION_BEFORE = new RegExp(
   `\\b(?:${POSITIVE_DIRECTION_WORDS})\\b(?:\\s+${DIRECTION_CONNECTOR}){0,2}\\s*$`,
   "i",
 );
+// Whole-word noun forms only: this excludes inflections such as "falling",
+// "dropped", and "declining", and never includes "up"/"down".
+const NEGATIVE_DIRECTION_AFTER = /^\s*(?:decrease|decline|drop|fall|loss)\b/i;
+const POSITIVE_DIRECTION_AFTER = /^\s*(?:increase|gain|rise)\b/i;
 
-/** Bounded character window immediately before a percent magnitude. */
+/** Bounded character window on each side of a percent magnitude. */
 const DIRECTION_CONTEXT_BEFORE = 32;
+const DIRECTION_CONTEXT_AFTER = 16;
 
 /**
- * Resolve an unsigned percent's sign from a directly preceding direction word
- * only. Callers apply this only when the percent has no explicit sign, so an
- * explicit sign is never overridden and a contradictory claim cannot be
- * silently corrected.
+ * Resolve an unsigned percent's sign from a directly preceding direction word,
+ * falling back to a directly trailing change noun. Callers apply this only when
+ * the percent has no explicit sign, so an explicit sign is never overridden and
+ * a contradictory claim cannot be silently corrected.
  */
-function directionForPercent(text: string, start: number): "+" | "-" | undefined {
+function directionForPercent(text: string, start: number, end: number): "+" | "-" | undefined {
   const before = text.slice(Math.max(0, start - DIRECTION_CONTEXT_BEFORE), start);
+  const after = text.slice(end, end + DIRECTION_CONTEXT_AFTER);
+  // A directly preceding direction is unambiguous and wins over trailing nouns.
   if (NEGATIVE_DIRECTION_BEFORE.test(before)) return "-";
   if (POSITIVE_DIRECTION_BEFORE.test(before)) return "+";
+  if (NEGATIVE_DIRECTION_AFTER.test(after)) return "-";
+  if (POSITIVE_DIRECTION_AFTER.test(after)) return "+";
   return undefined;
 }
 
@@ -114,12 +124,12 @@ export function extractFinancialNumbers(text: string): number[] {
   }
 
   // Percentages: 28.5%, -0.5%, +12.3%, plus unsigned magnitudes whose direction
-  // is stated immediately before the number ("a decrease of 0.33%"). An explicit
-  // sign wins, and trailing direction prose is deliberately not normalized.
+  // is stated immediately before the number ("a decrease of 0.33%") or as a
+  // trailing change noun ("a 2.47% decrease"). An explicit sign wins.
   for (const m of text.matchAll(/([+-])?(\d+(?:\.\d+)?)%/g)) {
     const magnitude = parseFloat(m[2]);
     const start = m.index ?? 0;
-    const sign = m[1] ?? directionForPercent(text, start);
+    const sign = m[1] ?? directionForPercent(text, start, start + m[0].length);
     numbers.push(sign === "-" ? -magnitude : magnitude);
   }
 
