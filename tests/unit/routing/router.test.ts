@@ -2780,6 +2780,19 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a model basis corroborated by a recognized held position", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I have 100 shares of AAPL at $150. Suggest covered calls.",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.heldSymbol).toBe("AAPL");
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("keeps a basis established by an earlier user turn for the same symbol", async () => {
     const result = await route(
       {

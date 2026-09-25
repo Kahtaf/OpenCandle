@@ -342,6 +342,7 @@ export function postProcessRouterOutput(
         text,
         output.entities.costBasis,
         extracted.costBasis,
+        extracted.heldSymbol,
         inputContext,
         next.entities.symbols,
       ),
@@ -1397,6 +1398,7 @@ function resolveCostBasis(
   text: string,
   modelCostBasis: number | undefined,
   extractedCostBasis: number | undefined,
+  heldSymbol: string | undefined,
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   symbols: string[],
 ): number | undefined {
@@ -1404,7 +1406,9 @@ function resolveCostBasis(
   if (extractedCostBasis !== undefined && amountsClose(extractedCostBasis, modelCostBasis)) {
     return modelCostBasis;
   }
-  if (hasCostBasisContext(text, modelCostBasis, symbols, inputContext)) return modelCostBasis;
+  if (hasCostBasisContext(text, modelCostBasis, heldSymbol, symbols, inputContext)) {
+    return modelCostBasis;
+  }
   return extractedCostBasis;
 }
 
@@ -1414,15 +1418,16 @@ const COST_BASIS_CONTEXT =
 function hasCostBasisContext(
   text: string,
   value: number,
+  heldSymbol: string | undefined,
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): boolean {
-  if (statesCostBasis(text, value)) return true;
+  if (statesCostBasis(text, value, heldSymbol)) return true;
   if (
     (inputContext?.priorTurns ?? []).some(
       (turn) =>
         turn.role === "user" &&
-        statesCostBasis(turn.text, value) &&
+        statesCostBasis(turn.text, value, extractEntities(turn.text).heldSymbol) &&
         extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol)),
     )
   ) {
@@ -1434,8 +1439,11 @@ function hasCostBasisContext(
   });
 }
 
-function statesCostBasis(text: string, value: number): boolean {
-  if (!COST_BASIS_CONTEXT.test(text)) return false;
+// A recognized held position (the existing heldSymbol parser) is a role cue in
+// its own right, so ownership phrasing the wording regex does not enumerate
+// ("I have 100 shares of AAPL at $150") still corroborates the amount.
+function statesCostBasis(text: string, value: number, heldSymbol?: string): boolean {
+  if (heldSymbol === undefined && !COST_BASIS_CONTEXT.test(text)) return false;
   for (const match of text.matchAll(
     /(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)/g,
   )) {
