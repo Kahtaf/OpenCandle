@@ -1408,13 +1408,15 @@ function resolveSupportedCostBasis(
   return undefined;
 }
 
-const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
+const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*(?<![\d,])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)`;
 const COST_BASIS_CUE = String.raw`(?:cost\s*basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|basis)`;
 // Whole-position basis phrasing mirrors the deterministic extractor: the cue
 // and amount must be adjacent (only a linking word between), so an unrelated
 // later number cannot be claimed as basis.
 const COST_BASIS_CONNECTOR = String.raw`\s*(?:is|was|at|of|:)?\s*`;
-const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d+\s*(?:shares?|contracts?|units?))*`;
+// Acquisition phrasing may carry a grouped or ungrouped share/contract
+// quantity; consuming it here keeps the quantity from being read as the price.
+const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d{1,3}(?:,\d{3})+\s*(?:shares?|contracts?|units?)|\d+\s*(?:shares?|contracts?|units?))*`;
 // Wording that marks the matched cue+amount span as hypothetical, targeted, or
 // negated. It is checked only against the cue's own immediate prefix and the
 // cue..amount span, never the whole clause, so a trailing request ("and would
@@ -1478,9 +1480,16 @@ function hasUserCostBasisSupport(text: string, value: number): boolean {
   );
 }
 
-// The last explicit basis asserted in the turn.
+// The last explicit basis asserted in the turn, but not when more than one
+// distinct symbol is mentioned: nothing in the remaining evidence attributes a
+// particular basis value to the routed holding, so the deterministic override
+// declines and the candidate/saved path decides. The same rule gates the
+// options saved-position override.
 function currentExplicitBasis(text: string): number | undefined {
-  return assertedBasisMatches(text, EXPLICIT_BASIS_PATTERNS).at(-1)?.value;
+  const asserted = assertedBasisMatches(text, EXPLICIT_BASIS_PATTERNS);
+  if (asserted.length === 0) return undefined;
+  if (new Set(extractEntities(text).symbols).size > 1) return undefined;
+  return asserted.at(-1)?.value;
 }
 
 // A cue+amount match is unasserted only when its own immediate prefix or span
