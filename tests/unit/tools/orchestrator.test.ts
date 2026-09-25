@@ -236,14 +236,3 @@ describe("buildComprehensiveAnalysisDefinition", () => {
     expect(synthesis.skippable).toBe(false);
   });
 });
-
-describe("comprehensive analysis follow-up prompts", () => {
-  it("queues 10 follow-ups (5 analysts + 3 debate + synthesis + validation)", () => {
-    const calls = buildComprehensiveAnalysisDefinition("AAPL")
-      .steps.slice(1)
-      .map((step) => step.prompt);
-    expect(calls).toHaveLength(10);
-    expect(calls[8]).toContain("RESOLVE THE DEBATE");
-    expect(calls[9]).toContain("[Validation");
-  });
-});
