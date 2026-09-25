@@ -824,6 +824,21 @@ describe("direction-worded percent symmetry", () => {
     expect(result.message).toContain("2.47");
   });
 
+  it("signs a Unicode-minus percent in answer text like tool-result text", () => {
+    for (const minus of ["−", "﹣", "－"]) {
+      expect(extractFinancialNumbers(`AAPL changed ${minus}2.47% today`)).toEqual([-2.47]);
+      expect(extractNumbersFromObject(`${minus}2.47%`)).toEqual([-2.47]);
+    }
+  });
+
+  it("grounds a Unicode-minus percent answer against identical tool text", () => {
+    const trace = makeTrace({
+      text: "AAPL changed −2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: "−2.47%" } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(true);
+  });
+
   it("fails a rose answer against signed numeric tool evidence", () => {
     const trace = makeTrace({
       text: "AAPL rose 2.47% today",

@@ -178,6 +178,9 @@ const ABBREVIATED_LARGE_NUMBER_PATTERN = new RegExp(
   "g",
 );
 
+/** Percent in response text: optional sign (1) and unsigned digits (2). */
+const PERCENT_PATTERN = new RegExp(`(${SIGN_CHAR_CLASS})?(\\d+(?:\\.\\d+)?)%`, "g");
+
 /**
  * Financial metric patterns: "P/E of 28.5", "ratio of 1.2", "yield of 3.5".
  * An optional magnitude is consumed with the number so a metric written as
@@ -206,12 +209,13 @@ export function extractFinancialNumbers(text: string): number[] {
 
   // Percentages: 28.5%, -0.5%, +12.3%, plus unsigned magnitudes whose direction
   // is stated immediately before the number ("a decrease of 0.33%") or as a
-  // trailing change noun ("a 2.47% decrease"). An explicit sign wins.
-  for (const m of text.matchAll(/([+-])?(\d+(?:\.\d+)?)%/g)) {
+  // trailing change noun ("a 2.47% decrease"). An explicit sign wins, using
+  // the same minus-sign grammar as tool-result strings.
+  for (const m of text.matchAll(PERCENT_PATTERN)) {
     const magnitude = parseFloat(m[2]);
     const start = m.index ?? 0;
     const sign = m[1] ?? directionForPercent(text, start, start + m[0].length);
-    numbers.push(sign === "-" ? -magnitude : magnitude);
+    numbers.push(MINUS_SIGN_CHARS.has(sign ?? "") ? -magnitude : magnitude);
   }
 
   // Multipliers: 15.3x
