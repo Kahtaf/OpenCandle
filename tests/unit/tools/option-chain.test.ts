@@ -155,7 +155,7 @@ describe("get_option_chain tool", () => {
   });
 
   it("warns that all-zero bid/ask quotes are stale before options market open", async () => {
-    // Intentional after-hours case: pin the pre-market clock explicitly so the
+    // Intentional pre-market case: pin the pre-market clock explicitly so the
     // warning path is exercised regardless of when the suite runs.
     vi.setSystemTime(new Date("2026-05-20T12:26:00Z")); // 8:26 AM EDT
     rateLimiter.configure("yahoo", 5, 5);

@@ -188,7 +188,22 @@ describe("yahoo-finance options provider", () => {
   });
 
   describe("getOptionsChain", () => {
-    function mockCrumbAndOptions() {
+    // Stable Wednesday 10:00 AM ET — a weekday inside the NY regular options
+    // session. Freezing "now" here keeps quote-status branches independent of
+    // the wall clock; tests below override the time for other sessions.
+    const REGULAR_SESSION = new Date("2026-05-20T14:00:00.000Z");
+    beforeEach(() => {
+      // Fake only the clock; keep timers real so the rate limiter and fetch
+      // scheduling behave like production.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(REGULAR_SESSION);
+      // Re-anchor the shared bucket to the frozen clock; otherwise its
+      // module-load "last refill" stays on the real wall clock and a negative
+      // elapsed time makes acquire() wait for an absurd duration.
+      rateLimiter.configure("yahoo", 5, 5);
+    });
+
+    function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {
           return Promise.resolve({
@@ -206,9 +221,21 @@ describe("yahoo-finance options provider", () => {
         // Options endpoint
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(optionsFixture),
+          json: () => Promise.resolve(fixture),
         });
       });
+    }
+
+    function zeroBidAskFixture(fixture: typeof optionsFixture): typeof optionsFixture {
+      for (const contract of fixture.optionChain.result[0].options[0].calls) {
+        contract.bid = 0;
+        contract.ask = 0;
+      }
+      for (const contract of fixture.optionChain.result[0].options[0].puts) {
+        contract.bid = 0;
+        contract.ask = 0;
+      }
+      return fixture;
     }
 
     it("returns OptionsChain with contracts and Greeks", async () => {
@@ -259,46 +286,107 @@ describe("yahoo-finance options provider", () => {
       expect(typeof chain.putCallRatio).toBe("number");
     });
 
-    it("labels all-zero bid/ask outside regular options hours as closed-market stale quotes", async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-05-20T12:26:00Z")); // 8:26 AM EDT
+    type SessionCase = {
+      name: string;
+      utc: string;
+      allZeroBidAsk: boolean;
+      marketSession: "pre_market" | "regular" | "after_hours" | "closed";
+      bidAskState:
+        | "live_quotes"
+        | "closed_market_or_stale_quotes"
+        | "live_zero_bid_ask"
+        | "mixed_or_unknown";
+      warningContains?: string;
+      expectWarning: boolean;
+    };
+
+    const SESSION_CASES: SessionCase[] = [
+      {
+        name: "pre-market all-zero quotes are closed-market stale",
+        utc: "2026-05-20T12:26:00.000Z", // 8:26 AM EDT
+        allZeroBidAsk: true,
+        marketSession: "pre_market",
+        bidAskState: "closed_market_or_stale_quotes",
+        warningContains: "before regular options trading",
+        expectWarning: true,
+      },
+      {
+        name: "after-hours all-zero quotes are closed-market stale",
+        utc: "2026-05-20T20:26:00.000Z", // 4:26 PM EDT
+        allZeroBidAsk: true,
+        marketSession: "after_hours",
+        bidAskState: "closed_market_or_stale_quotes",
+        warningContains: "outside market hours",
+        expectWarning: true,
+      },
+      {
+        name: "regular-session all-zero quotes are live illiquidity, not stale",
+        utc: "2026-05-20T14:00:00.000Z", // 10:00 AM EDT
+        allZeroBidAsk: true,
+        marketSession: "regular",
+        bidAskState: "live_zero_bid_ask",
+        warningContains: "during regular options trading hours",
+        expectWarning: true,
+      },
+      {
+        name: "regular-session live quotes carry no stale warning",
+        utc: "2026-05-20T14:00:00.000Z", // 10:00 AM EDT
+        allZeroBidAsk: false,
+        marketSession: "regular",
+        bidAskState: "live_quotes",
+        expectWarning: false,
+      },
+      {
+        name: "after-hours live quotes warn executable prices may be stale",
+        utc: "2026-05-20T20:26:00.000Z", // 4:26 PM EDT
+        allZeroBidAsk: false,
+        marketSession: "after_hours",
+        bidAskState: "live_quotes",
+        warningContains: "stale outside regular options trading hours",
+        expectWarning: true,
+      },
+      {
+        name: "weekend quotes report the closed session",
+        utc: "2026-05-23T14:00:00.000Z", // Saturday 10:00 AM EDT
+        allZeroBidAsk: true,
+        marketSession: "closed",
+        bidAskState: "closed_market_or_stale_quotes",
+        warningContains: "outside market hours",
+        expectWarning: true,
+      },
+    ];
+
+    it.each(SESSION_CASES)("$name", async (c) => {
+      vi.setSystemTime(new Date(c.utc));
       rateLimiter.configure("yahoo", 5, 5);
       const fixture = structuredClone(optionsFixture);
-      for (const contract of fixture.optionChain.result[0].options[0].calls) {
-        contract.bid = 0;
-        contract.ask = 0;
-      }
-      for (const contract of fixture.optionChain.result[0].options[0].puts) {
-        contract.bid = 0;
-        contract.ask = 0;
-      }
-      mockCrumbAndOptions();
-      (fetch as any).mockImplementation((url: string) => {
-        if (typeof url === "string" && url.includes("fc.yahoo.com")) {
-          return Promise.resolve({
-            ok: true,
-            headers: new Headers({ "set-cookie": "A3=d=testcookie; Path=/" }),
-            text: () => Promise.resolve(""),
-          });
-        }
-        if (typeof url === "string" && url.includes("getcrumb")) {
-          return Promise.resolve({
-            ok: true,
-            text: () => Promise.resolve("testCrumb"),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(fixture),
-        });
-      });
+      if (c.allZeroBidAsk) zeroBidAskFixture(fixture);
+      mockCrumbAndOptions(fixture);
 
       const chain = await getOptionsChain("AAPL");
 
-      expect(chain.quoteStatus.marketSession).toBe("pre_market");
-      expect(chain.quoteStatus.bidAskState).toBe("closed_market_or_stale_quotes");
-      expect(chain.quoteStatus.warning).toContain("before regular options trading");
-      vi.useRealTimers();
+      expect(chain.quoteStatus.marketSession).toBe(c.marketSession);
+      expect(chain.quoteStatus.bidAskState).toBe(c.bidAskState);
+      if (c.expectWarning) {
+        expect(chain.quoteStatus.warning).toContain(c.warningContains);
+      } else {
+        expect(chain.quoteStatus.warning).toBeUndefined();
+      }
+    });
+
+    it.each([
+      { et: "09:29", utc: "2026-05-20T13:29:00.000Z", expected: "pre_market" },
+      { et: "09:30", utc: "2026-05-20T13:30:00.000Z", expected: "regular" },
+      { et: "15:59", utc: "2026-05-20T19:59:00.000Z", expected: "regular" },
+      { et: "16:00", utc: "2026-05-20T20:00:00.000Z", expected: "after_hours" },
+    ])("classifies $et ET as $expected", async ({ utc, expected }) => {
+      vi.setSystemTime(new Date(utc));
+      rateLimiter.configure("yahoo", 5, 5);
+      mockCrumbAndOptions();
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(chain.quoteStatus.marketSession).toBe(expected);
     });
 
     it("caches options chain", async () => {
