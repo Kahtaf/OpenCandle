@@ -263,6 +263,37 @@ describe("doctor report", () => {
     });
   });
 
+  it("reports the OS-home default when OPENCANDLE_HOME is absent", async () => {
+    // OPENCANDLE_HOME empty + OS home redirected to a temp root proves the
+    // default ~/.opencandle path is chosen without ever touching the real home.
+    const osHomeRoot = mkdtempSync(join(tmpdir(), "opencandle-doctor-os-home-"));
+    tempHomes.push(osHomeRoot);
+    vi.stubEnv("OPENCANDLE_HOME", "");
+    vi.stubEnv("HOME", osHomeRoot);
+    vi.stubEnv("USERPROFILE", osHomeRoot);
+    vi.stubEnv("LSE_API_KEY", "");
+    resetConfigCache();
+
+    const expectedHome = join(osHomeRoot, ".opencandle");
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      now: new Date("2026-06-22T12:00:00.000Z"),
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(report.metadata.opencandleHome).toBe(expectedHome);
+    expect(report.metadata.opencandleHomeSource).toBe("default");
+
+    const homeCheck = report.sections
+      .flatMap((section) => section.checks)
+      .find((candidate) => candidate.id === "state.opencandle_home");
+    expect(homeCheck).toMatchObject({
+      summary: `${expectedHome} (default)`,
+      metadata: { path: expectedHome, source: "default" },
+    });
+  });
+
   it("runs explicit session probes and keeps optional session failures non-blocking", async () => {
     useTempOpenCandleHome();
     const installed = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
