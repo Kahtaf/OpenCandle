@@ -2808,6 +2808,50 @@ describe("router cost-basis provenance", () => {
     expect(result.entities.costBasis).toBeUndefined();
   });
 
+  it("preserves a past-passive acquisition statement", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "My AAPL shares were purchased at $220. What covered call should I sell?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "past passive acquisition",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(220);
+  });
+
+  it("preserves an acquisition followed by a request clause", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AAPL at $220 and would like covered calls.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "acquisition plus request",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(220);
+  });
+
   it("does not emit a target entry price as cost basis", async () => {
     // The deterministic extractor matches "entry price ... $220"; postprocess
     // must still reject it as an unasserted target even when the model omits it.
@@ -3096,7 +3140,7 @@ describe("router cost-basis provenance", () => {
     expect(result.entities.costBasis).toBe(400);
   });
 
-  it("prefers a current-turn correction over the saved position basis", async () => {
+  it("keeps the saved position basis when the turn only adds a lot purchase", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
@@ -3111,7 +3155,30 @@ describe("router cost-basis provenance", () => {
           slots: {},
           preference_updates: [],
           missing_required: [],
-          reasoning: "corrected basis",
+          reasoning: "additional lot price is not whole-position basis",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(52);
+  });
+
+  it("prefers an explicit current-position basis correction over the saved position", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Should I sell covered calls against my AMD position? Actually, my cost basis is $420.",
+        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AMD"], heldSymbol: "AMD", costBasis: 420 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "explicit basis correction",
         }),
       ),
     );

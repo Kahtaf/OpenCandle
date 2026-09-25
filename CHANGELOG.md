@@ -12,7 +12,7 @@
 
 ### Fixed
 
-- The router now reports a stock's cost basis only when the current turn asserts it, a same-ticker saved position carries it, or the most recent prior user turn for that ticker establishes it; hypothetical, negated, target, budget, or quoted prices no longer become your basis.
+- The router now keeps a stock's saved cost basis unless the current turn explicitly states a new whole-position basis, and it no longer reports a cost basis from a hypothetical, negated, target, budget, or quoted price.
 - A GUI chat whose writer-lock acquisition fails during setup no longer leaves its session stuck as busy, so the next prompt on that session runs once lock storage recovers.
 - `npm run eval -- release` now fails on skipped or inconsistent required cases instead of reporting a false green.
 - The local GUI's mobile session drawer now returns focus to the control that opened it after Escape, a backdrop click, or close.

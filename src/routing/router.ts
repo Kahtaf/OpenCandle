@@ -602,6 +602,14 @@ export function postProcessRouterOutput(
       extracted.heldSymbol,
     );
     const optionStrategy = extracted.optionStrategy ?? next.entities.optionStrategy;
+    // An explicit position-basis correction in the user's own words outranks the
+    // saved lot basis. An ordinary lot purchase does not: without a quantity it
+    // is a lot price, not the whole-position basis, so the saved position stays
+    // authoritative.
+    const explicitBasisCorrection =
+      extracted.costBasis !== undefined && hasUserCostBasisSupport(text, extracted.costBasis)
+        ? extracted.costBasis
+        : undefined;
     next = {
       ...next,
       entities: {
@@ -614,7 +622,7 @@ export function postProcessRouterOutput(
           reorderedSymbols.length > 1
             ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
             : undefined,
-        costBasis: next.entities.costBasis ?? savedPosition?.costBasis,
+        costBasis: explicitBasisCorrection ?? savedPosition?.costBasis ?? next.entities.costBasis,
         shareQuantity:
           extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
@@ -1392,12 +1400,12 @@ function resolveSupportedCostBasis(
 ): number | undefined {
   // Deterministic extraction goes through the same provenance check: it can
   // match a target or counterfactual phrase the model then echoes.
-  if (extracted.costBasis !== undefined && claimsUserCostBasis(text, extracted.costBasis)) {
+  if (extracted.costBasis !== undefined && hasUserCostBasisSupport(text, extracted.costBasis)) {
     return extracted.costBasis;
   }
   const candidate = output.entities.costBasis;
   if (candidate === undefined) return undefined;
-  if (claimsUserCostBasis(text, candidate)) return candidate;
+  if (hasUserCostBasisSupport(text, candidate)) return candidate;
   if (matchesSavedPositionCostBasis(inputContext?.portfolioPositions, symbols, candidate)) {
     return candidate;
   }
@@ -1410,11 +1418,13 @@ const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\
 // digits so a cue cannot reach across clauses or past an unrelated amount.
 const COST_BASIS_GAP = String.raw`[^.;?!,$\d]{0,40}`;
 const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d+\s*(?:shares?|contracts?|units?))*`;
-// Wording that turns an otherwise explicit basis/acquisition phrase into a
-// hypothetical, target, or negated statement. Deliberately conservative: an
-// unasserted basis is dropped rather than reported as the user's own.
+// Wording that marks the matched cue+amount span as hypothetical, targeted, or
+// negated. It is checked only against the cue's own immediate prefix and the
+// cue..amount span, never the whole clause, so a trailing request ("and would
+// like covered calls") or a past passive ("shares were purchased") remains a
+// real statement.
 const COST_BASIS_UNASSERTED =
-  /\b(?:what\s+if|if\s+(?:i|we|my|the|it)\b|suppose|supposing|imagine|hypothetical|let'?s\s+say|say\s+i|assuming|assume|maybe|perhaps|might|could|would|were|target(?:ing|ed|s)?|plan(?:ning|ned|s)?|intend(?:ing|ed|s)?|hop(?:e|es|ing|ed)|looking\s+to|considering|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|wouldn'?t|couldn'?t|never|not|no\s+longer)\b/i;
+  /\b(?:what\s+if|if\b|suppose|supposing|imagine|hypothetical|let'?s\s+say|say\s+i|assuming|assume|maybe|perhaps|might|could|would|target(?:ing|ed|s)?|plan(?:ning|ned|s)?|intend(?:ing|ed|s)?|hop(?:e|es|ing|ed)|looking\s+to|considering|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|wouldn'?t|couldn'?t|never|not(?!\s+only)|no\s+longer)\b/i;
 
 function hasUserCostBasisSupport(text: string, value: number): boolean {
   const patterns = [
@@ -1440,34 +1450,24 @@ function hasUserCostBasisSupport(text: string, value: number): boolean {
     const match = pattern.exec(text);
     if (!match) return false;
     const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    return amountsClose(parsed, value);
+    return amountsClose(parsed, value) && cueIsAsserted(text, match.index, match[0]);
   });
 }
 
-// The user's own assertion, not a hypothetical, target, or negated phrase.
-function claimsUserCostBasis(text: string, value: number): boolean {
-  return hasUserCostBasisSupport(text, value) && !hasUnassertedCostBasisClause(text, value);
-}
-
-function hasUnassertedCostBasisClause(text: string, value: number): boolean {
-  return (
-    text
-      // A period/comma is a clause boundary unless it sits between two digits
-      // (decimal point or thousands separator). So a sentence-final period after
-      // a decimal amount still splits, while the decimal and thousands
-      // separators themselves keep the amount intact.
-      .split(/[.,](?!\d)|(?<!\d)[.,]|[;?!\n]/)
-      .filter((clause) => clauseContainsAmount(clause, value))
-      .some((clause) => COST_BASIS_UNASSERTED.test(clause))
+// A cue+amount match is unasserted only when its own immediate prefix or span
+// carries a hypothetical/negated marker. The prefix is capped at the current
+// clause segment so a marker in an earlier clause cannot leak in.
+function cueIsAsserted(text: string, cueIndex: number, matchText: string): boolean {
+  const bounded = text.slice(Math.max(0, cueIndex - 48), cueIndex);
+  const boundary = Math.max(
+    bounded.lastIndexOf("."),
+    bounded.lastIndexOf(","),
+    bounded.lastIndexOf(";"),
+    bounded.lastIndexOf("?"),
+    bounded.lastIndexOf("!"),
   );
-}
-
-function clauseContainsAmount(clause: string, value: number): boolean {
-  for (const match of clause.matchAll(/(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)/g)) {
-    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (amountsClose(parsed, value)) return true;
-  }
-  return false;
+  const prefix = boundary >= 0 ? bounded.slice(boundary + 1) : bounded;
+  return !COST_BASIS_UNASSERTED.test(`${prefix} ${matchText}`);
 }
 
 function amountsClose(left: number, right: number): boolean {
@@ -1497,7 +1497,7 @@ function readEstablishedCostBasis(text: string): number | undefined {
   const asserted: number[] = [];
   for (const match of text.matchAll(/(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)/g)) {
     const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (claimsUserCostBasis(text, parsed)) asserted.push(parsed);
+    if (hasUserCostBasisSupport(text, parsed)) asserted.push(parsed);
   }
   return asserted.at(-1);
 }
