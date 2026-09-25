@@ -141,6 +141,9 @@ export function canonicalReleaseEnv(now: Date = new Date()): Record<string, stri
     OPENCANDLE_COMPETITIVE_NO_CACHE: "1",
     OPENCANDLE_COMPETITIVE_CACHE: "",
     OPENCANDLE_COMPETITIVE_REUSE_CACHE: "",
+    // Judge-only override off: release reports use the default judge.
+    OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER: "",
+    OPENCANDLE_COMPETITIVE_JUDGE_MODEL: "",
     // Nullish-defaulted path; keep the real default so it still resolves.
     PROMPT_POLICY_MANIFEST: "docs/internal/prompt-to-policy-migration-manifest.json",
     OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS: "90000",

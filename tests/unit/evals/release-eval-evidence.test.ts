@@ -190,6 +190,10 @@ describe("canonical release environment", () => {
     expect(pinned.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS).toBe("90000");
     expect(pinned.OPENCANDLE_COMPETITIVE_AGENT_CWD).not.toBe("");
     expect(pinned.OPENCANDLE_COMPETITIVE_NO_CACHE).toBe("1");
+    // Release runs use the default judge; a local judge-only override from
+    // .env must not silently change the release report's grader.
+    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER).toBe("");
+    expect(pinned.OPENCANDLE_COMPETITIVE_JUDGE_MODEL).toBe("");
   });
 
   it("clears inherited selectors but keeps credentials and model/provider choices", () => {

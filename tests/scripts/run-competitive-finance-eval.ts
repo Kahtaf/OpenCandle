@@ -39,6 +39,7 @@ import {
   buildPortableAgentPath,
   buildPromptGenerationPrompt,
   buildSavedStateSummary,
+  COMPETITIVE_JUDGE_RUBRIC_VERSION,
   COMPETITIVE_STATE_FIXTURE,
   type ComparisonJudgment,
   type CompetitorAnswer,
@@ -53,6 +54,7 @@ import {
   formatCompetitiveReportAnalysisMarkdown,
   frozenCompetitivePanelFromEnv,
   type GeneratedFinancePrompt,
+  isUnsupportedTemperatureError,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   resolveAdapterBinary,
@@ -62,8 +64,11 @@ import {
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectCompetitiveGeminiBaseline,
+  selectCompetitiveJudgeModelOverride,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
+  stampComparisonJudgment,
+  summarizeCompetitiveResults,
 } from "../evals/competitive-finance.js";
 import {
   buildCompletionReport,
@@ -83,6 +88,8 @@ interface CompetitiveRunResult {
   competitorAnswers: CompetitorAnswer[];
   judgment: ComparisonJudgment;
   hardAssertionResults?: FinalAnswerAssertionResult[];
+  /** Frozen-panel completion case: the deterministic verdict for this prompt. */
+  mandatory?: CompletionReportCase;
 }
 
 interface ResolvedModel {
@@ -155,11 +162,22 @@ registerBuiltInApiProviders();
 const modelRuntime = await ModelRuntime.create();
 const modelRegistry = new ModelRegistry(modelRuntime);
 const competitorAnswerCache = selectCompetitiveReportCache(process.env, loadCompetitiveReportCache);
-const judgeModel = await resolveModelWithAuth(
+// The model under test (OpenCandle's session model and the prompt generator).
+const competitiveModel = await resolveModelWithAuth(
   requestedProvider,
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
+// The comparison judge defaults to the same model; a judge-only override
+// changes the grader without changing the product under test.
+const judgeOverride = selectCompetitiveJudgeModelOverride(process.env);
+const judgeModel = judgeOverride
+  ? await resolveModelWithAuth(
+      judgeOverride.provider,
+      judgeOverride.model,
+      "Set the API key for OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER, or unset the judge override.",
+    )
+  : competitiveModel;
 const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
 // The frozen panel's loss-class contracts live in the prompt-policy
 // manifest; the frozen run must evaluate them itself instead of assuming a
@@ -185,7 +203,7 @@ const rawPrompts = frozenPanel
     ? [fixedPrompt]
     : parseGeneratedPrompts(
         await completeText(
-          judgeModel,
+          competitiveModel,
           buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
           { temperature: 0.8, maxTokens: 3000 },
         ),
@@ -296,20 +314,32 @@ for (const prompt of prompts.slice(0, promptCount)) {
   // Only the frozen release panel has manifest-required hard assertions. A
   // generated/fixed discovery run is not made to fail just because no frozen
   // manifest exists; it is excluded from this completion helper entirely.
-  if (frozenPanel) {
-    completionCases.push(completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults));
-  }
-  const judgment = await completeComparisonJudgment(
-    buildComparisonJudgePrompt({
-      prompt,
-      asOfDate,
-      openCandleTrace,
-      competitorAnswers,
-      savedStateSummary,
-    }),
-    ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
+  const mandatory = frozenPanel
+    ? completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults)
+    : undefined;
+  if (mandatory) completionCases.push(mandatory);
+  const judgment = stampComparisonJudgment(
+    await completeComparisonJudgment(
+      buildComparisonJudgePrompt({
+        prompt,
+        asOfDate,
+        openCandleTrace,
+        competitorAnswers,
+        savedStateSummary,
+        hardAssertionResults,
+      }),
+      ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
+    ),
+    { provider: judgeModel.model.provider, model: judgeModel.model.id },
   );
-  results.push({ prompt, openCandleTrace, competitorAnswers, judgment, hardAssertionResults });
+  results.push({
+    prompt,
+    openCandleTrace,
+    competitorAnswers,
+    judgment,
+    hardAssertionResults,
+    ...(mandatory ? { mandatory } : {}),
+  });
   const competitorScoreText = Object.entries(judgment.competitorScores)
     .map(([id, score]) => `${id}=${score}`)
     .join(" ");
@@ -320,7 +350,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
   }
 }
 
-const summary = summarize(results);
+const summary = summarizeCompetitiveResults(results);
 const report = {
   generatedAt: new Date().toISOString(),
   asOfDate,
@@ -330,6 +360,7 @@ const report = {
   judge: {
     provider: judgeModel.model.provider,
     model: judgeModel.model.id,
+    rubricVersion: COMPETITIVE_JUDGE_RUBRIC_VERSION,
   },
   competitors: allCompetitors.map((competitor) => ({
     id: competitor.id,
@@ -349,7 +380,13 @@ const outputPath = writeReport(report);
 const analysisPath = writeReportAnalysis(report, outputPath);
 
 console.log("\n--- Competitive Finance Summary ---");
-console.log(`OpenCandle wins: ${summary.openCandleWins}`);
+console.log("Judge preference is advisory; deterministic mandatory checks decide correctness.");
+console.log(
+  `Mandatory: ${summary.mandatory.passed} passed, ${summary.mandatory.failed} failed, ${summary.mandatory.notEvaluated} not evaluated`,
+);
+console.log(
+  `OpenCandle preference wins: ${summary.openCandleWins} (${summary.openCandleWinsWithMandatoryPass} with mandatory passed, ${summary.openCandleWinsWithMandatoryFailure} ineligible: mandatory failed)`,
+);
 for (const competitor of allCompetitors) {
   console.log(`${competitor.label} wins: ${summary.competitorWins[competitor.id] ?? 0}`);
 }
@@ -368,8 +405,8 @@ if (frozenPanel) {
       finishedAt: new Date().toISOString(),
       cases: completionCases,
       settings: {
-        provider: judgeModel.model.provider,
-        model: judgeModel.model.id,
+        provider: competitiveModel.model.provider,
+        model: competitiveModel.model.id,
         mode: "frozen",
         seed,
       },
@@ -406,6 +443,7 @@ async function completeText(
   options: { temperature: number; maxTokens: number },
 ): Promise<string> {
   const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_MODEL_ATTEMPTS", 3);
+  let sendTemperature = true;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await completeSimple(
       resolvedModel.model,
@@ -414,7 +452,7 @@ async function completeText(
         tools: [],
       },
       {
-        temperature: options.temperature,
+        ...(sendTemperature ? { temperature: options.temperature } : {}),
         maxTokens: options.maxTokens,
         reasoning: "minimal",
         apiKey: resolvedModel.apiKey,
@@ -429,6 +467,14 @@ async function completeText(
         .trim();
     }
     const message = response.errorMessage ?? `model call failed: ${response.stopReason}`;
+    if (sendTemperature && isUnsupportedTemperatureError(message)) {
+      console.warn(
+        `${resolvedModel.model.provider}/${resolvedModel.model.id} rejects temperature; retrying without it.`,
+      );
+      sendTemperature = false;
+      attempt -= 1;
+      continue;
+    }
     if (!shouldRetryCompetitiveModelCall(message, attempt, maxAttempts)) {
       throw new Error(message);
     }
@@ -477,8 +523,8 @@ async function runOpenCandle(prompt: string): Promise<EvalTrace> {
   const result = await runOpenCandleSession({
     prompt,
     modelRuntime,
-    defaultProvider: judgeModel.model.provider,
-    defaultModel: judgeModel.model.id,
+    defaultProvider: competitiveModel.model.provider,
+    defaultModel: competitiveModel.model.id,
     openCandleHome,
     settleGraceMs: Number.isFinite(parsedSettleGraceMs) ? parsedSettleGraceMs : undefined,
     timeoutMs: 900_000,
@@ -726,24 +772,6 @@ function findExecutable(name: string): string | undefined {
   });
   if (result.status !== 0) return undefined;
   return result.stdout.trim() || undefined;
-}
-
-function summarize(results: CompetitiveRunResult[]): {
-  openCandleWins: number;
-  competitorWins: Record<string, number>;
-  ties: number;
-} {
-  const competitorWins: Record<string, number> = {};
-  for (const result of results) {
-    if (result.judgment.winner !== "opencandle" && result.judgment.winner !== "tie") {
-      competitorWins[result.judgment.winner] = (competitorWins[result.judgment.winner] ?? 0) + 1;
-    }
-  }
-  return {
-    openCandleWins: results.filter((result) => result.judgment.winner === "opencandle").length,
-    competitorWins,
-    ties: results.filter((result) => result.judgment.winner === "tie").length,
-  };
 }
 
 function writeReport(report: unknown): string {
