@@ -206,6 +206,32 @@ describe("alpha-vantage provider", () => {
       await getGlobalQuote("AAPL", "test-key");
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
+
+    it("throws when a GLOBAL_QUOTE payload has no price instead of returning a zero quote", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ "Global Quote": { "01. symbol": "AAPL" } }),
+      });
+
+      await expect(getGlobalQuote("AAPL", "test-key")).rejects.toThrow(
+        "Alpha Vantage: No quote data for AAPL",
+      );
+    });
+
+    it("recovers a stale cached quote when a refresh fails after the TTL expires", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(globalQuoteFixture),
+      });
+      const fresh = await getGlobalQuote("AAPL", "test-key");
+
+      // Expire the entry past its TTL but inside the stale limit, then break
+      // the network: the user should still get the last known quote.
+      cache.set("av:globalquote:AAPL", fresh, -1);
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
+
+      await expect(getGlobalQuote("AAPL", "test-key")).resolves.toEqual(fresh);
+    });
   });
 
   describe("getDailyHistory", () => {

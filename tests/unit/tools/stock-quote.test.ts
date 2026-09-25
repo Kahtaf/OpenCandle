@@ -1,23 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetConfigCache } from "../../../src/config.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
 import type { StockQuote } from "../../../src/types/market.js";
+import globalQuoteFixture from "../../fixtures/alphavantage/AAPL-global-quote.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("get_stock_quote tool", () => {
   const originalFetch = globalThis.fetch;
+  const originalAlphaVantageApiKey = process.env.ALPHA_VANTAGE_API_KEY;
 
   beforeEach(() => {
     cache.clear();
+    // Pin the Alpha Vantage key so the fallback branch is covered identically
+    // with or without a developer .env / shell key. An empty string is
+    // deliberately not `undefined`, which stops `loadEnv()` from refilling it.
+    process.env.ALPHA_VANTAGE_API_KEY = "";
+    resetConfigCache();
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     vi.useRealTimers();
+    if (originalAlphaVantageApiKey == null) {
+      delete process.env.ALPHA_VANTAGE_API_KEY;
+    } else {
+      process.env.ALPHA_VANTAGE_API_KEY = originalAlphaVantageApiKey;
+    }
+    resetConfigCache();
   });
 
   it("has correct tool metadata", () => {
@@ -124,5 +138,40 @@ describe("get_stock_quote tool", () => {
     expect(text.text).toContain("Stock quote unavailable for XXFAKEXX");
     expect(text.text).toContain("Invalid symbol XXFAKEXX for yahoo");
     expect(result.details).toBeNull();
+  });
+
+  it("falls back to the configured Alpha Vantage quote when Yahoo is unavailable", async () => {
+    process.env.ALPHA_VANTAGE_API_KEY = "test-av-key";
+    resetConfigCache();
+    rateLimiter.configure("yahoo", 1000, 1000);
+    rateLimiter.configure("alphavantage", 1000, 1000);
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes("alphavantage.co")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(globalQuoteFixture) });
+      }
+      return Promise.reject(new Error("yahoo down"));
+    });
+
+    const result = await stockQuoteTool.execute("call-av-fallback", { symbol: "AAPL" });
+
+    // The Alpha Vantage fixture is the only available price, so a successful
+    // quote proves Yahoo was skipped in favour of the configured fallback.
+    expect(result.details?.symbol).toBe("AAPL");
+    expect(result.details?.price).toBe(186.35);
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls.some((u: string) => u.includes("query1.finance.yahoo.com"))).toBe(true);
+    expect(urls.some((u: string) => u.includes("alphavantage.co"))).toBe(true);
+  });
+
+  it("never calls Alpha Vantage when no key is configured", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("yahoo down"));
+
+    const result = await stockQuoteTool.execute("call-no-av", { symbol: "AAPL" });
+
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls.every((u: string) => !u.includes("alphavantage.co"))).toBe(true);
+    const text = result.content[0];
+    if (text.type !== "text") throw new Error("expected text content");
+    expect(text.text).toContain("Stock quote unavailable for AAPL");
   });
 });

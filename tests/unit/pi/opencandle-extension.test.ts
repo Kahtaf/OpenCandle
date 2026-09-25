@@ -118,7 +118,19 @@ function comprehensiveAnalysisPrompts(symbol: string): string[] {
 }
 
 describe("opencandle extension", () => {
+  const tempHomes: string[] = [];
+
+  function makeTempHome(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    tempHomes.push(dir);
+    return dir;
+  }
+
   beforeEach(() => {
+    // Every test gets a fresh, empty OpenCandle home so the suite never reads
+    // or writes the developer's real ~/.opencandle state. Tests that need
+    // seeded state create their own tracked home below.
+    vi.stubEnv("OPENCANDLE_HOME", makeTempHome("opencandle-extension-home-"));
     vi.stubEnv("OPENCANDLE_ROUTER_MODE", "");
     resetConfigCache();
     vi.useFakeTimers();
@@ -129,6 +141,9 @@ describe("opencandle extension", () => {
     vi.unstubAllEnvs();
     resetConfigCache();
     vi.restoreAllMocks();
+    for (const dir of tempHomes.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("registers the finance tool surface and analyze command", () => {
@@ -1622,7 +1637,7 @@ describe("opencandle extension", () => {
     });
 
     it("prompts for external-tool setup and persists always-skip choices", async () => {
-      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      const home = makeTempHome("opencandle-external-tool-");
       vi.stubEnv("OPENCANDLE_HOME", home);
       const askUserHandler = vi.fn().mockResolvedValue({ answer: "Always skip Reddit" });
       const fake = createFakeApi();
@@ -1647,12 +1662,10 @@ describe("opencandle extension", () => {
       expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
       expect(result?.content[0]?.text).toContain("silenced=true");
       expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
-
-      rmSync(home, { recursive: true, force: true });
     });
 
     it("gives hosted users provider-settings instructions instead of a dead connect flow", async () => {
-      const home = mkdtempSync(join(tmpdir(), "opencandle-hosted-provider-"));
+      const home = makeTempHome("opencandle-hosted-provider-");
       vi.stubEnv("OPENCANDLE_HOME", home);
       const askUserHandler = vi
         .fn()
@@ -1676,11 +1689,10 @@ describe("opencandle extension", () => {
       );
       expect(input).not.toHaveBeenCalled();
       expect(result?.content[0]?.text).toContain("Providers settings");
-      rmSync(home, { recursive: true, force: true });
     });
 
     it("keeps inline provider connection available in an interactive Pi UI", async () => {
-      const home = mkdtempSync(join(tmpdir(), "opencandle-interactive-provider-"));
+      const home = makeTempHome("opencandle-interactive-provider-");
       vi.stubEnv("OPENCANDLE_HOME", home);
       const askUserHandler = vi
         .fn()
@@ -1701,11 +1713,10 @@ describe("opencandle extension", () => {
           options: expect.arrayContaining([expect.stringMatching(/^Connect now/)]),
         }),
       );
-      rmSync(home, { recursive: true, force: true });
     });
 
     it("uses the requested external-tool provider in continue responses", async () => {
-      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      const home = makeTempHome("opencandle-external-tool-");
       vi.stubEnv("OPENCANDLE_HOME", home);
       const askUserHandler = vi
         .fn()
@@ -1726,12 +1737,10 @@ describe("opencandle extension", () => {
       expect(result?.content[0]?.text).toContain("[OPENCANDLE_CONNECTED provider=twitter]");
       expect(result?.content[0]?.text).toContain("Re-run the original X / Twitter request now");
       expect(result?.content[0]?.text).not.toContain("Reddit sentiment request");
-
-      rmSync(home, { recursive: true, force: true });
     });
 
     it("honors saved always-skip choices before prompting for external tools", async () => {
-      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      const home = makeTempHome("opencandle-external-tool-");
       vi.stubEnv("OPENCANDLE_HOME", home);
       saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
       const askUserHandler = vi.fn();
@@ -1752,8 +1761,6 @@ describe("opencandle extension", () => {
       expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
       expect(result?.content[0]?.text).toContain("silenced=true");
       expect(result?.content[0]?.text).toContain("previously asked not to be reminded");
-
-      rmSync(home, { recursive: true, force: true });
     });
   });
 

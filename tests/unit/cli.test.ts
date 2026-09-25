@@ -159,8 +159,19 @@ async function runCli(args: string[]): Promise<void> {
 }
 
 describe("opencandle package commands", () => {
+  const tempHomes: string[] = [];
+
+  function makeTempHome(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    tempHomes.push(dir);
+    return dir;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Isolate the CLI from the developer's real ~/.opencandle home; tests that
+    // need seeded state create their own tracked home below.
+    vi.stubEnv("OPENCANDLE_HOME", makeTempHome("opencandle-cli-home-"));
     piMocks.install.mockResolvedValue(undefined);
     piMocks.remove.mockResolvedValue(undefined);
     piMocks.removeSourceFromSettings.mockReturnValue(true);
@@ -192,6 +203,9 @@ describe("opencandle package commands", () => {
     vi.restoreAllMocks();
     process.argv = originalArgv;
     process.exitCode = originalExitCode;
+    for (const dir of tempHomes.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it.each(["--local", "-l"])("passes %s through to package installs", async (localFlag) => {
@@ -306,7 +320,7 @@ describe("opencandle package commands", () => {
   });
 
   it("clears a skipped provider preference from doctor", async () => {
-    const home = mkdtempSync(join(tmpdir(), "opencandle-cli-"));
+    const home = makeTempHome("opencandle-cli-");
     vi.stubEnv("OPENCANDLE_HOME", home);
     const { loadOnboardingState, markProviderNeverAsk, saveOnboardingState } = await import(
       "../../src/onboarding/state.js"
@@ -318,8 +332,6 @@ describe("opencandle package commands", () => {
 
     expect(log).toHaveBeenCalledWith("Re-enabled reddit.");
     expect(loadOnboardingState().providers.reddit).toBeUndefined();
-
-    rmSync(home, { recursive: true, force: true });
   });
 
   it("acquires and releases the TUI session writer lock for interactive mode", async () => {

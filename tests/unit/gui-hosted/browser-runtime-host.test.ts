@@ -4,10 +4,26 @@ import {
   createDurableSseGate,
 } from "../../../gui/hosted/src/runtime/browser-runtime-host.js";
 
+// The hosted runtime lazily imports @webcontainer/api when the browser bundle did
+// not inject an implementation or key-configurer. Mock the package boundary so the
+// boot path is deterministic instead of depending on the ambient VITE_WEBCONTAINER_API_KEY
+// (present in a developer .env, absent in CI) and never touches a real client key.
+const webContainerApiMock = vi.hoisted(() => ({
+  boot: vi.fn(),
+  configureAPIKey: vi.fn(),
+}));
+
+vi.mock("@webcontainer/api", () => ({
+  WebContainer: { boot: webContainerApiMock.boot },
+  configureAPIKey: webContainerApiMock.configureAPIKey,
+}));
+
 describe("browser runtime host", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    webContainerApiMock.boot.mockReset();
+    webContainerApiMock.configureAPIKey.mockReset();
   });
 
   it("waits for a superseded WebContainer boot to tear down before disposal completes", async () => {
@@ -136,6 +152,8 @@ describe("browser runtime host", () => {
       storage: memoryStorage(),
       sessionStorage: memoryStorage(),
       dataStore,
+      // Keep this host independent of an ambient VITE_WEBCONTAINER_API_KEY.
+      webContainerApiKey: "",
       WebContainerImpl: {
         boot: vi.fn(async () => ({ mount: vi.fn(async () => {}), teardown: vi.fn() })),
       },
@@ -1121,6 +1139,187 @@ describe("browser runtime host", () => {
     expect(calls).toEqual(["configure", "boot", "boot"]);
   });
 
+  it("loads the WebContainer API and applies a hosted key once across boots", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const calls: string[] = [];
+    const container = { mount: vi.fn(async () => {}) };
+    webContainerApiMock.configureAPIKey.mockImplementation(() => {
+      calls.push("configure");
+    });
+    webContainerApiMock.boot.mockImplementation(async () => {
+      calls.push("boot");
+      return container;
+    });
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        readRuntimeSnapshot: vi.fn(async () => ({
+          sessions: [],
+          stateBytes: null,
+          currentSessionId: "",
+        })),
+      },
+      webContainerApiKey: "wc_fake_client_id_value",
+    });
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {});
+
+    await host.boot();
+    await host.boot();
+
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledWith("wc_fake_client_id_value");
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledOnce();
+    expect(webContainerApiMock.boot).toHaveBeenCalledTimes(2);
+    // Key configuration must land before the first boot and never repeat.
+    expect(calls).toEqual(["configure", "boot", "boot"]);
+  });
+
+  it("keeps an injected WebContainer implementation while loading key configuration from the API module", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const container = { mount: vi.fn(async () => {}) };
+    const injectedBoot = vi.fn(async () => container);
+    webContainerApiMock.boot.mockImplementation(async () => {
+      throw new Error("module boot must not run when an implementation is injected");
+    });
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        readRuntimeSnapshot: vi.fn(async () => ({
+          sessions: [],
+          stateBytes: null,
+          currentSessionId: "",
+        })),
+      },
+      webContainerApiKey: "wc_fake_client_id_value",
+      WebContainerImpl: { boot: injectedBoot },
+    });
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {});
+
+    await host.boot();
+    await host.boot();
+
+    expect(injectedBoot).toHaveBeenCalledTimes(2);
+    expect(webContainerApiMock.boot).not.toHaveBeenCalled();
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledOnce();
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledWith("wc_fake_client_id_value");
+  });
+
+  it("boots from the API module without configuring a key when no hosted key is present", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const container = { mount: vi.fn(async () => {}) };
+    webContainerApiMock.boot.mockResolvedValue(container);
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        readRuntimeSnapshot: vi.fn(async () => ({
+          sessions: [],
+          stateBytes: null,
+          currentSessionId: "",
+        })),
+      },
+      // Pin the empty key so an ambient VITE_WEBCONTAINER_API_KEY cannot supply one.
+      webContainerApiKey: "",
+    });
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {});
+
+    await host.boot();
+
+    expect(webContainerApiMock.boot).toHaveBeenCalledOnce();
+    expect(webContainerApiMock.configureAPIKey).not.toHaveBeenCalled();
+    expect(host.webContainerApiConfigured).toBe(false);
+  });
+
+  it("tears down a failed API-module boot and does not re-apply the key on retry", async () => {
+    vi.stubGlobal("addEventListener", vi.fn());
+    vi.stubGlobal("removeEventListener", vi.fn());
+    vi.stubGlobal("__OPENCANDLE_RUNTIME_VERSION__", "test");
+    const teardown = vi.fn(async () => {});
+    const container = { mount: vi.fn(async () => {}), teardown };
+    webContainerApiMock.boot.mockResolvedValue(container);
+    const host = createBrowserRuntimeHost({
+      bridgeFrame: {},
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {
+        readRuntimeSnapshot: vi.fn(async () => ({
+          sessions: [],
+          stateBytes: null,
+          currentSessionId: "",
+        })),
+      },
+      webContainerApiKey: "wc_fake_client_id_value",
+    });
+    // Fail after the container exists so the cleanup path has something to tear down.
+    host.fetchAssetText = vi.fn(async () => {
+      throw new Error("asset failed");
+    });
+    host.fetchAssetBytes = vi.fn(async () => new Uint8Array());
+    host.startProcess = vi.fn(async () => {});
+
+    await expect(host.ensureBooted()).rejects.toThrow("asset failed");
+    expect(teardown).toHaveBeenCalledOnce();
+    expect(host.container).toBeNull();
+    expect(host.bootPromise).toBeNull();
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledOnce();
+
+    host.fetchAssetText = vi.fn(async (path: string) =>
+      path.includes("runtime-files.json")
+        ? JSON.stringify({
+            version: 1,
+            entry: "runtime-bundle.mjs",
+            files: ["runtime-bundle.mjs"],
+          })
+        : "runtime",
+    );
+    await host.ensureBooted();
+
+    expect(host.container).toBe(container);
+    expect(webContainerApiMock.boot).toHaveBeenCalledTimes(2);
+    // The key was already applied; a retry must not re-run configuration.
+    expect(webContainerApiMock.configureAPIKey).toHaveBeenCalledOnce();
+  });
+
   it("mounts canonical action markers beside restored Pi sessions", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -1147,6 +1346,8 @@ describe("browser runtime host", () => {
           currentSessionId: "session-1",
         })),
       },
+      // Keep this host independent of an ambient VITE_WEBCONTAINER_API_KEY.
+      webContainerApiKey: "",
       WebContainerImpl: { boot: vi.fn(async () => ({ mount })) },
     });
     host.fetchAssetText = vi.fn(async (path: string) =>
