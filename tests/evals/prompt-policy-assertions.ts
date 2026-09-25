@@ -167,6 +167,16 @@ const HEDGE_EXCESS_QUALIFIER =
 const HEDGE_FLOOR_MECHANICS =
   /\b(?:hedge|effective|downside)?\s*floor\b|\bprotected from (?:falling|dropping|declining|slipping) below\b|\bprotection (?:begins|starts|kicks in)(?: only)? (?:at|below|around|once)\b|\bdownside protection (?:begins|starts|level|at|below|once)\b|\bcaps? (?:your )?(?:losses|downside|risk|exposure) (?:at|below|around)\b|\b(?:strike|price)\s*(?:minus|[-–])\s*(?:the\s+)?premium\b|\bputs?\b[^.\n]{0,80}\bright to sell\b[^.\n]{0,40}\bstrike\b|\bstrike\b[^.\n]{0,40}\blevel at which\b[^.\n]{0,60}\b(?:sell|exit|offload)\b/i;
 
+// Explicit protective-put hazard concepts. The literal "risk" stays accepted,
+// but an answer may instead state the concrete hazard: the put-leg premium that
+// can be lost, unprotected/remaining shares, time or premium decay, or theta
+// eroding the option's time value. A bare "tradeoff"/"consider" heading, a
+// generic "downside protection begins at the strike" floor sentence, or an
+// unrelated word such as "fall season" does not count. Deliberately small,
+// bounded phrases rather than broad stems like decline/drop/fall/erode.
+const HEDGE_DOWNSIDE_HAZARD =
+  /\brisks?\b|\b(?:loss|losses|lose|loses|losing)\b|\b(?:unprotected|unhedged|uncovered)\b|\b(?:time|premium|option|theta)\s+decay\b|\btheta\b[^.\n]{0,40}\b(?:erod|reduc|eats?|drains?)\w*\b|\b(?:erod|reduc)\w*\b[^.\n]{0,40}\b(?:option|time)\s+value\b/i;
+
 // Normal Markdown bold emphasis around a number must not change sizing, e.g.
 // "buy **4** put contracts" or "**5** puts". Strip paired ** / __ markers from
 // the matching copy only; unmatched markers are left untouched.
@@ -490,8 +500,16 @@ function evaluateManifestAssertion(
     return evaluateHedgeSizingFromShares(text);
   }
   if (lowerAssertion.includes("hedge floor, premium")) {
-    const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/, /risk/);
+    const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/);
     if (!base.passed) return base;
+    if (!HEDGE_DOWNSIDE_HAZARD.test(text)) {
+      return {
+        passed: false,
+        reason:
+          "expected an explicit protective-put hazard, such as the put-leg loss/loses/premium at risk, unprotected or unhedged shares, or time/theta decay of the option's value, not only premium/Greeks/liquidity mechanics",
+        deterministic: true,
+      };
+    }
     if (!HEDGE_FLOOR_MECHANICS.test(text)) {
       return {
         passed: false,
@@ -503,7 +521,7 @@ function evaluateManifestAssertion(
     return {
       passed: true,
       reason:
-        "observed premium, Greeks, liquidity, risk, and explicit downside-protection floor mechanics",
+        "observed premium, Greeks, liquidity, an explicit protective-put hazard, and explicit downside-protection floor mechanics",
       deterministic: true,
     };
   }

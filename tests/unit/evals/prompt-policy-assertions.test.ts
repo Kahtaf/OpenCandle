@@ -503,6 +503,59 @@ describe("prompt-policy final answer assertions", () => {
     expect(result.passed).toBe(false);
     expect(result.reason).toContain("premium");
   });
+
+  // Faithful excerpt of the preserved 2026-09-25T03-58-04-569Z competitive-finance
+  // trace (results[0].openCandleTrace.text). It explains the put premium as the
+  // maximum loss, the 50 unprotected shares, potential downside, time decay, and
+  // liquidity slippage without ever using the word "risk".
+  const preservedLiveHedgeAnswer = [
+    "To protect your 450 shares of AAPL for the next month, you should consider buying **5 put option contracts** with the **2026-10-30 expiration**.",
+    "",
+    "**4 Contracts:** Would cover 400 shares, leaving 50 shares (approximately 11% of your holdings) unprotected. This would result in a lower premium cost.",
+    "",
+    "**Higher Strike:** They provide immediate protection closer to the current market price, limiting your potential downside from the current level.",
+    "",
+    "Per-share hedge floor for covered shares: $335 (strike) - $9.75 (premium per share) = $325.25.",
+    "Max loss for the *put leg itself*: $4,875 (the premium paid).",
+    "",
+    "**Premium Cost:** The price you pay for the put option is the maximum you can lose on the option contract if AAPL's price does not fall below your chosen strike by expiration.",
+    "",
+    "**Time Decay (Theta):** Options lose value as they approach expiration; the $335 strike put has a Theta of -0.123.",
+    "",
+    "**Liquidity:** The bid/ask spreads can be wide, making it more challenging to enter or exit positions at favorable prices.",
+  ].join("\n");
+
+  it("accepts the preserved live hedge answer that explains loss, downside, and decay without the word risk", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(preservedLiveHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts a hazard explanation on an independent ticker and quantity without the word risk", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "For the covered 300 MSFT shares, the put gives the right to sell at the $250 strike; the maximum loss on the put is the premium paid, the 100 remaining shares stay unprotected, theta erodes the option's time value as expiry nears, and the wide bid-ask spread adds liquidity slippage.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects floor mechanics with 'fall season' but no actual put hazard", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The downside protection begins at the $350 strike; the premium, delta, and theta are quoted; liquidity is fine; fall season can affect trading volume.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {
