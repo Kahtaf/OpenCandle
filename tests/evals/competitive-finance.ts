@@ -630,7 +630,11 @@ export interface CompetitiveResultsSummary {
 }
 
 export function summarizeCompetitiveResults(
-  results: ReadonlyArray<{ judgment: { winner: string } } & Record<string, unknown>>,
+  results: ReadonlyArray<{
+    judgment: { winner: string };
+    mandatory?: unknown;
+    hardAssertionResults?: unknown;
+  }>,
 ): CompetitiveResultsSummary {
   const competitorWins: Record<string, number> = {};
   const mandatory = { passed: 0, failed: 0, notEvaluated: 0 };
