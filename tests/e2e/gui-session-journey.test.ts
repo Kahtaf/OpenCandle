@@ -220,6 +220,53 @@ describe("GUI session journey", () => {
     ).toBe(true);
   }, 90_000);
 
+  it("explicit Stop while an ask_user question is open ends the run and frees the session", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const runActionId = await submitPromptAndCaptureRunActionId(page, ASK_USER_PROMPT);
+    expect(runActionId).toMatch(/^chat-/);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+    await expectVisible(page.getByRole("button", { name: "1 year" }), 15_000);
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+
+    // The server must actually retire the run, not just acknowledge the Stop:
+    // the tool waiting on the open question settles as cancelled.
+    expect(
+      await waitForRunCancelReason(page, stoppedSessionId, runActionId, "no_active_run", 10_000),
+    ).toBe(true);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+
+    // The stale question is no longer answerable.
+    await page
+      .getByRole("button", { name: "1 year" })
+      .waitFor({ state: "detached", timeout: 10_000 });
+
+    // The model never received an answer for the stopped question.
+    expect(
+      harness.modelServer.requests.some((request) =>
+        request.messages.some(
+          (message) => message.role === "tool" && JSON.stringify(message).includes("User answered"),
+        ),
+      ),
+    ).toBe(false);
+
+    // The same session accepts the next send (no 409 "still working").
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(stoppedSessionId);
+  }, 120_000);
+
   it("passive reload does not cancel; the held run completes normally", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });

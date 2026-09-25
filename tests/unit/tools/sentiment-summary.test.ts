@@ -266,6 +266,37 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Web/News");
   });
 
+  it("passes the run's abort signal to every source setup prompt", async () => {
+    mockedWrapProvider.mockImplementation(async (provider) => {
+      if (provider === "twitter") {
+        return {
+          status: "unavailable",
+          reason: "twitter-cli is not installed. Install it with: uv tool install twitter-cli",
+        } as any;
+      }
+      return { status: "unavailable", reason: "No Reddit session found" } as any;
+    });
+    mockedSearchWeb.mockResolvedValue({ status: "unavailable", reason: "offline" } as any);
+    const signals: Array<AbortSignal | undefined> = [];
+    const askUserHandler: AskUserHandler = vi.fn(async (prompt, options) => {
+      signals.push(options?.signal);
+      return {
+        answer: prompt.options?.find((option) => option.includes("Skip")) ?? null,
+        cancelled: false,
+      };
+    });
+    const controller = new AbortController();
+
+    await createSentimentSummaryTool({ askUserHandler }).execute(
+      "call-signal",
+      { query: "AAPL" },
+      controller.signal,
+    );
+
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals.every((signal) => signal === controller.signal)).toBe(true);
+  });
+
   it("keeps Reddit search results for natural-language ticker queries", async () => {
     mockedWrapProvider.mockImplementation(async (provider) => {
       if (provider === "twitter") {

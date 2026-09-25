@@ -212,4 +212,20 @@ describe("applyGuiRunCancellation", () => {
 
     expect(clearQueue).toHaveBeenCalledOnce();
   });
+
+  it("cancels the stopped session's open ask_user questions so a waiting tool settles", async () => {
+    const token = createSessionCancellationToken();
+    const order: string[] = [];
+    const abort = vi.fn(async () => {
+      order.push("abort");
+    });
+    const cancelPendingQuestions = vi.fn(() => {
+      order.push("questions");
+    });
+
+    applyGuiRunCancellation({ token, session: { abort }, cancelPendingQuestions });
+
+    expect(cancelPendingQuestions).toHaveBeenCalledOnce();
+    expect(order).toEqual(["abort", "questions"]);
+  });
 });

@@ -128,6 +128,8 @@ interface GuiHttpRouteOptions {
   quoteSnapshotStore: QuoteSnapshotStore;
   indicesSnapshotStore: MarketIndicesSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
+  /** Settles a stopped session's open ask_user questions as cancelled. */
+  cancelAskUserPromptsForSession?: (sessionId: string) => void;
   /** Injectable active-run registry (tests); defaults to a fresh registry. */
   runRegistry?: GuiRunRegistry;
 }
@@ -1025,6 +1027,7 @@ async function streamAcceptedSseChatRun({
       token: runToken,
       coordinator: getSessionCoordinator(runSession),
       session: runSession,
+      cancelPendingQuestions: () => options.cancelAskUserPromptsForSession?.(sessionId),
     }),
   );
   // A Stop that landed while setup was awaiting (prompt dispatch, writer lock,

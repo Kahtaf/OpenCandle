@@ -148,13 +148,19 @@ export interface GuiRunCancellationTargets {
     abort?: () => Promise<void>;
     clearQueue?: () => { steering: string[]; followUp: string[] };
   } | null;
+  /**
+   * Cancel the session's open ask_user questions. A tool waiting on a person
+   * does not settle on abort alone, so without this the run never ends.
+   */
+  cancelPendingQuestions?: () => void;
 }
 
 /**
  * Retire a stopped run: mark the input-hook token cancelled (covers Stop while
  * the router await is in flight, before any Pi agent run exists), retire the
- * active workflow, drop any queued workflow follow-up prompts, and abort an
- * already-active model/tool operation. Every target is optional so a
+ * active workflow, drop any queued workflow follow-up prompts, abort an
+ * already-active model/tool operation, and settle any open ask_user question
+ * as cancelled so a tool waiting on it returns. Every target is optional so a
  * partially-constructed run still cancels cleanly.
  */
 export function applyGuiRunCancellation(targets: GuiRunCancellationTargets): void {
@@ -162,4 +168,5 @@ export function applyGuiRunCancellation(targets: GuiRunCancellationTargets): voi
   targets.coordinator?.cancelActiveWorkflow();
   targets.session?.clearQueue?.();
   void Promise.resolve(targets.session?.abort?.()).catch(() => {});
+  targets.cancelPendingQuestions?.();
 }

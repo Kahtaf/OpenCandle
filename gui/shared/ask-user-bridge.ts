@@ -27,6 +27,11 @@ export function createAskUserBridge({
   askForSession: (sessionId: string) => AskUserHandler;
   answer: (id: string, answer: string) => boolean;
   cancel: (id: string) => boolean;
+  /**
+   * Cancel every open question for a session (its run was stopped), so the
+   * tool waiting on each one settles as cancelled. Returns how many settled.
+   */
+  cancelForSession: (sessionId: string) => number;
   getPrompts: () => GuiAskUserPrompt[];
 } {
   let nextId = 1;
@@ -35,7 +40,10 @@ export function createAskUserBridge({
 
   const createAskHandler =
     (resolveSessionId: () => string): AskUserHandler =>
-    async (params) => {
+    async (params, options) => {
+      const signal = options?.signal;
+      // A stopped run never opens a question it cannot wait for.
+      if (signal?.aborted) return { answer: null, cancelled: true };
       const id = `ask-user-${Date.now()}-${nextId++}`;
       const prompt: GuiAskUserPrompt = {
         id,
@@ -51,9 +59,12 @@ export function createAskUserBridge({
       prompts.set(id, prompt);
       broadcast({ type: "ask_user.prompt", prompt });
 
-      return new Promise<AskUserResult>((resolve) => {
+      const settled = new Promise<AskUserResult>((resolve) => {
         pending.set(id, { prompt, resolve });
       });
+      const cancelOnAbort = () => resolvePrompt(id, { answer: null, cancelled: true });
+      signal?.addEventListener("abort", cancelOnAbort, { once: true });
+      return settled.finally(() => signal?.removeEventListener("abort", cancelOnAbort));
     };
   const ask = createAskHandler(getSessionId);
 
@@ -82,6 +93,14 @@ export function createAskUserBridge({
     },
     cancel(id) {
       return resolvePrompt(id, { answer: null, cancelled: true });
+    },
+    cancelForSession(sessionId) {
+      let cancelled = 0;
+      for (const [id, item] of [...pending]) {
+        if (item.prompt.sessionId !== sessionId) continue;
+        if (resolvePrompt(id, { answer: null, cancelled: true })) cancelled += 1;
+      }
+      return cancelled;
     },
     getPrompts() {
       return [...prompts.values()];

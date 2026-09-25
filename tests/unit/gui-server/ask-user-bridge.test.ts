@@ -84,3 +84,56 @@ describe("GUI ask_user bridge", () => {
     });
   });
 });
+
+describe("GUI ask_user bridge run cancellation", () => {
+  it("cancels only the stopped session's pending prompts", async () => {
+    const broadcast = vi.fn();
+    const bridge = createAskUserBridge({ broadcast, getSessionId: () => "session-1" });
+    const stopped = bridge.askForSession("session-1")({ question: "A?", questionType: "text" });
+    const other = bridge.askForSession("session-2")({ question: "B?", questionType: "text" });
+
+    expect(bridge.cancelForSession("session-1")).toBe(1);
+
+    await expect(stopped).resolves.toEqual({ answer: null, cancelled: true });
+    const [first, second] = bridge.getPrompts();
+    expect(first).toMatchObject({ sessionId: "session-1", status: "cancelled" });
+    expect(second).toMatchObject({ sessionId: "session-2", status: "pending" });
+    expect(broadcast).toHaveBeenLastCalledWith({
+      type: "ask_user.resolved",
+      prompt: expect.objectContaining({ id: first?.id, status: "cancelled" }),
+    });
+    // A late answer to the stopped question is rejected.
+    expect(bridge.answer(first?.id ?? "", "late")).toBe(false);
+    expect(bridge.cancelForSession("session-1")).toBe(0);
+
+    bridge.cancel(second?.id ?? "");
+    await other;
+  });
+
+  it("settles a pending prompt as cancelled when the run signal aborts", async () => {
+    const bridge = createAskUserBridge({ broadcast: vi.fn(), getSessionId: () => "session-1" });
+    const controller = new AbortController();
+    const pending = bridge.ask(
+      { question: "Proceed?", questionType: "confirm" },
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+
+    await expect(pending).resolves.toEqual({ answer: null, cancelled: true });
+    expect(bridge.getPrompts()[0]).toMatchObject({ status: "cancelled" });
+  });
+
+  it("never opens a prompt for a run that was already stopped", async () => {
+    const broadcast = vi.fn();
+    const bridge = createAskUserBridge({ broadcast, getSessionId: () => "session-1" });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      bridge.ask({ question: "Proceed?", questionType: "confirm" }, { signal: controller.signal }),
+    ).resolves.toEqual({ answer: null, cancelled: true });
+    expect(bridge.getPrompts()).toEqual([]);
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+});

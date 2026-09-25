@@ -75,7 +75,9 @@ export function createJourneyModelScript(
     }
 
     const lastUserText = latestUserText(request) ?? "";
-    const hasToolResult = request.messages.some((message) => message.role === "tool");
+    // Only this turn's tool results count: an earlier stopped turn in the same
+    // session can leave a tool result in history.
+    const hasToolResult = currentTurnMessages(request).some((message) => message.role === "tool");
     if (!hasToolResult) {
       if (lastUserText.includes("Ask me which horizon")) {
         return {
@@ -194,8 +196,15 @@ function latestUserText(request: ModelChatRequest): string | undefined {
   return undefined;
 }
 
+function currentTurnMessages(request: ModelChatRequest): ModelChatRequest["messages"] {
+  for (let index = request.messages.length - 1; index >= 0; index -= 1) {
+    if (request.messages[index]?.role === "user") return request.messages.slice(index + 1);
+  }
+  return request.messages;
+}
+
 function toolResultText(request: ModelChatRequest): string {
-  return request.messages
+  return currentTurnMessages(request)
     .filter((message) => message.role === "tool")
     .map((message) => messageText(message))
     .join("\n");
