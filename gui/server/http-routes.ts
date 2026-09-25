@@ -1027,7 +1027,12 @@ async function streamAcceptedSseChatRun({
       session: runSession,
     }),
   );
-  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
+  // A Stop that landed while setup was awaiting (prompt dispatch, writer lock,
+  // session creation) must keep the queued prompt from ever starting. The
+  // token cancel above only reaches the extension input hook, which slash
+  // commands such as `/analyze` never pass through.
+  const cancelledDuringSetup = runHandle.cancelRequested;
+  if (!cancelledDuringSetup && !prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
   const beforeEntries = runSessionManager.getEntries();
@@ -1082,6 +1087,19 @@ async function streamAcceptedSseChatRun({
   });
 
   try {
+    if (cancelledDuringSetup) {
+      // Nothing was dispatched: no pending action, no input marker, no turn.
+      // Settle as a stopped run, never as a completed one; finally releases
+      // ownership and ends the stream.
+      writeSse(res, {
+        type: "run.failed",
+        runId,
+        sessionId,
+        error: { message: "Run stopped." },
+        seq,
+      });
+      return actionAccepted;
+    }
     recordPendingSessionAction(runSessionManager, actionId);
     if (shouldPersistOriginalInputMarker(prompt, inputAttachmentLabels)) {
       appendOriginalInputMarker();

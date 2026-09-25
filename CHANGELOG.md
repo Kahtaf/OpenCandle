@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
 - The portfolio builder now acquires and reports candidate prices before recommending an allocation, and when its evidence validation still fails after one repair it shows a visible warning that any draft above is unverified instead of presenting it as a validated portfolio.
 - A workflow no longer treats the previous turn going idle as proof that a queued repair prompt finished, so the repair response is produced before the run reports its result.
 - A workflow repair or next-step prompt is now sent only once the session is idle, so a prompt submitted while the prior turn is still settling is no longer dropped and the run finishes instead of stalling.
