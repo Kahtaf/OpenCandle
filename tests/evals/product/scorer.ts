@@ -284,25 +284,71 @@ function passesFamilyAwareDimension(
 // read still needs to be owned when every source returned. Canonical concepts
 // are noisy sentiment/data/signal, sparse coverage or sample, low sample count,
 // insufficient data, and a sample/evidence set that is not representative. Each
-// is bound to a sentiment context, and an explicit negation such as "the signal
-// is not noisy" does not qualify. Missing-source impact is handled separately by
-// missingSourceDivergence; a bare "source unavailable" note is not risk here.
+// limitation is bound to a sentiment context and rejected when it sits under a
+// clause-local negation ("the signal is not particularly noisy", "no insufficient
+// data or sparse coverage"). "not representative" is itself the risk statement,
+// so it is deliberately kept outside the negation filter. Missing-source impact
+// is handled separately by missingSourceDivergence.
 function sentimentDataQualityRisk(text: string): boolean {
-  const noise =
-    "\\b(?<!\\bnot\\s)(?<!\\bno\\s)(?<!\\bisn't\\s)(?<!\\baren't\\s)(?<!\\bwithout\\s)(?:noisy|noise)\\b";
-  const sentimentContext = "\\b(?:sentiment|signal|sample|sources?|data|read)\\b";
-  const noisySentiment =
-    `${sentimentContext}[^.;!?\\n]{0,25}?${noise}` +
-    `|${noise}\\s+(?:in|within)\\s+(?:the\\s+)?(?:sentiment|signal|data|read|sources?)\\b`;
-  return (
-    new RegExp(noisySentiment, "i").test(text) ||
-    /\b(?:sparse|thin|limited)\s+(?:coverage|sample|data|sources?)\b/i.test(text) ||
-    /\b(?:low|small|limited)\s+sample\s+(?:count|size)\b/i.test(text) ||
-    /\binsufficient\s+(?:data|sample|coverage|evidence)\b/i.test(text) ||
+  if (
     /\b(?:sample|evidence|data|sources?|read|signal|sentiment)\b[^.;!?\n]{0,80}?\b(?:not|isn't|aren't)\s+(?:be\s+)?(?:fully\s+)?representative\b/i.test(
       text,
     )
+  ) {
+    return true;
+  }
+  return (
+    hasNoisySentimentRisk(text) ||
+    hasUnnegatedMatch(text, /\b(?:sparse|thin|limited)\s+(?:coverage|sample|data|sources?)\b/gi) ||
+    hasUnnegatedMatch(text, /\b(?:low|small|limited)\s+sample\s+(?:count|size)\b/gi) ||
+    hasUnnegatedMatch(text, /\binsufficient\s+(?:data|sample|coverage|evidence)\b/gi)
   );
+}
+
+function hasNoisySentimentRisk(text: string): boolean {
+  for (const match of text.matchAll(/\b(?:noisy|noise)\b/gi)) {
+    const index = match.index;
+    if (index === undefined || clauseLocalNegation(text, index)) continue;
+    const { start, end } = clauseBounds(text, index);
+    if (/\b(?:sentiment|signal|sample|sources?|data|read)\b/i.test(text.slice(start, end))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasUnnegatedMatch(text: string, pattern: RegExp): boolean {
+  for (const match of text.matchAll(pattern)) {
+    if (match.index !== undefined && !clauseLocalNegation(text, match.index)) return true;
+  }
+  return false;
+}
+
+// Conservative, clause-local negation: a limitation is negated only when a
+// negation token appears earlier in the same clause (bounded by . ; ! ? , or a
+// newline). "not only" is treated as additive, not negating.
+function clauseLocalNegation(text: string, anchorIndex: number): boolean {
+  const { start } = clauseBounds(text, anchorIndex);
+  const clause = text.slice(start, anchorIndex);
+  return /\b(?:no|never|without|nor|neither)\b|n't\b|\bnot\b(?!\s+only\b)/i.test(clause);
+}
+
+function clauseBounds(text: string, index: number): { start: number; end: number } {
+  let start = 0;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (".;!?,\n".includes(text[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  let end = text.length;
+  for (let i = index; i < text.length; i += 1) {
+    if (".;!?,\n".includes(text[i])) {
+      end = i;
+      break;
+    }
+  }
+  return { start, end };
 }
 
 // A missing source is risk framing only when the answer also explains the gap's

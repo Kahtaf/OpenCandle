@@ -941,6 +941,67 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("accepts each canonical data-quality limitation as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const positiveTexts = [
+      "The sentiment signal is noisy.",
+      "The sentiment read shows sparse coverage.",
+      "The sentiment read rests on a low sample count.",
+      "There is insufficient data for a sentiment read.",
+      "The sentiment sample may not be representative.",
+    ];
+
+    for (const text of positiveTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects clause-local negation of each data-quality limitation", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const negatedTexts = [
+      // Intervening modifier between the negation and the noise word.
+      "The sentiment signal is not particularly noisy; all sources returned data.",
+      // Shared "no ... or ..." scope must negate both coordinated limitations.
+      "There is no insufficient data or sparse coverage.",
+      "There is no sparse coverage in the sentiment read.",
+      "There is no low sample count in the sentiment read.",
+      "There is no insufficient data for the sentiment read.",
+    ];
+
+    for (const text of negatedTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(false);
+      expect(result.passed, text).toBe(false);
+    }
+  });
+
   it("still fails sentiment answers with no risk framing, unrelated noise, or negated noise", () => {
     const sentimentCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
