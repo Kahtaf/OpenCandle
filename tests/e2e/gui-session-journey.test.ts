@@ -427,6 +427,57 @@ describe("GUI session journey", () => {
     }
   }, 120_000);
 
+  it("Retry on a stopped turn starts a fresh run with a new action id", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const waitCountBefore = routerHold.waitCount;
+    const runActionId = await submitPromptAndCaptureRunActionId(page, CANCEL_PROMPT);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    await waitForCondition(() => routerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Hold the NVDA router", "router");
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+    routerHold.release();
+    expect(await settlesWithin(heldSettlement!.aborted, 10_000)).toBe(true);
+    expect(
+      await waitForRunCancelReason(page, stoppedSessionId, runActionId, "no_active_run", 10_000),
+    ).toBe(true);
+
+    // The live stopped turn offers Retry without a reload.
+    await expectVisible(page.getByText("Stopped").first(), 15_000);
+    const retry = page.getByRole("button", { name: "Retry" });
+    await expectVisible(retry, 15_000);
+    await expect(retry.isEnabled()).resolves.toBe(true);
+
+    const retryRequest = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" &&
+        new URL(request.url()).pathname ===
+          `/api/sessions/${encodeURIComponent(stoppedSessionId)}/runs`,
+    );
+    await retry.click();
+    const retryBody = (await retryRequest).postDataJSON() as {
+      actionId?: string;
+      prompt?: string;
+    };
+    expect(retryBody.prompt).toBe(CANCEL_PROMPT);
+    expect(String(retryBody.actionId)).toMatch(/^chat-/);
+    expect(retryBody.actionId).not.toBe(runActionId);
+
+    // The retried run actually runs to a completed answer.
+    await expectVisible(
+      page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(stoppedSessionId))).toBe(true);
+  }, 120_000);
+
   it("explicit Stop cancels the run mid native answer stream", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });

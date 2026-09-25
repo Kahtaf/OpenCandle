@@ -109,7 +109,8 @@ export function sessionEntriesToChatEvents(
         messageId: entry.id,
         customType: "opencandle-run-cancelled",
         content: [{ type: "text", text: "Run stopped before it produced an answer." }],
-        details,
+        // Retry re-sends the user's own words, never the expanded prompt.
+        details: originalText ? { ...details, prompt: originalText } : details,
         seq: seq++,
       });
       continue;

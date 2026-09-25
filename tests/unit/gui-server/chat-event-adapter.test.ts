@@ -935,7 +935,7 @@ describe("sessionEntriesToChatEvents", () => {
         messageId: "cancel-1",
         customType: "opencandle-run-cancelled",
         content: [{ type: "text", text: "Run stopped before it produced an answer." }],
-        details: { text: "hold then stop" },
+        details: { text: "hold then stop", prompt: "hold then stop" },
         seq: 4,
       },
     ]);
@@ -991,6 +991,14 @@ describe("sessionEntriesToChatEvents", () => {
       content: [{ type: "text", text: "am I too concentrated?" }],
       attachments: [{ kind: "portfolio", label: "Portfolio" }],
     });
+    // Retry on the stopped turn re-sends the user's own words, not the
+    // expanded workflow prompt the marker stores.
+    expect(
+      events.find(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+      ),
+    ).toMatchObject({ details: { prompt: "am I too concentrated?" } });
 
     const plain = events.find(
       (event) => event.type === "message.completed" && event.messageId === "plain-user",

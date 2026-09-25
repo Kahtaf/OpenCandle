@@ -52,6 +52,7 @@ export function ChatPanel({
   send,
   startChatRun,
   stopRun,
+  retryRun,
   invokeTool,
   setToast,
   draft: draftProp,
@@ -268,6 +269,21 @@ export function ChatPanel({
     submit(prompt, { includePendingAttachments: false });
   };
 
+  // Retry a stopped turn. When it is this session's latest run, retryRun
+  // re-sends it with its attachments under a fresh action id (Stop retired the
+  // original one). A stopped turn from an earlier page load re-sends its prompt.
+  const retryStoppedRun = (prompt) => {
+    if (chatDisabled || canStopRun) return;
+    const stoppedPrompt = typeof prompt === "string" && prompt.trim() ? prompt.trim() : lastPrompt;
+    if (!stoppedPrompt) return;
+    if (retryRun && stoppedPrompt === lastPrompt) {
+      setAllowToolAutoOpen(true);
+      retryRun();
+      return;
+    }
+    retryFailedRun(stoppedPrompt);
+  };
+
   const addAttachment = useCallback(
     (attachment) => {
       setPendingAttachmentState((current) => ({
@@ -387,6 +403,7 @@ export function ChatPanel({
                       typeof failedPrompt === "string" && failedPrompt ? failedPrompt : lastPrompt,
                     )
                   }
+                  onRetryStoppedRun={retryStoppedRun}
                   onFixModelKey={onOpenModelSetup}
                   retryDisabled={chatDisabled || canStopRun}
                 />
@@ -848,6 +865,7 @@ function MessageRow({
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
   onRetryToolRun,
   onRetryFailedRun,
+  onRetryStoppedRun,
   onFixModelKey,
   retryDisabled = false,
 }) {
@@ -874,6 +892,7 @@ function MessageRow({
         knownSymbols={knownSymbols}
         onRetryToolRun={onRetryToolRun}
         onRetryFailedRun={onRetryFailedRun}
+        onRetryStoppedRun={onRetryStoppedRun}
         onFixModelKey={onFixModelKey}
         retryDisabled={retryDisabled}
       />
@@ -889,6 +908,7 @@ function MessageRowContent({
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
   onRetryToolRun,
   onRetryFailedRun,
+  onRetryStoppedRun,
   onFixModelKey,
   retryDisabled = false,
 }) {
@@ -903,13 +923,18 @@ function MessageRowContent({
     );
   }
   if (entry.type === "custom_message") {
+    const stopped = entry.customType === "opencandle-run-cancelled";
+    const retryStopped = onRetryStoppedRun
+      ? () => onRetryStoppedRun(entry.details?.prompt)
+      : undefined;
     return (
       <CustomMessage
         customType={entry.customType}
         content={entry.content}
         details={entry.details}
-        onRetry={() => onRetryFailedRun?.(entry.details?.prompt)}
+        onRetry={stopped ? retryStopped : () => onRetryFailedRun?.(entry.details?.prompt)}
         onFixModelKey={onFixModelKey}
+        retryDisabled={stopped && retryDisabled}
       />
     );
   }

@@ -617,6 +617,7 @@ export function AppShell() {
               send={gui.send}
               startChatRun={startRoutedChatRun}
               stopRun={chatRun.stopRun}
+              retryRun={chatRun.retryRun}
               invokeTool={invokeToolForVisibleSession}
               setToast={gui.setToast}
               draft={draft}

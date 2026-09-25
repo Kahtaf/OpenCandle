@@ -21,7 +21,7 @@
 ### Fixed
 
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
-- Retry after pressing Stop in the GUI now starts a new run instead of being ignored as a repeat of the stopped one.
+- A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.
 - An analysis no longer fails when a temporary model error is retried automatically and the retry succeeds.
 - Pressing Stop in the GUI while a question is waiting for your answer now ends the run and closes the question, so your next message is accepted instead of being refused as still working.
 - The portfolio builder now acquires and reports candidate prices before recommending an allocation, and when its evidence validation still fails after one repair it shows a visible warning that any draft above is unverified instead of presenting it as a validated portfolio.
