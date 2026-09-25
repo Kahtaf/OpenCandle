@@ -255,7 +255,16 @@ export function extractNumbersFromObject(obj: unknown): number[] {
         // Bare number (groups 5-7): optional sign, digits, optional shared
         // magnitude. A magnitude suffix is consumed with the digits so the
         // unscaled mantissa is never emitted beside the scaled value.
-        const sign = m[5];
+        // An unsigned, unscaled percent takes its direction from adjacent
+        // wording exactly as in answer text, so "fell 2.47%" is -2.47 on both
+        // sides of the comparison.
+        const start = m.index ?? 0;
+        const end = start + m[0].length;
+        const direction =
+          m[5] === undefined && m[7] === undefined && obj[end] === "%"
+            ? directionForPercent(obj, start, end + 1)
+            : undefined;
+        const sign = m[5] ?? direction;
         const negative = sign !== undefined && MINUS_SIGN_CHARS.has(sign);
         const n = parseMagnitude(m[6], m[7]);
         if (Number.isFinite(n)) numbers.push(negative ? -n : n);

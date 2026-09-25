@@ -429,7 +429,8 @@ describe("extractNumbersFromObject", () => {
   it("does not drop other numeric evidence beside a signed currency string", () => {
     const nums = extractNumbersFromObject({ formatted: "-$2.50 (down 1.2%)" });
     expect(nums).toContain(-2.5);
-    expect(nums).toContain(1.2);
+    // "down 1.2%" is signed the same way it would be in answer text.
+    expect(nums).toContain(-1.2);
   });
 
   it("extracts comma-grouped currency strings as one signed value", () => {
@@ -779,6 +780,56 @@ describe("scoreDataFaithfulness", () => {
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
     expect(result.score).toBe(1.0);
+  });
+});
+
+describe("direction-worded percent symmetry", () => {
+  it("signs a direction-worded percent in tool-result text like answer text", () => {
+    expect(extractNumbersFromObject("AAPL fell 2.47% today")).toEqual([-2.47]);
+    expect(extractNumbersFromObject("a 2.47% decrease")).toEqual([-2.47]);
+    expect(extractNumbersFromObject("rose 2.47%")).toEqual([2.47]);
+    expect(extractNumbersFromObject("a decrease of +2.47%")).toEqual([2.47]);
+    expect(extractNumbersFromObject("4% down from 5%")).toEqual([4, 5]);
+  });
+
+  it("grounds a fell answer against tool text that also says fell", () => {
+    const trace = makeTrace({
+      text: "AAPL fell 2.47% today",
+      toolCalls: [
+        { name: "get_stock_quote", args: {}, result: { summary: "AAPL fell 2.47% today" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a fell answer against signed numeric tool evidence", () => {
+    const trace = makeTrace({
+      text: "AAPL fell 2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(true);
+  });
+
+  it("fails a rose answer against tool text that says fell", () => {
+    const trace = makeTrace({
+      text: "AAPL rose 2.47% today",
+      toolCalls: [
+        { name: "get_stock_quote", args: {}, result: { summary: "AAPL fell 2.47% today" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("fails a rose answer against signed numeric tool evidence", () => {
+    const trace = makeTrace({
+      text: "AAPL rose 2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(false);
   });
 });
 
