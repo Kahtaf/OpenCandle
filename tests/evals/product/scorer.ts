@@ -24,14 +24,19 @@ export function scoreProductEvalCase(
     totalWeight > 0
       ? results.reduce((sum, result) => sum + result.score * result.weight, 0) / totalWeight
       : 1;
-  const mandatoryFailure = results.some((result) => result.mandatory && !result.passed);
+  const failedDimensions = results.filter((result) => !result.passed);
+  const mandatoryFailure = failedDimensions.some((result) => result.mandatory);
 
   return {
     id: evalCase.id,
     family: evalCase.family,
     prompt: evalCase.prompt,
     score: weightedScore,
-    passed: weightedScore >= PASS_THRESHOLD && !mandatoryFailure,
+    // Every emitted dimension must pass: a non-mandatory dimension (for
+    // example evidence_use or missing_data_honesty) can fail while the weighted
+    // score still clears the threshold, and that partial failure must block.
+    // `mandatoryFailure` is retained as the diagnostic subtype.
+    passed: weightedScore >= PASS_THRESHOLD && failedDimensions.length === 0,
     mandatoryFailure,
     dimensions: results,
     trace,

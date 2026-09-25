@@ -137,6 +137,73 @@ describe("product eval scoring", () => {
     );
   });
 
+  // A mandatory dimension failure is not the only way a case can be wrong: an
+  // emitted non-mandatory dimension (for example evidence_use or
+  // missing_data_honesty) can fail while the weighted score still clears 0.8.
+  // The case must still block; `mandatoryFailure` stays as a diagnostic subtype.
+  const nonMandatoryCase: ProductEvalCase = {
+    id: "non-mandatory-masking-synthetic",
+    family: "single_asset",
+    prompt: "isolated product scorer fixture",
+    dimensions: [
+      {
+        id: "direct_answer",
+        description: "Answers directly.",
+        requiredPatterns: [/\bhold\b/i],
+        mandatory: true,
+      },
+      {
+        id: "risk_framing",
+        description: "Names risk.",
+        requiredPatterns: [/\brisks?\b/i],
+        mandatory: true,
+      },
+      {
+        id: "evidence_use",
+        description: "Uses concrete evidence.",
+        requiredPatterns: [/\bpositive catalyst\b/i],
+        weight: 0.25,
+      },
+    ],
+  };
+
+  it("fails a partially failed non-mandatory dimension even when the weighted score clears the threshold", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({ text: "I would hold here; downside risk is elevated." }),
+    );
+
+    expect(result.score).toBeGreaterThanOrEqual(0.8);
+    expect(result.mandatoryFailure).toBe(false);
+    expect(
+      result.dimensions.filter((dimension) => !dimension.passed).map((dimension) => dimension.id),
+    ).toEqual(["evidence_use"]);
+    expect(result.passed).toBe(false);
+  });
+
+  it("passes the same case when every emitted dimension passes", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({
+        text: "I would hold here; downside risk is elevated and the positive catalyst supports it.",
+      }),
+    );
+
+    expect(result.mandatoryFailure).toBe(false);
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("propagates a non-mandatory dimension failure to a failing product eval exit code", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({ text: "I would hold here; downside risk is elevated." }),
+    );
+    const summary = summarizeProductEvalResults([result]);
+
+    expect(productEvalExitCode({ ...summary, results: [result] })).toBe(1);
+  });
+
   it("aggregates scores by prompt family and dimension", () => {
     const passed = scoreProductEvalCase(
       compareCase,
