@@ -1423,6 +1423,7 @@ function hasCostBasisContext(
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): boolean {
   if (statesCostBasis(text, value, heldSymbol)) return true;
+  if (answersCostBasisQuestion(text, value, symbols, inputContext)) return true;
   if (
     (inputContext?.priorTurns ?? []).some(
       (turn) =>
@@ -1444,6 +1445,42 @@ function hasCostBasisContext(
 // ("I have 100 shares of AAPL at $150") still corroborates the amount.
 function statesCostBasis(text: string, value: number, heldSymbol?: string): boolean {
   if (heldSymbol === undefined && !COST_BASIS_CONTEXT.test(text)) return false;
+  return textMentionsAmount(text, value);
+}
+
+// The user replying with an amount to the most recent assistant request for a
+// cost/purchase price supplies a source fact; an assistant quote supplies a
+// value instead and never qualifies. Only the latest assistant turn counts.
+function answersCostBasisQuestion(
+  text: string,
+  value: number,
+  symbols: string[],
+  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+): boolean {
+  const lastAssistant = [...(inputContext?.priorTurns ?? [])]
+    .reverse()
+    .find((turn) => turn.role === "assistant");
+  if (!lastAssistant || !asksForCostBasis(lastAssistant.text)) return false;
+  const askedSymbols = extractEntities(lastAssistant.text).symbols;
+  if (
+    askedSymbols.length > 0 &&
+    symbols.length > 0 &&
+    !askedSymbols.some((symbol) => symbols.includes(symbol))
+  ) {
+    return false;
+  }
+  return textMentionsAmount(text, value);
+}
+
+const COST_BASIS_REQUEST_FIELD =
+  /\b(?:cost\s*basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price|pay\s+for|paid\s+for)\b/i;
+const COST_BASIS_REQUEST_FORM = /\?|\b(?:what|which|tell\s+me|give\s+me|share|confirm|state)\b/i;
+
+function asksForCostBasis(text: string): boolean {
+  return COST_BASIS_REQUEST_FIELD.test(text) && COST_BASIS_REQUEST_FORM.test(text);
+}
+
+function textMentionsAmount(text: string, value: number): boolean {
   for (const match of text.matchAll(
     /(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)/g,
   )) {
