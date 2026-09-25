@@ -213,7 +213,16 @@ async function waitForPromptSettlement(
       sawBusyOrPending = true;
     }
 
-    if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
+    if (requiresObservableActivity) {
+      // When Pi's transcript is observable, only the expected prompt's own
+      // terminal assistant outcome proves it ran. A prior turn's busy-to-idle
+      // transition can otherwise settle a queued prompt (for example a repair)
+      // that Pi has not dequeued yet, which re-validates stale/empty output and
+      // fails the run before that prompt ever executes.
+      if (terminalOutcome === "success") {
+        return true;
+      }
+    } else if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
       return true;
     }
 

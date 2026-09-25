@@ -13,6 +13,7 @@
 ### Fixed
 
 - The portfolio builder now acquires and reports candidate prices before recommending an allocation, and when its evidence validation still fails after one repair it shows a visible warning that any draft above is unverified instead of presenting it as a validated portfolio.
+- A workflow no longer treats the previous turn going idle as proof that a queued repair prompt finished, so the repair response is produced before the run reports its result.
 
 - `npm run eval -- release` now writes interruption-safe, candidate-scoped evidence under `validation-output/release-evals/v2/<commit>/<run-id>`, so an interrupted or malformed run for the current candidate blocks a later green run while unrelated historical and other-candidate runs no longer do.
 - A follow-up price question no longer invents a cost basis when the conversation never mentioned a basis, purchase, or holding; a basis from your own turn, a same-symbol earlier user turn, or a saved position is still kept.

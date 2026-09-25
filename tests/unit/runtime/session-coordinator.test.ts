@@ -264,6 +264,53 @@ function multiStepWorkflowDefinition(): WorkflowDefinition {
   };
 }
 
+/** Two non-structured steps, to observe whether a required prompt settled. */
+function twoStepSettlementDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "settlement-race",
+    steps: [
+      {
+        stepType: "first",
+        description: "first step",
+        prompt: "first prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "second",
+        description: "second step",
+        prompt: "second prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+/** Single step that only validates once the repair draft is observed. */
+function validationWorkflowDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "repair-race",
+    steps: [
+      {
+        stepType: "fetch_candidates",
+        description: "fetch step",
+        prompt: "fetch prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+        outputValidation: {
+          validate: (rawText: string) =>
+            rawText.includes("REPAIR_OK") ? [] : ["missing evidence"],
+          repairPrompt: () => "repair prompt",
+        },
+      },
+    ],
+  };
+}
+
 function analystWorkflowDefinition(): WorkflowDefinition {
   return {
     workflowType: "comprehensive_analysis",
@@ -777,6 +824,111 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
 
     coord.cancelActiveWorkflow();
+  });
+
+  it("does not settle a required prompt from the prior turn's busy-to-idle transition", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    // The prior turn finishes and the queue reports idle; the next required
+    // prompt has still not been observed.
+    setTimeout(() => {
+      idle = true;
+    }, 100);
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        // Pi has not dequeued the second prompt yet.
+        if (prompt === "second prompt") return;
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry(`${prompt} response`)), 10);
+      }),
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      twoStepSettlementDefinition(),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    // The queue is idle, but a busy-to-idle transition of the prior turn must
+    // not stand in for the queued second prompt's own terminal outcome.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+    expect(pi.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.anything(),
+    );
+
+    // Pi now dequeues and completes the queued prompt.
+    entries.push(userTextEntry("second prompt"));
+    entries.push(assistantTextEntry("second prompt response"));
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "settlement-race",
+      status: "completed",
+    });
+  });
+
+  it("does not fail a workflow from the prior turn's idle transition before the queued repair runs", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    // The first attempt's terminal response is recorded while the session is
+    // still busy, then the queue reports idle before Pi dequeues the repair.
+    setTimeout(() => {
+      idle = true;
+    }, 50);
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        // Pi accepted the repair but has not started it yet.
+        if (prompt === "repair prompt") return;
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry("no-evidence draft")), 10);
+      }),
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      validationWorkflowDefinition(),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(150);
+    // One repair was queued after the initial validation failure. The prior
+    // turn's idle transition must not re-validate the unobserved repair and
+    // record a second terminal failure.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+    const failureEvents = pi.appendEntry.mock.calls
+      .filter(([entryType]) => entryType === "opencandle-workflow-event")
+      .map(([, data]) => data as { eventType?: string; repairAttempted?: boolean });
+    expect(
+      failureEvents.filter(
+        (event) => event.eventType === "output_validation_failed" && event.repairAttempted === true,
+      ),
+    ).toHaveLength(0);
+
+    // Pi now dequeues the repair and returns an acceptable draft.
+    entries.push(userTextEntry("repair prompt"));
+    entries.push(assistantTextEntry("REPAIR_OK"));
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "repair-race",
+      status: "completed",
+    });
   });
 
   it("settles a transformed first step from Pi's persisted original user input", async () => {
