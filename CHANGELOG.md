@@ -27,6 +27,7 @@
 - Product evaluations now recognize recommendations stated with common inflections such as "recommended", so a clear "stance is recommended" answer is no longer scored as evasive.
 - Protective-put benchmark checks now accept an answer that states the put's strike-level sell right for the covered shares, while still rejecting stop-loss levels, put-premium-only loss claims, and protection claims with no strike trigger.
 - Eval runs now fail and report a regression when any scoring layer or product eval dimension fails, even if the case's aggregate score clears the suite threshold, and keep a redacted response-and-tool trace to diagnose the failure.
+- Data-faithfulness scoring now preserves the sign on currency amounts written as `-$2.50` or `$-2.50`, so a faithful negative change is no longer flagged and a reversed or wrong-signed amount is no longer silently accepted.
 
 ## [0.15.0] - 2026-09-21
 

@@ -144,6 +144,38 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("P/E of 28.5")).toContain(28.5);
     expect(extractFinancialNumbers("yield of 3.5")).toContain(3.5);
   });
+
+  it("keeps a negative sign that precedes the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was -$2.50")).toEqual([-2.5]);
+  });
+
+  it("keeps a negative sign that follows the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was $-2.50")).toEqual([-2.5]);
+  });
+
+  it("keeps a positive sign that precedes the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was +$3.25")).toEqual([3.25]);
+  });
+
+  it("keeps a positive sign that follows the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was $+3.25")).toEqual([3.25]);
+  });
+
+  it("normalizes a financial Unicode minus before the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was \u2212$4.75")).toEqual([-4.75]);
+  });
+
+  it("preserves unsigned currency with commas and decimals", () => {
+    expect(extractFinancialNumbers("AAPL closed at $1,234.56")).toEqual([1234.56]);
+  });
+
+  it("keeps the magnitude suffix on unsigned currency without an unsigned duplicate", () => {
+    expect(extractFinancialNumbers("Revenue was $394B")).toEqual([394e9]);
+  });
+
+  it("keeps the sign and magnitude suffix without a sign-losing duplicate", () => {
+    expect(extractFinancialNumbers("The raise was -$2.5B")).toEqual([-2.5e9]);
+  });
 });
 
 describe("extractNumbersFromObject", () => {
@@ -166,6 +198,41 @@ describe("extractNumbersFromObject", () => {
   it("extracts numbers from strings", () => {
     const nums = extractNumbersFromObject({ formatted: "$185.50" });
     expect(nums).toContain(185.5);
+  });
+
+  it("keeps a negative sign that precedes the dollar sign in strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.50" });
+    expect(nums).toContain(-2.5);
+    expect(nums).not.toContain(2.5);
+  });
+
+  it("keeps a negative sign that follows the dollar sign in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$-2.50" })).toContain(-2.5);
+  });
+
+  it("keeps a positive sign on currency strings", () => {
+    expect(extractNumbersFromObject({ formatted: "+$3.25" })).toContain(3.25);
+  });
+
+  it("normalizes a financial Unicode minus before the dollar sign in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "\u2212$4.75" })).toContain(-4.75);
+  });
+
+  it("does not drop other numeric evidence beside a signed currency string", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.50 (down 1.2%)" });
+    expect(nums).toContain(-2.5);
+    expect(nums).toContain(1.2);
+  });
+
+  it("extracts comma-grouped currency strings as one signed value", () => {
+    expect(extractNumbersFromObject({ formatted: "$1,234.56" })).toContain(1234.56);
+  });
+
+  it("keeps the magnitude suffix on signed currency strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.5B" });
+    expect(nums).toContain(-2.5e9);
+    expect(nums).not.toContain(-2.5);
+    expect(nums).not.toContain(2.5e9);
   });
 });
 
@@ -201,6 +268,75 @@ describe("scoreDataFaithfulness", () => {
 
   it("scores 1.0 when no financial numbers in response", () => {
     const trace = makeTrace({ text: "Here is your analysis." });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a faithful negative change whose minus precedes the dollar sign", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a faithful negative change whose minus follows the dollar sign", () => {
+    const trace = makeTrace({
+      text: "The change was $-4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails when a positive currency sign is reversed versus negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "The change was +$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4.75");
+  });
+
+  it("fails when a negative currency sign is reversed versus positive tool evidence", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: 4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4.75");
+  });
+
+  it("does not ignore an incorrect dollar-then-minus amount", () => {
+    const trace = makeTrace({
+      text: "The change was $-9.25",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("9.25");
+  });
+
+  it("preserves 1% tolerance for signed values", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.73",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+  });
+
+  it("grounds a signed currency amount that carries a magnitude suffix", () => {
+    const trace = makeTrace({
+      text: "The raise was -$2.5B",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: { change: -2.5e9 } }],
+    });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
     expect(result.score).toBe(1.0);
