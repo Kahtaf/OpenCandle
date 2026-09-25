@@ -265,6 +265,7 @@ function passesFamilyAwareDimension(
         /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)) ||
       (/\b(?:missing sources?|unavailable)\b/i.test(text) &&
         /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text)) ||
+      missingSourceDivergence(text) ||
       sentimentNoiseCoverageCaveat(text)
     );
   }
@@ -292,6 +293,18 @@ function sentimentNoiseCoverageCaveat(text: string): boolean {
     "\\b(?:(?:(?:may|might|could|can|does|do|did)\\s+not|doesn't|don't|won't)\\s+" +
     "(?:fully\\s+|completely\\s+|entirely\\s+)?(?:capture|reflect|represent|cover|include|account for))\\b";
   return new RegExp(`${subjectNoise}[^.!?]{0,160}${negativeCoverage}`, "i").test(text);
+}
+
+// A missing source is risk framing only when the answer also explains the gap's
+// effect: the sentiment/signal/sample/data/source read can differ from the other
+// sources that did return. The divergence must name a sentiment subject and a
+// real "other/available/remaining sources" comparison, so an unrelated
+// difference clause plus a bare "source unavailable" note does not qualify.
+function missingSourceDivergence(text: string): boolean {
+  if (!/\b(?:missing sources?|unavailable|no sources returned)\b/i.test(text)) return false;
+  return /\b(?:sentiment|signal|sample|data|sources?)\b[^.!?]{0,80}\b(?:may|might|could|can|would)\s+(?:differ|diverge|vary)\s+from\b[^.!?]{0,30}\b(?:other|available|remaining)\s+sources?\b/i.test(
+    text,
+  );
 }
 
 function toolCallIsUnavailable(call: EvalTrace["toolCalls"][number]): boolean {

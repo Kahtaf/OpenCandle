@@ -936,6 +936,94 @@ describe("product eval scoring", () => {
     }
   });
 
+  it("accepts the full saved source-divergence answer's missing-source gap explanation", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim live answer preserved in
+        // validation-output/sentiment-source-divergence.txt.
+        text:
+          'Sentiment around "AI stocks" is currently **Leaning Bullish** with an aggregate score of +0.07 based on 103 records from Reddit and Web/News over the last 24 hours.\n\n' +
+          "**Key Drivers:**\n" +
+          '*   **Positive:** "buy", "long", "calls"\n' +
+          '*   **Negative:** "sell", "short", "bubble"\n\n' +
+          "**Missing Sources:**\n" +
+          "*   **Twitter:** Twitter sentiment is unavailable due to a Twitter API error (HTTP 404). This is a significant data gap as Twitter can provide real-time public sentiment that may differ from other sources.\n\n" +
+          "**Data gaps**:\n" +
+          "*   Twitter: Twitter sentiment unavailable (Twitter API error (HTTP 404): Twitter API error 404: ).",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts an independent missing-source divergence explanation as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Reddit is unavailable, and its sentiment may diverge from the available sources.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails a bare missing-source note and a fully covered bullish answer", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const missingOnly = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Twitter sentiment is unavailable right now.",
+      }),
+    );
+    const allCovered = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "All sources returned data; sentiment for AI stocks is bullish.",
+      }),
+    );
+    // An unrelated "may differ from other …" clause must not be read as a
+    // sentiment source-divergence explanation.
+    const unrelatedDifference = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Twitter is unavailable. Shipping times may differ from other estimates.",
+      }),
+    );
+
+    for (const result of [missingOnly, allCovered, unrelatedDifference]) {
+      expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+        false,
+      );
+      expect(result.passed).toBe(false);
+    }
+  });
+
   it("recognizes plural risk headings in education answers", () => {
     const educationCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "education-options-greeks",

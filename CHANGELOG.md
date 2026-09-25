@@ -34,6 +34,7 @@
 - Data-faithfulness scoring now reads a spelled-out currency scale such as `$3.697 Trillion` at face value, including ranges like `$1 million-$2 million`, and no longer misreads a duration such as `15m delayed` as a millions amount.
 - Failed eval diagnostics now redact API credentials echoed in provider rate-limit messages.
 - Product evaluations now recognize a sentiment answer that frames noisy, incomplete source coverage as a risk caveat, so an honest "data can be noisy and may not capture the full market" disclosure is no longer scored as omitting risk framing.
+- Product evaluations now also recognize a sentiment answer that explains a missing source's divergence from the sources that returned, so a "Twitter is unavailable and its sentiment may differ from other sources" gap disclosure is no longer scored as omitting risk framing.
 
 ## [0.15.0] - 2026-09-21
 
