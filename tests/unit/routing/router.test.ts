@@ -2804,8 +2804,34 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
-  it("does not treat a dividend question as a cost-basis request", async () => {
+  it("keeps a reply to a plain personal pay question", async () => {
     const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you pay?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to a plain personal basis question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is your basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not treat a dividend question as a cost-basis request", async () => {
+    const plain = await route(
       {
         ...BASE_INPUT,
         text: "$1",
@@ -2813,8 +2839,17 @@ describe("router cost-basis context guard", () => {
       },
       outputFor({ symbols: ["AAPL"], costBasis: 1 }),
     );
+    const perShare = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much does AAPL pay per share in dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
 
-    expect(result.entities.costBasis).toBeUndefined();
+    expect(plain.entities.costBasis).toBeUndefined();
+    expect(perShare.entities.costBasis).toBeUndefined();
   });
 
   it("does not treat a quantity holding question as a cost-basis request", async () => {

@@ -1458,16 +1458,18 @@ function answersBasisQuestion(
   );
 }
 
-// A question counts as a cost-basis request only with an explicit basis field
-// or personal purchase-price intent. Personal price intent distinguishes "how
-// much did you pay per share" from a company paying dividends or interest, and
-// quantity-only holding questions are not price requests.
+// A question counts as a cost-basis request with an explicit basis field or a
+// personal purchase-price intent. For pay/paid, a personal subject plus the
+// request form is already price context ("how much did you pay?"); acquisition
+// verbs still need an explicit price word. The personal subject separates the
+// user as payer from a company paying dividends, and the explicit basis field
+// (including plain "basis") needs no pronoun.
 const COST_BASIS_REQUEST_FORM =
   /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
 const COST_BASIS_REQUEST_FIELD =
-  /\b(?:cost\s*basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
+  /\b(?:cost\s*basis|basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
 const COST_BASIS_REQUEST_PRICE =
-  /\b(?:pay|paid)\b[^.?!]{0,30}\b(?:price|per\s+share|cost|for)\b|\b(?:price|per\s+share)\b[^.?!]{0,30}\b(?:pay|paid|bought|purchased|acquired)\b/i;
+  /\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:pay|paid)\b|\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b[^.?!]{0,40}\b(?:price|per\s+share|cost|for)\b/i;
 
 function asksForCostBasis(text: string): boolean {
   if (!COST_BASIS_REQUEST_FORM.test(text)) return false;
