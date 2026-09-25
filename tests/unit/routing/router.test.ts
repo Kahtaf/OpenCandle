@@ -3070,6 +3070,86 @@ describe("router cost-basis provenance", () => {
     expect(result.entities.costBasis).toBe(51);
   });
 
+  it("preserves an explicit cost basis in the reverse amount-before-cue form", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Sell covered calls on AAPL with a $150 cost basis.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "reverse explicit basis",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("drops a hypothetical reverse amount-before-cue cost basis", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What if I had a $150 cost basis on AAPL? Should I sell covered calls?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "hypothetical reverse basis",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("resolves the latest explicit basis correction in the current turn", async () => {
+    const text =
+      "My AAPL cost basis is $100. Correction: my AAPL cost basis is $150. Should I add to my position?";
+    const modelCorrect = await route(
+      { ...BASE_INPUT, text },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: ["AAPL"], costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "latest correction",
+        }),
+      ),
+    );
+    const modelStale = await route(
+      { ...BASE_INPUT, text },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: ["AAPL"], costBasis: 100 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "stale first basis",
+        }),
+      ),
+    );
+
+    expect(modelCorrect.entities.costBasis).toBe(150);
+    expect(modelStale.entities.costBasis).toBe(150);
+  });
+
   // The deterministic cost-basis extractor only knows "cost basis / basis /
   // entry price"; a natural ownership statement must still be preserved.
   it("preserves a model cost basis grounded in an ownership phrase", async () => {

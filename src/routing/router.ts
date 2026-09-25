@@ -293,7 +293,6 @@ export function postProcessRouterOutput(
       costBasis: resolveSupportedCostBasis(
         text,
         output,
-        extracted,
         inputContext,
         mergeSymbols(symbolsAfterAmbiguousFilter, extracted.symbols),
       ),
@@ -606,10 +605,7 @@ export function postProcessRouterOutput(
     // saved lot basis. An ordinary lot purchase does not: without a quantity it
     // is a lot price, not the whole-position basis, so the saved position stays
     // authoritative.
-    const explicitBasisCorrection =
-      extracted.costBasis !== undefined && hasUserCostBasisSupport(text, extracted.costBasis)
-        ? extracted.costBasis
-        : undefined;
+    const explicitBasisCorrection = currentExplicitBasis(text);
     next = {
       ...next,
       entities: {
@@ -1394,15 +1390,14 @@ function readPortfolioPosition(
 function resolveSupportedCostBasis(
   text: string,
   output: RouterOutput,
-  extracted: ExtractedEntities,
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   symbols: string[],
 ): number | undefined {
-  // Deterministic extraction goes through the same provenance check: it can
-  // match a target or counterfactual phrase the model then echoes.
-  if (extracted.costBasis !== undefined && hasUserCostBasisSupport(text, extracted.costBasis)) {
-    return extracted.costBasis;
-  }
+  // An explicit position-basis assertion in the current turn is the current
+  // authority. When the turn restates it, the latest assertion wins rather than
+  // the first one the deterministic extractor happened to return.
+  const explicitBasis = currentExplicitBasis(text);
+  if (explicitBasis !== undefined) return explicitBasis;
   const candidate = output.entities.costBasis;
   if (candidate === undefined) return undefined;
   if (hasUserCostBasisSupport(text, candidate)) return candidate;
@@ -1414,9 +1409,11 @@ function resolveSupportedCostBasis(
 }
 
 const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
-// Cue gaps exclude sentence terminators, commas, dollar signs, and bare
-// digits so a cue cannot reach across clauses or past an unrelated amount.
-const COST_BASIS_GAP = String.raw`[^.;?!,$\d]{0,40}`;
+const COST_BASIS_CUE = String.raw`(?:cost\s*basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|basis)`;
+// Whole-position basis phrasing mirrors the deterministic extractor: the cue
+// and amount must be adjacent (only a linking word between), so an unrelated
+// later number cannot be claimed as basis.
+const COST_BASIS_CONNECTOR = String.raw`\s*(?:is|was|at|of|:)?\s*`;
 const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d+\s*(?:shares?|contracts?|units?))*`;
 // Wording that marks the matched cue+amount span as hypothetical, targeted, or
 // negated. It is checked only against the cue's own immediate prefix and the
@@ -1426,32 +1423,64 @@ const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d+\s*(?:shares?|co
 const COST_BASIS_UNASSERTED =
   /\b(?:what\s+if|if\b|suppose|supposing|imagine|hypothetical|let'?s\s+say|say\s+i|assuming|assume|maybe|perhaps|might|could|would|target(?:ing|ed|s)?|plan(?:ning|ned|s)?|intend(?:ing|ed|s)?|hop(?:e|es|ing|ed)|looking\s+to|considering|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|wouldn'?t|couldn'?t|never|not(?!\s+only)|no\s+longer)\b/i;
 
+// Explicit whole-position basis phrasing, including the reverse "amount ...
+// cue" form the deterministic extractor already supports.
+const EXPLICIT_BASIS_PATTERNS = [
+  new RegExp(String.raw`\b${COST_BASIS_CUE}\b${COST_BASIS_CONNECTOR}${COST_BASIS_AMOUNT}`, "i"),
+  new RegExp(String.raw`${COST_BASIS_AMOUNT}\s*${COST_BASIS_CUE}\b`, "i"),
+  new RegExp(
+    String.raw`\b(?:my|the)\s+(?:cost|basis|entry(?:\s*price)?|average\s+cost)\b${COST_BASIS_CONNECTOR}${COST_BASIS_AMOUNT}`,
+    "i",
+  ),
+];
+// Acquisition and position-price phrasing. This corroborates a model candidate
+// or a prior-turn basis; it does not by itself override a saved position basis.
+const ACQUISITION_BASIS_PATTERNS = [
+  new RegExp(
+    String.raw`\b(?:bought|purchased|acquired|paid|cost\s+(?:me|us))\b${COST_BASIS_ACQUISITION_GAP}${COST_BASIS_AMOUNT}`,
+    "i",
+  ),
+  new RegExp(
+    String.raw`\b(?:my|the)\s+(?:position|shares?|holding|stock)\b(?:\s+(?:is|was))?\s+(?:at\s+)?${COST_BASIS_AMOUNT}`,
+    "i",
+  ),
+  new RegExp(String.raw`\bi(?:'m| am)\s+(?:in|long)\s+(?:at|@)\s*${COST_BASIS_AMOUNT}`, "i"),
+];
+const ALL_BASIS_PATTERNS = [...EXPLICIT_BASIS_PATTERNS, ...ACQUISITION_BASIS_PATTERNS];
+
+interface AssertedBasisMatch {
+  index: number;
+  value: number;
+}
+
+// Enumerate every asserted cue+amount match in text order. Enumerating (rather
+// than taking each pattern's first match) is what lets a restated correction
+// and the extractor's reverse form both be found.
+function assertedBasisMatches(text: string, patterns: RegExp[]): AssertedBasisMatch[] {
+  const matches: AssertedBasisMatch[] = [];
+  for (const pattern of patterns) {
+    const regex = new RegExp(pattern.source, "gi");
+    let match = regex.exec(text);
+    while (match !== null) {
+      const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+      if (cueIsAsserted(text, match.index, match[0])) {
+        matches.push({ index: match.index, value: parsed });
+      }
+      match = regex.exec(text);
+    }
+  }
+  return matches.sort((left, right) => left.index - right.index);
+}
+
 function hasUserCostBasisSupport(text: string, value: number): boolean {
-  const patterns = [
-    new RegExp(
-      String.raw`\b(?:cost\s*basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|basis)\b${COST_BASIS_GAP}${COST_BASIS_AMOUNT}`,
-      "i",
-    ),
-    new RegExp(
-      String.raw`\b(?:bought|purchased|acquired|paid|cost\s+(?:me|us))\b${COST_BASIS_ACQUISITION_GAP}${COST_BASIS_AMOUNT}`,
-      "i",
-    ),
-    new RegExp(
-      String.raw`\b(?:my|the)\s+(?:cost|basis|entry(?:\s*price)?|average\s+cost)\b${COST_BASIS_GAP}${COST_BASIS_AMOUNT}`,
-      "i",
-    ),
-    new RegExp(
-      String.raw`\b(?:my|the)\s+(?:position|shares?|holding|stock)\b(?:\s+(?:is|was))?\s+(?:at\s+)?${COST_BASIS_AMOUNT}`,
-      "i",
-    ),
-    new RegExp(String.raw`\bi(?:'m| am)\s+(?:in|long)\s+(?:at|@)\s*${COST_BASIS_AMOUNT}`, "i"),
-  ];
-  return patterns.some((pattern) => {
-    const match = pattern.exec(text);
-    if (!match) return false;
-    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    return amountsClose(parsed, value) && cueIsAsserted(text, match.index, match[0]);
-  });
+  return assertedBasisMatches(text, ALL_BASIS_PATTERNS).some((match) =>
+    amountsClose(match.value, value),
+  );
+}
+
+// The last explicit basis asserted in the turn.
+function currentExplicitBasis(text: string): number | undefined {
+  return assertedBasisMatches(text, EXPLICIT_BASIS_PATTERNS).at(-1)?.value;
 }
 
 // A cue+amount match is unasserted only when its own immediate prefix or span
@@ -1494,12 +1523,7 @@ function latestPriorUserCostBasis(
 }
 
 function readEstablishedCostBasis(text: string): number | undefined {
-  const asserted: number[] = [];
-  for (const match of text.matchAll(/(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)/g)) {
-    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (hasUserCostBasisSupport(text, parsed)) asserted.push(parsed);
-  }
-  return asserted.at(-1);
+  return assertedBasisMatches(text, ALL_BASIS_PATTERNS).at(-1)?.value;
 }
 
 function matchesSavedPositionCostBasis(
