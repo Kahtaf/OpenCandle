@@ -32,6 +32,6 @@ Release and publish paths SHALL reject missing, stale, mismatched, or incomplete
 - **WHEN** a tag is pushed without trusted approved release evidence
 - **THEN** publication is blocked before npm publish
 
-#### Scenario: Explicit waiver
-- **WHEN** an approved nonexpired waiver covers a failed check
-- **THEN** the release report preserves the failure and displays the waiver separately
+#### Scenario: Failed check cannot be waived
+- **WHEN** a required check fails
+- **THEN** release evidence stays blocked and no waiver, skip, or override turns it green

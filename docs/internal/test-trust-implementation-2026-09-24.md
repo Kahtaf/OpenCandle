@@ -69,7 +69,9 @@ rehearsal has run.
   release runner, and the release-lib real-default npm runner goes through the safe helper (5
   focused tests, 50 with readiness).
 - The compact release summary is a new fail-closed feature. The proposed evidence **waiver was NOT
-  implemented**; strict blocking is the recorded deviation.
+  implemented**; strict blocking is the recorded deviation. **Superseded (2026-09-25):** the
+  maintainer decided every release failure blocks and no waiver will be built, making strict blocking
+  the permanent policy.
 - Operational summary: `docs/internal/release-enforcement.md`.
 
 ### Policy and authoring guidance

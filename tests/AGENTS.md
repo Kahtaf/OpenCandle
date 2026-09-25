@@ -80,8 +80,9 @@ The authoritative policy is `docs/internal/test-trust-policy.md`. In short:
   assets; browser/combined ratios are reported separately (informational) and are not ratio-compared
   across instrumentation maps. Node child-process and WebContainer coverage are unavailable; relay
   and browser are measured.
-- **Failures:** no retry-until-green; one human diagnostic rerun at most, attempts preserved. No
-  waiver or bypass is implemented.
+- **Failures:** no retry-until-green; one human diagnostic rerun at most, attempts preserved. Every
+  release failure blocks: no waiver or bypass is implemented, and none will be built (maintainer
+  decision 2026-09-25).
 - **Quarantine** of a required check needs a written record (owner, issue, expiry, lost contract,
   alternative proof); there is no automated registry or silent skip.
 

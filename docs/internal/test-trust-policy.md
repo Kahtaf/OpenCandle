@@ -71,11 +71,19 @@ not produced by the code or mock under test.
 - Gate steps fail closed; infrastructure failures stay red.
 - **One diagnostic rerun, by a human, only to separate infrastructure failure from functional
   failure.** Preserve every attempt. Never retry until green; a rerun that passes is not a fix.
+- **A failure is a work item, not a report.** Diagnose the cause, reproduce it as a credible
+  regression red at the declared boundary, fix the actual cause at the narrowest durable layer, and
+  verify with a focused run before handoff. Classify first: product defect, inaccurate assertion, or
+  harness/environment issue. Never weaken, delete, or bypass a required check, overfit prompts to a
+  benchmark, or suppress failed evidence.
 - `scripts/release-evidence.mjs` rejects any recorded attempt with a non-zero exit, so a release
   cannot be attested from a retry.
-- **No emergency waiver or bypass exists.** No skip flag, policy override, or CI input exempts a
-  required check; emergency publication remains blocked by design until waiver support is separately
-  designed, reviewed, and approved.
+- **Every release failure blocks; there is no emergency waiver.** The approved plan originally
+  proposed an explicit emergency waiver, but the maintainer's explicit decision (2026-09-25)
+  supersedes it: no skip flag, policy override, CI input, or waiver turns a required failure green,
+  and none should be built. Missing required credentials/cases/checkers or a scope contradiction is
+  diagnosed and escalated to the orchestrator with preserved progress, never waived or replaced with
+  mocks.
 
 ## 6. Quarantine (editorial rule, not a registry)
 

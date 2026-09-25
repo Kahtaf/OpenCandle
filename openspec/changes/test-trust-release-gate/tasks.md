@@ -41,7 +41,9 @@ Inventory counts in `docs/internal/test-inventory.md` are a recorded milestone, 
 - [ ] Phase 6: authoring/flake policy, compact release summary, candidate rehearsal. **Partial
   (2026-09-24):** the compact release summary landed with 29 tests; the evidence waiver was **not
   implemented** (strict block is the deviation); the first live candidate rehearsal failed, so the
-  fresh rehearsal and final summary are pending.
+  fresh rehearsal and final summary are pending. **Superseded (2026-09-25):** the maintainer decided
+  every release failure blocks and no waiver will be built, so "not implemented" is now the permanent
+  policy rather than a deviation.
 - [ ] Integrated release candidate. Candidate `70ac0956` RELEASE gate **PASS** (291.2 s); final
   full-branch autoreview clean (11 batches, 0 findings); package prepare/smoke/verify passed; 2 live
   provider cases passed. The first live `eval -- release` attempt failed (31/32 router checks, 18

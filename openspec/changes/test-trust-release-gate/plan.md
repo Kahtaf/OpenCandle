@@ -96,7 +96,12 @@ Priority order: GUI source/CSS checks → manually stitched coordinator scenario
 - Account explicitly for today's version/changelog bump after preflight. Prepare final release metadata before the definitive package check, or verify that only allowlisted release metadata changed since behavioral evals. Any production, dependency, test, or policy change invalidates relevant evidence. Build, hash, smoke-test, and publish the same tarball.
 - Proposed default: live evidence must be from the candidate and within 24 hours of release; rerun later releases. Deterministic evidence may be reused only for matching inputs/environment policy. The chosen live window is configurable and reported.
 - Missing required credentials/cases/checkers or stale/mismatched reports block release. Optional competitor baselines may be skipped only if declared optional in the release policy with a visible reason; they do not count as wins. Specify which baselines are required when Phase 1 records the maintainer's current cadence.
-- Preserve an explicit emergency waiver with reason, approver, affected checks, and expiry in the release report. It must remain visibly waived, never green. Normal publication cannot use the current unrecorded confirmation bypass.
+- The plan originally proposed: "Preserve an explicit emergency waiver with reason, approver,
+  affected checks, and expiry in the release report. It must remain visibly waived, never green."
+  **Superseded by the maintainer's explicit decision (2026-09-25): every release failure blocks and
+  no emergency waiver will be built.** Missing required credentials/cases/checkers or stale/mismatched
+  reports block release; the response is a concrete diagnosis and repair, never a waiver. Normal
+  publication cannot use the current unrecorded confirmation bypass.
 
 **Acceptance:** dry-run releases reject missing/stale/wrong-candidate reports and failed required cases; a valid candidate succeeds without publishing. Test metadata-only version changes, direct-tag attempts, and mismatched package hashes. Approval of this plan does not authorize an actual publish.
 
@@ -105,10 +110,17 @@ Priority order: GUI source/CSS checks → manually stitched coordinator scenario
 **Deliverables:** test authoring guidance, flake ownership, and a compact release summary.
 
 - Make the value checklist part of test review: named contract, credible defect, correct boundary, independent expected result, and explanation of additional protection.
-- Preserve all run attempts. No retry-until-green: allow one diagnostic rerun for suspected infrastructure failure, classify the cause, and expose it in the report. A functional failure still blocks until fixed or explicitly waived.
-- Quarantines need an owner, reason, expiry, and known coverage loss. Critical release journeys cannot silently disappear through quarantine; alternate proof or an explicit waiver is required.
+- Preserve all run attempts. No retry-until-green: allow one diagnostic rerun for suspected
+  infrastructure failure, classify the cause (product defect, inaccurate assertion, or
+  harness/environment), and expose it in the report. A failure is diagnosed, reproduced as a credible
+  regression red, fixed at the narrowest durable layer, and verified with a focused run; it never ends
+  at a report and is never waived.
+- Quarantines need an owner, reason, expiry, and known coverage loss. Critical release journeys cannot
+  silently disappear through quarantine; alternate proof is required, and quarantine is never a waiver
+  of a release failure.
 - Track runtime, failure causes, flake rate, missing coverage, and mutation survivors. Set execution/cost budgets from measurements and keep broad live discovery off the PR path.
-- Release summary answers: what candidate/artifact was tested, which user journeys and failure cases passed, what was skipped/waived, and which risks remain.
+- Release summary answers: what candidate/artifact was tested, which user journeys and failure cases
+  passed, what was skipped or is still pending, and which risks remain.
 
 **Acceptance:** one real release-candidate rehearsal produces complete evidence; a seeded failure blocks the rehearsal; subsequent release does not require interpreting scattered logs to establish readiness.
 

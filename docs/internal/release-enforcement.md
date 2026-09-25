@@ -182,8 +182,9 @@ basename, hash, candidate commit, and version, and publishes that exact tarball
 with `--ignore-scripts --access public --provenance`. The GitHub release is
 created only after the npm publish succeeds.
 
-## Open item: emergency publication is blocked
+## Emergency publication is blocked
 
-No waiver or bypass input exists anywhere in this batch. Emergency publication
-remains blocked until explicit waiver support is separately designed, reviewed,
-and approved. This is a declared open plan item, not an oversight.
+No waiver or bypass input exists. This was originally recorded as a declared open plan item; the
+maintainer's explicit decision (2026-09-25) closes it: every release failure blocks, no emergency
+waiver support will be built, and no skip flag, policy override, or CI input exempts a required check.
+Missing required credentials/evidence are diagnosed and escalated, never waived.

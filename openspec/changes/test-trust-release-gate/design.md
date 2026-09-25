@@ -16,7 +16,7 @@ Separate evidence validation from evidence provenance. A JSON report can validat
 
 Prepare final version metadata before definitive package validation. If behavioral eval evidence was generated against the pre-bump tree, permit only version fields in package manifests/lockfile and changelog changes; compare normalized tree content and require unchanged production, dependency values, tests, and policy. Pack once, hash and smoke-test that tarball, and publish that exact artifact. No actual release or remote workflow is triggered by implementation.
 
-Introduce reporting first, then exercise success/failure rehearsals before enforcement. Keep manual quality review of noisy competitive judgments; correctness hard assertions and completed required journeys block automatically. Waivers are explicit records with approver/reason/checks/expiry and cannot turn failure into a plain pass.
+Introduce reporting first, then exercise success/failure rehearsals before enforcement. Keep manual quality review of noisy competitive judgments; correctness hard assertions and completed required journeys block automatically. There is no waiver: per the maintainer's explicit decision (2026-09-25), every release failure blocks and no waiver support will be built, so a failed required check is never turned into a plain pass.
 
 ## Worker ownership and review
 
