@@ -1494,10 +1494,33 @@ function asksForCostBasis(text: string): boolean {
   return COST_BASIS_REQUEST_FIELD.test(text) && COST_BASIS_REQUEST_FORM.test(text);
 }
 
+// Compact scaled amounts follow the existing K convention ("$1.5k"); the
+// scaled token is matched whole so the unscaled mantissa is never accepted too.
+const COMPACT_SCALE: Record<string, number> = {
+  k: 1_000,
+  m: 1_000_000,
+  b: 1_000_000_000,
+  t: 1_000_000_000_000,
+};
+// The leading guard rejects a start inside a decimal or grouped number, and the
+// trailing guards reject ending before a decimal+digit; a sentence-final period
+// after the amount is still allowed.
+const AMOUNT_MANTISSA = String.raw`(?:\$)?\s*(?<![\d,.])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
+const SCALED_AMOUNT = new RegExp(
+  String.raw`${AMOUNT_MANTISSA}\s*([kKmMbBtT])\b(?!\s*(?:shares?|contracts?|units?)\b)`,
+  "g",
+);
+const PLAIN_AMOUNT = new RegExp(
+  String.raw`${AMOUNT_MANTISSA}(?![\d,])(?!\.\d)(?!\s*[kKmMbBtT]\b)(?!\s*(?:shares?|contracts?|units?)\b)`,
+  "g",
+);
+
 function textMentionsAmount(text: string, value: number): boolean {
-  for (const match of text.matchAll(
-    /(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)/g,
-  )) {
+  for (const match of text.matchAll(SCALED_AMOUNT)) {
+    const mantissa = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (amountsClose(mantissa * COMPACT_SCALE[match[2].toLowerCase()], value)) return true;
+  }
+  for (const match of text.matchAll(PLAIN_AMOUNT)) {
     if (amountsClose(Number.parseFloat(match[1].replace(/,/g, "")), value)) return true;
   }
   return false;

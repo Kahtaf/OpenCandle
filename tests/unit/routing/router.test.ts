@@ -2808,6 +2808,84 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a compact-scaled purchase price", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AVGO at $1.5k. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 1500 }),
+    );
+
+    expect(result.entities.costBasis).toBe(1500);
+  });
+
+  it("keeps a compact-scaled reply to a cost-basis question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1.5k",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AVGO?" }],
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 1500 }),
+    );
+
+    expect(result.entities.costBasis).toBe(1500);
+  });
+
+  it("does not accept the unscaled mantissa of a compact-scaled amount", async () => {
+    const purchase = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AVGO at $1.5k. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 1.5 }),
+    );
+    const reply = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1.5k",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AVGO?" }],
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 1.5 }),
+    );
+
+    expect(purchase.entities.costBasis).toBeUndefined();
+    expect(reply.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not accept a partial-digit reading of a compact-scaled amount", async () => {
+    const leading = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AVGO at $1.5k. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 1 }),
+    );
+    const trailing = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AVGO at $1.5k. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 5000 }),
+    );
+
+    expect(leading.entities.costBasis).toBeUndefined();
+    expect(trailing.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a plain amount followed by a sentence period", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AVGO at $150.50. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 150.5 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150.5);
+  });
+
   it("does not use a future question or another holding's question for a prior amount", async () => {
     const futureQuestion = await route(
       {
