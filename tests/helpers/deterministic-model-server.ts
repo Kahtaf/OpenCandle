@@ -34,6 +34,7 @@ export interface ModelChatRequest {
 }
 
 export type ModelScriptedReply =
+  | { kind: "error"; message: string }
   | {
       kind: "text";
       text: string;
@@ -198,6 +199,13 @@ function createSettlement(
 async function writeScriptedReply(res: ServerResponse, reply: ModelScriptedReply): Promise<void> {
   const id = "chatcmpl-deterministic-journey";
   const base = { id, object: "chat.completion.chunk", created: 1, model: "oc-journey-model" };
+
+  if (reply.kind === "error") {
+    writeSse(res, {
+      error: { message: reply.message, type: "server_error", code: "server_error" },
+    });
+    return;
+  }
 
   if (reply.kind === "text") {
     // Split the text so the journey also exercises multi-delta assembly.

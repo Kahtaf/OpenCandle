@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Live evaluations now wait for the agent to finish provider retries and reject empty or unsuccessful final answers instead of accepting a partial run.
+
 ### Added
 
 - `npm run gates`, `npm run gates:full`, and `npm run release:check` now share one checked-in, sequential proof battery that stops on the first failure, never retries, and reports each run.

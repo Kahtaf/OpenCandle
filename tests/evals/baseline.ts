@@ -359,6 +359,9 @@ export function saveFailureDiagnostic(
     responseText: redactForDiagnostic(trace.text),
     // Sanitized terminal metadata explains an empty/unresolved final answer:
     // a blank successful stop vs. an error/aborted terminal assistant message.
+    ...(trace.retryEvents === undefined
+      ? {}
+      : { retryEvents: redactForDiagnostic(trace.retryEvents) }),
     ...(trace.terminalOutcome === undefined
       ? {}
       : { terminalOutcome: redactForDiagnostic(trace.terminalOutcome) }),

@@ -75,7 +75,9 @@ export function assistantMessageHasText(content: unknown): boolean {
     if (typeof block !== "object" || block === null) return false;
     const candidate = block as { type?: unknown; text?: unknown };
     return (
-      candidate.type === "text" && typeof candidate.text === "string" && candidate.text.length > 0
+      candidate.type === "text" &&
+      typeof candidate.text === "string" &&
+      candidate.text.trim().length > 0
     );
   });
 }

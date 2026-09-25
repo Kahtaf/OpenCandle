@@ -122,15 +122,30 @@ describe("runOpenCandleSession", () => {
   });
 
   it("passes explicit auth and model registry into the isolated harness session", async () => {
-    const listeners: Array<(event: { type: string }) => void> = [];
+    const listeners: Array<(event: Record<string, unknown>) => void> = [];
     const session = {
-      subscribe: vi.fn((listener: (event: { type: string }) => void) => {
+      subscribe: vi.fn((listener: (event: Record<string, unknown>) => void) => {
         listeners.push(listener);
         return () => {};
       }),
       prompt: vi.fn(async () => {
         queueMicrotask(() => {
-          for (const listener of listeners) listener({ type: "agent_end" });
+          for (const listener of listeners) {
+            listener({
+              type: "message_update",
+              assistantMessageEvent: { type: "text_delta", delta: "done" },
+            });
+            listener({
+              type: "turn_end",
+              message: {
+                role: "assistant",
+                stopReason: "stop",
+                content: [{ type: "text", text: "done" }],
+              },
+              toolResults: [],
+            });
+            listener({ type: "agent_end", messages: [] });
+          }
         });
       }),
       dispose: vi.fn(),
@@ -163,15 +178,30 @@ describe("runOpenCandleSession", () => {
 
   it("passes an imported Pi session manager through for cross-surface continuation", async () => {
     const importedSessionManager = SessionManager.inMemory("/tmp/imported-hosted-session");
-    const listeners: Array<(event: { type: string }) => void> = [];
+    const listeners: Array<(event: Record<string, unknown>) => void> = [];
     const session = {
-      subscribe: vi.fn((listener: (event: { type: string }) => void) => {
+      subscribe: vi.fn((listener: (event: Record<string, unknown>) => void) => {
         listeners.push(listener);
         return () => {};
       }),
       prompt: vi.fn(async () => {
         queueMicrotask(() => {
-          for (const listener of listeners) listener({ type: "agent_end" });
+          for (const listener of listeners) {
+            listener({
+              type: "message_update",
+              assistantMessageEvent: { type: "text_delta", delta: "done" },
+            });
+            listener({
+              type: "turn_end",
+              message: {
+                role: "assistant",
+                stopReason: "stop",
+                content: [{ type: "text", text: "done" }],
+              },
+              toolResults: [],
+            });
+            listener({ type: "agent_end", messages: [] });
+          }
         });
       }),
       dispose: vi.fn(),
@@ -205,7 +235,15 @@ describe("runOpenCandleSession", () => {
               type: "message_update",
               assistantMessageEvent: { type: "text_delta", delta: "done" },
             });
-            listener({ type: "turn_end", message: {}, toolResults: [] });
+            listener({
+              type: "turn_end",
+              message: {
+                role: "assistant",
+                stopReason: "stop",
+                content: [{ type: "text", text: "done" }],
+              },
+              toolResults: [],
+            });
             listener({ type: "agent_end", messages: [] });
           }
         });
@@ -274,7 +312,15 @@ describe("runOpenCandleSession", () => {
                 delta: `answer ${promptIndex}`,
               },
             });
-            listener({ type: "turn_end", message: {}, toolResults: [] });
+            listener({
+              type: "turn_end",
+              message: {
+                role: "assistant",
+                stopReason: "stop",
+                content: [{ type: "text", text: "done" }],
+              },
+              toolResults: [],
+            });
             listener({ type: "agent_end", messages: [] });
           }
         });

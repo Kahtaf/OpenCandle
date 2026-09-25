@@ -5,10 +5,15 @@
 
 import { appendFileSync, writeFileSync } from "node:fs";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import { terminalOutcomeFromMessage, withPromptIndex } from "./terminal-outcome.js";
+import {
+  classifyTerminalError,
+  terminalOutcomeFromMessage,
+  withPromptIndex,
+} from "./terminal-outcome.js";
 import type {
   AgentTrace,
   InteractionTrace,
+  RetryEventTrace,
   TerminalOutcomeTrace,
   ToolCallTrace,
   TurnTrace,
@@ -40,6 +45,7 @@ export function createTraceCollector(
   const pendingTools = new Map<string, PendingToolCall>();
   const turns: TurnTrace[] = [];
   const interactions: InteractionTrace[] = [];
+  const retryEvents: RetryEventTrace[] = [];
   let currentPromptIndex = 0;
   const createTurn = (): TurnTrace => ({
     toolCalls: [],
@@ -73,6 +79,20 @@ export function createTraceCollector(
 
   const unsub = session.subscribe((event: AgentSessionEvent) => {
     switch (event.type) {
+      case "auto_retry_start":
+      case "auto_retry_end": {
+        const error = event.type === "auto_retry_start" ? event.errorMessage : event.finalError;
+        retryEvents.push({
+          type: event.type,
+          attempt: event.attempt,
+          ...(event.type === "auto_retry_start"
+            ? { delayMs: event.delayMs }
+            : { success: event.success }),
+          ...(error ? { errorCategory: classifyTerminalError(error, "error") } : {}),
+          ...(options?.trackPromptIndex ? { promptIndex: currentPromptIndex } : {}),
+        });
+        break;
+      }
       case "tool_execution_start": {
         const pending: PendingToolCall = {
           name: event.toolName,
@@ -166,10 +186,13 @@ export function createTraceCollector(
         toolSequence: buildToolSequence(),
         durationMs: Date.now() - startTime,
         ...(terminalOutcome === undefined ? {} : { terminalOutcome }),
+        ...(retryEvents.length === 0 ? {} : { retryEvents: [...retryEvents] }),
       };
     },
     setPromptIndex(promptIndex: number) {
       currentPromptIndex = promptIndex;
+      terminalOutcome = undefined;
+      finalText = "";
       if (
         options?.trackPromptIndex &&
         currentTurn.toolCalls.length === 0 &&

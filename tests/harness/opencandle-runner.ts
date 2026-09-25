@@ -30,11 +30,13 @@ import {
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
 } from "./planning-evidence.js";
+import { assertSessionCompleted, failSessionCompletion } from "./session-completion.js";
 import {
   ANSWER_CONTRACT_REGISTRY,
   type FinalAnswerField,
   runStructuredChecks,
 } from "./structured-checks.js";
+import { classifyTerminalError } from "./terminal-outcome.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
 
@@ -121,11 +123,18 @@ export async function runOpenCandleSession(
     for (const [promptIndex, prompt] of prompts.entries()) {
       collector.setPromptIndex(promptIndex);
       const sessionManager = session.sessionManager;
-      await promptAndWaitForSettle(session, prompt, {
-        resolveSettleGraceMs: () =>
-          options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
-        timeoutMs: options.timeoutMs ?? 900_000,
-      });
+      try {
+        await promptAndWaitForSettle(session, prompt, {
+          resolveSettleGraceMs: () =>
+            options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
+          timeoutMs: options.timeoutMs ?? 900_000,
+        });
+      } catch (error) {
+        failSessionCompletion(
+          collector.getTrace(),
+          classifyTerminalError(error instanceof Error ? error.message : undefined, undefined),
+        );
+      }
       const drained = drainOpenCandleCustomEntries(
         session.sessionManager,
         customEntryOffset,
@@ -133,6 +142,7 @@ export async function runOpenCandleSession(
       );
       customEntries.push(...drained.entries);
       customEntryOffset = drained.nextEntryOffset;
+      assertSessionCompleted(collector.getTrace());
     }
 
     const agentTrace: AgentTrace = {
@@ -220,6 +230,7 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
       answer: interaction.answer,
     })),
     text: agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
+    ...(agentTrace.retryEvents === undefined ? {} : { retryEvents: agentTrace.retryEvents }),
     ...(agentTrace.terminalOutcome === undefined
       ? {}
       : { terminalOutcome: agentTrace.terminalOutcome }),
@@ -266,6 +277,8 @@ async function promptAndWaitForSettle(
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let promptFinished = false;
+    let closed = false;
     let unsub = () => {};
     const timeoutTimer = setTimeout(() => {
       cleanup();
@@ -273,6 +286,7 @@ async function promptAndWaitForSettle(
     }, options.timeoutMs);
 
     const cleanup = () => {
+      closed = true;
       clearTimeout(timeoutTimer);
       if (settleTimer) {
         clearTimeout(settleTimer);
@@ -289,8 +303,12 @@ async function promptAndWaitForSettle(
     };
 
     const finishAfterGrace = () => {
+      if (closed) return;
       cancelSettle();
       settleTimer = setTimeout(() => {
+        // agent_end precedes Pi retry backoff and compaction. Only a fully
+        // settled session can be captured or disposed by the harness.
+        if (!promptFinished || session.isIdle === false) return;
         cleanup();
         resolve();
       }, options.resolveSettleGraceMs());
@@ -300,18 +318,28 @@ async function promptAndWaitForSettle(
       if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
         cancelSettle();
       }
-      if (event.type === "tool_execution_start") {
+      if (
+        event.type === "tool_execution_start" ||
+        event.type === "auto_retry_start" ||
+        event.type === "agent_start"
+      ) {
         cancelSettle();
       }
-      if (event.type === "agent_end") {
+      if ((event.type === "agent_end" && !event.willRetry) || event.type === "agent_settled") {
         finishAfterGrace();
       }
     });
 
-    void session.prompt(prompt).catch((error: unknown) => {
-      cleanup();
-      reject(error);
-    });
+    void session
+      .prompt(prompt)
+      .then(() => {
+        promptFinished = true;
+        finishAfterGrace();
+      })
+      .catch((error: unknown) => {
+        cleanup();
+        reject(error);
+      });
   });
 }
 

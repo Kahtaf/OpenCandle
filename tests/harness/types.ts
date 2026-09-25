@@ -81,6 +81,15 @@ export interface TerminalOutcomeTrace {
   promptIndex?: number;
 }
 
+export interface RetryEventTrace {
+  type: "auto_retry_start" | "auto_retry_end";
+  attempt: number;
+  delayMs?: number;
+  success?: boolean;
+  errorCategory?: TerminalErrorCategory;
+  promptIndex?: number;
+}
+
 export interface AgentTrace {
   prompt: string;
   prompts?: string[];
@@ -91,6 +100,7 @@ export interface AgentTrace {
   durationMs: number;
   /** Sanitized terminal outcome of the last assistant message, when observed. */
   terminalOutcome?: TerminalOutcomeTrace;
+  retryEvents?: RetryEventTrace[];
   /** OpenCandle extension-authored custom entries, in append order. */
   customEntries?: CustomEntryTrace[];
 }
