@@ -72,4 +72,52 @@ describe("useChatRun terminal state", () => {
     expect(onRunError).toHaveBeenCalledWith("session-1");
     expect(latestRun?.runState).toBe("failed");
   });
+
+  it("retries a stopped run with a fresh action id instead of replaying the stopped one", async () => {
+    const startBodies: Array<{ actionId: string }> = [];
+    const cancelBodies: Array<{ targetActionId: string }> = [];
+    const transport = {
+      startChatRun: vi.fn(
+        (_sessionId: string, body: { actionId: string }, signal: AbortSignal) =>
+          new Promise<Response>((_resolve, reject) => {
+            startBodies.push(body);
+            signal.addEventListener("abort", () =>
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            );
+          }),
+      ),
+      cancelChatRun: vi.fn(async (_sessionId: string, body: { targetActionId: string }) => {
+        cancelBodies.push(body);
+        return { ok: true, cancelled: true, duplicate: false };
+      }),
+    };
+
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe, { onRunError: vi.fn() }),
+        ),
+      ),
+    );
+
+    let firstRun: Promise<unknown> | undefined;
+    await act(async () => {
+      firstRun = latestRun?.startChatRun("Research AAPL");
+    });
+    await act(async () => latestRun?.stopRun());
+    await act(async () => firstRun);
+    expect(cancelBodies).toEqual([
+      expect.objectContaining({ targetActionId: startBodies[0]?.actionId }),
+    ]);
+
+    await act(async () => {
+      void latestRun?.retryRun();
+    });
+
+    expect(startBodies).toHaveLength(2);
+    expect(startBodies[1]?.actionId).toBeTruthy();
+    expect(startBodies[1]?.actionId).not.toBe(startBodies[0]?.actionId);
+  });
 });

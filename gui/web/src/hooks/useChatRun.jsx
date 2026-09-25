@@ -225,6 +225,16 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           })
           .catch(() => setToast(RUN_CANCEL_UNCONFIRMED_MESSAGE));
       }
+      if (targetActionId) {
+        // A stopped run is terminal. Retry must mint a fresh action id: reusing
+        // the stopped one gets an idempotent duplicate acknowledgement (or is
+        // retired by this Stop) instead of starting a new run.
+        setLastRuns((current) =>
+          current[key]?.actionId === targetActionId
+            ? { ...current, [key]: { ...current[key], actionId: "" } }
+            : current,
+        );
+      }
       abortsRef.current.get(key)?.abort();
     },
     [activeSessionId, lastRuns, transport, setToast],
