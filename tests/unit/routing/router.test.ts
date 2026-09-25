@@ -2830,6 +2830,32 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a reply to a price-before-verb purchase question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "At what price had you bought AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not treat a passive dividend-received question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much were you paid in AAPL dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("does not treat a dividend question as a cost-basis request", async () => {
     const plain = await route(
       {

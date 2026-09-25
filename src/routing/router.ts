@@ -1459,17 +1459,25 @@ function answersBasisQuestion(
 }
 
 // A question counts as a cost-basis request with an explicit basis field or a
-// personal purchase-price intent. For pay/paid, a personal subject plus the
-// request form is already price context ("how much did you pay?"); acquisition
-// verbs still need an explicit price word. The personal subject separates the
-// user as payer from a company paying dividends, and the explicit basis field
-// (including plain "basis") needs no pronoun.
+// personal purchase-price intent. Payment must be active-personal ("did you
+// pay", "had you paid"), so passive "were you paid" receipts do not qualify;
+// personal acquisition may carry its price cue before or after the verb, all
+// within the bounded question. The explicit basis field (including plain
+// "basis") needs no pronoun.
 const COST_BASIS_REQUEST_FORM =
   /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
 const COST_BASIS_REQUEST_FIELD =
   /\b(?:cost\s*basis|basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
-const COST_BASIS_REQUEST_PRICE =
-  /\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:pay|paid)\b|\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b[^.?!]{0,40}\b(?:price|per\s+share|cost|for)\b/i;
+const COST_BASIS_REQUEST_PRICE = new RegExp(
+  [
+    String.raw`\b(?:did|do|does)\s+(?:you|i|we)\s+pay(?:ing)?\b`,
+    String.raw`\b(?:had|have|has)\s+(?:you|i|we)\s+paid\b`,
+    String.raw`\b(?:you|i|we)\s+(?:had|have|has)\s+paid\b`,
+    String.raw`(?<!\b(?:were|was|are|is|be|been|being|get|got)\s)\b(?:you|i|we)\s+paid\b`,
+    String.raw`(?=[^.?!]{0,80}\b(?:you|your|i|we)\b)(?=[^.?!]{0,80}\b(?:bought|purchased|acquired)\b)(?=[^.?!]{0,80}\b(?:price|per\s+share|cost|for)\b)`,
+  ].join("|"),
+  "i",
+);
 
 function asksForCostBasis(text: string): boolean {
   if (!COST_BASIS_REQUEST_FORM.test(text)) return false;
