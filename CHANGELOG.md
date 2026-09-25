@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- A GUI chat whose writer-lock acquisition fails during setup no longer leaves its session stuck as busy, so the next prompt on that session runs once lock storage recovers.
 - `npm run eval -- release` now fails on skipped or inconsistent required cases instead of reporting a false green.
 - The local GUI's mobile session drawer now returns focus to the control that opened it after Escape, a backdrop click, or close.
 - When more than one data source falls back in a single turn, the recorded data-gap note now names every affected source instead of only the first.

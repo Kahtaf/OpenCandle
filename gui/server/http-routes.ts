@@ -919,57 +919,8 @@ async function streamAcceptedSseChatRun({
   }
   let runCancellationState: SessionCancellationState | null = null;
   let runToken: SessionCancellationToken | null = null;
-  let dispatchedPrompt: string;
-  try {
-    dispatchedPrompt = await buildDispatchedPrompt(parsedRun);
-  } catch (error) {
-    activeGuiRuns.finish(runHandle);
-    writeJson(res, { error: error instanceof Error ? error.message : String(error) }, 400);
-    return false;
-  }
-  const promptImages = parsedRun.images.map((image) => ({
-    type: "image" as const,
-    data: image.data,
-    mimeType: image.mimeType,
-  }));
-  const attachmentLabels = parsedRun.attachments.map((attachment) => ({
-    kind: attachment.kind,
-    label: chatRunAttachmentLabel(attachment),
-  }));
-  const inputAttachmentLabels = [
-    ...promptImages.map((image, index) => ({
-      kind: "image",
-      label: `${image.mimeType || "image"} #${index + 1}`,
-    })),
-    ...attachmentLabels,
-  ];
-
-  const currentSessionFile = currentSessionManager.getSessionFile();
-  const targetSessionFile = runSessionManager.getSessionFile();
-  const useCurrentSession = !targetSessionManager || currentSessionFile === targetSessionFile;
   let acquiredLockScope = "";
   let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
-  const needsWriterLock = !useCurrentSession || options.role !== "writer";
-  if (needsWriterLock) {
-    const lockScope = writerLockScopeForSession(runSessionManager);
-    const lockResult = await acquireWriterLock(lockScope, "gui", {
-      coordinatorEndpoint: options.localCoordinatorEndpoint,
-      coordinatorSecret: options.localCoordinatorSecret,
-    });
-    if (lockResult.role !== "writer") {
-      activeGuiRuns.finish(runHandle);
-      writeJson(
-        res,
-        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
-        409,
-      );
-      return false;
-    }
-    acquiredLockScope = lockScope;
-    lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
-  }
-
-  activeRunSessionIds.add(sessionId);
   let createdSession: {
     session: AgentSession;
     waitForSettled?: () => Promise<void>;
@@ -977,7 +928,11 @@ async function streamAcceptedSseChatRun({
   let runOwnershipReleased = false;
   // The busy guard, heartbeat, and writer lock are one unit of run
   // ownership: release them together, exactly once, and only after the
-  // deferred session disposal has finished.
+  // deferred session disposal has finished. This is defined before the first
+  // setup await so that ANY unsuccessful exit after the run handle was
+  // registered -- prompt dispatch, writer-lock storage, session creation, or
+  // any other setup throw -- can never leak ownership and wedge the session
+  // on 409 session_busy after the underlying fault recovers.
   const releaseRunOwnership = () => {
     if (runOwnershipReleased) return;
     runOwnershipReleased = true;
@@ -987,14 +942,67 @@ async function streamAcceptedSseChatRun({
     if (lockHeartbeat) clearInterval(lockHeartbeat);
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
   };
+
+  let dispatchedPrompt = "";
+  let promptImages: Array<{ type: "image"; data: string; mimeType: string }> = [];
+  let inputAttachmentLabels: Array<{ kind: string; label: string }> = [];
+  let useCurrentSession = false;
   try {
+    try {
+      dispatchedPrompt = await buildDispatchedPrompt(parsedRun);
+    } catch (error) {
+      // Prompt dispatch is a client/state problem, not an infrastructure one.
+      throw new RunSetupRejected(error instanceof Error ? error.message : String(error), 400);
+    }
+    promptImages = parsedRun.images.map((image) => ({
+      type: "image" as const,
+      data: image.data,
+      mimeType: image.mimeType,
+    }));
+    const attachmentLabels = parsedRun.attachments.map((attachment) => ({
+      kind: attachment.kind,
+      label: chatRunAttachmentLabel(attachment),
+    }));
+    inputAttachmentLabels = [
+      ...promptImages.map((image, index) => ({
+        kind: "image",
+        label: `${image.mimeType || "image"} #${index + 1}`,
+      })),
+      ...attachmentLabels,
+    ];
+
+    const currentSessionFile = currentSessionManager.getSessionFile();
+    const targetSessionFile = runSessionManager.getSessionFile();
+    useCurrentSession = !targetSessionManager || currentSessionFile === targetSessionFile;
+    const needsWriterLock = !useCurrentSession || options.role !== "writer";
+    if (needsWriterLock) {
+      const lockScope = writerLockScopeForSession(runSessionManager);
+      const lockResult = await acquireWriterLock(lockScope, "gui", {
+        coordinatorEndpoint: options.localCoordinatorEndpoint,
+        coordinatorSecret: options.localCoordinatorSecret,
+      });
+      if (lockResult.role !== "writer") {
+        throw new RunSetupRejected("OpenCandle is reconnecting to this session.", 409, "syncing");
+      }
+      acquiredLockScope = lockScope;
+      lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
+    }
+
+    activeRunSessionIds.add(sessionId);
     createdSession = useCurrentSession
       ? null
       : await options.createSessionForManager(runSessionManager);
   } catch (error) {
     releaseRunOwnership();
     const message = error instanceof Error ? error.message : String(error);
-    writeJson(res, { error: message }, 500);
+    if (error instanceof RunSetupRejected) {
+      writeJson(res, { error: message, ...(error.code ? { code: error.code } : {}) }, error.status);
+    } else {
+      // Writer-lock storage, session creation, or other setup infrastructure
+      // threw after the handle was registered: fail closed with 500 and no
+      // lingering ownership.
+      writeJson(res, { error: message }, 500);
+    }
     return false;
   }
 
@@ -1244,6 +1252,23 @@ function trackSessionProgress(session: AgentSession): {
 }
 
 class SessionActionNotAdmitted extends Error {}
+
+/**
+ * A deliberate, client-visible setup rejection (bad dispatched prompt, writer
+ * lock held by a peer) that still must release run ownership before returning.
+ * Anything else thrown from run setup is treated as infrastructure failure and
+ * surfaced as 500.
+ */
+class RunSetupRejected extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "RunSetupRejected";
+  }
+}
 
 export function isModelAuthenticationFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
