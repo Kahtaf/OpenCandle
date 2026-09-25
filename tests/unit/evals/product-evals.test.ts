@@ -872,7 +872,7 @@ describe("product eval scoring", () => {
     expect(result.passed).toBe(true);
   });
 
-  it("accepts independently worded noisy sentiment coverage caveats as risk framing", () => {
+  it("accepts an independently worded data-quality limitation as risk framing", () => {
     const sentimentCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
     );
@@ -891,7 +891,57 @@ describe("product eval scoring", () => {
     );
   });
 
-  it("still fails sentiment answers that lack a coverage caveat or any risk framing", () => {
+  it("accepts a data-quality limitation on its own even when every source returned", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "All sentiment sources returned data, but the signal is noisy.",
+      }),
+    );
+    // Supersedes the earlier incorrect rule that required a negative coverage
+    // verb: noisy sentiment is a data-quality risk even at full coverage.
+    const noisyButComplete = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment data is noisy but captures the full picture.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(
+      noisyButComplete.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+    ).toBe(true);
+  });
+
+  it("accepts a not-representative sentiment sample as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "The sentiment sample is sparse, so this read may not be representative.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails sentiment answers with no risk framing, unrelated noise, or negated noise", () => {
     const sentimentCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
     );
@@ -918,22 +968,66 @@ describe("product eval scoring", () => {
         text: "Sentiment for AI stocks is mildly positive, with steady discussion volume.",
       }),
     );
-    // Affirmative complete-coverage phrasing: "noisy" alone plus a coverage noun
-    // must not count without an explicit negative coverage verb.
-    const noisyCompleteCoverage = scoreProductEvalCase(
+    // Unrelated noise about another domain is not a sentiment data-quality risk.
+    const unrelatedNoise = scoreProductEvalCase(
       sentimentCase,
       makeTrace({
         toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
-        text: "Sentiment data is noisy but captures the full picture.",
+        text: "Shipping times are noisy, but all sentiment sources returned data.",
+      }),
+    );
+    // An explicit negation of noise is not a hazard.
+    const negatedNoise = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "The sentiment signal is not noisy, and all sources returned data.",
       }),
     );
 
-    for (const result of [plainBullish, neutralNoise, steadyPositive, noisyCompleteCoverage]) {
+    for (const result of [
+      plainBullish,
+      neutralNoise,
+      steadyPositive,
+      unrelatedNoise,
+      negatedNoise,
+    ]) {
       expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
         false,
       );
       expect(result.passed).toBe(false);
     }
+  });
+
+  it("accepts the full saved data-quality answer's sparse-sample and noise disclosure", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim live answer preserved in
+        // validation-output/sentiment-data-quality.txt.
+        text:
+          'The sentiment around "AI stocks" in the last 24 hours is **Leaning Bullish** with an aggregate score of +0.10.\n\n' +
+          "Here's a breakdown by source:\n\n" +
+          "*   **Twitter:** +0.20 (Leaning Bullish) from 40 records\n" +
+          "*   **Reddit:** +0.07 (Leaning Bullish) from 95 records\n" +
+          "*   **Web/News:** +0.00 (Neutral) from 2 records\n\n" +
+          '**Positive drivers** include mentions of "buy," "long," and "calls." **Negative drivers** are "sell," "short," and "bubble."\n\n' +
+          "**Data gaps:**\n" +
+          'All three sentiment sources (Twitter, Reddit, and Web/News) were able to provide some data for the query "AI stocks." However, the confidence score for the aggregate sentiment is high (0.71), but this is primarily because most records were neutral or had no keyword sentiment match, indicating sparse coverage and potential noise in the signal. The "Web/News" source only provided 2 records, which is a very low sample count and may not be representative. The tool also indicated "Insufficient data for divergence analysis," meaning a comparison with price action could not be made.',
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
   });
 
   it("accepts the full saved source-divergence answer's missing-source gap explanation", () => {

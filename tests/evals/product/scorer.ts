@@ -266,7 +266,7 @@ function passesFamilyAwareDimension(
       (/\b(?:missing sources?|unavailable)\b/i.test(text) &&
         /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text)) ||
       missingSourceDivergence(text) ||
-      sentimentNoiseCoverageCaveat(text)
+      sentimentDataQualityRisk(text)
     );
   }
   if (dimensionId === "risk_framing" && evalCase.family === "macro") {
@@ -280,19 +280,29 @@ function passesFamilyAwareDimension(
   return false;
 }
 
-// Sentiment answers can frame uncertainty as a data-quality limitation on the
-// sentiment/data/source signal plus an explicit *negative* coverage verb (for
-// example "may not capture", "doesn't reflect"). Both concepts must sit in the
-// same bounded sentence. Affirmative coverage ("is noisy but captures the full
-// picture") and bare coverage nouns are intentionally not accepted, so a bare
-// "noisy"/"missing"/"high confidence" mention cannot satisfy risk framing.
-function sentimentNoiseCoverageCaveat(text: string): boolean {
-  const subjectNoise =
-    "\\b(?:sentiment|data|sources?)\\b[^.!?]{0,40}?\\b(?:noisy|noise|incomplete)\\b";
-  const negativeCoverage =
-    "\\b(?:(?:(?:may|might|could|can|does|do|did)\\s+not|doesn't|don't|won't)\\s+" +
-    "(?:fully\\s+|completely\\s+|entirely\\s+)?(?:capture|reflect|represent|cover|include|account for))\\b";
-  return new RegExp(`${subjectNoise}[^.!?]{0,160}${negativeCoverage}`, "i").test(text);
+// A concrete data-quality limitation is itself sentiment risk: an unreliable
+// read still needs to be owned when every source returned. Canonical concepts
+// are noisy sentiment/data/signal, sparse coverage or sample, low sample count,
+// insufficient data, and a sample/evidence set that is not representative. Each
+// is bound to a sentiment context, and an explicit negation such as "the signal
+// is not noisy" does not qualify. Missing-source impact is handled separately by
+// missingSourceDivergence; a bare "source unavailable" note is not risk here.
+function sentimentDataQualityRisk(text: string): boolean {
+  const noise =
+    "\\b(?<!\\bnot\\s)(?<!\\bno\\s)(?<!\\bisn't\\s)(?<!\\baren't\\s)(?<!\\bwithout\\s)(?:noisy|noise)\\b";
+  const sentimentContext = "\\b(?:sentiment|signal|sample|sources?|data|read)\\b";
+  const noisySentiment =
+    `${sentimentContext}[^.;!?\\n]{0,25}?${noise}` +
+    `|${noise}\\s+(?:in|within)\\s+(?:the\\s+)?(?:sentiment|signal|data|read|sources?)\\b`;
+  return (
+    new RegExp(noisySentiment, "i").test(text) ||
+    /\b(?:sparse|thin|limited)\s+(?:coverage|sample|data|sources?)\b/i.test(text) ||
+    /\b(?:low|small|limited)\s+sample\s+(?:count|size)\b/i.test(text) ||
+    /\binsufficient\s+(?:data|sample|coverage|evidence)\b/i.test(text) ||
+    /\b(?:sample|evidence|data|sources?|read|signal|sentiment)\b[^.;!?\n]{0,80}?\b(?:not|isn't|aren't)\s+(?:be\s+)?(?:fully\s+)?representative\b/i.test(
+      text,
+    )
+  );
 }
 
 // A missing source is risk framing only when the answer also explains the gap's
