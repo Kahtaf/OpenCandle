@@ -46,6 +46,7 @@ describe("buildFreshnessStamp", () => {
 
     expect(stamp.marketSession).toBe("pre_market");
     expect(stamp.isStaleForSession).toBe(false);
+    expect(formatAsOfLine(stamp)).toBe("As of 2026-07-02 ET (pre-market).");
   });
 
   it("falls back to stale-cache status when provider market time is absent", () => {

@@ -192,6 +192,21 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
     expect(followUp).toContain("Do not frame assignment risk like a short option sale");
   });
 
+  it("asks for missing owned quantity before personalizing protective-put sizing", () => {
+    const definition = buildOptionsScreenerWorkflowDefinition(
+      makeResolution({ optionStrategy: "protective_put", direction: "bearish" }),
+    );
+
+    for (const step of definition.steps) {
+      expect(step.prompt).toContain(
+        "Ask for owned share quantity before giving personalized whole-contract sizing; verify the actual contract multiplier.",
+      );
+      expect(step.prompt).not.toContain("Owned position:");
+      expect(step.prompt).not.toContain("| Put contracts | Covered shares |");
+    }
+    expect(definition.steps[1].outputValidation).toBeUndefined();
+  });
+
   it("follow-up prompt does not mix covered-call fallback into catalyst-driven protective puts", () => {
     const followUp = followUpPrompt(
       makeResolution({
