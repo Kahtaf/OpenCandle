@@ -1389,11 +1389,13 @@ function readPortfolioPosition(
   };
 }
 
-// Absence-of-basis-context guard. A model-emitted cost basis is kept only when
-// the turn (or a same-symbol prior user turn / saved position) states basis,
-// purchase, or position-price wording for that amount. The deterministic
-// extractor stays the fallback, so nothing here overrides it or limits an
-// explicitly stated scenario basis; an assistant quote is never a source.
+// Absence-of-basis-role-context guard. A model-emitted cost basis is dropped
+// only when nothing establishes a basis/purchase/holding role: the current turn,
+// a same-symbol prior user turn, a reply to a preceding assistant basis
+// question, or a saved position. This is role presence, not numeric grounding,
+// so derived, scaled, or spelled amounts stay the model's interpretation and the
+// deterministic extractor remains the fallback. An assistant quote alone is
+// never a source.
 function resolveCostBasis(
   text: string,
   modelCostBasis: number | undefined,
@@ -1403,87 +1405,57 @@ function resolveCostBasis(
   symbols: string[],
 ): number | undefined {
   if (modelCostBasis === undefined) return extractedCostBasis;
-  if (extractedCostBasis !== undefined && amountsClose(extractedCostBasis, modelCostBasis)) {
-    return modelCostBasis;
-  }
-  if (hasCostBasisContext(text, modelCostBasis, heldSymbol, symbols, inputContext)) {
-    return modelCostBasis;
-  }
+  if (extractedCostBasis !== undefined) return modelCostBasis;
+  if (hasBasisRoleContext(text, heldSymbol, symbols, inputContext)) return modelCostBasis;
   return extractedCostBasis;
 }
 
 const COST_BASIS_CONTEXT =
   /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
-function hasCostBasisContext(
+function hasBasisRoleContext(
   text: string,
-  value: number,
   heldSymbol: string | undefined,
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): boolean {
-  if (statesCostBasis(text, value, heldSymbol)) return true;
-  if (answersCostBasisQuestion(text, value, symbols, inputContext?.priorTurns)) return true;
-  if (priorUserEstablishesBasis(inputContext?.priorTurns ?? [], value, symbols)) return true;
-  return symbols.some((symbol) => {
-    const saved = readPortfolioPosition(inputContext?.portfolioPositions, symbol);
-    return saved?.costBasis !== undefined && amountsClose(saved.costBasis, value);
-  });
-}
-
-// A prior user turn establishes the basis either by stating it directly or by
-// answering its own preceding assistant cost/purchase-price question. The
-// prefix restriction means a later assistant question never applies backwards.
-function priorUserEstablishesBasis(
-  turns: RouterInputContext["priorTurns"],
-  value: number,
-  symbols: string[],
-): boolean {
+  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text)) return true;
+  if (answersBasisQuestion(symbols, inputContext?.priorTurns)) return true;
+  const turns = inputContext?.priorTurns ?? [];
   for (let index = 0; index < turns.length; index += 1) {
     const turn = turns[index];
     if (turn.role !== "user") continue;
+    const turnEntities = extractEntities(turn.text);
     if (
-      extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol)) &&
-      statesCostBasis(turn.text, value, extractEntities(turn.text).heldSymbol)
+      turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
+      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text))
     ) {
       return true;
     }
-    if (answersCostBasisQuestion(turn.text, value, symbols, turns.slice(0, index))) {
-      return true;
-    }
+    if (answersBasisQuestion(symbols, turns.slice(0, index))) return true;
   }
-  return false;
+  return symbols.some(
+    (symbol) =>
+      readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
+  );
 }
 
-// A recognized held position (the existing heldSymbol parser) is a role cue in
-// its own right, so ownership phrasing the wording regex does not enumerate
-// ("I have 100 shares of AAPL at $150") still corroborates the amount.
-function statesCostBasis(text: string, value: number, heldSymbol?: string): boolean {
-  if (heldSymbol === undefined && !COST_BASIS_CONTEXT.test(text)) return false;
-  return textMentionsAmount(text, value);
-}
-
-// A user amount answering the most recent assistant request for a cost/purchase
-// price is a source fact; an assistant quote supplies a value instead and never
-// qualifies. Callers pass the turns that precede the user turn, so only that
-// turn's own preceding assistant question counts.
-function answersCostBasisQuestion(
-  text: string,
-  value: number,
+// The user turn immediately after an assistant request for a cost/purchase price
+// replies to it; callers pass only the turns preceding the user turn, so a later
+// assistant question never applies backwards. An assistant quote has no request
+// form and never qualifies.
+function answersBasisQuestion(
   symbols: string[],
   priorTurns: RouterInputContext["priorTurns"] | undefined,
 ): boolean {
   const lastAssistant = [...(priorTurns ?? [])].reverse().find((turn) => turn.role === "assistant");
   if (!lastAssistant || !asksForCostBasis(lastAssistant.text)) return false;
   const askedSymbols = extractEntities(lastAssistant.text).symbols;
-  if (
-    askedSymbols.length > 0 &&
-    symbols.length > 0 &&
-    !askedSymbols.some((symbol) => symbols.includes(symbol))
-  ) {
-    return false;
-  }
-  return textMentionsAmount(text, value);
+  return (
+    askedSymbols.length === 0 ||
+    symbols.length === 0 ||
+    askedSymbols.some((symbol) => symbols.includes(symbol))
+  );
 }
 
 const COST_BASIS_REQUEST_FIELD =
@@ -1492,42 +1464,6 @@ const COST_BASIS_REQUEST_FORM = /\?|\b(?:what|which|tell\s+me|give\s+me|share|co
 
 function asksForCostBasis(text: string): boolean {
   return COST_BASIS_REQUEST_FIELD.test(text) && COST_BASIS_REQUEST_FORM.test(text);
-}
-
-// Compact scaled amounts follow the existing K convention ("$1.5k"); the
-// scaled token is matched whole so the unscaled mantissa is never accepted too.
-const COMPACT_SCALE: Record<string, number> = {
-  k: 1_000,
-  m: 1_000_000,
-  b: 1_000_000_000,
-  t: 1_000_000_000_000,
-};
-// The leading guard rejects a start inside a decimal or grouped number, and the
-// trailing guards reject ending before a decimal+digit; a sentence-final period
-// after the amount is still allowed.
-const AMOUNT_MANTISSA = String.raw`(?:\$)?\s*(?<![\d,.])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
-const SCALED_AMOUNT = new RegExp(
-  String.raw`${AMOUNT_MANTISSA}\s*([kKmMbBtT])\b(?!\s*(?:shares?|contracts?|units?)\b)`,
-  "g",
-);
-const PLAIN_AMOUNT = new RegExp(
-  String.raw`${AMOUNT_MANTISSA}(?![\d,])(?!\.\d)(?!\s*[kKmMbBtT]\b)(?!\s*(?:shares?|contracts?|units?)\b)`,
-  "g",
-);
-
-function textMentionsAmount(text: string, value: number): boolean {
-  for (const match of text.matchAll(SCALED_AMOUNT)) {
-    const mantissa = Number.parseFloat(match[1].replace(/,/g, ""));
-    if (amountsClose(mantissa * COMPACT_SCALE[match[2].toLowerCase()], value)) return true;
-  }
-  for (const match of text.matchAll(PLAIN_AMOUNT)) {
-    if (amountsClose(Number.parseFloat(match[1].replace(/,/g, "")), value)) return true;
-  }
-  return false;
-}
-
-function amountsClose(left: number, right: number): boolean {
-  return Number.isFinite(left) && Math.abs(left - right) <= 0.011;
 }
 
 function isConversationalRiskPreferenceUpdate(

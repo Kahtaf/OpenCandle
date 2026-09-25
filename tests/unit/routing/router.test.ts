@@ -2808,97 +2808,22 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
-  it("keeps a compact-scaled purchase price", async () => {
+  it("keeps a derived basis from a purchase total", async () => {
+    // The user states quantity and total, not a per-share price: role presence
+    // is enough, and the model keeps the interpretation.
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I bought AVGO at $1.5k. What covered call should I sell?",
+        text: "I bought 100 shares of AVGO for $15,000. What covered call should I sell?",
       },
-      outputFor({ symbols: ["AVGO"], costBasis: 1500 }),
+      outputFor({ symbols: ["AVGO"], costBasis: 150 }),
     );
 
-    expect(result.entities.costBasis).toBe(1500);
+    expect(result.entities.costBasis).toBe(150);
   });
 
-  it("keeps a compact-scaled reply to a cost-basis question", async () => {
+  it("does not use another holding's prior question as basis context", async () => {
     const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "$1.5k",
-        priorTurns: [{ role: "assistant", text: "What is your cost basis for AVGO?" }],
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 1500 }),
-    );
-
-    expect(result.entities.costBasis).toBe(1500);
-  });
-
-  it("does not accept the unscaled mantissa of a compact-scaled amount", async () => {
-    const purchase = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AVGO at $1.5k. What covered call should I sell?",
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 1.5 }),
-    );
-    const reply = await route(
-      {
-        ...BASE_INPUT,
-        text: "$1.5k",
-        priorTurns: [{ role: "assistant", text: "What is your cost basis for AVGO?" }],
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 1.5 }),
-    );
-
-    expect(purchase.entities.costBasis).toBeUndefined();
-    expect(reply.entities.costBasis).toBeUndefined();
-  });
-
-  it("does not accept a partial-digit reading of a compact-scaled amount", async () => {
-    const leading = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AVGO at $1.5k. What covered call should I sell?",
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 1 }),
-    );
-    const trailing = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AVGO at $1.5k. What covered call should I sell?",
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 5000 }),
-    );
-
-    expect(leading.entities.costBasis).toBeUndefined();
-    expect(trailing.entities.costBasis).toBeUndefined();
-  });
-
-  it("keeps a plain amount followed by a sentence period", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AVGO at $150.50. What covered call should I sell?",
-      },
-      outputFor({ symbols: ["AVGO"], costBasis: 150.5 }),
-    );
-
-    expect(result.entities.costBasis).toBe(150.5);
-  });
-
-  it("does not use a future question or another holding's question for a prior amount", async () => {
-    const futureQuestion = await route(
-      {
-        ...BASE_INPUT,
-        text: "What about AAPL at 180?",
-        priorTurns: [
-          { role: "user", text: "$150" },
-          { role: "assistant", text: "What is your cost basis for AAPL?" },
-        ],
-      },
-      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
-    );
-    const otherHolding = await route(
       {
         ...BASE_INPUT,
         text: "What about AAPL at 180?",
@@ -2910,23 +2835,13 @@ describe("router cost-basis context guard", () => {
       outputFor({ symbols: ["AAPL"], costBasis: 150 }),
     );
 
-    expect(futureQuestion.entities.costBasis).toBeUndefined();
-    expect(otherHolding.entities.costBasis).toBeUndefined();
+    expect(result.entities.costBasis).toBeUndefined();
   });
 
   it("keeps an explicitly stated cost basis", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
       outputFor({ symbols: ["DRAM"], costBasis: 51 }),
-    );
-
-    expect(result.entities.costBasis).toBe(51);
-  });
-
-  it("falls back to the deterministic extractor when the model basis is unsupported", async () => {
-    const result = await route(
-      { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
-      outputFor({ symbols: ["DRAM"], costBasis: 999 }),
     );
 
     expect(result.entities.costBasis).toBe(51);
@@ -2942,18 +2857,6 @@ describe("router cost-basis context guard", () => {
     );
 
     expect(result.entities.costBasis).toBe(51);
-  });
-
-  it("keeps the model's later basis in a restated 'basis' correction", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "My basis is $100; correction my basis is $150. What covered call should I sell?",
-      },
-      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
-    );
-
-    expect(result.entities.costBasis).toBe(150);
   });
 
   it("keeps a model basis corroborated by ownership-at wording", async () => {
