@@ -239,24 +239,18 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("The stock is down. The yield is 2.47%.")).toEqual([2.47]);
   });
 
-  it("signs a percent from a direction word that follows it", () => {
-    expect(extractFinancialNumbers("2.47% decrease")).toEqual([-2.47]);
-    expect(extractFinancialNumbers("2.47% decline")).toEqual([-2.47]);
-  });
-
-  it("prefers a preceding direction word over trailing wording", () => {
+  it("uses a preceding direction word regardless of trailing prose", () => {
     expect(extractFinancialNumbers("up 2.47% down from yesterday")).toEqual([2.47]);
     expect(extractFinancialNumbers("down 2.47% up from yesterday")).toEqual([-2.47]);
   });
 
-  it("does not treat a trailing level comparison as a direction", () => {
+  it("leaves trailing direction prose unsigned", () => {
+    expect(extractFinancialNumbers("4% falling to 3%")).toEqual([4, 3]);
+    expect(extractFinancialNumbers("4% down from 5%")).toEqual([4, 5]);
     expect(extractFinancialNumbers("2.47% down from yesterday")).toEqual([2.47]);
     expect(extractFinancialNumbers("2.47% up from 1.23%")).toEqual([2.47, 1.23]);
-  });
-
-  it("still signs a trailing change word that is not a level comparison", () => {
-    expect(extractFinancialNumbers("a 2.47% decrease from last year")).toEqual([-2.47]);
-    expect(extractFinancialNumbers("2.47% down today")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("a 2% decrease")).toEqual([2]);
+    expect(extractFinancialNumbers("2% decrease")).toEqual([2]);
   });
 
   it("lets an explicit sign win over a contradictory direction word", () => {
@@ -561,7 +555,7 @@ describe("scoreDataFaithfulness", () => {
     expect(result.message).toContain("2.47");
   });
 
-  it("prefers a preceding direction word over trailing wording in scoring", () => {
+  it("uses a preceding direction word regardless of trailing prose in scoring", () => {
     const upTrace = makeTrace({
       text: "up 2.47% down from yesterday",
       toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
@@ -599,14 +593,14 @@ describe("scoreDataFaithfulness", () => {
     expect(result.score).toBe(1.0);
   });
 
-  it("still fails when a trailing directional claim contradicts the evidence", () => {
+  it("grounds a level range stated with trailing prose", () => {
     const trace = makeTrace({
-      text: "The change was 2.47% down",
-      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+      text: "The yield was 4% falling to 3%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 3 } }],
     });
     const result = scoreDataFaithfulness(trace);
-    expect(result.passed).toBe(false);
-    expect(result.message).toContain("2.47");
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
   });
 });
 
