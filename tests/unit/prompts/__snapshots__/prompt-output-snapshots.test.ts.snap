@@ -725,7 +725,7 @@ Response format:
 - Include covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid.",
   "portfolioEtf": "Current date: 2026-06-13
 
-Build a draft portfolio under these parameters:
+Identify candidate holdings under these parameters:
 - Budget: $10,000
 - Risk profile: balanced [DEFAULT]
 - Time horizon: 1y_plus [DEFAULT]
@@ -736,18 +736,14 @@ Build a draft portfolio under these parameters:
 Steps:
 1. Identify 6 diversified fund/ETF building-block candidates appropriate for a balanced 1y_plus portfolio.
    Include distinct asset-class roles such as core domestic equity, international equity, fixed income, short-duration or cash-like stability, and inflation-sensitive ballast when appropriate.
-2. Use get_stock_quote for each candidate to get current prices.
-3. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
-4. Use analyze_correlation across all candidates to check diversification.
+2. Use get_stock_quote for each candidate to get its current price.
 
-Portfolio construction guardrails:
-- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
-- Use exactly 6 eligible positions, make allocations sum to 100%, and keep every position at or below 20%.
-- The eligible universe is "diversified_etf_building_blocks". Do not introduce an asset outside that universe during candidate selection or risk review.
+Candidate selection guardrails:
+- Treat asset scope and position count as hard constraints, not preferences.
+- Select exactly 6 eligible candidates. The eligible universe is "diversified_etf_building_blocks". Do not introduce an asset outside that universe.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
-- If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
-- Keep rationale tied to each holding's role in this portfolio; do not paste company descriptions or generic issuer background.
+- Keep the evidence tied to each candidate's role; do not paste company descriptions or generic issuer background.
 
 Assumptions (reproduce this block exactly — do not relabel sources):
   User-specified: budget ($10,000)
@@ -755,16 +751,12 @@ Assumptions (reproduce this block exactly — do not relabel sources):
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Then start the analysis with "Bottom line:" and directly say what portfolio you would build for the user.
-- Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
-- Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
-- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff and horizon-specific risks for the stated time horizon.
-- Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
-- Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
-- Suggest what to change for more growth or more safety.",
+- Report exactly 6 candidates. For each candidate give: symbol (and asset class or intended role), the current price returned by the quote tool and its as-of date, and one line of supporting evidence from the returned data.
+- Base every price and fundamental only on successful tool results. If a candidate's data is unavailable, name it as a data gap instead of filling it in.
+- Do not present a final allocation table, portfolio recommendation, risk metrics, or implementation notes in this step; the risk review and synthesis steps produce those.",
   "portfolioStocks": "Current date: 2026-06-13
 
-Build a draft portfolio under these parameters:
+Identify candidate holdings under these parameters:
 - Budget: $10,000
 - Risk profile: balanced [DEFAULT]
 - Time horizon: 1y_plus [DEFAULT]
@@ -774,19 +766,15 @@ Build a draft portfolio under these parameters:
 
 Steps:
 1. Identify exactly 6 diverse candidates appropriate for a balanced 1y_plus portfolio.
-2. Use get_stock_quote for each candidate to get current prices.
+2. Use get_stock_quote for each candidate to get its current price.
 3. Use get_company_overview for fundamentals on each candidate.
-4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
-5. Use analyze_correlation across all candidates to check diversification.
 
-Portfolio construction guardrails:
-- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
-- Use exactly 6 eligible positions, make allocations sum to 100%, and keep every position at or below 20%.
-- The eligible universe is "large_cap_equities". Do not introduce an asset outside that universe during candidate selection or risk review.
+Candidate selection guardrails:
+- Treat asset scope and position count as hard constraints, not preferences.
+- Select exactly 6 eligible candidates. The eligible universe is "large_cap_equities". Do not introduce an asset outside that universe.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
-- If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
-- Keep rationale tied to each holding's role in this portfolio; do not paste company descriptions or generic issuer background.
+- Keep the evidence tied to each candidate's role; do not paste company descriptions or generic issuer background.
 
 Assumptions (reproduce this block exactly — do not relabel sources):
   User-specified: budget ($10,000), asset scope (large_cap_equities)
@@ -794,12 +782,8 @@ Assumptions (reproduce this block exactly — do not relabel sources):
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Then start the analysis with "Bottom line:" and directly say what portfolio you would build for the user.
-- Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
-- Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
-- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff and horizon-specific risks for the stated time horizon.
-- Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
-- Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
-- Suggest what to change for more growth or more safety.",
+- Report exactly 6 candidates. For each candidate give: symbol (and asset class or intended role), the current price returned by the quote tool and its as-of date, and one line of supporting evidence from the returned data.
+- Base every price and fundamental only on successful tool results. If a candidate's data is unavailable, name it as a data gap instead of filling it in.
+- Do not present a final allocation table, portfolio recommendation, risk metrics, or implementation notes in this step; the risk review and synthesis steps produce those.",
 }
 `;

@@ -15,22 +15,22 @@ export function buildPortfolioWorkflowDefinition(
   const allocationConstraintsAreCompatible = s.positionCount * s.maxSinglePositionPct >= 100;
   const includesCrypto = s.assetScope.toLowerCase().includes("stocks_and_crypto");
   const riskReviewPrompt = includesCrypto
-    ? `Now review the risk and diversification of this draft portfolio:
-1. For each stock position, use analyze_risk for volatility and max drawdown. Use analyze_correlation only across the stock positions.
-2. For each cryptocurrency position, use get_crypto_history with its canonical CoinGecko id to assess the available dated volatility and drawdown evidence. Do not send cryptocurrencies to stock-only risk or correlation tools.
+    ? `Now review the risk and diversification of the selected candidates, then propose a risk-appropriate draft allocation:
+1. For each selected stock candidate, use analyze_risk for volatility and max drawdown. Use analyze_correlation only across the stock positions.
+2. For each cryptocurrency candidate, use get_crypto_history with its canonical CoinGecko id to assess the available dated volatility and drawdown evidence. Do not send cryptocurrencies to stock-only risk or correlation tools.
 3. Assess stock/crypto diversification from the available evidence and disclose that a cross-asset correlation matrix is unavailable instead of inventing one.
-4. If any position's risk evidence undermines its intended role, lower its allocation, replace it with an eligible role-equivalent candidate, or explicitly justify why it remains.
+4. If any candidate's risk evidence undermines its intended role, lower its allocation, replace it with an eligible role-equivalent candidate, or explicitly justify why it remains.
 5. Preserve the hard asset scope "${s.assetScope}" for every replacement.
-6. Preserve exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
-7. Confirm the portfolio fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`
-    : `Now review the risk and diversification of this draft portfolio:
-1. Use analyze_correlation across all ${s.positionCount} candidates to check for concentration risk.
-2. Use analyze_risk on each position for volatility and max drawdown.
-3. If correlation is too high (>0.7 between any pair), suggest a replacement to improve diversification.
-4. If any position's risk metrics undermine its intended role, lower its allocation, replace it with a role-equivalent candidate, or explicitly justify why it remains.
+6. Propose a draft allocation with exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
+7. Confirm the draft allocation fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`
+    : `Now review the risk and diversification of the selected candidates, then propose a risk-appropriate draft allocation:
+1. Use analyze_correlation across all ${s.positionCount} selected candidates to check for concentration risk.
+2. Use analyze_risk on each selected candidate for volatility and max drawdown.
+3. If correlation is too high (>0.7 between any pair), suggest a role-equivalent replacement to improve diversification.
+4. If any candidate's risk metrics undermine its intended role, lower its allocation, replace it with a role-equivalent candidate, or explicitly justify why it remains.
 5. Preserve the hard asset scope "${s.assetScope}" for every replacement.
-6. Preserve exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
-7. Confirm the portfolio fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`;
+6. Propose a draft allocation with exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
+7. Confirm the draft allocation fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`;
 
   return {
     workflowType: "portfolio_builder",
@@ -63,7 +63,8 @@ export function buildPortfolioWorkflowDefinition(
         "synthesize",
         "Present final portfolio draft",
         `Present the final portfolio draft as a structured summary:
-- State all assumptions at the top (which parameters were defaults vs user-specified vs saved preferences).
+- Start with "Bottom line:" and directly state the portfolio you would build for the user.
+- State all assumptions at the top, naming the budget ($${s.budget.toLocaleString("en-US")}), risk profile (${s.riskProfile}), time horizon (${s.timeHorizon}), position count (${s.positionCount}), and asset scope (${s.assetScope}), and which parameters were defaults vs user-specified vs saved preferences. Preserve the source attribution established in the earlier assumptions disclosure (user-specified, saved preference, prior context, or default) for each named parameter; do not relabel sources.
 - Treat these as hard final constraints: asset scope "${s.assetScope}", exactly ${s.positionCount} positions, no position above ${s.maxSinglePositionPct}%, and allocations summing to 100%.
 - If those constraints are mathematically incompatible, say so explicitly instead of violating one. Otherwise, verify the final table satisfies each constraint before presenting it.
 - Commit to the allocation: concrete percentages per position, not ranges.

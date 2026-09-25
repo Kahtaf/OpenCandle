@@ -108,7 +108,7 @@ const VALID_TABLE = `| Symbol | Allocation % | Dollar Amount | Current Price | E
 
 /** Stage markers taken from the live portfolio workflow prompts. */
 function stageOf(prompt: string): "fetch" | "risk" | "synthesize" | "fetch_repair" | "risk_repair" {
-  if (prompt.includes("Build a draft portfolio")) return "fetch";
+  if (prompt.includes("Identify candidate holdings")) return "fetch";
   if (prompt.includes("Now review the risk and diversification")) return "risk";
   if (prompt.includes("Present the final portfolio draft")) return "synthesize";
   if (prompt.includes("usable market price evidence")) return "fetch_repair";
@@ -157,6 +157,7 @@ function startHarness(respond: (prompt: string) => TurnScript) {
       }, 10);
     }),
     appendEntry: vi.fn(),
+    sendMessage: vi.fn(),
   };
 
   const ctx = {
@@ -553,6 +554,7 @@ function startSessionEntryHarness() {
       }, 10);
     }),
     appendEntry: vi.fn(),
+    sendMessage: vi.fn(),
   };
 
   const ctx = {

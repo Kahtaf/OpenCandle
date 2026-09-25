@@ -248,6 +248,13 @@ export class SessionCoordinator {
   private activeWorkflowType: string | undefined;
   private activeStepCapture: ActiveStepCapture | null = null;
   private workflowEventCaptureInstalled = false;
+  /**
+   * Set when a workflow step throws after its output validation still failed
+   * following the single repair attempt. `finishWorkflowRun` uses it to emit a
+   * user-visible terminal notice so an unvalidated draft is never presented as
+   * a successful answer.
+   */
+  private outputValidationFailure: { workflowType: string; stepType: string } | null = null;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
@@ -579,6 +586,7 @@ export class SessionCoordinator {
     }
     runner.cancel();
     this.activeWorkflowType = definition.workflowType;
+    this.outputValidationFailure = null;
 
     const [firstStep] = definition.steps;
     let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
@@ -739,6 +747,10 @@ export class SessionCoordinator {
                   errors: validationErrors,
                   repairAttempted: true,
                 });
+                this.outputValidationFailure = {
+                  workflowType: definition.workflowType,
+                  stepType: step.stepType,
+                };
                 throw new Error(
                   `workflow_output_validation_failed: ${validationErrors.join("; ")}`,
                 );
@@ -843,6 +855,8 @@ export class SessionCoordinator {
   ): void {
     if (this.activeWorkflowRunRef !== runRef) return;
     const reason = runRef.interruptedReason;
+    const validationFailure = this.outputValidationFailure;
+    this.outputValidationFailure = null;
     // An interrupted run is a failed run: it never reached its answer, so it
     // must not settle as a silent cancellation with no terminal marker.
     const status =
@@ -858,6 +872,30 @@ export class SessionCoordinator {
         status,
         ...(reason ? { reason } : {}),
       });
+      // A clean terminal output-validation rejection leaves the fabricated
+      // draft as the last assistant message. Emit a deterministic, visible
+      // notice (no new model turn) so that draft is not presented as a
+      // validated answer. The failed terminal marker and the captured draft
+      // remain in the forensic trace.
+      if (status === "failed" && !reason && validationFailure) {
+        pi.sendMessage(
+          {
+            customType: "Workflow validation failed",
+            content: [
+              {
+                type: "text",
+                text: buildWorkflowValidationFailureText(validationFailure.workflowType),
+              },
+            ],
+            display: true,
+            details: {
+              workflow: validationFailure.workflowType,
+              reason: "output_validation_failed",
+            },
+          },
+          { triggerTurn: false },
+        );
+      }
     } catch (error) {
       // A workflow can outlive its session context when the session is disposed
       // without Pi's awaited `session_shutdown` handoff. The transcript marker
@@ -1014,6 +1052,19 @@ export class SessionCoordinator {
 
 function isStaleExtensionContextError(error: unknown): boolean {
   return error instanceof Error && error.message.includes("extension ctx is stale");
+}
+
+/**
+ * User-visible terminal notice for a workflow that failed because a step's
+ * output could not be validated against captured evidence. Deliberately says
+ * nothing about the specific validation or provider failure.
+ */
+function buildWorkflowValidationFailureText(workflowType: string): string {
+  const subject = workflowType === "portfolio_builder" ? "portfolio" : "workflow result";
+  return [
+    `This ${subject} draft failed validation, so I can't stand behind its figures.`,
+    `Treat any ${subject} draft above as unverified and do not rely on its allocations, prices, or risk metrics.`,
+  ].join(" ");
 }
 
 function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {

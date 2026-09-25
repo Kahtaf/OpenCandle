@@ -5,22 +5,22 @@ const multiTurnCases: EvalCase[] = [
   {
     name: "portfolio-builder-conservative",
     tier: "always",
-    prompt: "Build me a portfolio with $50k",
-    answers: ["conservative", "10 years", "no", "no", "growth"],
+    prompt: "Build me a conservative portfolio with $50k over 10 years",
     assertions: {
       expectedWorkflow: "portfolio_builder",
       requiredTools: ["get_stock_quote"],
       forbiddenTools: ["get_option_chain"],
+      responseContains: [/\bconservative\b/i],
     },
   },
   {
     name: "portfolio-builder-aggressive",
     tier: "always",
-    prompt: "Build me a portfolio with $50k",
-    answers: ["aggressive", "3 years", "no", "no", "growth"],
+    prompt: "Build me an aggressive portfolio with $50k over 3 years",
     assertions: {
       expectedWorkflow: "portfolio_builder",
       requiredTools: ["get_stock_quote"],
+      responseContains: [/\baggressive\b/i],
     },
   },
   {

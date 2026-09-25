@@ -256,6 +256,57 @@ function diagnosticFilename(caseName: string, now: Date): string {
 
 const TOOL_CALL_KEYS = ["name", "args", "result", "isError", "promptIndex"] as const;
 
+interface WorkflowDiagnosticSummary {
+  workflow?: string;
+  terminalStatus?: string;
+  validationFailedSteps: string[];
+}
+
+/**
+ * Safe workflow terminal summary for the failure diagnostic. Reads only the
+ * workflow name, terminal status, and validation-failed step names from the
+ * captured `opencandle-*` custom entries; never persists raw entries.
+ */
+function summarizeWorkflowDiagnostic(trace: EvalTrace): WorkflowDiagnosticSummary {
+  const entries = trace.customEntries ?? [];
+  const findData = (customType: string): Record<string, unknown> | undefined => {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (entry?.customType !== customType) continue;
+      const data = entry.data;
+      if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+        return data as Record<string, unknown>;
+      }
+    }
+    return undefined;
+  };
+
+  const workflowData = findData("opencandle-workflow");
+  const completeData = findData("opencandle-workflow-complete");
+  const validationFailedSteps = [
+    ...new Set(
+      entries
+        .filter((entry) => entry.customType === "opencandle-workflow-event")
+        .map((entry) => entry.data)
+        .filter(
+          (data): data is Record<string, unknown> =>
+            typeof data === "object" && data !== null && !Array.isArray(data),
+        )
+        .filter(
+          (data) =>
+            data.eventType === "output_validation_failed" && typeof data.stepType === "string",
+        )
+        .map((data) => data.stepType as string),
+    ),
+  ];
+
+  return {
+    workflow: typeof workflowData?.workflow === "string" ? workflowData.workflow : undefined,
+    terminalStatus: typeof completeData?.status === "string" ? completeData.status : undefined,
+    validationFailedSteps,
+  };
+}
+
 /**
  * Persist a bounded, redacted trace diagnostic for a failed eval assertion.
  *
@@ -294,6 +345,8 @@ export function saveFailureDiagnostic(
     return entry;
   });
 
+  const workflowDiagnostics = summarizeWorkflowDiagnostic(trace);
+
   const artifact = {
     timestamp: now.toISOString(),
     case: redactForDiagnostic(result.name),
@@ -306,6 +359,13 @@ export function saveFailureDiagnostic(
     responseText: redactForDiagnostic(trace.text),
     toolCalls,
     askUserTranscript: redactForDiagnostic(trace.askUserTranscript),
+    ...(workflowDiagnostics.workflow === undefined
+      ? {}
+      : { workflow: redactForDiagnostic(workflowDiagnostics.workflow) }),
+    ...(workflowDiagnostics.terminalStatus === undefined
+      ? {}
+      : { workflowTerminalStatus: redactForDiagnostic(workflowDiagnostics.terminalStatus) }),
+    workflowValidationFailedSteps: redactForDiagnostic(workflowDiagnostics.validationFailedSteps),
   };
   const content = `${JSON.stringify(artifact, null, 2)}\n`;
 

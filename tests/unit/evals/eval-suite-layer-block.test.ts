@@ -231,6 +231,29 @@ describe("saveFailureDiagnostic", () => {
           isError: true,
         },
       ],
+      customEntries: [
+        {
+          customType: "opencandle-workflow",
+          timestamp: "2026-09-25T00:00:00.000Z",
+          data: { workflow: `portfolio_builder (api key as ${credential})` },
+        },
+        {
+          customType: "opencandle-workflow-event",
+          timestamp: "2026-09-25T00:00:01.000Z",
+          data: {
+            eventType: "output_validation_failed",
+            stepType: `fetch_candidates (api key as ${credential})`,
+          },
+        },
+        {
+          customType: "opencandle-workflow-complete",
+          timestamp: "2026-09-25T00:00:02.000Z",
+          data: {
+            workflow: `portfolio_builder (api key as ${credential})`,
+            status: `failed (api key as ${credential})`,
+          },
+        },
+      ],
     });
 
     const path = saveFailureDiagnostic(partialLayerFailure("quote-accuracy"), trace, { dir });
@@ -244,6 +267,10 @@ describe("saveFailureDiagnostic", () => {
     const artifact = JSON.parse(raw) as {
       responseText: string;
       toolCalls: Array<{ result: { providerError: { message: string } } }>;
+      workflow?: string;
+      workflowTerminalStatus?: string;
+      workflowValidationFailedSteps?: string[];
+      customEntries?: unknown;
     };
     // The surrounding diagnostic stays readable, case-insensitively.
     expect(artifact.responseText).toContain("We have detected your API key as [redacted]");
@@ -254,6 +281,22 @@ describe("saveFailureDiagnostic", () => {
       "we detected your api Key as [redacted]",
     );
     expect(artifact.toolCalls[0].result.providerError.message).not.toContain(credential);
+
+    // The workflow summary fields go through the same redactor, and raw custom
+    // entry contents are never serialized into the artifact.
+    expect(artifact.workflow).toContain("[redacted]");
+    expect(artifact.workflowTerminalStatus).toContain("[redacted]");
+    expect(artifact.workflowValidationFailedSteps?.[0]).toContain("[redacted]");
+    expect(artifact.customEntries).toBeUndefined();
+    expect(raw).not.toContain("customEntries");
+    expect(raw).not.toContain("opencandle-workflow-event");
+    for (const value of [
+      artifact.workflow,
+      artifact.workflowTerminalStatus,
+      ...(artifact.workflowValidationFailedSteps ?? []),
+    ]) {
+      expect(value).not.toContain(credential);
+    }
   });
 
   it("caps object entries on retained tool payloads", () => {
@@ -272,6 +315,54 @@ describe("saveFailureDiagnostic", () => {
       toolCalls: Array<{ result: Record<string, number> }>;
     };
     expect(Object.keys(artifact.toolCalls[0].result).length).toBeLessThanOrEqual(100);
+  });
+
+  it("records safe workflow terminal status and validation step names", () => {
+    const dir = makeTempDir();
+    const trace = makeTrace({
+      customEntries: [
+        {
+          customType: "opencandle-workflow",
+          timestamp: "2026-09-25T00:00:00.000Z",
+          data: { workflow: "portfolio_builder" },
+        },
+        {
+          customType: "opencandle-workflow-event",
+          timestamp: "2026-09-25T00:00:01.000Z",
+          data: { eventType: "output_validation_failed", stepType: "fetch_candidates" },
+        },
+        {
+          customType: "opencandle-workflow-event",
+          timestamp: "2026-09-25T00:00:02.000Z",
+          data: {
+            eventType: "output_validation_failed",
+            stepType: "fetch_candidates",
+            repairAttempted: true,
+          },
+        },
+        {
+          customType: "opencandle-workflow-complete",
+          timestamp: "2026-09-25T00:00:03.000Z",
+          data: { workflow: "portfolio_builder", status: "failed" },
+        },
+      ],
+    });
+
+    const path = saveFailureDiagnostic(
+      partialLayerFailure("portfolio-builder-conservative"),
+      trace,
+      { dir },
+    );
+
+    expect(path).not.toBeNull();
+    const artifact = JSON.parse(readFileSync(path as string, "utf-8")) as {
+      workflow?: string;
+      workflowTerminalStatus?: string;
+      workflowValidationFailedSteps?: string[];
+    };
+    expect(artifact.workflow).toBe("portfolio_builder");
+    expect(artifact.workflowTerminalStatus).toBe("failed");
+    expect(artifact.workflowValidationFailedSteps).toEqual(["fetch_candidates"]);
   });
 
   it("uses a safe, unique filename that cannot escape the diagnostics directory or overwrite", () => {
