@@ -146,6 +146,35 @@ describe("createPortfolioEvidenceValidation", () => {
     expect(errors).toHaveLength(1);
   });
 
+  it("fails closed when the validation context is missing", () => {
+    const validation = createPortfolioEvidenceValidation({
+      step: "fetch_candidates",
+      assetScope: "stocks_only",
+    });
+
+    expect(validation.validate("| AAPL | 40% |")).toEqual([
+      expect.stringMatching(/no usable market price evidence/i),
+    ]);
+  });
+
+  it("does not let malformed evidence or an unrelated tool authorize advancement", () => {
+    const validation = createPortfolioEvidenceValidation({
+      step: "fetch_candidates",
+      assetScope: "stocks_only",
+    });
+
+    const malformed: EvidenceRecord = {
+      label: "tool:get_stock_quote",
+      value: "not-an-object",
+      provenance: { source: "computed" },
+    };
+
+    expect(validation.validate("draft", context([malformed]))).toHaveLength(1);
+    expect(
+      validation.validate("draft", context([toolEvidence("get_company_overview", "ok")])),
+    ).toHaveLength(1);
+  });
+
   it("builds a corrective tool-fetch repair prompt for a missing pricing evidence failure", () => {
     const validation = createPortfolioEvidenceValidation({
       step: "fetch_candidates",

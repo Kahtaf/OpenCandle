@@ -53,16 +53,12 @@ export function classifyToolOutcome(
     const details = isPlainRecord(result.details) ? result.details : undefined;
     return Array.isArray(details?.series) && details.series.length > 0 ? "ok" : "unavailable";
   }
-  if (!("details" in result)) {
-    // Non-envelope result (extension/legacy tools): a non-empty structured
-    // payload is usable, an empty one carries no evidence.
-    return Object.keys(result).length > 0 ? "ok" : "unavailable";
-  }
+  // A missing `details` envelope carries no inspected evidence; only non-empty
+  // structured details are usable.
   return hasUsableDetails(result.details) ? "ok" : "unavailable";
 }
 
 function hasUsableDetails(details: unknown): boolean {
-  if (details === null || details === undefined) return false;
   if (Array.isArray(details)) return details.length > 0;
   if (isPlainRecord(details)) return Object.keys(details).length > 0;
   return false;

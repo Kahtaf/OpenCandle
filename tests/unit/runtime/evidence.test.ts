@@ -122,6 +122,19 @@ describe("captureToolEvidence", () => {
     ).toBe("unavailable");
   });
 
+  it("treats malformed or non-envelope tool results as unavailable", () => {
+    // No `details` envelope means no inspected evidence, even for a
+    // non-empty object (the speculative legacy acceptance was removed).
+    expect(classifyToolOutcome({ price: 178.72 }, false, "get_stock_quote")).toBe("unavailable");
+    expect(classifyToolOutcome(null, false, "get_stock_quote")).toBe("unavailable");
+    expect(classifyToolOutcome("boom", false, "get_stock_quote")).toBe("unavailable");
+    expect(classifyToolOutcome([], false, "get_stock_quote")).toBe("unavailable");
+    // A scalar details payload carries no usable evidence.
+    expect(classifyToolOutcome({ content: [], details: "n/a" }, false, "get_stock_quote")).toBe(
+      "unavailable",
+    );
+  });
+
   it("classifies captured tool results without usable details as unavailable", () => {
     const entries = [
       {
