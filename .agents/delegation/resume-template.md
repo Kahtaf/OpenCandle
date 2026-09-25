@@ -7,8 +7,10 @@
   credible regression red, fix the actual cause at the narrowest durable layer, and verify with a
   focused run. Classify product defect vs inaccurate assertion vs harness/environment first; never
   weaken or delete a required check, retry until green, overfit prompts, or suppress failed evidence.
-- Genuinely unavailable credentials/external dependencies or scope contradictions go to the parent
-  with a concrete diagnosis and preserved progress; do not substitute mocks or invent proof.
-- Re-run the assigned proof scope before handoff; the parent may own the full/live gate centrally, so
-  report required pending work honestly instead of claiming it ran.
+- Preserve all failed evidence and attempts. Genuinely unavailable credentials/external dependencies
+  or scope contradictions go to the parent with a concrete diagnosis and preserved progress; do not
+  substitute mocks or invent proof.
+- By default, re-run `npm run gates` before handoff. Only when the parent explicitly centralizes the
+  full/live gate, run the assigned focused proof instead and disclose the required pending gate work
+  honestly.
 - Produce the same final report: files changed, proof outputs, and deviations.

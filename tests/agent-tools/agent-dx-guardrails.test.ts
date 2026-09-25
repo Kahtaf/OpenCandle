@@ -125,7 +125,8 @@ describe("agent developer guardrails", () => {
     expect(existsSync(contractPath)).toBe(true);
     if (!existsSync(contractPath)) return;
 
-    const contract = readFileSync(contractPath, "utf8");
+    // Collapse incidental line wrapping so clause checks are not whitespace-sensitive.
+    const contract = readFileSync(contractPath, "utf8").replace(/\s+/g, " ");
     for (const requiredPhrase of [
       "Owned tasks",
       "Commit policy",
@@ -142,6 +143,10 @@ describe("agent developer guardrails", () => {
       "never print",
       "CHANGELOG",
       "Codex review",
+      "diagnose the cause",
+      "fix the actual cause",
+      "focused run",
+      "Preserve all failed evidence",
     ]) {
       expect(contract).toContain(requiredPhrase);
     }
@@ -152,9 +157,18 @@ describe("agent developer guardrails", () => {
     expect(existsSync(resumePath)).toBe(true);
     if (!existsSync(resumePath)) return;
 
-    const resumeTemplate = readFileSync(resumePath, "utf8");
+    // Collapse incidental line wrapping so clause checks are not whitespace-sensitive.
+    const resumeTemplate = readFileSync(resumePath, "utf8").replace(/\s+/g, " ");
     expect(resumeTemplate).toContain("working tree");
     expect(resumeTemplate).toContain("npm run gates");
+    for (const requiredPhrase of [
+      "diagnose the cause",
+      "fix the actual cause",
+      "focused run",
+      "Preserve all failed evidence",
+    ]) {
+      expect(resumeTemplate).toContain(requiredPhrase);
+    }
   });
 
   describe("agent bootstrap", () => {
