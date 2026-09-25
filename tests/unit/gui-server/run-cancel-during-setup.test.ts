@@ -225,6 +225,32 @@ describe("chat-run Stop during setup", () => {
     await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
   });
 
+  it("never starts a run whose Stop overtook the run request", async () => {
+    const actionId = "chat-stop-overtook-run";
+    // Deterministic worst case: the Stop is fully handled before the run
+    // request is even sent, so the run is not registered yet.
+    const stop = await fetch(`${endpoint}/api/sessions/${sessionId}/run-cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: `stop-${actionId}`, targetActionId: actionId }),
+    });
+    expect(stop.status).toBe(200);
+
+    const response = await fetch(`${endpoint}/api/sessions/${sessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId, prompt: "hello", sessionId }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(promptCalls).toEqual([]);
+    expect(body).toContain("Run stopped.");
+    expect(body).not.toContain("run.completed");
+    expect(handlerRejections).toHaveLength(0);
+    await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
+  });
+
   function fakeWsHub(): WsHub {
     return {
       handleUpgrade: vi.fn(),

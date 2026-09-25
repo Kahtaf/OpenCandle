@@ -59,6 +59,73 @@ describe("GUI active run cancellation registry", () => {
     });
   });
 
+  it("remembers a stop that lands before its run is registered and applies it on admission", () => {
+    const registry = createGuiRunRegistry();
+    // The Stop request can overtake its own run request (the run body is still
+    // being read or its session resolved). It must not be lost.
+    expect(registry.cancel("session-1", "chat-1")).toEqual({
+      cancelled: false,
+      reason: "no_active_run",
+    });
+    const applyCancel = vi.fn();
+    const run = registry.start({ sessionId: "session-1", actionId: "chat-1" })!;
+    expect(run.cancelRequested).toBe(true);
+    run.setApplyCancel(applyCancel);
+    expect(applyCancel).toHaveBeenCalledOnce();
+  });
+
+  it("does not apply a remembered early stop to a run with a different action id", () => {
+    const registry = createGuiRunRegistry();
+    registry.cancel("session-1", "chat-old");
+    const run = registry.start({ sessionId: "session-1", actionId: "chat-new" })!;
+    expect(run.cancelRequested).toBe(false);
+    registry.finish(run);
+    expect(registry.start({ sessionId: "session-2", actionId: "chat-old" })!.cancelRequested).toBe(
+      false,
+    );
+  });
+
+  it("remembers an early stop that lands while a different run is still active", () => {
+    const registry = createGuiRunRegistry();
+    const other = registry.start({ sessionId: "session-1", actionId: "chat-other" })!;
+    expect(registry.cancel("session-1", "chat-1")).toEqual({
+      cancelled: false,
+      reason: "stale_target",
+    });
+    expect(other.cancelRequested).toBe(false);
+    registry.finish(other);
+    expect(registry.start({ sessionId: "session-1", actionId: "chat-1" })!.cancelRequested).toBe(
+      true,
+    );
+  });
+
+  it("bounds remembered early stops by forgetting the oldest first", () => {
+    const registry = createGuiRunRegistry({ maxEarlyCancels: 2 });
+    registry.cancel("session-1", "chat-1");
+    registry.cancel("session-2", "chat-2");
+    registry.cancel("session-1", "chat-1");
+    registry.cancel("session-3", "chat-3");
+    expect(registry.start({ sessionId: "session-2", actionId: "chat-2" })!.cancelRequested).toBe(
+      false,
+    );
+    expect(registry.start({ sessionId: "session-1", actionId: "chat-1" })!.cancelRequested).toBe(
+      true,
+    );
+    expect(registry.start({ sessionId: "session-3", actionId: "chat-3" })!.cancelRequested).toBe(
+      true,
+    );
+  });
+
+  it("forgets a remembered early stop after its retention window", () => {
+    let now = 1_000;
+    const registry = createGuiRunRegistry({ now: () => now, earlyCancelRetentionMs: 5_000 });
+    registry.cancel("session-1", "chat-1");
+    now += 5_001;
+    expect(registry.start({ sessionId: "session-1", actionId: "chat-1" })!.cancelRequested).toBe(
+      false,
+    );
+  });
+
   it("applies an early stop that lands before the run is able to accept cancellation", () => {
     const registry = createGuiRunRegistry();
     const applyCancel = vi.fn();
