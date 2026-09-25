@@ -1,5 +1,11 @@
 # Test contract inventory — Phase 1 (inventory only, unreviewed)
 
+> **Superseded.** This is the dated 2026-09-24 Phase 1 record. The current,
+> authoritative description of the inventory (route registry, derived gate
+> membership, and how counts are produced) is
+> [`test-inventory.md`](test-inventory.md). Where the two disagree,
+> `test-inventory.md` and `scripts/test-gate-policy.json` win.
+
 Status: **inventory only**. No case has an individual review. `boundary` is
 `unknown` and `reviewedDisposition` is `pending-review` for every case until a
 human records a classification. Route `boundaryHint` values are triage aids,
@@ -38,13 +44,16 @@ JSON is still written for diagnosis but the command exits non-zero (and
 `--check` reports `collection-error:<route>`); an incomplete collection is never
 reported as a successful inventory.
 
-No `package.json`, `vitest.*`, or CI edits were made in this task. Suggested
-parent follow-up (not done here): add
-`"test:inventory": "node scripts/test-inventory.mjs"` to `package.json`.
+No `package.json`, `vitest.*`, or CI edits were made in this task. The
+suggested follow-up has since landed: `package.json` now defines
+`"test:inventory": "node scripts/test-inventory.mjs"`.
 
 ## Actual collection
 
-The table below is a **dated snapshot**, not a contract. Regenerate it with the
+The table below is a **dated snapshot**, not a contract. Its route list and
+"Runs in `npm run gates`?" column predate the `gui-integration` and
+`gui-journey` routes and the shared gate policy; see `test-inventory.md` for
+current routes and derived gate membership. Regenerate it with the
 command above; do not edit counts by hand and do not assert these numbers in
 tests. The route registry is the source of truth: adding a project (for example
 the incoming `gui-integration` browser project) means adding one entry to

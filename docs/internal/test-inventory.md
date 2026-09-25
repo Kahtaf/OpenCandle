@@ -63,11 +63,13 @@ Counts are deliberately **not** listed here. They are collected at run time
 Notes:
 
 - `gui-integration` (tests/e2e/gui-integration.test.ts +
-  gui-integration-lifecycle.test.ts) collects its **27 real cases** under
+  gui-integration-lifecycle.test.ts) collects its real cases under
   `OPENCANDLE_GUI_INTEGRATION=1`; a stale flag name previously collected it as
   0 (a false zero), which the collector worker corrected. `gui-journey`
-  (tests/e2e/gui-session-journey.test.ts) collects its **8 deterministic cases**
-  and passes in normal and shuffled order. Both are required by `gates:full` and
+  (tests/e2e/gui-session-journey.test.ts) collects its deterministic cases and
+  passes in normal and shuffled order. Per-route case counts live in the
+  generated JSON (`caseCount`), not in this doc, since both files keep gaining
+  cases. Both are required by `gates:full` and
   `release:check` per the policy.
 - `gui-browser` is now the **live** set only; the mocked set moved out. It is
   opt-in and in no gate.

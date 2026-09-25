@@ -292,10 +292,11 @@ describe("GUI session journey", () => {
 
     answerHold.release();
     // The held upstream request completes normally and the run finishes,
-    // persisting the completed answer. (Currently RED: a passive disconnect
-    // aborts the run at the application layer, so the native assistant message
-    // persists with stopReason "aborted" and only the first streamed half. The
-    // provider HTTP itself completes; only explicit Stop is supposed to cancel.)
+    // persisting the completed answer. This guards a regression that was fixed
+    // when GUI cancellation became durable: a passive disconnect used to abort
+    // the run at the application layer, persisting the native assistant message
+    // with stopReason "aborted" and only the first streamed half. The provider
+    // HTTP itself completes; only explicit Stop is supposed to cancel.
     expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
     const completed = await waitFor(
       () => hasCompletedNvdaAnswer(harness.readSessionEntries(runSessionId)),

@@ -120,7 +120,7 @@ Origin: `scorers` from 2026-04-03 (eval framework), `competitive-finance` 2026-0
 | `prompt-policy-assertions.test.ts` | 13 | unit + manifest artifact | Unregistered hard assertions fail (not silently pass); every manifest hard assertion has a deterministic checker; DTE window, ticker-clarification, structural-portfolio-read variants | behavior on real evaluator; manifest coverage | keep | Good. Manifest-driven, so coverage tracks `prompt-to-policy-migration-manifest.json` |
 | `router-live-contract.test.ts` | 7 | unit (real `stripNonContract`) | Share-class identity (GOOG vs GOOGL not deduped); canonical DTE slot wins over horizon prose; empty catalyst list ignored; expected tool bundles retained, extras ignored | behavior | keep | None material |
 | `run-evals-table.test.ts` | 8 | unit + artifact (reads `package.json`, `tests/scripts/run-evals.ts`) | Front-door script ownership; `spawnSync` with `shell:false`; suite list; suite→command/env mapping incl. known-fail flags; unknown-suite error; release aggregation; run-index JSONL diff/append | behavior + source contract | keep | Source assertion `shell:false` is a real security contract (no shell injection); keep |
-| `provider-outage-deterministic.test.ts` | 3 + 1 skipped | integration (registered tools + fixture fetch, real cache/rate limiter) | Zero-filled quote disclosed as unavailable, not `$0.00`; partial correlation drops 429 symbol with reason; weekend-stale quote timestamp disclosed | behavior | keep | The skipped `KNOWN-FAIL E3` case (line 131) is documented as needing a credentialed harness run; **it is not gating** and must not be counted as exercised coverage |
+| `provider-outage-deterministic.test.ts` | 3 | integration (registered tools + fixture fetch, real cache/rate limiter) | Zero-filled quote disclosed as unavailable, not `$0.00`; partial correlation drops 429 symbol with reason; weekend-stale quote timestamp disclosed | behavior | keep | All 3 cases execute, including the promoted `E3` weekend-stale case. The former skipped `KNOWN-FAIL … opencandle-turn-gap` placeholder was removed on 2026-09-24 (see `test-trust-implementation-2026-09-24.md`), so no skipped case remains in this file |
 | `competitive-finance-planning.test.ts` | 2 | unit | Judge prompt carries planning metadata; improvement-idea classification into prompt-to-policy layers | behavior | keep | None material |
 | `eval-suite-registration.test.ts` | 2 | unit with `vi.mock` of runner/scorer/baseline | `registerEvalSuite` collection succeeds and runs case through `runEvalCase`/`scoreCase` (guards the vitest-evals 0.14 `define` regression); runtime collection sees 2 tests (the top-level registered case + the explicit assertion), static collection sees only 1 | mock-supplied expectations | keep | Depends on `clearMocks:false` (documented in `vitest.config.ts`); a future `clearMocks` flip silently breaks it. Mock supplies all outputs, so it checks wiring only. Illustrates why static counts must not be used |
 | `subprocess-runner.test.ts` | 1 | integration (spawns real node child) | Timeout kills the child and reports `timedOut`, `status:null` | behavior | keep | None |
@@ -253,8 +253,9 @@ gated by `npm run gates`. Origin: 2026-07-31 (audited provider relay) with later
    No other deletions are proposed in this audit.
 5. **Naming accuracy.** `tests/unit/e2e-integration.test.ts` is not end-to-end (no CLI/session/model);
    `eval-suite-registration.test.ts` relies on `clearMocks:false` (documented in `vitest.config.ts`).
-6. **Explicit non-gating coverage.** The one `.skip` in scope (`provider-outage-deterministic.test.ts`
-   line 131, `KNOWN-FAIL E3`) is not exercised and must not be counted as coverage.
+6. **Explicit non-gating coverage.** At audit time the one `.skip` in scope was the
+   `KNOWN-FAIL … opencandle-turn-gap` placeholder in `provider-outage-deterministic.test.ts`. It was
+   removed on 2026-09-24; no skipped case remains in that file, and all 3 of its cases execute.
 
 ## Pending gaps / missing journeys (explicit)
 
@@ -269,8 +270,9 @@ gated by `npm run gates`. Origin: 2026-07-31 (audited provider relay) with later
   dependencies are mocked; real TUI driving is via `tests/e2e` / `tests/harness`, out of scope.
 - **Relay deployment reality unproven.** Rate-limiter binding and CORS are exercised with injected
   mocks; no live Cloudflare run in scope.
-- **`provider-outage-deterministic` `opencandle-turn-gap` assertion is skipped** pending a
-  credentialed harness run (tracked `KNOWN-FAIL`).
+- **`provider-outage-deterministic` `opencandle-turn-gap` is not covered by a unit case.** The skipped
+  `KNOWN-FAIL` placeholder was removed on 2026-09-24; the turn-gap behavior still needs a
+  credentialed harness run to prove.
 - **Not independently verified by a second reviewer.** This ledger is worker evidence pending parent
   review; no human review has occurred.
 
@@ -298,8 +300,8 @@ Counting commands were read-only; the deletion was verified with one focused tes
 - `git log --follow` per in-scope file → `/tmp/origins.tsv`
 - `npx vitest run --project unit tests/unit/pi/opencandle-extension-router.test.ts` → **2 passed** (post-deletion)
 - `npm run gates` → **PASS, exit code 0**: `check` clean; unit `350 files / 3740 passed, 1 skipped`;
-  relay `2 files / 76 passed`; agent-tools `2 files / 28 passed`. The single skip is the tracked
-  `KNOWN-FAIL E3` provider-outage case.
+  relay `2 files / 76 passed`; agent-tools `2 files / 28 passed`. The single skip at audit time was
+  the `KNOWN-FAIL` provider-outage placeholder, since removed (2026-09-24).
 
 Scope count reconciliation (executable, `--staticParse=false`): unit in-scope 728 + site 30 +
 agent-tools 28 + relay 76 = **862 executable cases across 64 files** post-deletion (863 pre-deletion).

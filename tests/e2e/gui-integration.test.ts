@@ -1330,12 +1330,11 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
     await dialog.waitFor({ state: "hidden" });
   }, 30_000);
 
-  // Known product bug, left as a strict failing case rather than hidden behind
-  // `it.fails`/`skip`: the drawer opener is a plain button rather than a
-  // Drawer.Trigger, so closing the mobile drawer leaves focus on <body>
-  // instead of returning it to the control that opened it. The old source
-  // check only asserted the open-side autoFocus and never covered this. This
-  // case goes green once Sheet/Drawer restores focus to the opener.
+  // Regression guard for a fixed focus bug: the drawer opener is a plain button
+  // rather than a Drawer.Trigger, so Radix/vaul alone left focus on <body>
+  // after closing the mobile drawer. SessionDrawer now restores focus to the
+  // opener via `returnFocusRef` in `onCloseAutoFocus`. The old source check
+  // only asserted the open-side autoFocus and never covered this.
   it("returns focus to the mobile drawer trigger after Escape", async () => {
     const mocked = await newPage({ viewport: { width: 390, height: 844 } });
     await installMockSocket(mocked);
@@ -1352,8 +1351,8 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
     await mocked.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });
 
-    // This is the intended contract; it currently times out with focus left
-    // on <body>, so this case fails until the product gap above is fixed.
+    // Focus must return to the opener; before the fix this timed out with
+    // focus left on <body>.
     await mocked.waitForFunction(
       () => {
         const active = document.activeElement;

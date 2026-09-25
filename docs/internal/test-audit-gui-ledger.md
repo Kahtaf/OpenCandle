@@ -6,6 +6,14 @@
 **Owner:** `audit-gui: audit only; scope below`. Parent owns integration/review.
 **Commit policy:** leave-uncommitted.
 
+> **Historical snapshot.** Counts, line citations, and dispositions below describe the test tree on
+> `test-trust/audit-gui` as of 2026-09-24, before the `test-trust/integration` branch moved most
+> `tests/e2e/gui-browser.test.ts` journeys into `gui-integration.test.ts` and
+> `gui-session-journey.test.ts`, removed source-slice cases (including the `transcript-scroller`
+> slice), and added or deleted unit files. Only entries explicitly marked **Done** were updated
+> afterwards. Check the current tree, and `test-inventory.md` for live counts, before acting on any
+> remaining R/C/I disposition.
+
 ## 1. Scope and counts
 
 Collected with `npx vitest list --staticParse=false` (runtime collection: modules are loaded and `it.each` families are expanded, but **test bodies are not executed**), with `OPENCANDLE_GUI_BROWSER=1` / `OPENCANDLE_GUI_RELEASE_SMOKE=1` set for the browser projects:
@@ -261,7 +269,7 @@ Legend — **Read**: `full` (line-level this run) or `scan` (case-index + target
 | `search-icon-alignment` | 2 | icon alignment | K/C | class regex |
 | `sentiment-insight-render` | 2 | insight | K | render |
 | `series-colors` | 1 | palette | I | tautological |
-| `session-drawer-focus` | 1 | focus source | **R** | source-only |
+| `session-drawer-focus` | 1 | focus source | **R (done 2026-09-24)** | source-only; file removed, replaced by `tests/e2e/gui-integration.test.ts` focus-in and focus-return cases |
 | `session-market-facts` | 3 | market facts | K | — |
 | `session-search` | 2 | search | K | — |
 | `settings-automation-section` | 7 | settings | K | render |
@@ -329,14 +337,14 @@ Legend — **Read**: `full` (line-level this run) or `scan` (case-index + target
 
 - **Keep (K):** ~150 files. The overwhelming majority are behavior-first and boundary-appropriate (real SQLite, real HTTP/WS, pure deterministic logic, real file locks, focused provider-relay security). Mocks are concentrated and mostly justified.
 - **Consolidate (C):** render/page suites listed in 4.4; transport/catalog clusters are complementary and should not be merged.
-- **Replace (R):** `gui-web/session-drawer-focus.test.ts` (source-only) and the source-slice portions of `transcript-scroller` / `chat-composer`. `gui-web/runtime-transport-parity.test.ts` is no longer R: strengthened in place 2026-09-24 (test-only) with concrete per-transport state and session-targeting assertions, mutation-proved to fail on an empty reducer.
+- **Replace (R):** ~~`gui-web/session-drawer-focus.test.ts` (source-only)~~ **Done 2026-09-24**: file removed and replaced by `tests/e2e/gui-integration.test.ts` browser cases for focus entering the mobile drawer and returning to its opener after Escape (the focus-return bug was fixed in `SessionDrawer`). Still R: the source-slice portions of `transcript-scroller` / `chat-composer`. `gui-web/runtime-transport-parity.test.ts` is no longer R: strengthened in place 2026-09-24 (test-only) with concrete per-transport state and session-targeting assertions, mutation-proved to fail on an empty reducer.
 - **Investigate (I):** `gui-web/onboarding-carousel.test.ts` (misnamed; carousel untested), `gui-web/series-colors.test.ts` (tautology), `market-state/notification-delivery.test.ts` (retry-success), `browser-data-store` size ceiling; live e2e scripts (credential gating/docstring).
 
 No file is recommended for outright deletion: every file either asserts a real contract or is cheap insurance. The replacements above are **proposed**, not performed (read-only audit).
 
 ## 7. Pending / replacement gaps
 
-1. `gui-web/session-drawer-focus.test.ts` → jsdom focus test (open drawer → search field focused).
+1. ~~`gui-web/session-drawer-focus.test.ts` → jsdom focus test (open drawer → search field focused).~~ **Done 2026-09-24** as real browser cases in `tests/e2e/gui-integration.test.ts` (focus enters the drawer; Escape returns focus to the opener).
 2. ~~`gui-web/runtime-transport-parity.test.ts` → assert concrete reduced state, not just local==hosted.~~ **Done 2026-09-24** (test-only; mutation-proved).
 3. `OnboardingCarousel.jsx` → direct step/provider/dismiss assertions (or rename the current file to `model-setup-card.test.ts`).
 4. `notification-delivery` → success-after-failure retry case.
@@ -546,7 +554,7 @@ Every in-scope file below was read line-by-line in this run. Counts are runtime-
 | `search-icon-alignment` | `it.each` panel/ticker magnifier centering (2) | Detectable: fixed-offset icon drift. Class regex. | K/C |
 | `sentiment-insight-render` | scored vs preview sample, legacy fields (2) | Detectable: preview presented as full scoring. | K |
 | `series-colors` | palette literal (1) | Detectable: palette drift only; no consumer boundary. | I |
-| `session-drawer-focus` | source substring for Sheet autofocus (1) | **Source-only**: cannot fail for a real focus bug. | R |
+| `session-drawer-focus` | source substring for Sheet autofocus (1) | **Source-only**: cannot fail for a real focus bug. Removed 2026-09-24; replaced by `tests/e2e/gui-integration.test.ts` focus-in and focus-return browser cases. | R (done) |
 | `session-market-facts` | enrich from comparison, session facts, latest non-empty (3) | Detectable: quote fields not backfilled, stale fact wins. | K |
 | `session-search` | empty query, name/first/transcript matching (2) | Detectable: session search misses text. | K |
 | `settings-automation-section` | hosted/offline/follower gating, on-demand vs monitor copy (7) | Detectable: schedule controls in web app, read-only save. | K |
@@ -592,5 +600,5 @@ Every in-scope file below was read line-by-line in this run. Counts are runtime-
 1. **Security/authorization is well covered**: `private-api-access` (executed predicate), `server-route-guards` (artifact ordering, retain), `provider-relay-fetch` (fail-closed, bounds), `ws-hub`/`tool-metadata`/`preferences-*` (no secret serialization), `ticker-line-sparkline` (no stale/cached error). No credible bypass found.
 2. **Durability/idempotency is well covered**: `browser-hosted-gui-runtime`, `browser-runtime-host`, `browser-data-store`, `local-session-coordinator`, `session-actions`, `chat-run-body` (dispose-after-settle). The main residual is white-box coupling (`(runtime as any)`), not weak behavior.
 3. **Financial-boundary honesty is well covered**: FX-mismatch exclusion and partial-total refusal recur in `market-state-api`, `hosted-market-data-api`, `portfolio-view-model`, `use-market-state`, `home-dashboard-render`, `symbol-page-render`.
-4. **Weakest remaining links** after the 2026-09-24 follow-up: `session-drawer-focus` (source-only), `onboarding-carousel` (misnamed; carousel untested), `motion-accessibility-contract`/`chat-panel-events`/`home-dashboard-render`/`use-gui-connection` (source-text or whole-tree greps), `series-colors` (tautology). `runtime-transport-parity` and `browser-model-runtime` were strengthened/cleaned in the follow-up.
+4. **Weakest remaining links** after the 2026-09-24 follow-up: `onboarding-carousel` (misnamed; carousel untested), `motion-accessibility-contract`/`chat-panel-events`/`home-dashboard-render`/`use-gui-connection` (source-text or whole-tree greps), `series-colors` (tautology). `runtime-transport-parity` and `browser-model-runtime` were strengthened/cleaned in the follow-up, and `session-drawer-focus` was replaced by real browser focus cases in `tests/e2e/gui-integration.test.ts`.
 5. **Boundary limits, not defects**: `lightweight-charts`/`recharts` mocked in gui-web chart tests; `BroadcastChannel`/`LockManager`/`WebContainer` simulated in hosted unit tests; most `gui-browser` cases stub the server. Real chart rendering and real multi-tab/WebContainer behavior rest on `hosted-pwa` and `gui-release-smoke` only.
