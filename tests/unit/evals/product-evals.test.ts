@@ -1011,6 +1011,9 @@ describe("product eval scoring", () => {
       "There is no sparse coverage in the sentiment read.",
       "There is no low sample count in the sentiment read.",
       "There is no insufficient data for the sentiment read.",
+      // Ordinary negative verb forms bound to the limitation.
+      "The sentiment read does not have sparse coverage.",
+      "The sentiment signal cannot be noisy.",
     ];
 
     for (const text of negatedTexts) {

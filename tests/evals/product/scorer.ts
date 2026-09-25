@@ -330,21 +330,24 @@ const DATA_QUALITY_LIMITATION =
   "(?:noisy|noise|sparse\\s+(?:coverage|sample|data|sources?)|thin\\s+(?:coverage|sample|data|sources?)|limited\\s+(?:coverage|sample|data|sources?)|(?:low|small)\\s+sample\\s+(?:count|size)|insufficient\\s+(?:data|sample|coverage|evidence))";
 
 // Negation is limitation-local: only a negation directly attached to the
-// limitation (optionally through a small modifier set) counts, plus a bounded
-// coordinated denial such as "no insufficient data or sparse coverage". An
-// unrelated clause negation ("not reliable because of sparse coverage",
-// "do not trust the noisy signal") is not suppression.
+// limitation (optionally through a bounded be/have auxiliary and a small
+// modifier set) counts, plus a bounded coordinated denial such as "no
+// insufficient data or sparse coverage". An unrelated clause negation
+// ("not reliable because of sparse coverage", "do not trust the noisy signal")
+// is not suppression.
 function limitationNegated(text: string, anchorIndex: number): boolean {
   const { start } = clauseBounds(text, anchorIndex);
   const before = text.slice(start, anchorIndex);
-  const negation = "(?:\\b(?:no|not|isn't|aren't|never|without|nor|neither)\\b)";
+  const negation =
+    "(?:\\b(?:no|not|never|without|nor|neither|cannot)\\b|\\b(?:isn't|aren't|wasn't|weren't|doesn't|don't|didn't|can't|won't|wouldn't|shouldn't|couldn't|mustn't|hasn't|haven't)\\b)";
+  const auxiliary = "(?:(?:be|have)\\s+)?";
   const directlyAttached = new RegExp(
-    `^.*${negation}\\s+${DATA_QUALITY_MODIFIERS}(?:the\\s+)?$`,
+    `^.*${negation}\\s+${auxiliary}${DATA_QUALITY_MODIFIERS}(?:the\\s+)?$`,
     "i",
   ).test(before);
   if (directlyAttached) return true;
   return new RegExp(
-    `${negation}\\s+${DATA_QUALITY_MODIFIERS}${DATA_QUALITY_LIMITATION}(?:\\s+(?:or|nor|and)\\s+${DATA_QUALITY_LIMITATION})*\\s+(?:or|nor|and)\\s+$`,
+    `${negation}\\s+${auxiliary}${DATA_QUALITY_MODIFIERS}${DATA_QUALITY_LIMITATION}(?:\\s+(?:or|nor|and)\\s+${DATA_QUALITY_LIMITATION})*\\s+(?:or|nor|and)\\s+$`,
     "i",
   ).test(before);
 }
