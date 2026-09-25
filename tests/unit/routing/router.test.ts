@@ -2804,6 +2804,32 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("does not treat a dividend question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much does AAPL pay in dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not treat a quantity holding question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "100",
+        priorTurns: [{ role: "assistant", text: "How many shares of AAPL do you own?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("keeps the basis from an earlier question-and-answer turn in a later follow-up", async () => {
     const result = await route(
       {

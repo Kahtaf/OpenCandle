@@ -1458,16 +1458,20 @@ function answersBasisQuestion(
   );
 }
 
-// A question is a basis/purchase/holding request when it carries the same role
-// cue vocabulary as an assertion (plus the bare verb "pay"), so per-share
-// phrasings are not missed. The request form still has to be present.
+// A question counts as a cost-basis request only with an explicit basis field
+// or personal purchase-price intent. Personal price intent distinguishes "how
+// much did you pay per share" from a company paying dividends or interest, and
+// quantity-only holding questions are not price requests.
 const COST_BASIS_REQUEST_FORM =
   /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
+const COST_BASIS_REQUEST_FIELD =
+  /\b(?:cost\s*basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
+const COST_BASIS_REQUEST_PRICE =
+  /\b(?:pay|paid)\b[^.?!]{0,30}\b(?:price|per\s+share|cost|for)\b|\b(?:price|per\s+share)\b[^.?!]{0,30}\b(?:pay|paid|bought|purchased|acquired)\b/i;
 
 function asksForCostBasis(text: string): boolean {
-  return (
-    (COST_BASIS_CONTEXT.test(text) || /\bpay\b/i.test(text)) && COST_BASIS_REQUEST_FORM.test(text)
-  );
+  if (!COST_BASIS_REQUEST_FORM.test(text)) return false;
+  return COST_BASIS_REQUEST_FIELD.test(text) || COST_BASIS_REQUEST_PRICE.test(text);
 }
 
 function isConversationalRiskPreferenceUpdate(
