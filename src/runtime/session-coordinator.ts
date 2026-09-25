@@ -219,7 +219,15 @@ async function waitForPromptSettlement(
       // transition can otherwise settle a queued prompt (for example a repair)
       // that Pi has not dequeued yet, which re-validates stale/empty output and
       // fails the run before that prompt ever executes.
-      if (terminalOutcome === "success") {
+      //
+      // The terminal outcome alone is also insufficient: Pi persists the
+      // assistant message before the run releases the session (its
+      // `_emitAgentSettled` sets the run-inactive flag in `_runAgentPrompt`'s
+      // finally, independently of this coordinator). Sending a follow-up prompt
+      // without a `deliverAs` mode into that still-busy session is rejected and
+      // swallowed, so the repair/next prompt is never dispatched. Require the
+      // queue to report idle with no pending messages as well.
+      if (terminalOutcome === "success" && ready) {
         return true;
       }
     } else if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
