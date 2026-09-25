@@ -308,7 +308,7 @@ function sentimentDataQualityRisk(text: string): boolean {
 function hasNoisySentimentRisk(text: string): boolean {
   for (const match of text.matchAll(/\b(?:noisy|noise)\b/gi)) {
     const index = match.index;
-    if (index === undefined || clauseLocalNegation(text, index)) continue;
+    if (index === undefined || limitationNegated(text, index)) continue;
     const { start, end } = clauseBounds(text, index);
     if (/\b(?:sentiment|signal|sample|sources?|data|read)\b/i.test(text.slice(start, end))) {
       return true;
@@ -319,18 +319,34 @@ function hasNoisySentimentRisk(text: string): boolean {
 
 function hasUnnegatedMatch(text: string, pattern: RegExp): boolean {
   for (const match of text.matchAll(pattern)) {
-    if (match.index !== undefined && !clauseLocalNegation(text, match.index)) return true;
+    if (match.index !== undefined && !limitationNegated(text, match.index)) return true;
   }
   return false;
 }
 
-// Conservative, clause-local negation: a limitation is negated only when a
-// negation token appears earlier in the same clause (bounded by . ; ! ? , or a
-// newline). "not only" is treated as additive, not negating.
-function clauseLocalNegation(text: string, anchorIndex: number): boolean {
+const DATA_QUALITY_MODIFIERS =
+  "(?:(?:particularly|especially|really|very|entirely|fully|completely|necessarily|actually)\\s+)*";
+const DATA_QUALITY_LIMITATION =
+  "(?:noisy|noise|sparse\\s+(?:coverage|sample|data|sources?)|thin\\s+(?:coverage|sample|data|sources?)|limited\\s+(?:coverage|sample|data|sources?)|(?:low|small)\\s+sample\\s+(?:count|size)|insufficient\\s+(?:data|sample|coverage|evidence))";
+
+// Negation is limitation-local: only a negation directly attached to the
+// limitation (optionally through a small modifier set) counts, plus a bounded
+// coordinated denial such as "no insufficient data or sparse coverage". An
+// unrelated clause negation ("not reliable because of sparse coverage",
+// "do not trust the noisy signal") is not suppression.
+function limitationNegated(text: string, anchorIndex: number): boolean {
   const { start } = clauseBounds(text, anchorIndex);
-  const clause = text.slice(start, anchorIndex);
-  return /\b(?:no|never|without|nor|neither)\b|n't\b|\bnot\b(?!\s+only\b)/i.test(clause);
+  const before = text.slice(start, anchorIndex);
+  const negation = "(?:\\b(?:no|not|isn't|aren't|never|without|nor|neither)\\b)";
+  const directlyAttached = new RegExp(
+    `^.*${negation}\\s+${DATA_QUALITY_MODIFIERS}(?:the\\s+)?$`,
+    "i",
+  ).test(before);
+  if (directlyAttached) return true;
+  return new RegExp(
+    `${negation}\\s+${DATA_QUALITY_MODIFIERS}${DATA_QUALITY_LIMITATION}(?:\\s+(?:or|nor|and)\\s+${DATA_QUALITY_LIMITATION})*\\s+(?:or|nor|and)\\s+$`,
+    "i",
+  ).test(before);
 }
 
 function clauseBounds(text: string, index: number): { start: number; end: number } {

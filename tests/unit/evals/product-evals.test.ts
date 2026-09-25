@@ -970,6 +970,33 @@ describe("product eval scoring", () => {
     }
   });
 
+  it("accepts a data-quality limitation despite an unrelated negation in the clause", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const positiveTexts = [
+      // The "not reliable/reassuring" negation is not attached to the limitation.
+      "The sentiment read is not reliable because of sparse coverage.",
+      "Do not trust the noisy sentiment signal.",
+    ];
+
+    for (const text of positiveTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(true);
+    }
+  });
+
   it("rejects clause-local negation of each data-quality limitation", () => {
     const sentimentCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
