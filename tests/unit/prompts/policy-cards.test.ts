@@ -445,8 +445,12 @@ describe("policy cards", () => {
 
     // The put's contractual sell right at the strike is the observable floor.
     expect(rendered).toContain("right to sell");
-    // Net protection at expiration is the strike minus the premium paid.
+    // A single strike-minus-premium floor is gated on fully matched coverage.
     expect(rendered).toContain("strike minus the premium");
+    expect(rendered).toContain("fully match the owned shares per covered share");
+    // Mismatched coverage must not be collapsed into one per-owned-share floor.
+    expect(rendered).toContain("do not quote a single numerical per-owned-share floor");
+    expect(rendered).toContain("surplus long put exposure");
     // The standalone long-put loss is the premium; the combined position loss is larger.
     expect(rendered).toContain("put leg");
     expect(rendered).toContain("combined stock-plus-put");

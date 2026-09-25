@@ -506,6 +506,8 @@ describe("PromptContextBuilder", () => {
     expect(renderedPrompt).toContain("right to sell");
     expect(renderedPrompt).toContain("strike minus the premium");
     expect(renderedPrompt).toContain("remain fully exposed");
+    // Mismatched coverage must not be collapsed into one per-owned-share floor.
+    expect(renderedPrompt).toContain("do not quote a single numerical per-owned-share floor");
   });
 
   it("uses the stateful tracking policy without deleting agent-task context", () => {
