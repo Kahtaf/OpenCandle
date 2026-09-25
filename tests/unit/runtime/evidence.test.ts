@@ -83,6 +83,45 @@ describe("captureToolEvidence", () => {
     expect(classifyToolOutcome({ content: [], details: { price: 178.72 } }, true)).toBe("error");
   });
 
+  it("requires a price comparison to carry actual aligned series", () => {
+    const emptySeries = {
+      content: [],
+      details: {
+        range: "1y",
+        interval: "1d",
+        baseDate: "",
+        series: [],
+        unavailableSymbols: ["VOO", "BND"],
+        freshness: {},
+      },
+    };
+    const usableSeries = {
+      content: [],
+      details: {
+        range: "1y",
+        interval: "1d",
+        baseDate: "2026-01-02",
+        series: [{ symbol: "VOO", bars: [{ date: "2026-01-02", close: 470 }] }],
+        unavailableSymbols: [],
+        freshness: {},
+      },
+    };
+
+    expect(classifyToolOutcome(emptySeries, false, "get_price_comparison")).toBe("unavailable");
+    expect(classifyToolOutcome(usableSeries, false, "get_price_comparison")).toBe("ok");
+    // The legacy no-envelope acceptance must not qualify a comparison.
+    expect(classifyToolOutcome({ range: "1y", series: [] }, false, "get_price_comparison")).toBe(
+      "unavailable",
+    );
+    expect(
+      classifyToolOutcome(
+        { range: "1y", series: [{ symbol: "VOO" }] },
+        false,
+        "get_price_comparison",
+      ),
+    ).toBe("unavailable");
+  });
+
   it("classifies captured tool results without usable details as unavailable", () => {
     const entries = [
       {

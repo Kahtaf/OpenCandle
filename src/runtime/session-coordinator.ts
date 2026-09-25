@@ -1093,7 +1093,7 @@ function toolEvidenceRecord(input: {
     value: {
       tool: input.tool,
       args: truncateToolValue(serializeToolValue(input.args), 500),
-      outcome: classifyToolOutcome(input.result, input.isError),
+      outcome: classifyToolOutcome(input.result, input.isError, input.tool),
       ...(freshness ? { freshness } : {}),
       resultDigest: {
         preview: truncateToolValue(serializedResult, 500),

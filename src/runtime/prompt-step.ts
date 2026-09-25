@@ -123,6 +123,7 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
         outcome: classifyToolOutcome(
           { details: message.details, content: message.content },
           message.isError === true,
+          tool,
         ),
         ...(freshness ? { freshness } : {}),
         resultDigest: {

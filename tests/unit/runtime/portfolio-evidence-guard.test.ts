@@ -356,7 +356,97 @@ describe("portfolio workflow absent-evidence guard", () => {
       expect.arrayContaining(["get_stock_quote", "get_stock_history"]),
     );
   });
+
+  it("accepts a price comparison that returned usable aligned series", async () => {
+    const harness = startHarness((prompt) => {
+      switch (stageOf(prompt)) {
+        case "fetch":
+          return {
+            tools: [{ tool: "get_price_comparison", details: usableComparisonDetails() }],
+            text: "Compared the candidates from aligned series.",
+          };
+        case "risk":
+          return {
+            tools: [
+              { tool: "analyze_risk", details: { symbol: "VOO", annualizedVolatility: 0.16 } },
+            ],
+            text: "Risk reviewed from returned metrics.",
+          };
+        default:
+          return { text: VALID_TABLE };
+      }
+    });
+
+    await harness.advance();
+    await harness.coord.waitForActiveWorkflow();
+
+    const run = harness.coord.getRunner().getActiveRun();
+    expect(run?.status).toBe("completed");
+    expect(
+      promptsMatching(harness.sentPrompts, "Now review the risk and diversification"),
+    ).toHaveLength(1);
+  });
+
+  it("does not let an empty-series price comparison authorize candidate selection", async () => {
+    const harness = startHarness(() => ({
+      tools: [{ tool: "get_price_comparison", details: emptyComparisonDetails() }],
+      text: "| VOO | 18% | $474.96 |\nPrices are current and correlations are low.",
+    }));
+
+    await harness.advance();
+    await harness.coord.waitForActiveWorkflow();
+
+    const run = harness.coord.getRunner().getActiveRun();
+    expect(run?.status).toBe("failed");
+    expect(run?.steps.find((step) => step.stepType === "fetch_candidates")?.status).toBe("failed");
+    expect(promptsMatching(harness.sentPrompts, "Present the final portfolio draft")).toHaveLength(
+      0,
+    );
+  });
 });
+
+/** A get_price_comparison envelope with actual aligned series. */
+function usableComparisonDetails() {
+  return {
+    range: "1y",
+    interval: "1d",
+    baseDate: "2026-01-02",
+    series: [
+      {
+        symbol: "VOO",
+        bars: [{ date: "2026-01-02", close: 470 }],
+        indexed: [100],
+        providerTimestamp: "2026-01-02T21:00:00.000Z",
+        cached: false,
+        stale: false,
+      },
+    ],
+    unavailableSymbols: [],
+    freshness: {
+      fetchedAt: "2026-01-02T21:00:00.000Z",
+      cacheStatus: "live",
+      marketSession: "open",
+      isStaleForSession: false,
+    },
+  };
+}
+
+/** The real unavailable get_price_comparison envelope: metadata with series: []. */
+function emptyComparisonDetails() {
+  return {
+    range: "1y",
+    interval: "1d",
+    baseDate: "",
+    series: [],
+    unavailableSymbols: ["VOO", "BND"],
+    freshness: {
+      fetchedAt: "2026-01-02T21:00:00.000Z",
+      cacheStatus: "live",
+      marketSession: "open",
+      isStaleForSession: false,
+    },
+  };
+}
 
 function toolNameOf(record: EvidenceRecord): string | undefined {
   const value = isObject(record.value) ? record.value : undefined;

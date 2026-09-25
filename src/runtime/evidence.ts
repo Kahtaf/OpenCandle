@@ -34,11 +34,25 @@ export type ToolEvidenceOutcome = "ok" | "error" | "unavailable";
 /**
  * Classify a tool result's usability from its runtime envelope
  * (`{ content, details }` plus the `isError` flag). Unavailable tools return
- * `details: null` or an empty payload; thrown failures are flagged `isError`.
+ * `details: null`, an empty payload, or — for `get_price_comparison` — a
+ * metadata envelope with no aligned series. Thrown failures are flagged
+ * `isError`.
  */
-export function classifyToolOutcome(result: unknown, isError: boolean): ToolEvidenceOutcome {
+export function classifyToolOutcome(
+  result: unknown,
+  isError: boolean,
+  toolName?: string,
+): ToolEvidenceOutcome {
   if (isError) return "error";
   if (!isPlainRecord(result)) return "unavailable";
+  if (toolName === "get_price_comparison") {
+    // The comparison tool always returns range/interval/freshness metadata,
+    // even when it found fewer than two usable aligned series. Only actual
+    // series constitute pricing evidence, and the legacy no-envelope path
+    // must not qualify a comparison either.
+    const details = isPlainRecord(result.details) ? result.details : undefined;
+    return Array.isArray(details?.series) && details.series.length > 0 ? "ok" : "unavailable";
+  }
   if (!("details" in result)) {
     // Non-envelope result (extension/legacy tools): a non-empty structured
     // payload is usable, an empty one carries no evidence.
