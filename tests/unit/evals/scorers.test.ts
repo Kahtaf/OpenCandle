@@ -236,6 +236,15 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("The range is $1.5M-$2M")).toEqual([1.5e6, 2e6]);
   });
 
+  it("reads a spelled-out currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $1 million-$2 million")).toEqual([1e6, 2e6]);
+    expect(extractFinancialNumbers("The range is $1 million - $2 million")).toEqual([1e6, 2e6]);
+  });
+
+  it("keeps a real spelled-out negative separate across a line break", () => {
+    expect(extractFinancialNumbers("$1 million\n-$2 million")).toEqual([1e6, -2e6]);
+  });
+
   it("signs an unsigned percent negative when a decrease word is adjacent", () => {
     expect(extractFinancialNumbers("a decrease of 2.47%")).toEqual([-2.47]);
   });
@@ -374,6 +383,11 @@ describe("extractNumbersFromObject", () => {
     expect(extractNumbersFromObject({ formatted: "$100 - $200" })).toEqual([100, 200]);
   });
 
+  it("reads a spelled-out currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$1 million-$2 million" })).toEqual([1e6, 2e6]);
+    expect(extractNumbersFromObject({ formatted: "$1 million\n-$2 million" })).toEqual([1e6, -2e6]);
+  });
+
   it("keeps the pre-existing sign on a bare-number sequence in strings", () => {
     expect(extractNumbersFromObject({ formatted: "100-200" })).toEqual([100, -200]);
     expect(extractNumbersFromObject({ formatted: "100 -200" })).toEqual([100, -200]);
@@ -509,6 +523,16 @@ describe("scoreDataFaithfulness", () => {
     const trace = makeTrace({
       text: "The range is $100 - $200",
       toolCalls: [{ name: "get_range", args: {}, result: { low: 100, high: 200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a spelled-out currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $1 million-$2 million",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 1e6, high: 2e6 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);

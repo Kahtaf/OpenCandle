@@ -10,20 +10,23 @@ const MINUS_SIGN_CHARS = new Set(["-", "\u2212", "\uFE63", "\uFF0D"]);
 const SIGN_CHAR_CLASS = "[+\\-\\u2212\\uFE63\\uFF0D]";
 
 /**
- * A minus directly after a completed dollar amount (only horizontal whitespace
- * may intervene) is a range separator, not a unary sign: `$100-$200` and
- * `$100 - $200`. A line break ends the range context, so `$100\n-$200` keeps
- * the negative on the next line. Bare numbers are deliberately not consulted.
- */
-const DOLLAR_RANGE_GUARD = `(?<!${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?[\\d,]+(?:\\.\\d+)?[BMTbmt]?[ \\t]*)`;
-
-/**
  * Magnitude suffix after a currency amount: the compact forms B/M/T or a
  * spelled-out trillion/billion/million. The spelled-out form may be separated
  * from the digits by horizontal whitespace ("$3.697 Trillion").
  */
 const SPELLED_MAGNITUDE = "(?:[Tt]rillion|[Bb]illion|[Mm]illion)";
 const CURRENCY_MAGNITUDE = `(?:[BMTbmt]\\b|[ \\t]*${SPELLED_MAGNITUDE}\\b)`;
+
+/**
+ * A minus directly after a completed dollar amount (only horizontal whitespace
+ * may intervene) is a range separator, not a unary sign: `$100-$200`,
+ * `$100 - $200`, `$1 million-$2 million`. A line break ends the range context,
+ * so `$100\n-$200` keeps the negative on the next line. Bare numbers are
+ * deliberately not consulted. The completed dollar amount uses the same
+ * magnitude syntax as the currency parser so a spelled-out scale still counts
+ * as a finished endpoint.
+ */
+const DOLLAR_RANGE_GUARD = `(?<!${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?[\\d,]+(?:\\.\\d+)?(?:${CURRENCY_MAGNITUDE})?[ \\t]*)`;
 
 /**
  * Currency amount whose sign may precede or follow the dollar sign, with an
