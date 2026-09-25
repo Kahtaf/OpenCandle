@@ -1277,7 +1277,11 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
     await expectVisible(second.getByText("Session B completed independently"));
 
     await first.getByRole("button", { name: "Stop response" }).click();
-    await expectVisible(first.getByText("Stopped response."));
+    // Scope to the visible toast description by exact text. Radix also mounts a
+    // screen-reader announcer ("Notification Stopped response.") with
+    // role=status, so the non-exact text locator is ambiguous once that
+    // announcement lands in the same frame.
+    await expectVisible(first.getByText("Stopped response.", { exact: true }));
     const firstRequests = await first.evaluate(() => window.__concurrentSessionRequests);
     const secondRequests = await second.evaluate(() => window.__concurrentSessionRequests);
     expect(firstRequests).toContainEqual(
