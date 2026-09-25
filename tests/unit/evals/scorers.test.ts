@@ -205,6 +205,64 @@ describe("extractFinancialNumbers", () => {
   it("keeps the sign on each endpoint of a suffixed currency range", () => {
     expect(extractFinancialNumbers("The range is $1.5M-$2M")).toEqual([1.5e6, 2e6]);
   });
+
+  it("signs an unsigned percent negative when a decrease word is adjacent", () => {
+    expect(extractFinancialNumbers("a decrease of 2.47%")).toEqual([-2.47]);
+  });
+
+  it("signs an unsigned percent negative for down, fell, dropped, declined, and loss wording", () => {
+    expect(extractFinancialNumbers("down 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("fell by 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("dropped 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("declined 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("a loss of 2.47%")).toEqual([-2.47]);
+  });
+
+  it("keeps an unsigned percent positive for increase, up, gained, and rose wording", () => {
+    expect(extractFinancialNumbers("an increase of 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("up 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("gained 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("rose 2.47%")).toEqual([2.47]);
+  });
+
+  it("leaves an unsigned percent positive when no direction word is adjacent", () => {
+    expect(extractFinancialNumbers("The yield was 2.47%.")).toEqual([2.47]);
+  });
+
+  it("does not re-sign an unrelated downside phrase", () => {
+    expect(extractFinancialNumbers("The downside risk leaves 2.47% of assets exposed")).toEqual([
+      2.47,
+    ]);
+  });
+
+  it("does not re-sign across a sentence boundary", () => {
+    expect(extractFinancialNumbers("The stock is down. The yield is 2.47%.")).toEqual([2.47]);
+  });
+
+  it("signs a percent from a direction word that follows it", () => {
+    expect(extractFinancialNumbers("2.47% decrease")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("2.47% decline")).toEqual([-2.47]);
+  });
+
+  it("prefers a preceding direction word over trailing wording", () => {
+    expect(extractFinancialNumbers("up 2.47% down from yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("down 2.47% up from yesterday")).toEqual([-2.47]);
+  });
+
+  it("does not treat a trailing level comparison as a direction", () => {
+    expect(extractFinancialNumbers("2.47% down from yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("2.47% up from 1.23%")).toEqual([2.47, 1.23]);
+  });
+
+  it("still signs a trailing change word that is not a level comparison", () => {
+    expect(extractFinancialNumbers("a 2.47% decrease from last year")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("2.47% down today")).toEqual([-2.47]);
+  });
+
+  it("lets an explicit sign win over a contradictory direction word", () => {
+    expect(extractFinancialNumbers("a decrease of +2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("an increase of -2.47%")).toEqual([-2.47]);
+  });
 });
 
 describe("extractNumbersFromObject", () => {
@@ -437,6 +495,161 @@ describe("scoreDataFaithfulness", () => {
     const trace = makeTrace({
       text: "$100\n-$200",
       toolCalls: [{ name: "get_range", args: {}, result: { low: 100, change: -200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a stated decrease against negative percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails an increase statement against negative percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was an increase of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("fails an unsigned percent without direction against negative evidence", () => {
+    const trace = makeTrace({
+      text: "The change was 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("fails a decrease statement against positive percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("does not re-sign an unrelated downside phrase in scoring", () => {
+    const trace = makeTrace({
+      text: "The downside risk leaves 2.47% of assets exposed",
+      toolCalls: [{ name: "get_risk", args: {}, result: { exposure: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("lets an explicit sign win over a contradictory direction word in scoring", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of +2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("prefers a preceding direction word over trailing wording in scoring", () => {
+    const upTrace = makeTrace({
+      text: "up 2.47% down from yesterday",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const upResult = scoreDataFaithfulness(upTrace);
+    expect(upResult.passed).toBe(true);
+    expect(upResult.score).toBe(1.0);
+
+    const downTrace = makeTrace({
+      text: "down 2.47% up from yesterday",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const downResult = scoreDataFaithfulness(downTrace);
+    expect(downResult.passed).toBe(true);
+    expect(downResult.score).toBe(1.0);
+  });
+
+  it("grounds a positive yield level written as down from a higher level", () => {
+    const trace = makeTrace({
+      text: "The yield is 4% down from 5%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 5 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a positive yield level written as up from a lower level", () => {
+    const trace = makeTrace({
+      text: "The yield is 4% up from 3%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 3 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("still fails when a trailing directional claim contradicts the evidence", () => {
+    const trace = makeTrace({
+      text: "The change was 2.47% down",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+});
+
+describe("quote-accuracy diagnostic replay", () => {
+  it("grounds the preserved AAPL quote trace whose decrease is stated in words", () => {
+    // Inline replay of validation-output/eval-diagnostics/2026-09-25T02-49-29-850Z_quote-accuracy_42737-pcfcs3.json
+    // (preserved live evidence; no live API call).
+    const trace = makeTrace({
+      prompt: "What's the current price of AAPL?",
+      text: "The current price of AAPL is $335.92, a decrease of 0.33%. The market is closed as of 2026-09-24 16:00 ET.",
+      toolCalls: [
+        {
+          name: "get_stock_quote",
+          args: { symbol: "AAPL" },
+          result: {
+            content: [
+              {
+                type: "text",
+                text: "AAPL: $335.92 (-0.33%)\nOpen: $336.72 | High: $338.91 | Low: $334.30\nVolume: 24,364,559 | Market Cap: N/A\n52W Range: $243.42 - $345.34\nAs of 2026-09-24 16:00 ET (market closed).",
+              },
+            ],
+            details: {
+              symbol: "AAPL",
+              name: "Apple Inc.",
+              price: 335.92,
+              change: -1.099999999999966,
+              changePercent: -0.3263901252151106,
+              open: 336.7200012207031,
+              high: 338.91,
+              low: 334.3,
+              previousClose: 337.02,
+              volume: 24364559,
+              marketCap: 0,
+              pe: null,
+              week52High: 345.34,
+              week52Low: 243.42,
+              extendedPrice: 335.91,
+              extendedChange: -0.010009766,
+              extendedChangePercent: -0.0029798062,
+            },
+          },
+        },
+      ],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
