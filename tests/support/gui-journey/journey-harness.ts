@@ -9,6 +9,7 @@ import {
   type ModelScript,
   startDeterministicModelServer,
 } from "../../helpers/deterministic-model-server.js";
+import { isolatedGuiServerEnv } from "../gui/server.js";
 import { createBrowserRequestGuard, launchJourneyBrowser } from "./browser.js";
 import {
   type GuiJourneyFixtureServer,
@@ -16,7 +17,7 @@ import {
   startGuiJourneyFixtureServer,
 } from "./fixture-server.js";
 import { allocatePort, type GuiServerProcess, startGuiServer } from "./gui-process.js";
-import { blankedCredentialEnv, GUI_JOURNEY_API_KEY, writeModelRuntimeConfig } from "./pi-config.js";
+import { GUI_JOURNEY_API_KEY, writeModelRuntimeConfig } from "./pi-config.js";
 
 /**
  * Composes one isolated full-stack GUI journey:
@@ -26,7 +27,8 @@ import { blankedCredentialEnv, GUI_JOURNEY_API_KEY, writeModelRuntimeConfig } fr
  *                       ->  local fixture server for external data/tool/font HTTP
  *
  * No GUI HTTP/SSE/WebSocket/controller/storage code is faked. The child uses an
- * isolated HOME, OPENCANDLE_HOME, PI_CODING_AGENT_DIR, and blanked credentials.
+ * isolated HOME, OPENCANDLE_HOME, PI_CODING_AGENT_DIR, blanked
+ * PI_CODING_AGENT_SESSION_DIR, and blanked credentials.
  */
 
 export interface GuiJourneyHarness {
@@ -53,6 +55,38 @@ export interface StartHarnessOptions {
   modelScript: ModelScript;
   /** Optional bounded external-HTTP fixture holds (e.g. held tool fetch). */
   fixture?: StartFixtureServerOptions;
+}
+
+/**
+ * Child environment for the journey's real GUI server. Reuses the isolated GUI
+ * server baseline so the developer's HOME/USERPROFILE, OPENCANDLE_HOME,
+ * PI_CODING_AGENT_DIR, PI_CODING_AGENT_SESSION_DIR, and provider credentials
+ * never reach the child; the journey's agent dir and fixture wiring override it.
+ * `root` must hold the `home` and `opencandle` directories the harness creates.
+ */
+export function journeyGuiServerEnv(options: {
+  root: string;
+  agentDir: string;
+  port: number;
+  modelBaseUrl: string;
+  auxBaseUrl: string;
+  unexpectedLog: string;
+  parentEnv?: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  return isolatedGuiServerEnv({
+    homeDir: options.root,
+    port: options.port,
+    parentEnv: options.parentEnv,
+    overrides: {
+      PI_CODING_AGENT_DIR: options.agentDir,
+      PI_OFFLINE: "1",
+      PI_SKIP_VERSION_CHECK: "1",
+      OPENCANDLE_AUTOMATION_HEARTBEAT_MS: "3600000",
+      OC_GUI_JOURNEY_MODEL_BASE_URL: options.modelBaseUrl,
+      OC_GUI_JOURNEY_AUX_BASE_URL: options.auxBaseUrl,
+      OC_GUI_JOURNEY_UNEXPECTED_LOG: options.unexpectedLog,
+    },
+  });
 }
 
 export async function startGuiJourneyHarness(
@@ -85,21 +119,14 @@ export async function startGuiJourneyHarness(
       cwd: process.cwd(),
       bootstrapPath: join(process.cwd(), "tests/support/gui-journey/gui-server-bootstrap.ts"),
       port,
-      env: {
-        ...process.env,
-        ...blankedCredentialEnv(),
-        HOME: home,
-        OPENCANDLE_HOME: openCandleHome,
-        PI_CODING_AGENT_DIR: agentDir,
-        PI_OFFLINE: "1",
-        PI_SKIP_VERSION_CHECK: "1",
-        OPENCANDLE_GUI_HOST: "127.0.0.1",
-        OPENCANDLE_GUI_PORT: String(port),
-        OPENCANDLE_AUTOMATION_HEARTBEAT_MS: "3600000",
-        OC_GUI_JOURNEY_MODEL_BASE_URL: modelServer.baseUrl,
-        OC_GUI_JOURNEY_AUX_BASE_URL: aux.baseUrl,
-        OC_GUI_JOURNEY_UNEXPECTED_LOG: unexpectedLog,
-      },
+      env: journeyGuiServerEnv({
+        root,
+        agentDir,
+        port,
+        modelBaseUrl: modelServer.baseUrl,
+        auxBaseUrl: aux.baseUrl,
+        unexpectedLog,
+      }),
     });
 
     browser = await launchJourneyBrowser();
