@@ -991,6 +991,30 @@ describe("sessionEntriesToChatEvents", () => {
     ).toBe(false);
   });
 
+  it("renders an aborted turn whose persisted content is missing as stopped only", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", { role: "user", content: "hold", timestamp: Date.now() } as Message),
+        messageEntry("a1", {
+          ...assistantMessage(""),
+          content: undefined,
+          stopReason: "aborted",
+        } as unknown as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.some((event) => "messageId" in event && event.messageId === "a1")).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "stopped-a1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+      }),
+    );
+  });
+
   it("renders an aborted turn with no answer text as stopped without an empty bubble", () => {
     const events = sessionEntriesToChatEvents(
       [
