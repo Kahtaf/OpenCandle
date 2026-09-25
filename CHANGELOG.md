@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Public documentation link checks retry temporary server failures, verify HEAD failures with GET, and block release when a link remains unreachable.
+
 - Release evaluations now reject workflows that failed validation even when their final draft contains a complete-looking answer.
 
 - Protective-put workflows show whole-contract coverage and uncovered or excess shares, and check displayed premium percentages against the actual stock position.
