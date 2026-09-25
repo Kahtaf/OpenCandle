@@ -2791,6 +2791,51 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps the basis from an earlier question-and-answer turn in a later follow-up", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "$150" },
+          { role: "assistant", text: "Got it." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not use a future question or another holding's question for a prior amount", async () => {
+    const futureQuestion = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "user", text: "$150" },
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const otherHolding = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for MSFT?" },
+          { role: "user", text: "$150" },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(futureQuestion.entities.costBasis).toBeUndefined();
+    expect(otherHolding.entities.costBasis).toBeUndefined();
+  });
+
   it("keeps an explicitly stated cost basis", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },

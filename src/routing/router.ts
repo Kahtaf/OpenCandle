@@ -1423,21 +1423,36 @@ function hasCostBasisContext(
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): boolean {
   if (statesCostBasis(text, value, heldSymbol)) return true;
-  if (answersCostBasisQuestion(text, value, symbols, inputContext)) return true;
-  if (
-    (inputContext?.priorTurns ?? []).some(
-      (turn) =>
-        turn.role === "user" &&
-        statesCostBasis(turn.text, value, extractEntities(turn.text).heldSymbol) &&
-        extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol)),
-    )
-  ) {
-    return true;
-  }
+  if (answersCostBasisQuestion(text, value, symbols, inputContext?.priorTurns)) return true;
+  if (priorUserEstablishesBasis(inputContext?.priorTurns ?? [], value, symbols)) return true;
   return symbols.some((symbol) => {
     const saved = readPortfolioPosition(inputContext?.portfolioPositions, symbol);
     return saved?.costBasis !== undefined && amountsClose(saved.costBasis, value);
   });
+}
+
+// A prior user turn establishes the basis either by stating it directly or by
+// answering its own preceding assistant cost/purchase-price question. The
+// prefix restriction means a later assistant question never applies backwards.
+function priorUserEstablishesBasis(
+  turns: RouterInputContext["priorTurns"],
+  value: number,
+  symbols: string[],
+): boolean {
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
+    if (turn.role !== "user") continue;
+    if (
+      extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol)) &&
+      statesCostBasis(turn.text, value, extractEntities(turn.text).heldSymbol)
+    ) {
+      return true;
+    }
+    if (answersCostBasisQuestion(turn.text, value, symbols, turns.slice(0, index))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // A recognized held position (the existing heldSymbol parser) is a role cue in
@@ -1448,18 +1463,17 @@ function statesCostBasis(text: string, value: number, heldSymbol?: string): bool
   return textMentionsAmount(text, value);
 }
 
-// The user replying with an amount to the most recent assistant request for a
-// cost/purchase price supplies a source fact; an assistant quote supplies a
-// value instead and never qualifies. Only the latest assistant turn counts.
+// A user amount answering the most recent assistant request for a cost/purchase
+// price is a source fact; an assistant quote supplies a value instead and never
+// qualifies. Callers pass the turns that precede the user turn, so only that
+// turn's own preceding assistant question counts.
 function answersCostBasisQuestion(
   text: string,
   value: number,
   symbols: string[],
-  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
 ): boolean {
-  const lastAssistant = [...(inputContext?.priorTurns ?? [])]
-    .reverse()
-    .find((turn) => turn.role === "assistant");
+  const lastAssistant = [...(priorTurns ?? [])].reverse().find((turn) => turn.role === "assistant");
   if (!lastAssistant || !asksForCostBasis(lastAssistant.text)) return false;
   const askedSymbols = extractEntities(lastAssistant.text).symbols;
   if (
