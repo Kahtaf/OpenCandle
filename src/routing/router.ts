@@ -290,13 +290,7 @@ export function postProcessRouterOutput(
       compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
-      costBasis: resolveCostBasis(
-        text,
-        output.entities.costBasis,
-        extracted.costBasis,
-        inputContext,
-        mergeSymbols(symbolsAfterAmbiguousFilter, extracted.symbols),
-      ),
+      costBasis: output.entities.costBasis ?? extracted.costBasis,
       shareQuantity: output.entities.shareQuantity ?? extracted.shareQuantity,
       heldSymbol:
         extracted.heldSymbol ??
@@ -336,6 +330,23 @@ export function postProcessRouterOutput(
       };
     }
   }
+
+  // The entity block above runs before follow-up symbol recovery, so the model's
+  // cost basis is validated here against the final resolved symbols. This keeps
+  // the extracted fallback and the model's original candidate untouched.
+  next = {
+    ...next,
+    entities: {
+      ...next.entities,
+      costBasis: resolveCostBasis(
+        text,
+        output.entities.costBasis,
+        extracted.costBasis,
+        inputContext,
+        next.entities.symbols,
+      ),
+    },
+  };
 
   if (isPortfolioEvaluationRequest(text)) {
     const savedSymbols = inputContext?.portfolioPositions?.map((position) => position.symbol) ?? [];

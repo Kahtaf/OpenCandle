@@ -2793,6 +2793,34 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(400);
   });
 
+  it("revalidates the model basis after follow-up symbol recovery", async () => {
+    // The model returns no symbols, so the basis only becomes attributable once
+    // the follow-up recovery restores NVDA from the prior user turn.
+    const recovered = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [{ role: "user", text: "I bought 100 shares of NVDA at $400." }],
+      },
+      outputFor({ symbols: [], costBasis: 400 }),
+    );
+    const noBasisContext = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [
+          { role: "user", text: "tell me about NVDA" },
+          { role: "assistant", text: "NVDA is trading around $450." },
+        ],
+      },
+      outputFor({ symbols: [], costBasis: 500 }),
+    );
+
+    expect(recovered.entities.symbols).toEqual(["NVDA"]);
+    expect(recovered.entities.costBasis).toBe(400);
+    expect(noBasisContext.entities.costBasis).toBeUndefined();
+  });
+
   it("keeps a model cost basis corroborated by the saved position", async () => {
     const result = await route(
       {
