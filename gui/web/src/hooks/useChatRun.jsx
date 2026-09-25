@@ -58,11 +58,15 @@ export function buildChatRunRequestBody(prompt, sessionId, actionId, extras = {}
   return { ...body, sessionId: expectedSessionId };
 }
 
-export function buildRetryChatRunOptions(lastRun) {
+// Reusing the prior action id lets the server dedupe a transport retry of a run
+// it may already have accepted. A deliberate new run of a terminal turn (a
+// stopped turn's Retry) must mint a fresh id instead: a completed run keeps its
+// id, and replaying it only earns a duplicate acknowledgement.
+export function buildRetryChatRunOptions(lastRun, { freshActionId = false } = {}) {
   if (!lastRun) return null;
   return {
     sessionId: lastRun.sessionId,
-    ...(lastRun.actionId ? { actionId: lastRun.actionId } : {}),
+    ...(lastRun.actionId && !freshActionId ? { actionId: lastRun.actionId } : {}),
     ...(Array.isArray(lastRun.images) && lastRun.images.length > 0
       ? { images: lastRun.images }
       : {}),
@@ -241,9 +245,9 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
   );
 
   const retryRun = useCallback(
-    (sessionId = activeSessionId) => {
+    (sessionId = activeSessionId, { freshActionId = false } = {}) => {
       const lastRun = lastRuns[runStateKey(sessionId)];
-      const retryOptions = buildRetryChatRunOptions(lastRun);
+      const retryOptions = buildRetryChatRunOptions(lastRun, { freshActionId });
       if (lastRun && retryOptions) void startChatRun(lastRun.prompt, retryOptions);
     },
     [activeSessionId, lastRuns, startChatRun],

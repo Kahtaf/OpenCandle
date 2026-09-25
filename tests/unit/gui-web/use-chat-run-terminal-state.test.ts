@@ -120,4 +120,42 @@ describe("useChatRun terminal state", () => {
     expect(startBodies[1]?.actionId).toBeTruthy();
     expect(startBodies[1]?.actionId).not.toBe(startBodies[0]?.actionId);
   });
+  it("retries a stopped turn with a fresh action id even after a completed retry kept its id", async () => {
+    const startBodies: Array<{ actionId: string }> = [];
+    const transport = {
+      startChatRun: vi.fn(async (_sessionId: string, body: { actionId: string }) => {
+        startBodies.push(body);
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: {"type":"run.completed"}\n\n'));
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      }),
+    };
+
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe, { onRunError: vi.fn() }),
+        ),
+      ),
+    );
+
+    await act(async () => latestRun?.startChatRun("Research AAPL"));
+    expect(latestRun?.runState).toBe("ready");
+
+    await act(async () => {
+      void latestRun?.retryRun(undefined, { freshActionId: true });
+    });
+
+    expect(startBodies).toHaveLength(2);
+    expect(startBodies[1]?.actionId).toBeTruthy();
+    expect(startBodies[1]?.actionId).not.toBe(startBodies[0]?.actionId);
+  });
 });

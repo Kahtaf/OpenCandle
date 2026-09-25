@@ -103,6 +103,15 @@ describe("chat run request helpers", () => {
     });
   });
 
+  it("mints a fresh action id when asked, even if the prior run kept one", () => {
+    expect(
+      buildRetryChatRunOptions(
+        { prompt: "hello", sessionId: "session-1", actionId: "chat-action-1" },
+        { freshActionId: true },
+      ),
+    ).toEqual({ sessionId: "session-1" });
+  });
+
   it("omits cleared action ids for deliberate failed-run retries", () => {
     expect(
       buildRetryChatRunOptions({

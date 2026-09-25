@@ -105,6 +105,8 @@ describe("ChatPanel Retry on a stopped turn", () => {
     clickRetry();
 
     expect(retryRun).toHaveBeenCalledTimes(1);
+    // A stopped turn is terminal: never replay a prior (possibly completed) action id.
+    expect(retryRun).toHaveBeenCalledWith(undefined, { freshActionId: true });
     expect(startChatRun).not.toHaveBeenCalled();
   });
 

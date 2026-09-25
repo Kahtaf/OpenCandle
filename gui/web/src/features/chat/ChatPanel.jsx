@@ -270,15 +270,17 @@ export function ChatPanel({
   };
 
   // Retry a stopped turn. When it is this session's latest run, retryRun
-  // re-sends it with its attachments under a fresh action id (Stop retired the
-  // original one). A stopped turn from an earlier page load re-sends its prompt.
+  // re-sends it with its attachments under a fresh action id: the turn is
+  // terminal, and a completed earlier Retry would otherwise leave its id to be
+  // replayed as a duplicate. A stopped turn from an earlier page load re-sends
+  // its prompt.
   const retryStoppedRun = (prompt) => {
     if (chatDisabled || canStopRun) return;
     const stoppedPrompt = typeof prompt === "string" && prompt.trim() ? prompt.trim() : lastPrompt;
     if (!stoppedPrompt) return;
     if (retryRun && stoppedPrompt === lastPrompt) {
       setAllowToolAutoOpen(true);
-      retryRun();
+      retryRun(undefined, { freshActionId: true });
       return;
     }
     retryFailedRun(stoppedPrompt);
