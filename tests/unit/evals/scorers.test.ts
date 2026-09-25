@@ -169,6 +169,10 @@ describe("extractFinancialNumbers", () => {
     expect(nums).not.toContain(2030);
   });
 
+  it("does not end a grouped number mid digit sequence", () => {
+    expect(extractFinancialNumbers("P/E of 20,3000")).not.toContain(20300);
+  });
+
   it("applies a spelled-out trillion scale to a currency amount", () => {
     expect(extractFinancialNumbers("**Market Cap:** $3.697 Trillion")).toEqual([3.697e12]);
   });
@@ -394,6 +398,10 @@ describe("extractNumbersFromObject", () => {
 
   it("keeps comma-delimited observations separate instead of merging them", () => {
     expect(extractNumbersFromObject({ text: "P/E observations: 20,30" })).toEqual([20, 30]);
+  });
+
+  it("keeps a partial thousands group separate from the following digits", () => {
+    expect(extractNumbersFromObject({ text: "P/E observations: 20,3000" })).toEqual([20, 3000]);
   });
 
   it("preserves a bare duration in tool strings instead of scaling it to millions", () => {
@@ -927,6 +935,30 @@ describe("tool-string magnitude grounding", () => {
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(false);
     expect(result.message).toContain("2030");
+  });
+
+  it("grounds separate observations around a partial thousands group", () => {
+    const trace = makeTrace({
+      text: "P/E of 20 and P/E of 3000",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,3000" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a fabricated value stitched from a partial thousands group", () => {
+    const trace = makeTrace({
+      text: "P/E of 20300",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,3000" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("20300");
   });
 });
 

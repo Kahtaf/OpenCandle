@@ -15,9 +15,11 @@ const SIGN_CHAR_CLASS = "[+\\-\\u2212\\uFE63\\uFF0D]";
  * an optional decimal part. Shared by currency, bare tool-string, abbreviated,
  * and metric parsing so a grouped magnitude such as "3,680B" is one number
  * rather than "3" plus "680B", while an arbitrary comma list such as "20,30"
- * stays two numbers instead of merging into 2030.
+ * stays two numbers instead of merging into 2030. The trailing digit guard keeps
+ * a valid group from ending mid digit-run, so "20,3000" stays "20" and "3000"
+ * instead of becoming "20,300" plus "0".
  */
-const NUMBER_DIGITS = "(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+(?:\\.\\d+)?)";
+const NUMBER_DIGITS = "(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?(?!\\d)|\\d+(?:\\.\\d+)?)";
 
 /**
  * Magnitude suffix after a number: the compact forms B/M/T or a spelled-out
