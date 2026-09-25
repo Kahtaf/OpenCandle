@@ -2791,6 +2791,19 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a reply to a per-share purchase question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you pay per share for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("keeps the basis from an earlier question-and-answer turn in a later follow-up", async () => {
     const result = await route(
       {

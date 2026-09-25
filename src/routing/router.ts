@@ -1458,12 +1458,16 @@ function answersBasisQuestion(
   );
 }
 
-const COST_BASIS_REQUEST_FIELD =
-  /\b(?:cost\s*basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price|pay\s+for|paid\s+for)\b/i;
-const COST_BASIS_REQUEST_FORM = /\?|\b(?:what|which|tell\s+me|give\s+me|share|confirm|state)\b/i;
+// A question is a basis/purchase/holding request when it carries the same role
+// cue vocabulary as an assertion (plus the bare verb "pay"), so per-share
+// phrasings are not missed. The request form still has to be present.
+const COST_BASIS_REQUEST_FORM =
+  /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
 
 function asksForCostBasis(text: string): boolean {
-  return COST_BASIS_REQUEST_FIELD.test(text) && COST_BASIS_REQUEST_FORM.test(text);
+  return (
+    (COST_BASIS_CONTEXT.test(text) || /\bpay\b/i.test(text)) && COST_BASIS_REQUEST_FORM.test(text)
+  );
 }
 
 function isConversationalRiskPreferenceUpdate(
