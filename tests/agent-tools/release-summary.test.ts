@@ -208,27 +208,44 @@ function requiredSuite(startedAt: string): Record<string, unknown> {
   };
 }
 
-function seedEvals(
-  repo: CandidateRepo,
-  {
+interface SeedEvalOptions {
+  exitCode?: number;
+  candidate?: { commit?: string; sourceDigest?: string; lockDigest?: string } | null;
+  startedAt?: string;
+  mutateEvidence?: (evidence: any) => void;
+  mutateSummary?: (summary: any) => void;
+  mutateStartup?: (startup: any) => void;
+  runId?: string;
+  omitStartup?: boolean;
+  omitSummary?: boolean;
+}
+
+/** v2 candidate-scoped run: startup manifest + final summary + evidence. */
+function seedEvals(repo: CandidateRepo, options: SeedEvalOptions = {}): void {
+  const {
     exitCode = 0,
     candidate,
     startedAt = RECENT,
     mutateEvidence,
     mutateSummary,
+    mutateStartup,
     runId = "run-1",
-  }: {
-    exitCode?: number;
-    candidate?: { commit?: string; sourceDigest?: string; lockDigest?: string } | null;
-    startedAt?: string;
-    mutateEvidence?: (evidence: any) => void;
-    mutateSummary?: (summary: any) => void;
-    runId?: string;
-  } = {},
-): void {
-  const runDir = `validation-output/release-evals/${runId}`;
+    omitStartup = false,
+  } = options;
   const identity = fingerprintCandidate(repo.root);
   const candidateIdentity = candidate === null ? null : { ...identity, ...(candidate ?? {}) };
+  const runDir = `validation-output/release-evals/v2/${candidateIdentity?.commit ?? "unknown"}/${runId}`;
+  if (!omitStartup) {
+    const startup: any = {
+      format: "release-eval-evidence-v2",
+      schemaVersion: 2,
+      runId,
+      candidate: candidateIdentity,
+      startedAt,
+    };
+    mutateStartup?.(startup);
+    writeJson(repo.root, `${runDir}/release-eval-startup.json`, startup);
+  }
   if (exitCode === 0) {
     const evidence: any = {
       schemaVersion: 1,
@@ -254,6 +271,87 @@ function seedEvals(
     mutateEvidence?.(incomplete);
     writeJson(repo.root, `${runDir}/release-eval-incomplete.json`, incomplete);
   }
+  const summary: any = {
+    format: "release-eval-evidence-v2",
+    schemaVersion: 2,
+    candidate: candidateIdentity,
+    runId,
+    startedAt,
+    finishedAt: startedAt,
+    exitCode,
+    evidencePath: exitCode === 0 ? `${runDir}/release-evidence.json` : null,
+    incompletePath: exitCode === 0 ? null : `${runDir}/release-eval-incomplete.json`,
+    attemptsPath: `${runDir}/attempts.jsonl`,
+    requiredSuites: ["router-live", "cases", "product", "competitive:frozen"],
+    notRunSuites: [],
+    optionalSkips: [],
+    suiteSettings: { cases: { provider: "openai", model: "gpt-6" } },
+    competitors: null,
+    competitorsKnown: false,
+  };
+  mutateSummary?.(summary);
+  writeJson(repo.root, `${runDir}/release-eval-summary.json`, summary);
+}
+
+/** Crash-safety directory: startup manifest only, no final summary. */
+function seedInterruptedV2(
+  repo: CandidateRepo,
+  { commit = repo.commit, runId = "run-interrupted" }: { commit?: string; runId?: string } = {},
+): void {
+  const identity = { ...fingerprintCandidate(repo.root), commit };
+  writeJson(
+    repo.root,
+    `validation-output/release-evals/v2/${commit}/${runId}/release-eval-startup.json`,
+    {
+      format: "release-eval-evidence-v2",
+      schemaVersion: 2,
+      runId,
+      candidate: identity,
+      startedAt: RECENT,
+    },
+  );
+}
+
+/** Pre-cutover unscoped run, retained untouched for historical reporting. */
+function seedLegacyEvals(repo: CandidateRepo, options: SeedEvalOptions = {}): void {
+  const {
+    exitCode = 0,
+    candidate,
+    startedAt = RECENT,
+    mutateEvidence,
+    mutateSummary,
+    runId = "legacy-run",
+    omitSummary = false,
+  } = options;
+  const runDir = `validation-output/release-evals/${runId}`;
+  const baseIdentity = fingerprintCandidate(repo.root);
+  const identity = candidate === null ? null : { ...baseIdentity, ...(candidate ?? {}) };
+  if (exitCode === 0) {
+    const evidence: any = {
+      schemaVersion: 1,
+      candidate: identity,
+      startedAt,
+      finishedAt: startedAt,
+      suites: {
+        "router-live": requiredSuite(startedAt),
+        cases: requiredSuite(startedAt),
+        product: requiredSuite(startedAt),
+        "competitive:frozen": requiredSuite(startedAt),
+      },
+    };
+    mutateEvidence?.(evidence);
+    writeJson(repo.root, `${runDir}/release-evidence.json`, evidence);
+  } else {
+    const incomplete: any = {
+      candidate: identity,
+      startedAt,
+      finishedAt: startedAt,
+      problems: ["suite failed"],
+    };
+    mutateEvidence?.(incomplete);
+    writeJson(repo.root, `${runDir}/release-eval-incomplete.json`, incomplete);
+  }
+  if (omitSummary) return;
   const summary: any = {
     runId,
     startedAt,
@@ -847,6 +945,237 @@ describe("buildReleaseSummary", () => {
       encoding: "utf8",
     });
     expect(bad.status).toBe(1);
+  });
+});
+
+describe("candidate-scoped v2 eval evidence selection", () => {
+  it("accepts a passing candidate-scoped v2 run", () => {
+    const repo = makeCandidate();
+    seedAll(repo);
+
+    const result = build(repo);
+
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect((result.summary as any).releaseEvals.format).toBe("release-eval-evidence-v2");
+  });
+
+  it("blocks a current-candidate interrupted v2 run even when a later v2 run passed", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo, { startedAt: RECENT, runId: "run-later" });
+    seedInterruptedV2(repo, { runId: "run-interrupted" });
+    seedPackage(repo);
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/run-interrupted|startup|final summary/i);
+  });
+
+  it("does not let an interrupted run for another candidate or a legacy interrupted dir block", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo, { startedAt: RECENT });
+    seedPackage(repo);
+    seedInterruptedV2(repo, { commit: "f".repeat(40), runId: "other-run" });
+    mkdirSync(join(repo.root, "validation-output/release-evals/legacy-interrupted"), {
+      recursive: true,
+    });
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("blocks path/manifest/final identity mismatches", () => {
+    for (const mutate of [
+      (startup: any) => {
+        startup.candidate = { ...startup.candidate, commit: "f".repeat(40) };
+      },
+      (startup: any) => {
+        startup.runId = "some-other-run";
+      },
+    ]) {
+      const repo = makeCandidate();
+      seedGate(repo);
+      seedProvider(repo);
+      seedEvals(repo, { mutateStartup: mutate });
+      seedPackage(repo);
+
+      const result = build(repo);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/identity|runId|manifest|startup/i);
+    }
+
+    for (const mutate of [
+      (summary: any) => {
+        summary.candidate = { ...summary.candidate, sourceDigest: "sha256:deadbeef" };
+      },
+      (summary: any) => {
+        summary.runId = "not-this-run";
+      },
+    ]) {
+      const repo = makeCandidate();
+      seedGate(repo);
+      seedProvider(repo);
+      seedEvals(repo, { mutateSummary: mutate });
+      seedPackage(repo);
+
+      const result = build(repo);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/identity|runId|summary|candidate/i);
+    }
+  });
+
+  it("blocks a malformed current-candidate v2 run with no startup manifest", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo);
+    seedPackage(repo);
+    writeJson(
+      repo.root,
+      `validation-output/release-evals/v2/${repo.commit}/no-manifest/release-eval-summary.json`,
+      { format: "release-eval-evidence-v2", schemaVersion: 2, runId: "no-manifest" },
+    );
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/startup manifest/i);
+  });
+
+  it("requires fresh v2 proof and treats a legacy same-candidate success as ineligible", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedLegacyEvals(repo, { startedAt: RECENT });
+    seedPackage(repo);
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/v2 release eval evidence/i);
+  });
+
+  it("still blocks a legacy same-candidate failed run even with fresh v2 proof", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo, { startedAt: RECENT });
+    seedLegacyEvals(repo, { exitCode: 1, startedAt: EARLIER, runId: "legacy-failed" });
+    seedPackage(repo);
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/legacy/i);
+  });
+
+  it("reports genuinely unattributed legacy records as unavailable history rather than blocking", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo, { startedAt: RECENT });
+    seedPackage(repo);
+    write(
+      repo.root,
+      "validation-output/release-evals/legacy-broken/release-eval-summary.json",
+      "{not json",
+    );
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(true);
+    expect((result.summary as any).releaseEvals.legacyRecords.unavailable).toBeGreaterThan(0);
+  });
+
+  it("blocks an attributed legacy incomplete record even when its summary is missing or malformed", () => {
+    for (const summaryState of ["missing", "malformed"]) {
+      const repo = makeCandidate();
+      seedGate(repo);
+      seedProvider(repo);
+      seedEvals(repo, { startedAt: RECENT });
+      seedPackage(repo);
+      seedLegacyEvals(repo, {
+        exitCode: 1,
+        startedAt: EARLIER,
+        runId: "legacy-incomplete",
+        omitSummary: true,
+      });
+      if (summaryState === "malformed") {
+        write(
+          repo.root,
+          "validation-output/release-evals/legacy-incomplete/release-eval-summary.json",
+          "{not json",
+        );
+      }
+
+      const result = build(repo);
+
+      expect(result.ok, summaryState).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/legacy/i);
+    }
+  });
+
+  it("blocks a same-commit legacy success whose full fingerprint differs or evidence is invalid", () => {
+    for (const mutateEvidence of [
+      (evidence: any) => {
+        evidence.candidate = { ...evidence.candidate, sourceDigest: "sha256:deadbeef" };
+      },
+      (evidence: any) => {
+        evidence.suites.cases.cases[0].status = "failed";
+      },
+      (evidence: any) => {
+        delete evidence.suites.product;
+      },
+    ]) {
+      const repo = makeCandidate();
+      seedGate(repo);
+      seedProvider(repo);
+      seedEvals(repo, { startedAt: RECENT });
+      seedPackage(repo);
+      seedLegacyEvals(repo, {
+        startedAt: EARLIER,
+        runId: "legacy-invalid",
+        mutateEvidence,
+      });
+
+      const result = build(repo);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/legacy/i);
+    }
+  });
+
+  it("distinguishes other known commit history from unattributed legacy records", () => {
+    const repo = makeCandidate();
+    seedGate(repo);
+    seedProvider(repo);
+    seedEvals(repo, { startedAt: RECENT });
+    seedPackage(repo);
+    seedLegacyEvals(repo, {
+      startedAt: EARLIER,
+      runId: "legacy-other",
+      candidate: { commit: "f".repeat(40) },
+    });
+    write(
+      repo.root,
+      "validation-output/release-evals/legacy-broken/release-eval-summary.json",
+      "{not json",
+    );
+
+    const result = build(repo);
+
+    expect(result.ok).toBe(true);
+    const legacyRecords = (result.summary as any).releaseEvals.legacyRecords;
+    expect(legacyRecords.historical).toBeGreaterThanOrEqual(1);
+    expect(legacyRecords.unavailable).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- `npm run eval -- release` now writes interruption-safe, candidate-scoped evidence under `validation-output/release-evals/v2/<commit>/<run-id>`, so an interrupted or malformed run for the current candidate blocks a later green run while unrelated historical and other-candidate runs no longer do.
 - A follow-up price question no longer invents a cost basis when the conversation never mentioned a basis, purchase, or holding; a basis from your own turn, a same-symbol earlier user turn, or a saved position is still kept.
 - A GUI chat whose writer-lock acquisition fails during setup no longer leaves its session stuck as busy, so the next prompt on that session runs once lock storage recovers.
 - `npm run eval -- release` now fails on skipped or inconsistent required cases instead of reporting a false green.

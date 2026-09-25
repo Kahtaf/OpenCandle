@@ -66,6 +66,14 @@ const DEFAULT_LIST_TIMEOUT_MS = 300_000;
 const DEFAULT_SUITE_TIMEOUT_MS = 7_200_000;
 const DEFAULT_TIMING_SLACK_MS = 1_000;
 
+/**
+ * Explicit producer/collector durability format for candidate-scoped evidence.
+ * This is a namespace/record format, not the semantic evidence payload: the
+ * `release-evidence.json` payload stays schema v1 until its meaning changes.
+ */
+export const RELEASE_EVAL_FORMAT_V2 = "release-eval-evidence-v2";
+export const RELEASE_EVAL_STARTUP_FILENAME = "release-eval-startup.json";
+
 // Model/provider selections the operator may keep. Everything else in the
 // selector families below is cleared and replaced by the canonical release
 // value, so a local .env cannot narrow the release coverage.
@@ -220,6 +228,9 @@ export interface ReleaseEvidenceOutcome {
 }
 
 interface AttemptRecord {
+  format: typeof RELEASE_EVAL_FORMAT_V2;
+  runId: string;
+  candidate: CandidateIdentity | null;
   suite: ReleaseSuiteId;
   exitCode: number | null;
   signal: NodeJS.Signals | null;
@@ -472,11 +483,6 @@ function sameCandidate(a: CandidateIdentity, b: CandidateIdentity): boolean {
 export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEvidenceOutcome {
   const startedAt = deps.now().toISOString();
   const runId = deps.runId ?? (deps.createRunId ?? buildReleaseRunId)(deps.now());
-  const runDir = deps.makeRunDir(deps.runDirParent, runId);
-  const attemptsPath = join(runDir, "attempts.jsonl");
-  const evidencePath = join(runDir, "release-evidence.json");
-  const incompletePath = join(runDir, "release-eval-incomplete.json");
-  const summaryPath = join(runDir, "release-eval-summary.json");
   const optionalCaseIds = deps.optionalCaseIds ?? DEFAULT_OPTIONAL_CASE_IDS;
   const slackMs = deps.timingSlackMs ?? DEFAULT_TIMING_SLACK_MS;
   const problems: string[] = [];
@@ -491,6 +497,10 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
       attempts: Array<{ exitCode: number | null; startedAt: string; finishedAt: string }>;
     }
   > = {};
+  // Suites the run never attempted because startup/collection failed, or that
+  // fail-fast skipped after an earlier required suite failed. Marked explicitly
+  // so a missing suite is never mistaken for a pass.
+  const notRunSuites: ReleaseSuiteId[] = [];
 
   let candidateBefore: CandidateIdentity | null = null;
   try {
@@ -499,9 +509,43 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
     problems.push(`candidate fingerprint before release failed: ${errorMessage(error)}`);
   }
 
+  // Candidate-scoped, versioned namespace: v2/<full-commit>/<run-id>. The
+  // commit segment makes other candidates' interrupted runs invisible to the
+  // collector, while the full fingerprint pins the exact source revision.
+  const candidateRoot = join(deps.runDirParent, "v2", candidateBefore?.commit ?? "unidentified");
+  const runDir = deps.makeRunDir(candidateRoot, runId);
+  const startupPath = join(runDir, RELEASE_EVAL_STARTUP_FILENAME);
+  const attemptsPath = join(runDir, "attempts.jsonl");
+  const evidencePath = join(runDir, "release-evidence.json");
+  const incompletePath = join(runDir, "release-eval-incomplete.json");
+  const summaryPath = join(runDir, "release-eval-summary.json");
+
+  // Crash-safety anchor: persist the full candidate identity atomically before
+  // the independent case collection or any child runs, so a SIGINT leaves a
+  // scoped run whose identity the collector can require. This never depends on
+  // JS signal handlers, which cannot interrupt a live spawnSync.
+  let startupPersisted = false;
+  if (candidateBefore !== null) {
+    try {
+      const startup = {
+        format: RELEASE_EVAL_FORMAT_V2,
+        schemaVersion: 2,
+        runId,
+        candidate: candidateBefore,
+        startedAt,
+      };
+      deps.writeTextAtomic(startupPath, `${JSON.stringify(startup, null, 2)}\n`);
+      startupPersisted = true;
+    } catch (error) {
+      problems.push(`release eval startup manifest could not be persisted: ${errorMessage(error)}`);
+    }
+  } else {
+    problems.push("release eval startup manifest was not persisted: no candidate fingerprint");
+  }
+
   const env = cleanReleaseEnv(deps.env, deps.now());
   let expected: ExpectedCaseIds | null = null;
-  if (candidateBefore !== null) {
+  if (startupPersisted && candidateBefore !== null) {
     try {
       expected = normalizeExpectedCaseIds(
         deps.collectExpectedCaseIds({
@@ -517,8 +561,9 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
     }
   }
 
-  if (expected !== null) {
-    for (const suite of RELEASE_SUITE_IDS) {
+  if (expected !== null && startupPersisted) {
+    for (let index = 0; index < RELEASE_SUITE_IDS.length; index += 1) {
+      const suite = RELEASE_SUITE_IDS[index];
       const request = buildSuiteRequest(
         suite,
         env,
@@ -527,7 +572,14 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
         deps.suiteTimeoutMs ?? DEFAULT_SUITE_TIMEOUT_MS,
       );
       const attemptStartedAt = deps.now();
-      const execution = deps.executeSuite(request);
+      let execution: ReleaseSuiteExecution;
+      try {
+        execution = deps.executeSuite(request);
+      } catch (error) {
+        // A throwing executor is a failed attempt, never an orchestrator crash:
+        // the attempt is journaled and the run finalizes with a normal record.
+        execution = { exitCode: null, signal: null, errorMessage: errorMessage(error) };
+      }
       const attemptFinishedAt = deps.now();
       const window = {
         startedAtMs: attemptStartedAt.getTime(),
@@ -554,6 +606,9 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
       const suiteProblems = [...executionProblems, ...read.problems];
       const passed = suiteProblems.length === 0 && read.report !== undefined;
       const attempt: AttemptRecord = {
+        format: RELEASE_EVAL_FORMAT_V2,
+        runId,
+        candidate: candidateBefore,
         suite,
         exitCode: execution.exitCode,
         signal: execution.signal ?? null,
@@ -569,7 +624,9 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
 
       if (!passed || read.report === undefined) {
         problems.push(...suiteProblems);
-        continue;
+        // Fail fast: later required suites are marked not run, never passed.
+        notRunSuites.push(...RELEASE_SUITE_IDS.slice(index + 1));
+        break;
       }
       const settings = suiteSettings(suite, read.report.settings, env);
       if (Object.keys(settings).length > 0) suiteSettingsById[suite] = settings;
@@ -600,6 +657,8 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
         }
       }
     }
+  } else {
+    notRunSuites.push(...RELEASE_SUITE_IDS);
   }
 
   let candidateAfter: CandidateIdentity | null = null;
@@ -640,10 +699,14 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
   let finalEvidencePath: string | null = null;
   let finalIncompletePath: string | null = null;
   const shared = {
+    format: RELEASE_EVAL_FORMAT_V2,
+    schemaVersion: 2,
     runId,
     runDir,
+    candidate: candidateBefore ?? null,
     startedAt,
     finishedAt,
+    notRunSuites,
     optionalSkips,
     suiteSettings: suiteSettingsById,
     // Release evidence must never rest on a cached competitor answer.
@@ -660,7 +723,6 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
   } else {
     const incomplete = {
       ...shared,
-      candidate: candidateBefore ?? null,
       problems,
       attempts,
     };
@@ -687,6 +749,9 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
   } else {
     console.log(`Incomplete:    ${finalIncompletePath}`);
     console.log(`Readiness:     blocked by ${problems.length} problem(s)`);
+    if (notRunSuites.length > 0) {
+      console.log(`Not run:       ${notRunSuites.join(", ")}`);
+    }
     for (const problem of problems) console.error(`release incomplete: ${problem}`);
   }
 

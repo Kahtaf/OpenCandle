@@ -19,12 +19,23 @@
 // - eval evidence must carry the full four-field candidate fingerprint, the
 //   exact four required suites, non-empty all-passed unique case lists, and a
 //   non-empty zero-exit attempt list;
+// - eval evidence is read from the explicitly versioned candidate-scoped
+//   namespace `validation-output/release-evals/v2/<full-commit>/<run-id>`:
+//   every run in the current candidate's directory must have a matching
+//   startup manifest and a complete final summary/evidence, and a missing,
+//   malformed, interrupted, or identity-mismatched run blocks even when a later
+//   run passed; other candidates' v2 interruptions are invisible;
+// - pre-cutover unscoped directories are retained untouched and reported as
+//   historical history that is ineligible for current proof, so fresh v2 proof
+//   is always required; a legacy record provably attributed to the current
+//   candidate that failed still blocks, and malformed legacy records are
+//   unavailable history rather than a conservative reject;
 // - settings and competitor metadata are whitelisted and bounded instead of
 //   copied verbatim.
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprintCandidate, REQUIRED_SUITE_IDS } from "./release-evidence.mjs";
 import { runVerify } from "./release-package.mjs";
@@ -35,6 +46,11 @@ const DEFAULT_MAX_AGE_HOURS = 24;
 const RELEASE_GATE = "release";
 const POLICY_RELATIVE_PATH = join("scripts", "test-gate-policy.json");
 const CANDIDATE_FIELDS = Object.freeze(["commit", "sourceDigest", "lockDigest", "policyDigest"]);
+// Candidate-scoped durability format produced by tests/scripts/release-eval-evidence.ts.
+const RELEASE_EVAL_FORMAT_V2 = "release-eval-evidence-v2";
+const RELEASE_EVAL_DIR = "release-evals";
+const RELEASE_EVAL_STARTUP_FILENAME = "release-eval-startup.json";
+const RELEASE_EVAL_SUMMARY_FILENAME = "release-eval-summary.json";
 
 const PROVIDER_SCOPE = "core";
 const PROVIDER_SYMBOL = "AAPL";
@@ -105,6 +121,8 @@ export function parseSummaryArgs(argv, { cwd = process.cwd() } = {}) {
 // Any unreadable JSON under a required evidence directory is a conservative
 // reject: it could have been a matching required report whose failure or
 // success would change the verdict, so it must never be silently skipped.
+// Legacy (pre-cutover) eval records are the deliberate exception, handled by
+// `collectLegacyEvals` as unavailable history rather than current evidence.
 function readJson(path, label, errors) {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
@@ -119,6 +137,29 @@ function listJsonFiles(dir) {
     return readdirSync(dir)
       .filter((name) => name.endsWith(".json"))
       .map((name) => join(dir, name));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Best-effort parse that never mutates `errors`. Used to inspect historical
+ * records whose malformed shape must be reported as unavailable history rather
+ * than treated as a blocking current-candidate artifact.
+ */
+function readJsonQuiet(path) {
+  try {
+    return { ok: true, value: JSON.parse(readFileSync(path, "utf8")) };
+  } catch {
+    return { ok: false, value: null };
+  }
+}
+
+function listChildDirs(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
   } catch {
     return [];
   }
@@ -701,34 +742,150 @@ function collectCompetitors(summary, errors) {
   return { competitors: clean, competitorsKnown: known };
 }
 
+function sameCandidateIdentity(identity, candidate) {
+  if (!isPlainObject(identity)) return false;
+  return CANDIDATE_FIELDS.every((field) => identity[field] === candidate[field]);
+}
+
+/**
+ * Validate one candidate-scoped v2 run directory and return its summary/evidence.
+ * Any missing, malformed, or identity-mismatched record returns null and pushes
+ * a blocking problem: unknown records never pass.
+ */
+function readV2Run(runDir, runName, candidate, errors) {
+  const startupResult = readJsonQuiet(join(runDir, RELEASE_EVAL_STARTUP_FILENAME));
+  if (!startupResult.ok || !isPlainObject(startupResult.value)) {
+    errors.push(`release eval run "${runName}" has no valid startup manifest`);
+    return null;
+  }
+  const startup = startupResult.value;
+  if (startup.format !== RELEASE_EVAL_FORMAT_V2) {
+    errors.push(`release eval run "${runName}" startup manifest has an unexpected format`);
+    return null;
+  }
+  if (startup.runId !== runName) {
+    errors.push(
+      `release eval run "${runName}" startup manifest runId does not match its directory`,
+    );
+    return null;
+  }
+  if (!sameCandidateIdentity(startup.candidate, candidate)) {
+    errors.push(
+      `release eval run "${runName}" startup identity does not match the current candidate`,
+    );
+    return null;
+  }
+
+  const summaryResult = readJsonQuiet(join(runDir, RELEASE_EVAL_SUMMARY_FILENAME));
+  if (!summaryResult.ok || !isPlainObject(summaryResult.value)) {
+    errors.push(`release eval run "${runName}" has no valid final summary`);
+    return null;
+  }
+  const summary = summaryResult.value;
+  if (summary.format !== RELEASE_EVAL_FORMAT_V2 || summary.runId !== runName) {
+    errors.push(
+      `release eval run "${runName}" final summary identity does not match its directory`,
+    );
+    return null;
+  }
+  if (!sameCandidateIdentity(summary.candidate, candidate)) {
+    errors.push(
+      `release eval run "${runName}" final summary candidate does not match the current candidate`,
+    );
+    return null;
+  }
+
+  const evidenceName =
+    summary.exitCode === 0 ? "release-evidence.json" : "release-eval-incomplete.json";
+  const evidenceResult = readJsonQuiet(join(runDir, evidenceName));
+  if (!evidenceResult.ok || !isPlainObject(evidenceResult.value)) {
+    errors.push(`release eval run "${runName}" is missing its final evidence`);
+    return null;
+  }
+  return { summary, evidence: evidenceResult.value };
+}
+
+/**
+ * Historical pre-cutover run directories. A record is attributed by commit
+ * exactly like the original collector (full identity is validated afterwards),
+ * so a legacy record claiming the current commit but carrying a stale or wrong
+ * digest cannot be silently ignored. Other known commits are counted as
+ * historical; records with no parseable identity are unavailable history.
+ * An attributed record that is failed, incomplete, missing either record, or
+ * fails `evalProblems` still blocks; only a fully valid legacy success is
+ * ineligible-for-proof history. Nothing here is deleted or rewritten.
+ */
+function collectLegacyEvals(releaseRoot, candidate, now, errors) {
+  const records = { total: 0, attributed: 0, ineligible: 0, historical: 0, unavailable: 0 };
+  for (const runName of listChildDirs(releaseRoot)) {
+    if (runName === "v2") continue;
+    records.total += 1;
+    const runDir = join(releaseRoot, runName);
+    const summaryResult = readJsonQuiet(join(runDir, RELEASE_EVAL_SUMMARY_FILENAME));
+    const summary = isPlainObject(summaryResult.value) ? summaryResult.value : null;
+    // Inspect both canonical evidence files independently: an attributed
+    // record whose summary is missing/malformed must not hide a failure that
+    // only the incomplete/evidence file proves.
+    const successResult = readJsonQuiet(join(runDir, "release-evidence.json"));
+    const success = isPlainObject(successResult.value) ? successResult.value : null;
+    const incompleteResult = readJsonQuiet(join(runDir, "release-eval-incomplete.json"));
+    const incomplete = isPlainObject(incompleteResult.value) ? incompleteResult.value : null;
+
+    const identities = [summary?.candidate, success?.candidate, incomplete?.candidate].filter(
+      isPlainObject,
+    );
+    const commits = identities
+      .map((identity) => identity.commit)
+      .filter((commit) => isNonEmptyString(commit));
+    if (!commits.includes(candidate.commit)) {
+      if (commits.length > 0) records.historical += 1;
+      else records.unavailable += 1;
+      continue;
+    }
+    records.attributed += 1;
+
+    const claimsSuccess = summary === null || summary.exitCode === 0;
+    const finalEvidence = claimsSuccess ? (success ?? incomplete) : (incomplete ?? success);
+    const problems = [];
+    if (finalEvidence === null) {
+      problems.push("legacy final evidence is missing or unreadable");
+    } else if (summary !== null) {
+      problems.push(...evalProblems(summary, finalEvidence, candidate, now));
+    } else {
+      problems.push("legacy final summary is missing or invalid");
+      problems.push(...candidateProblems(finalEvidence.candidate, candidate));
+    }
+    if (problems.length > 0) {
+      errors.push(
+        `release eval: legacy evidence for the current candidate is failed or incomplete (run "${runName}"); fresh v2 proof is required`,
+      );
+    } else {
+      records.ineligible += 1;
+    }
+  }
+  return records;
+}
+
 function collectEvals(root, candidate, now, windowMs, errors) {
-  const runDirs = listRunSummaries(
-    join(root, VALIDATION_ROOT, "release-evals"),
-    "release-eval-summary.json",
-  );
+  const releaseRoot = join(root, VALIDATION_ROOT, RELEASE_EVAL_DIR);
+  const candidateRoot = join(releaseRoot, "v2", candidate.commit);
   const entries = [];
-  for (const summaryPath of runDirs) {
-    const summary = readJson(summaryPath, `eval summary ${summaryPath}`, errors);
-    if (!isPlainObject(summary)) continue;
-    const runDir = dirname(summaryPath);
-    const evidenceName =
-      summary.exitCode === 0 ? "release-evidence.json" : "release-eval-incomplete.json";
-    const evidence = readJson(join(runDir, evidenceName), `eval evidence ${runDir}`, errors);
-    if (!isPlainObject(evidence)) continue;
-    const identity = evidence.candidate;
-    // A run whose recorded commit differs is unrelated historical evidence;
-    // only same-commit runs can attest the current candidate.
-    if (!isPlainObject(identity) || identity.commit !== candidate.commit) continue;
-    const problems = evalProblems(summary, evidence, candidate, now);
+  for (const runName of listChildDirs(candidateRoot)) {
+    const record = readV2Run(join(candidateRoot, runName), runName, candidate, errors);
+    if (record === null) continue;
+    const problems = evalProblems(record.summary, record.evidence, candidate, now);
     if (problems.length > 0) {
       errors.push(...problems.map((problem) => `release eval: ${problem}`));
     } else {
-      entries.push({ summary, evidence });
+      entries.push(record);
     }
   }
+
+  const legacyRecords = collectLegacyEvals(releaseRoot, candidate, now, errors);
+
   if (entries.length === 0) {
     if (!errors.some((error) => /release eval/i.test(error))) {
-      errors.push("required release eval summary for the current candidate is missing");
+      errors.push("required v2 release eval evidence for the current candidate is missing");
     }
     return null;
   }
@@ -760,6 +917,8 @@ function collectEvals(root, candidate, now, windowMs, errors) {
   }
   const { competitors, competitorsKnown } = collectCompetitors(latest.summary, errors);
   return {
+    format: RELEASE_EVAL_FORMAT_V2,
+    candidateRoot: relative(root, candidateRoot),
     runId: latest.summary.runId ?? null,
     startedAt: latest.summary.startedAt ?? null,
     finishedAt: latest.summary.finishedAt ?? null,
@@ -771,6 +930,7 @@ function collectEvals(root, candidate, now, windowMs, errors) {
     competitors,
     competitorsKnown,
     attempts,
+    legacyRecords,
   };
 }
 

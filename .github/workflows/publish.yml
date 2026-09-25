@@ -123,6 +123,7 @@ jobs:
         with:
           name: release-evidence
           path: |
+            validation-output/release-evals/**/release-eval-startup.json
             validation-output/release-evals/**/release-evidence.json
             validation-output/release-evals/**/release-eval-summary.json
             validation-output/release-evals/**/release-eval-incomplete.json

@@ -637,6 +637,7 @@ describe("release workflow security contract", () => {
     expect(publishWorkflow).toContain("if-no-files-found: warn");
     expect(publishWorkflow).not.toContain("if-no-files-found: error");
     for (const artifact of [
+      "validation-output/release-evals/**/release-eval-startup.json",
       "validation-output/release-evals/**/release-evidence.json",
       "validation-output/release-evals/**/release-eval-summary.json",
       "validation-output/release-evals/**/release-eval-incomplete.json",
@@ -663,10 +664,11 @@ describe("release workflow security contract", () => {
 
   it("matches the artifact globs against the real generated report path shapes", () => {
     const generated = [
-      "validation-output/release-evals/2026-09-24T18-00-00-000Z-1/release-evidence.json",
-      "validation-output/release-evals/2026-09-24T18-00-00-000Z-1/release-eval-summary.json",
-      "validation-output/release-evals/2026-09-24T18-00-00-000Z-1/release-eval-incomplete.json",
-      "validation-output/release-evals/2026-09-24T18-00-00-000Z-1/attempts.jsonl",
+      "validation-output/release-evals/v2/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2026-09-24T18-00-00-000Z-1/release-eval-startup.json",
+      "validation-output/release-evals/v2/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2026-09-24T18-00-00-000Z-1/release-evidence.json",
+      "validation-output/release-evals/v2/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2026-09-24T18-00-00-000Z-1/release-eval-summary.json",
+      "validation-output/release-evals/v2/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2026-09-24T18-00-00-000Z-1/release-eval-incomplete.json",
+      "validation-output/release-evals/v2/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2026-09-24T18-00-00-000Z-1/attempts.jsonl",
       "validation-output/release-package/package-proof.json",
       "validation-output/release-package/opencandle-0.15.0.tgz",
       "validation-output/provider-release/2026-09-24T18-00-00-000Z-1/summary.json",
@@ -676,6 +678,7 @@ describe("release workflow security contract", () => {
       "coverage/coverage-summary.json",
     ];
     const patterns = [
+      "validation-output/release-evals/**/release-eval-startup.json",
       "validation-output/release-evals/**/release-evidence.json",
       "validation-output/release-evals/**/release-eval-summary.json",
       "validation-output/release-evals/**/release-eval-incomplete.json",

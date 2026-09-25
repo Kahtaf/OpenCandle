@@ -105,12 +105,21 @@ Validation is strict and fail-closed:
   `timedOut: false`, `fatal: false`, totals of 2 passed / 0 failed / 0 skipped,
   and the two required cases `get_stock_quote:AAPL` and
   `get_stock_history:AAPL` each present once and passed.
-- **Release evals.** Evidence must carry the exact four-field candidate
-  fingerprint, the exact four required suites, a non-empty list of unique
-  all-passed required cases per suite, and a non-empty attempt list whose
-  attempts all exited zero. Canonical case-set authority stays in the eval front
-  door; the summary only checks the shape it can verify without inventing
-  expected ids.
+- **Release evals.** Candidate-scoped evidence lives in
+  `validation-output/release-evals/v2/<full-commit>/<run-id>/`. The producer
+  persists an atomic startup manifest carrying the full candidate fingerprint
+  before collecting expected cases or spawning any suite, journals every attempt
+  with its run/candidate identity, and fails fast after the first required suite
+  failure (later suites are recorded as not run, never passed). The collector
+  reads only the current candidate's commit directory and requires every run
+  there to have a matching startup identity and a complete final summary and
+  evidence; a missing, malformed, interrupted, or identity-mismatched run blocks
+  even when a later run passed, and other candidates' v2 interruptions are
+  invisible. Evidence must carry the exact four-field candidate fingerprint, the
+  exact four required suites, a non-empty list of unique all-passed required
+  cases per suite, and a non-empty attempt list whose attempts all exited zero.
+  Canonical case-set authority stays in the eval front door; the summary only
+  checks the shape it can verify without inventing expected ids.
 - **Metadata.** Suite settings are whitelisted to the keys the validated
   completion report actually emits (`provider`, `model`, `mode`, `seed`,
   `tier`) and competitor metadata is limited to `{ id, reason }`; unknown fields,
@@ -128,9 +137,15 @@ retry-until-green, and every attempt count/outcome is still shown in the
 Markdown for a passing candidate. A changed candidate requires fresh proof and
 clears the prior evidence because the fingerprint changed; separate CI runs
 whose artifacts are not on this machine remain an explicit limitation.
-Unreadable JSON under a required evidence directory is a conservative reject,
-because it could have been a matching report whose outcome would change the
-verdict.
+Pre-cutover unscoped `validation-output/release-evals/<run-id>/` directories are
+retained untouched and reported as historical history ineligible for current
+proof, so a legacy success never satisfies a release and fresh v2 proof is
+always required. A legacy record provably attributed to the current candidate
+that failed still blocks, so the format cutover is not an escape hatch;
+malformed legacy records are reported as unavailable history rather than
+blocking. Unreadable JSON under a required gate or provider evidence directory
+is still a conservative reject, because it could have been a matching report
+whose outcome would change the verdict.
 
 On success it writes exactly one
 `validation-output/release-summary/<timestamp>-<pid>/summary.json` plus a
@@ -166,8 +181,9 @@ last executable proof before publication. Provider data secrets are scoped to
 the provider-smoke step; model/provider secrets are scoped to the eval step.
 
 It always uploads bounded release evidence
-(`validation-output/release-evals/**/release-evidence.json`,
-`release-eval-summary.json`, `release-eval-incomplete.json`, `attempts.jsonl`,
+(`validation-output/release-evals/**/release-eval-startup.json`,
+`release-evidence.json`, `release-eval-summary.json`,
+`release-eval-incomplete.json`, `attempts.jsonl`,
 `release-package/package-proof.json`, the exact tested tarball,
 `validation-output/provider-release/**/summary.json`, the gate reports,
 `validation-output/release-summary/**/summary.json` + `summary.md`, and

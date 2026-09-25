@@ -699,6 +699,114 @@ describe("release eval evidence orchestration", () => {
   });
 });
 
+describe("candidate-scoped v2 release evidence", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const STARTUP = "release-eval-startup.json";
+
+  it("persists the candidate-scoped startup manifest before collection and children", () => {
+    const events: string[] = [];
+    let manifestAtCollection: Record<string, unknown> | null = null;
+    let manifestAtChild: Record<string, unknown> | null = null;
+    const { root, deps } = makeHarness({
+      collectExpectedCaseIds: (context) => {
+        events.push("collect");
+        manifestAtCollection = JSON.parse(
+          readFileSync(join(context.runDir, STARTUP), "utf-8"),
+        ) as Record<string, unknown>;
+        return EXPECTED_RAW;
+      },
+      executeSuite: (request) => {
+        events.push(`suite:${request.suite}`);
+        if (manifestAtChild === null) {
+          manifestAtChild = JSON.parse(
+            readFileSync(join(dirname(request.completionPath), STARTUP), "utf-8"),
+          ) as Record<string, unknown>;
+        }
+        return writeDefaultCompletion(request);
+      },
+    });
+
+    const outcome = runReleaseWithEvidence(deps);
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.runDir).toBe(
+      join(root, "validation-output", "release-evals", "v2", CANDIDATE.commit, "run-1"),
+    );
+    expect(manifestAtCollection).not.toBeNull();
+    expect(manifestAtCollection).toMatchObject({
+      format: "release-eval-evidence-v2",
+      runId: "run-1",
+      candidate: CANDIDATE,
+    });
+    expect(manifestAtChild).toEqual(manifestAtCollection);
+    expect(events[0]).toBe("collect");
+    expect(events.slice(1)).toEqual([
+      "suite:router-live",
+      "suite:cases",
+      "suite:product",
+      "suite:competitive:frozen",
+    ]);
+  });
+
+  it("fails fast after the first failed suite and marks later suites not run", () => {
+    const calls: string[] = [];
+    const { deps } = makeHarness({
+      executeSuite: (request) => {
+        calls.push(request.suite);
+        if (request.suite === "cases") return { exitCode: 1, signal: null };
+        return writeDefaultCompletion(request);
+      },
+    });
+
+    const outcome = runReleaseWithEvidence(deps);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(calls).toEqual(["router-live", "cases"]);
+    const incomplete = JSON.parse(readFileSync(outcome.incompletePath as string, "utf-8"));
+    expect(incomplete.notRunSuites).toEqual(["product", "competitive:frozen"]);
+    const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
+    expect(summary.notRunSuites).toEqual(["product", "competitive:frozen"]);
+    expect(summary.candidate).toEqual(CANDIDATE);
+  });
+
+  it("turns an executeSuite throw into a failed attempt and still finalizes", () => {
+    const { deps } = makeHarness({
+      executeSuite: (request) => {
+        if (request.suite === "router-live") throw new Error("spawn boom");
+        return writeDefaultCompletion(request);
+      },
+    });
+
+    const outcome = runReleaseWithEvidence(deps);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.incompletePath).not.toBeNull();
+    expect(outcome.problems.some((problem) => problem.includes("spawn boom"))).toBe(true);
+    const attempts = readAttempts(outcome.attemptsPath);
+    expect(attempts[0]).toMatchObject({ suite: "router-live", verdict: "failed" });
+    expect(JSON.parse(readFileSync(outcome.summaryPath, "utf-8")).candidate).toEqual(CANDIDATE);
+  });
+
+  it("writes run and candidate identity into every attempt journal record", () => {
+    const { deps } = makeHarness();
+    const outcome = runReleaseWithEvidence(deps);
+
+    const attempts = readAttempts(outcome.attemptsPath);
+    expect(attempts).toHaveLength(4);
+    for (const attempt of attempts) {
+      expect(attempt.runId).toBe("run-1");
+      expect(attempt.candidate).toEqual(CANDIDATE);
+    }
+  });
+});
+
 describe("real expected-case collection", () => {
   afterEach(() => {
     vi.restoreAllMocks();
