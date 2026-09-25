@@ -18,13 +18,21 @@ const SIGN_CHAR_CLASS = "[+\\-\\u2212\\uFE63\\uFF0D]";
 const DOLLAR_RANGE_GUARD = `(?<!${SIGN_CHAR_CLASS}?\\$${SIGN_CHAR_CLASS}?[\\d,]+(?:\\.\\d+)?[BMTbmt]?[ \\t]*)`;
 
 /**
+ * Magnitude suffix after a currency amount: the compact forms B/M/T or a
+ * spelled-out trillion/billion/million. The spelled-out form may be separated
+ * from the digits by horizontal whitespace ("$3.697 Trillion").
+ */
+const SPELLED_MAGNITUDE = "(?:[Tt]rillion|[Bb]illion|[Mm]illion)";
+const CURRENCY_MAGNITUDE = `(?:[BMTbmt]\\b|[ \\t]*${SPELLED_MAGNITUDE}\\b)`;
+
+/**
  * Currency amount whose sign may precede or follow the dollar sign, with an
  * optional magnitude suffix: $185.50, -$2.50, $-2.50, +$3.25, $1,234.56,
- * -$2.5B. The sign and suffix are part of the match so the digits can never be
- * re-matched as an unsigned substring.
+ * -$2.5B, $3.697 Trillion. The sign and suffix are part of the match so the
+ * digits can never be re-matched as an unsigned substring.
  */
 const CURRENCY_PATTERN = new RegExp(
-  `(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?\\$(${SIGN_CHAR_CLASS})?(\\d[\\d,]*(?:\\.\\d+)?)([BMTbmt]\\b)?`,
+  `(?:${DOLLAR_RANGE_GUARD}(${SIGN_CHAR_CLASS}))?\\$(${SIGN_CHAR_CLASS})?(\\d[\\d,]*(?:\\.\\d+)?)(${CURRENCY_MAGNITUDE})?`,
   "g",
 );
 
@@ -40,13 +48,14 @@ const STRING_NUMBER_PATTERN = new RegExp(
   "g",
 );
 
-/** Apply the B/M/T magnitude suffix (if any) to a currency magnitude. */
+/** Apply the B/M/T (compact or spelled-out) magnitude suffix to a currency magnitude. */
 function magnitudeMultiplier(suffix: string | undefined): number {
   if (suffix === undefined) return 1;
-  const upper = suffix.toUpperCase();
-  if (upper === "T") return 1e12;
-  if (upper === "B") return 1e9;
-  return 1e6;
+  const normalized = suffix.trim().toUpperCase();
+  if (normalized === "T" || normalized === "TRILLION") return 1e12;
+  if (normalized === "B" || normalized === "BILLION") return 1e9;
+  if (normalized === "M" || normalized === "MILLION") return 1e6;
+  return 1;
 }
 
 /** Parse a currency amount, treating a minus before or after the `$` as negative. */
@@ -110,6 +119,19 @@ function directionForPercent(text: string, start: number, end: number): "+" | "-
 }
 
 /**
+ * Explicit duration context that makes a trailing `m`/`M` a time unit (minutes)
+ * rather than a millions magnitude: "~15m delayed", "15m ago". Outside this
+ * context a lowercase `m` remains a millions suffix; ambiguous connective words
+ * (before/after/later/left/remaining/prior) are deliberately excluded so that
+ * "raised 15M before fees" stays a money amount.
+ */
+const DURATION_AFTER = "(?:delayed|delay|ago)\\b";
+const ABBREVIATED_LARGE_NUMBER_PATTERN = new RegExp(
+  `([+\\-\\u2212\\uFE63\\uFF0D]?\\$[+\\-\\u2212\\uFE63\\uFF0D]?)?(\\d+(?:\\.\\d+)?(?:[BTbt]\\b|[mM]\\b(?![ \\t]*${DURATION_AFTER})))`,
+  "g",
+);
+
+/**
  * Extract financial numbers from response text.
  * Matches: $185.50, 28.5%, 1.2B, 15.3x, -0.5%, plain decimals in financial context.
  * Excludes: ordinals (1st, 2nd), list indices, dates, year numbers.
@@ -140,10 +162,9 @@ export function extractFinancialNumbers(text: string): number[] {
 
   // Abbreviated large numbers: 1.2B, 500M, 3.5T. Currency-prefixed amounts are
   // already consumed by CURRENCY_PATTERN, so skip them here rather than emit a
-  // second, unsigned value.
-  for (const m of text.matchAll(
-    /([+\-\u2212\uFE63\uFF0D]?\$[+\-\u2212\uFE63\uFF0D]?)?(\d+(?:\.\d+)?[BMTbmt]\b)/g,
-  )) {
+  // second, unsigned value. A trailing `m`/`M` in explicit duration context is
+  // minutes, not a millions magnitude.
+  for (const m of text.matchAll(ABBREVIATED_LARGE_NUMBER_PATTERN)) {
     if (m[1] !== undefined) continue;
     const raw = m[2];
     const num = parseFloat(raw.slice(0, -1));

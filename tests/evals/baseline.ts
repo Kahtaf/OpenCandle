@@ -173,18 +173,36 @@ export interface FailureDiagnosticOptions {
 }
 
 /**
+ * A provider can name its own credential inside a natural-language message,
+ * for example "We have detected your API key as <value> and our standard API
+ * rate limit is 25 requests per day." The repo's `redactSensitiveOutput` only
+ * catches `name=value` assignments, cookie headers, and credential paths, so
+ * this bounded, case-insensitive phrase pass redacts just the token after
+ * "API key as" and leaves the surrounding diagnostic readable.
+ */
+const API_KEY_AS_PHRASE =
+  /\b(api[\s_-]?key\s+as\s+)([A-Za-z0-9_+=./-]+?)(?=[.,;:!?)\]}'"]?(?:\s|$))/gi;
+
+function redactDiagnosticString(value: string): string {
+  return redactSensitiveOutput(value.replace(API_KEY_AS_PHRASE, "$1[redacted]")).slice(
+    0,
+    MAX_DIAGNOSTIC_CHARS,
+  );
+}
+
+/**
  * Recursively redact a trace value for local failure diagnostics.
  *
  * Values are passed through the repo's existing `redactSensitiveOutput`
- * pattern, and object keys that name credentials/sessions are replaced
- * wholesale so quoted JSON keys cannot smuggle a secret through. Each string,
- * array, and object entry count is capped so a single value cannot balloon the
- * artifact.
+ * pattern (plus the bounded API-key-as phrase pass above), and object keys
+ * that name credentials/sessions are replaced wholesale so quoted JSON keys
+ * cannot smuggle a secret through. Each string, array, and object entry count
+ * is capped so a single value cannot balloon the artifact.
  */
 function redactForDiagnostic(value: unknown, depth = 0): unknown {
   if (depth > MAX_DIAGNOSTIC_DEPTH) return "[truncated-depth]";
   if (typeof value === "string") {
-    return redactSensitiveOutput(value).slice(0, MAX_DIAGNOSTIC_CHARS);
+    return redactDiagnosticString(value);
   }
   if (typeof value !== "object" || value === null) return value;
   if (Array.isArray(value)) {

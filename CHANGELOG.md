@@ -31,6 +31,8 @@
 - Data-faithfulness scoring now preserves the sign on currency amounts written as `-$2.50` or `$-2.50`, so a faithful negative change is no longer flagged and a reversed or wrong-signed amount is no longer silently accepted.
 - Data-faithfulness scoring now reads an unsigned percentage decrease stated in words (for example `a decrease of 0.33%`) as negative, while an explicit sign still wins and an increase or undirected percentage is never silently re-signed.
 - Protective-put benchmark checks now accept an explicit put-leg premium loss (or time/theta decay of the option's value) in place of the literal word "risk", so a hedge answer that states the put premium as the maximum loss on the option leg is no longer scored as omitting protective-put risk.
+- Data-faithfulness scoring now reads a spelled-out currency scale such as `$3.697 Trillion` at face value and no longer misreads a duration such as `15m delayed` as a millions amount.
+- Failed eval diagnostics now redact API credentials echoed in provider rate-limit messages.
 
 ## [0.15.0] - 2026-09-21
 

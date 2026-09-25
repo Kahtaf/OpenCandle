@@ -213,6 +213,49 @@ describe("saveFailureDiagnostic", () => {
     }
   });
 
+  it("redacts a credential named in a natural-language API-key-as provider message", () => {
+    const dir = makeTempDir();
+    // Synthetic credential only. It mimics the provider wording
+    // "We have detected your API key as <value> ...", which the
+    // assignment-based sanitizer does not cover.
+    const credential = "SYNTHETICEXAMPLE123";
+    const responseText = `We have detected your API key as ${credential} and our standard API rate limit is 25 requests per day.`;
+    const nestedError = `Provider refused the request: we detected your api Key as ${credential} and our standard API rate limit is 25 requests per day.`;
+    const trace = makeTrace({
+      text: responseText,
+      toolCalls: [
+        {
+          name: "get_quote",
+          args: { symbol: "AAPL" },
+          result: { providerError: { message: nestedError } },
+          isError: true,
+        },
+      ],
+    });
+
+    const path = saveFailureDiagnostic(partialLayerFailure("quote-accuracy"), trace, { dir });
+
+    expect(path).not.toBeNull();
+    const raw = readFileSync(path as string, "utf-8");
+    // RED before the fix: the credential appears verbatim in both the serialized
+    // response and the nested tool result.
+    expect(raw).not.toContain(credential);
+
+    const artifact = JSON.parse(raw) as {
+      responseText: string;
+      toolCalls: Array<{ result: { providerError: { message: string } } }>;
+    };
+    // The surrounding diagnostic stays readable, case-insensitively.
+    expect(artifact.responseText).toContain("We have detected your API key as [redacted]");
+    expect(artifact.responseText).toContain(
+      "and our standard API rate limit is 25 requests per day",
+    );
+    expect(artifact.toolCalls[0].result.providerError.message).toContain(
+      "we detected your api Key as [redacted]",
+    );
+    expect(artifact.toolCalls[0].result.providerError.message).not.toContain(credential);
+  });
+
   it("caps object entries on retained tool payloads", () => {
     const dir = makeTempDir();
     const bigResult: Record<string, number> = {};

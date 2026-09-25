@@ -145,6 +145,36 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("yield of 3.5")).toContain(3.5);
   });
 
+  it("applies a spelled-out trillion scale to a currency amount", () => {
+    expect(extractFinancialNumbers("**Market Cap:** $3.697 Trillion")).toEqual([3.697e12]);
+  });
+
+  it("applies spelled-out billion and million scales to currency amounts", () => {
+    expect(extractFinancialNumbers("Revenue was $1.2 Billion")).toEqual([1.2e9]);
+    expect(extractFinancialNumbers("Profit was $394 million")).toEqual([394e6]);
+  });
+
+  it("does not double count a currency amount with a spelled-out scale", () => {
+    expect(extractFinancialNumbers("The raise was $2.5 trillion")).toEqual([2.5e12]);
+    expect(extractFinancialNumbers("The raise was -$2.5 million")).toEqual([-2.5e6]);
+  });
+
+  it("treats an unambiguous abbreviated duration as time, not millions", () => {
+    expect(extractFinancialNumbers("~15m delayed")).toEqual([]);
+    expect(extractFinancialNumbers("15m ago")).toEqual([]);
+    expect(extractFinancialNumbers("5m delay")).toEqual([]);
+  });
+
+  it("keeps a million amount before an ambiguous connective word financial", () => {
+    expect(extractFinancialNumbers("raised 15M before fees")).toEqual([15e6]);
+    expect(extractFinancialNumbers("15M after fees")).toEqual([15e6]);
+  });
+
+  it("still reads a lowercase m suffix as millions outside duration context", () => {
+    expect(extractFinancialNumbers("$15m")).toEqual([15e6]);
+    expect(extractFinancialNumbers("15m")).toEqual([15e6]);
+  });
+
   it("keeps a negative sign that precedes the dollar sign", () => {
     expect(extractFinancialNumbers("The change was -$2.50")).toEqual([-2.5]);
   });
@@ -332,6 +362,12 @@ describe("extractNumbersFromObject", () => {
 
   it("reads a compact currency range in strings", () => {
     expect(extractNumbersFromObject({ formatted: "$100-$200" })).toEqual([100, 200]);
+  });
+
+  it("applies a spelled-out currency scale in strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "Market cap: $3.697 Trillion" });
+    expect(nums).toContain(3.697e12);
+    expect(nums).not.toContain(3.697);
   });
 
   it("reads a spaced currency range in strings", () => {
@@ -641,6 +677,65 @@ describe("scoreDataFaithfulness", () => {
     const trace = makeTrace({
       text: "The stock had a 2.47% gain",
       toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+});
+
+describe("market-cap scale and duration diagnostic replay", () => {
+  const marketCapText = "**Market Cap:** $3.697 Trillion (as of 2026-09-25 00:23 ET, ~15m delayed)";
+  const marketCapTool = { market_cap_basic: 3697401799030.4814 };
+
+  it("grounds the sanitized market-cap excerpt instead of emitting truncated and duration numbers", () => {
+    const trace = makeTrace({
+      text: marketCapText,
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("does not count the ~15m duration as ungrounded millions", () => {
+    const trace = makeTrace({
+      text: "The quote is ~15m delayed; market cap is $3.697 Trillion",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a wrong market-cap value at the spelled-out trillion scale", () => {
+    const trace = makeTrace({
+      text: marketCapText,
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { market_cap_basic: 2697401799030.4814 } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3697000000000");
+  });
+
+  it("fails a wrong market-cap unit stated as billions", () => {
+    const trace = makeTrace({
+      text: "**Market Cap:** $3.697 Billion",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3697000000");
+  });
+
+  it("grounds an answer against a spelled-out scale in a tool result string", () => {
+    const trace = makeTrace({
+      text: "**Market Cap:** $3.697T (as of 2026-09-25 00:23 ET, ~15m delayed)",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "Market cap: $3.697 Trillion" } },
+      ],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
