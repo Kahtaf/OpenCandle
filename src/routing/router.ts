@@ -290,9 +290,10 @@ export function postProcessRouterOutput(
       compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
-      costBasis: resolveSupportedCostBasis(
+      costBasis: resolveCostBasis(
         text,
-        output,
+        output.entities.costBasis,
+        extracted.costBasis,
         inputContext,
         mergeSymbols(symbolsAfterAmbiguousFilter, extracted.symbols),
       ),
@@ -601,11 +602,6 @@ export function postProcessRouterOutput(
       extracted.heldSymbol,
     );
     const optionStrategy = extracted.optionStrategy ?? next.entities.optionStrategy;
-    // An explicit position-basis correction in the user's own words outranks the
-    // saved lot basis. An ordinary lot purchase does not: without a quantity it
-    // is a lot price, not the whole-position basis, so the saved position stays
-    // authoritative.
-    const explicitBasisCorrection = currentExplicitBasis(text);
     next = {
       ...next,
       entities: {
@@ -618,7 +614,7 @@ export function postProcessRouterOutput(
           reorderedSymbols.length > 1
             ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
             : undefined,
-        costBasis: explicitBasisCorrection ?? savedPosition?.costBasis ?? next.entities.costBasis,
+        costBasis: extracted.costBasis ?? savedPosition?.costBasis ?? next.entities.costBasis,
         shareQuantity:
           extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
@@ -1381,178 +1377,64 @@ function readPortfolioPosition(
   };
 }
 
-// A per-share cost basis is a user-owned fact, not any dollar figure in the
-// turn. Hypothetical, budget, target, and quoted prices must not be echoed into
-// entities.costBasis. The value is trusted only when the user's own words
-// assert ownership/entry in the current turn, or when it matches an established
-// basis for the routed symbol from a saved position or the most recent prior
-// user turn that establishes one.
-function resolveSupportedCostBasis(
+// Absence-of-basis-context guard. A model-emitted cost basis is kept only when
+// the turn (or a same-symbol prior user turn / saved position) states basis,
+// purchase, or position-price wording for that amount. The deterministic
+// extractor stays the fallback, so nothing here overrides it or limits an
+// explicitly stated scenario basis; an assistant quote is never a source.
+function resolveCostBasis(
   text: string,
-  output: RouterOutput,
+  modelCostBasis: number | undefined,
+  extractedCostBasis: number | undefined,
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   symbols: string[],
 ): number | undefined {
-  // An explicit position-basis assertion in the current turn is the current
-  // authority. When the turn restates it, the latest assertion wins rather than
-  // the first one the deterministic extractor happened to return.
-  const explicitBasis = currentExplicitBasis(text);
-  if (explicitBasis !== undefined) return explicitBasis;
-  const candidate = output.entities.costBasis;
-  if (candidate === undefined) return undefined;
-  if (hasUserCostBasisSupport(text, candidate)) return candidate;
-  if (matchesSavedPositionCostBasis(inputContext?.portfolioPositions, symbols, candidate)) {
-    return candidate;
+  if (modelCostBasis === undefined) return extractedCostBasis;
+  if (extractedCostBasis !== undefined && amountsClose(extractedCostBasis, modelCostBasis)) {
+    return modelCostBasis;
   }
-  if (matchesPriorUserCostBasis(inputContext?.priorTurns, symbols, candidate)) return candidate;
-  return undefined;
+  if (hasCostBasisContext(text, modelCostBasis, symbols, inputContext)) return modelCostBasis;
+  return extractedCostBasis;
 }
 
-const COST_BASIS_AMOUNT = String.raw`(?:\$)?\s*(?<![\d,])((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)`;
-const COST_BASIS_CUE = String.raw`(?:cost\s*basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|basis)`;
-// Whole-position basis phrasing mirrors the deterministic extractor: the cue
-// and amount must be adjacent (only a linking word between), so an unrelated
-// later number cannot be claimed as basis.
-const COST_BASIS_CONNECTOR = String.raw`\s*(?:is|was|at|of|:)?\s*`;
-// Acquisition phrasing may carry a grouped or ungrouped share/contract
-// quantity; consuming it here keeps the quantity from being read as the price.
-const COST_BASIS_ACQUISITION_GAP = String.raw`(?:[^.;?!,$\d]|\d{1,3}(?:,\d{3})+\s*(?:shares?|contracts?|units?)|\d+\s*(?:shares?|contracts?|units?))*`;
-// Wording that marks the matched cue+amount span as hypothetical, targeted, or
-// negated. It is checked only against the cue's own immediate prefix and the
-// cue..amount span, never the whole clause, so a trailing request ("and would
-// like covered calls") or a past passive ("shares were purchased") remains a
-// real statement.
-const COST_BASIS_UNASSERTED =
-  /\b(?:what\s+if|if\b|suppose|supposing|imagine|hypothetical|let'?s\s+say|say\s+i|assuming|assume|maybe|perhaps|might|could|would|target(?:ing|ed|s)?|plan(?:ning|ned|s)?|intend(?:ing|ed|s)?|hop(?:e|es|ing|ed)|looking\s+to|considering|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|won'?t|wouldn'?t|couldn'?t|never|not(?!\s+only)|no\s+longer)\b/i;
+const COST_BASIS_CONTEXT =
+  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
-// Explicit whole-position basis phrasing, including the reverse "amount ...
-// cue" form the deterministic extractor already supports.
-const EXPLICIT_BASIS_PATTERNS = [
-  new RegExp(String.raw`\b${COST_BASIS_CUE}\b${COST_BASIS_CONNECTOR}${COST_BASIS_AMOUNT}`, "i"),
-  new RegExp(String.raw`${COST_BASIS_AMOUNT}\s*${COST_BASIS_CUE}\b`, "i"),
-  new RegExp(
-    String.raw`\b(?:my|the)\s+(?:cost|basis|entry(?:\s*price)?|average\s+cost)\b${COST_BASIS_CONNECTOR}${COST_BASIS_AMOUNT}`,
-    "i",
-  ),
-];
-// Acquisition and position-price phrasing. This corroborates a model candidate
-// or a prior-turn basis; it does not by itself override a saved position basis.
-const ACQUISITION_BASIS_PATTERNS = [
-  new RegExp(
-    String.raw`\b(?:bought|purchased|acquired|paid|cost\s+(?:me|us))\b${COST_BASIS_ACQUISITION_GAP}${COST_BASIS_AMOUNT}`,
-    "i",
-  ),
-  new RegExp(
-    String.raw`\b(?:my|the)\s+(?:position|shares?|holding|stock)\b(?:\s+(?:is|was))?\s+(?:at\s+)?${COST_BASIS_AMOUNT}`,
-    "i",
-  ),
-  new RegExp(String.raw`\bi(?:'m| am)\s+(?:in|long)\s+(?:at|@)\s*${COST_BASIS_AMOUNT}`, "i"),
-];
-const ALL_BASIS_PATTERNS = [...EXPLICIT_BASIS_PATTERNS, ...ACQUISITION_BASIS_PATTERNS];
-
-interface AssertedBasisMatch {
-  index: number;
-  value: number;
-}
-
-// Enumerate every asserted cue+amount match in text order. Enumerating (rather
-// than taking each pattern's first match) is what lets a restated correction
-// and the extractor's reverse form both be found.
-function assertedBasisMatches(text: string, patterns: RegExp[]): AssertedBasisMatch[] {
-  const matches: AssertedBasisMatch[] = [];
-  for (const pattern of patterns) {
-    const regex = new RegExp(pattern.source, "gi");
-    let match = regex.exec(text);
-    while (match !== null) {
-      const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
-      if (cueIsAsserted(text, match.index, match[0])) {
-        matches.push({ index: match.index, value: parsed });
-      }
-      match = regex.exec(text);
-    }
-  }
-  return matches.sort((left, right) => left.index - right.index);
-}
-
-function hasUserCostBasisSupport(text: string, value: number): boolean {
-  return assertedBasisMatches(text, ALL_BASIS_PATTERNS).some((match) =>
-    amountsClose(match.value, value),
-  );
-}
-
-// The last explicit basis asserted in the turn, but not when more than one
-// distinct symbol is mentioned: nothing in the remaining evidence attributes a
-// particular basis value to the routed holding, so the deterministic override
-// declines and the candidate/saved path decides. The same rule gates the
-// options saved-position override.
-function currentExplicitBasis(text: string): number | undefined {
-  const asserted = assertedBasisMatches(text, EXPLICIT_BASIS_PATTERNS);
-  if (asserted.length === 0) return undefined;
-  if (new Set(extractEntities(text).symbols).size > 1) return undefined;
-  return asserted.at(-1)?.value;
-}
-
-// A cue+amount match is unasserted only when its own immediate prefix or span
-// carries a hypothetical/negated marker. The prefix is capped at the current
-// clause segment so a marker in an earlier clause cannot leak in.
-function cueIsAsserted(text: string, cueIndex: number, matchText: string): boolean {
-  const bounded = text.slice(Math.max(0, cueIndex - 48), cueIndex);
-  const boundary = Math.max(
-    bounded.lastIndexOf("."),
-    bounded.lastIndexOf(","),
-    bounded.lastIndexOf(";"),
-    bounded.lastIndexOf("?"),
-    bounded.lastIndexOf("!"),
-  );
-  const prefix = boundary >= 0 ? bounded.slice(boundary + 1) : bounded;
-  return !COST_BASIS_UNASSERTED.test(`${prefix} ${matchText}`);
-}
-
-function amountsClose(left: number, right: number): boolean {
-  return Number.isFinite(left) && Math.abs(left - right) <= 0.011;
-}
-
-// The most recent prior user turn that actually establishes a basis for one of
-// the routed symbols is the authority; an older basis it supersedes must not be
-// revived. Turns for unrelated symbols are skipped, not treated as authority.
-function latestPriorUserCostBasis(
-  priorTurns: RouterInputContext["priorTurns"] | undefined,
-  symbols: string[],
-): number | undefined {
-  if (symbols.length === 0) return undefined;
-  const turns = priorTurns ?? [];
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const turn = turns[index];
-    if (turn.role !== "user") continue;
-    if (!extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol))) continue;
-    const established = readEstablishedCostBasis(turn.text);
-    if (established !== undefined) return established;
-  }
-  return undefined;
-}
-
-function readEstablishedCostBasis(text: string): number | undefined {
-  return assertedBasisMatches(text, ALL_BASIS_PATTERNS).at(-1)?.value;
-}
-
-function matchesSavedPositionCostBasis(
-  positions: RouterInputContext["portfolioPositions"] | undefined,
-  symbols: string[],
+function hasCostBasisContext(
+  text: string,
   value: number,
+  symbols: string[],
+  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): boolean {
+  if (statesCostBasis(text, value)) return true;
+  if (
+    (inputContext?.priorTurns ?? []).some(
+      (turn) =>
+        turn.role === "user" &&
+        statesCostBasis(turn.text, value) &&
+        extractEntities(turn.text).symbols.some((symbol) => symbols.includes(symbol)),
+    )
+  ) {
+    return true;
+  }
   return symbols.some((symbol) => {
-    const saved = readPortfolioPosition(positions, symbol);
+    const saved = readPortfolioPosition(inputContext?.portfolioPositions, symbol);
     return saved?.costBasis !== undefined && amountsClose(saved.costBasis, value);
   });
 }
 
-function matchesPriorUserCostBasis(
-  priorTurns: RouterInputContext["priorTurns"] | undefined,
-  symbols: string[],
-  value: number,
-): boolean {
-  const established = latestPriorUserCostBasis(priorTurns, symbols);
-  return established !== undefined && amountsClose(established, value);
+function statesCostBasis(text: string, value: number): boolean {
+  if (!COST_BASIS_CONTEXT.test(text)) return false;
+  for (const match of text.matchAll(
+    /(?:\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,])(?!\s*(?:shares?|contracts?|units?)\b)/g,
+  )) {
+    if (amountsClose(Number.parseFloat(match[1].replace(/,/g, "")), value)) return true;
+  }
+  return false;
+}
+
+function amountsClose(left: number, right: number): boolean {
+  return Number.isFinite(left) && Math.abs(left - right) <= 0.011;
 }
 
 function isConversationalRiskPreferenceUpdate(

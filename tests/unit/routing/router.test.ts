@@ -2204,7 +2204,7 @@ describe("route()", () => {
         JSON.stringify({
           routeKind: "workflow_dispatch",
           workflow: "options_screener",
-          entities: { symbols: ["NVDA"], costBasis: 51 },
+          entities: { symbols: ["NVDA"] },
           slots: {},
           preference_updates: [],
           missing_required: [],
@@ -2667,11 +2667,21 @@ describe("live-router deterministic context recovery", () => {
   });
 });
 
-describe("router cost-basis provenance", () => {
-  // Live regression (router suite fixture 013): "what about at $500?" after a
-  // prior NVDA discussion. The $500 is a hypothetical price, not a user-owned
-  // cost basis, even though the model echoed it into entities.costBasis.
-  it("drops a model cost basis derived from a follow-up hypothetical price", async () => {
+describe("router cost-basis context guard", () => {
+  function outputFor(entities: Record<string, unknown>): RouterLlmClient {
+    return fixedClient(
+      JSON.stringify({
+        routeKind: "agent_task",
+        entities,
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "test",
+      }),
+    );
+  }
+
+  it("drops a model cost basis invented from a bare follow-up price", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
@@ -2681,761 +2691,137 @@ describe("router cost-basis provenance", () => {
           { role: "assistant", text: "NVDA is trading around $450, up 1.2% today." },
         ],
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 500 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          tool_bundles: ["core_market"],
-          reasoning: "hypothetical price misread as basis",
-        }),
-      ),
+      outputFor({ symbols: ["NVDA"], costBasis: 500 }),
     );
 
     expect(result.entities.costBasis).toBeUndefined();
   });
 
-  it("drops a model cost basis that echoes an investment budget", async () => {
+  it("drops a model cost basis for a different ticker and amount", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I have $10,000 to invest in NVDA. What covered call should I sell?",
+        text: "what about MSFT at $250?",
+        priorTurns: [
+          { role: "user", text: "tell me about NVDA" },
+          { role: "assistant", text: "NVDA is trading around $450." },
+        ],
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["NVDA"], heldSymbol: "NVDA", costBasis: 10_000 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "budget misread as basis",
-        }),
-      ),
+      outputFor({ symbols: ["MSFT"], costBasis: 250 }),
     );
 
     expect(result.entities.costBasis).toBeUndefined();
   });
 
-  it("drops a model cost basis that echoes a target sale price", async () => {
+  it("does not take an assistant quote as cost-basis support", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I want to sell covered calls on NVDA if it reaches $500.",
+        text: "what about it?",
+        priorTurns: [{ role: "assistant", text: "NVDA is trading around $450." }],
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["NVDA"], heldSymbol: "NVDA", costBasis: 500 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "target price misread as basis",
-        }),
-      ),
+      outputFor({ symbols: ["NVDA"], costBasis: 450 }),
     );
 
     expect(result.entities.costBasis).toBeUndefined();
   });
 
-  it("drops a model cost basis that echoes a quoted trading price", async () => {
+  it("keeps an explicitly stated cost basis", async () => {
     const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "NVDA is trading at $500 today; should I sell covered calls?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["NVDA"], heldSymbol: "NVDA", costBasis: 500 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "quote misread as basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("drops a model cost basis from a hypothetical acquisition", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "What if I bought AAPL at $220? What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "counterfactual purchase misread as basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("drops a model cost basis from a negated acquisition", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "I haven't bought AAPL at $220 yet; what covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "negated purchase misread as basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("preserves a past-passive acquisition statement", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "My AAPL shares were purchased at $220. What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "past passive acquisition",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(220);
-  });
-
-  it("preserves an acquisition followed by a request clause", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AAPL at $220 and would like covered calls.",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "acquisition plus request",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(220);
-  });
-
-  it("does not emit a target entry price as cost basis", async () => {
-    // The deterministic extractor matches "entry price ... $220"; postprocess
-    // must still reject it as an unasserted target even when the model omits it.
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "My target entry price is $220 for AAPL. What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL" },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "target entry",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("drops a model cost basis from a counterfactual basis phrase", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "If my cost basis were $220, what covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "counterfactual basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("drops a hypothetical acquisition with a decimal amount", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "What if I bought AAPL at $220.50? What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220.5 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "counterfactual decimal purchase misread as basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("preserves an asserted decimal cost basis", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Sell a covered call on DRAM; cost basis is $220.50.",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["DRAM"], heldSymbol: "DRAM", costBasis: 220.5 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "asserted decimal basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(220.5);
-  });
-
-  it("preserves an asserted decimal basis followed by a sentence using an unasserted cue", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought AAPL at $220.50. Could you review it?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 220.5 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "asserted decimal basis before a separate sentence",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(220.5);
-  });
-
-  it("does not revive a superseded prior-turn basis", async () => {
-    const priorTurns: RouterInputContext["priorTurns"] = [
-      { role: "user", text: "My NVDA cost basis is $100." },
-      { role: "user", text: "Actually, my NVDA cost basis is $150." },
-    ];
-    const stale = await route(
-      { ...BASE_INPUT, text: "what about at $500?", priorTurns },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 100 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "stale prior basis",
-        }),
-      ),
-    );
-    const current = await route(
-      { ...BASE_INPUT, text: "what about at $500?", priorTurns },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "latest prior basis",
-        }),
-      ),
-    );
-
-    expect(stale.entities.costBasis).toBeUndefined();
-    expect(current.entities.costBasis).toBe(150);
-  });
-
-  it("keeps prior-turn basis authority isolated per symbol", async () => {
-    const priorTurns: RouterInputContext["priorTurns"] = [
-      { role: "user", text: "My NVDA cost basis is $100." },
-      { role: "user", text: "My AMD cost basis is $150." },
-    ];
-    const result = await route(
-      { ...BASE_INPUT, text: "what about at $500?", priorTurns },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 100 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "per-symbol prior basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(100);
-  });
-
-  it("does not borrow a saved cost basis from a different ticker", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "what about NVDA at $500?",
-        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 500 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "cross-ticker basis leak",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("preserves an explicit cost basis stated in the current turn", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Sell a covered call on DRAM; cost basis is $51.",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["DRAM"], heldSymbol: "DRAM", costBasis: 51 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "explicit basis",
-        }),
-      ),
+      { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
+      outputFor({ symbols: ["DRAM"], costBasis: 51 }),
     );
 
     expect(result.entities.costBasis).toBe(51);
   });
 
-  it("preserves an explicit cost basis in the reverse amount-before-cue form", async () => {
+  it("falls back to the deterministic extractor when the model basis is unsupported", async () => {
     const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Sell covered calls on AAPL with a $150 cost basis.",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "reverse explicit basis",
-        }),
-      ),
+      { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
+      outputFor({ symbols: ["DRAM"], costBasis: 999 }),
     );
 
-    expect(result.entities.costBasis).toBe(150);
+    expect(result.entities.costBasis).toBe(51);
   });
 
-  it("drops a hypothetical reverse amount-before-cue cost basis", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "What if I had a $150 cost basis on AAPL? Should I sell covered calls?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "hypothetical reverse basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBeUndefined();
-  });
-
-  it("resolves the latest explicit basis correction in the current turn", async () => {
-    const text =
-      "My AAPL cost basis is $100. Correction: my AAPL cost basis is $150. Should I add to my position?";
-    const modelCorrect = await route(
-      { ...BASE_INPUT, text },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["AAPL"], costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "latest correction",
-        }),
-      ),
-    );
-    const modelStale = await route(
-      { ...BASE_INPUT, text },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["AAPL"], costBasis: 100 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "stale first basis",
-        }),
-      ),
-    );
-
-    expect(modelCorrect.entities.costBasis).toBe(150);
-    expect(modelStale.entities.costBasis).toBe(150);
-  });
-
-  it("does not apply another holding's basis to the routed symbol", async () => {
-    // Two distinct holdings each state a basis; the deterministic override must
-    // not take the last one (MSFT $400) for the routed AAPL position.
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Sell covered calls on my AAPL shares; my AAPL cost basis is $150. My MSFT cost basis is $400.",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "multi-holding basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(150);
-  });
-
-  it("keeps the saved basis when a different holding states its own basis", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Sell covered calls on my AAPL shares; my AAPL cost basis is $150. My MSFT cost basis is $400.",
-        portfolioPositions: [{ symbol: "AAPL", quantity: 100, costBasis: 52, currency: "USD" }],
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 400 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "other holding basis misattributed",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(52);
-  });
-
-  it("declines the deterministic override when the only basis belongs to another holding", async () => {
-    // One basis value, but it is explicitly MSFT's: AAPL must not inherit $400,
-    // whether the model omits the basis or supplies AAPL's saved $150.
-    const text = "Sell covered calls on my AAPL shares. My MSFT cost basis is $400.";
-    const modelOmitted = await route(
-      { ...BASE_INPUT, text },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL" },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "no basis emitted",
-        }),
-      ),
-    );
-    const savedBasis = await route(
-      {
-        ...BASE_INPUT,
-        text,
-        portfolioPositions: [{ symbol: "AAPL", quantity: 100, costBasis: 150, currency: "USD" }],
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "correct AAPL basis from saved position",
-        }),
-      ),
-    );
-
-    expect(modelOmitted.entities.costBasis).toBeUndefined();
-    expect(savedBasis.entities.costBasis).toBe(150);
-  });
-
-  // The deterministic cost-basis extractor only knows "cost basis / basis /
-  // entry price"; a natural ownership statement must still be preserved.
-  it("preserves a model cost basis grounded in an ownership phrase", async () => {
+  it("keeps a natural purchase wording basis", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
         text: "I bought 100 shares of DRAM at $51. What covered call should I sell?",
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["DRAM"], heldSymbol: "DRAM", costBasis: 51 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "ownership phrase basis",
-        }),
-      ),
+      outputFor({ symbols: ["DRAM"], costBasis: 51 }),
     );
 
     expect(result.entities.costBasis).toBe(51);
   });
 
-  it("captures the purchase price after a grouped share quantity", async () => {
+  it("keeps the model's later basis in a restated 'basis' correction", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I bought 1,000 shares of AAPL at $150. What covered call should I sell?",
+        text: "My basis is $100; correction my basis is $150. What covered call should I sell?",
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "grouped quantity with price",
-        }),
-      ),
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
     );
 
     expect(result.entities.costBasis).toBe(150);
   });
 
-  it("does not treat a grouped share quantity as the purchase price", async () => {
+  it("keeps a model basis corroborated by ownership-at wording", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I bought 1,000 shares of AAPL at $150. What covered call should I sell?",
+        text: "I own 100 shares of AAPL at $150. What covered call should I sell?",
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 1000 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "quantity misread as price",
-        }),
-      ),
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
     );
 
-    expect(result.entities.costBasis).toBeUndefined();
+    expect(result.entities.costBasis).toBe(150);
   });
 
-  it("does not treat a share quantity as the purchase price when no price is given", async () => {
-    const grouped = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought 1,000 shares of AAPL. What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 1000 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "grouped quantity misread as price",
-        }),
-      ),
-    );
-    const ungrouped = await route(
-      {
-        ...BASE_INPUT,
-        text: "I bought 100 shares of AAPL. What covered call should I sell?",
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 100 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "quantity misread as price",
-        }),
-      ),
-    );
-
-    expect(grouped.entities.costBasis).toBeUndefined();
-    expect(ungrouped.entities.costBasis).toBeUndefined();
-  });
-
-  it("preserves a model cost basis that matches the saved position for the routed symbol", async () => {
-    const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "should I add to my AMD position?",
-        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["AMD"], costBasis: 52 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "context basis",
-        }),
-      ),
-    );
-
-    expect(result.entities.costBasis).toBe(52);
-  });
-
-  it("preserves a model cost basis grounded in an earlier user turn for the same symbol", async () => {
+  it("keeps a basis established by an earlier user turn for the same symbol", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
         text: "what about at $500?",
         priorTurns: [{ role: "user", text: "I bought 100 shares of NVDA at $400." }],
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "agent_task",
-          workflow: "general_finance_qa",
-          entities: { symbols: ["NVDA"], costBasis: 400 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "prior-turn basis",
-        }),
-      ),
+      outputFor({ symbols: ["NVDA"], costBasis: 400 }),
     );
 
     expect(result.entities.costBasis).toBe(400);
   });
 
-  it("keeps the saved position basis when the turn only adds a lot purchase", async () => {
+  it("keeps a model cost basis corroborated by the saved position", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "Should I sell covered calls against my AMD position? I actually bought more at $420.",
+        text: "should I add to my AMD position?",
         portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
       },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AMD"], heldSymbol: "AMD", costBasis: 420 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "additional lot price is not whole-position basis",
-        }),
-      ),
+      outputFor({ symbols: ["AMD"], costBasis: 52 }),
     );
 
     expect(result.entities.costBasis).toBe(52);
   });
 
-  it("prefers an explicit current-position basis correction over the saved position", async () => {
+  it("keeps an explicit hypothetical/scenario basis", async () => {
     const result = await route(
-      {
-        ...BASE_INPUT,
-        text: "Should I sell covered calls against my AMD position? Actually, my cost basis is $420.",
-        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
-      },
-      fixedClient(
-        JSON.stringify({
-          routeKind: "workflow_dispatch",
-          workflow: "options_screener",
-          entities: { symbols: ["AMD"], heldSymbol: "AMD", costBasis: 420 },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "explicit basis correction",
-        }),
-      ),
+      { ...BASE_INPUT, text: "What if I bought AAPL at $220? What covered call should I sell?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 220 }),
     );
 
-    expect(result.entities.costBasis).toBe(420);
+    expect(result.entities.costBasis).toBe(220);
+  });
+
+  it("keeps a politely phrased purchase basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Could you suggest covered calls on AAPL? I bought at $150." },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
   });
 });
 
