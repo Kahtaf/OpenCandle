@@ -33,6 +33,35 @@ export function blankedCredentialEnv(): Record<string, string> {
   return Object.fromEntries([...names].map((name) => [name, ""]));
 }
 
+/**
+ * Child environment for the isolated GUI server. Every home-derived state
+ * location is pointed into the throwaway home, including the ones a developer
+ * shell may set explicitly: Pi resolves its agent dir (auth.json, models.json,
+ * settings) from PI_CODING_AGENT_DIR before HOME, and its session dir from
+ * PI_CODING_AGENT_SESSION_DIR, so inheriting either would read real host
+ * state. USERPROFILE is Node's home on Windows. Explicit `overrides` still win.
+ */
+export function isolatedGuiServerEnv(options: {
+  homeDir: string;
+  port: number;
+  overrides?: Record<string, string>;
+  parentEnv?: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  const home = join(options.homeDir, "home");
+  return {
+    ...(options.parentEnv ?? process.env),
+    HOME: home,
+    USERPROFILE: home,
+    OPENCANDLE_HOME: join(options.homeDir, "opencandle"),
+    PI_CODING_AGENT_DIR: join(home, ".pi", "agent"),
+    PI_CODING_AGENT_SESSION_DIR: "",
+    OPENCANDLE_GUI_HOST: "127.0.0.1",
+    OPENCANDLE_GUI_PORT: String(options.port),
+    ...blankedCredentialEnv(),
+    ...options.overrides,
+  };
+}
+
 export interface IsolatedGuiServer {
   baseUrl: string;
   port: number;
@@ -90,15 +119,7 @@ export async function startIsolatedGuiServer(
 
   const child = spawn(process.execPath, ["--import", "tsx", entry], {
     cwd: options.cwd,
-    env: {
-      ...process.env,
-      HOME: join(homeDir, "home"),
-      OPENCANDLE_HOME: join(homeDir, "opencandle"),
-      OPENCANDLE_GUI_HOST: "127.0.0.1",
-      OPENCANDLE_GUI_PORT: String(port),
-      ...blankedCredentialEnv(),
-      ...options.env,
-    },
+    env: isolatedGuiServerEnv({ homeDir, port, overrides: options.env }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   });
