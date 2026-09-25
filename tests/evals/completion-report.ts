@@ -413,6 +413,15 @@ export function convertVitestJsonReport(
       reason: "no required test case executed",
     });
   }
+  // Vitest sets success=false for failures outside assertions (unhandled
+  // errors/rejections) while every assertion can still read as passed.
+  if (payload.success === false && !cases.some((testCase) => testCase.status === "failed")) {
+    cases.push({
+      id: "vitest:run-failed",
+      status: "failed",
+      reason: "vitest run failed outside test assertions (success=false)",
+    });
+  }
 
   const requiredSkipped = assertionCases.filter(
     (testCase) => testCase.status === "skipped" && !isOptional(testCase),

@@ -602,6 +602,64 @@ describe("Vitest JSON report conversion", () => {
     expect(converted.cases.some((testCase) => testCase.status === "failed")).toBe(true);
   });
 
+  it("fails a run Vitest marked unsuccessful even when every assertion passed", () => {
+    // e.g. an unhandled error or rejection outside any test: Vitest sets
+    // success=false while every assertion result and counter reads as passing.
+    const converted = convertVitestJsonReport(vitestPayload({ success: false }), {
+      suite: "cases",
+    });
+
+    expect(converted.exitCode).toBe(1);
+    expect(converted.cases).toContainEqual({
+      id: "vitest:run-failed",
+      status: "failed",
+      reason: "vitest run failed outside test assertions (success=false)",
+    });
+    expect(converted.cases.filter((testCase) => testCase.status === "failed")).toHaveLength(1);
+    expect(() => validateCompletionReport(converted)).toThrow(/failed/i);
+  });
+
+  it("does not add a run-level failure when a failure is already recorded", () => {
+    const converted = convertVitestJsonReport(
+      vitestPayload({
+        numPassedTests: 1,
+        numFailedTests: 1,
+        success: false,
+        testResults: [
+          {
+            assertionResults: [
+              { fullName: "router routes equities", status: "passed", failureMessages: [] },
+              {
+                fullName: "router routes crypto",
+                status: "failed",
+                failureMessages: ["AssertionError: expected crypto"],
+              },
+            ],
+            startTime: 1758700000000,
+            endTime: 1758700000100,
+            status: "failed",
+            message: "",
+            name: "/repo/tests/evals/cases/router.eval.ts",
+          },
+        ],
+      }),
+      { suite: "cases" },
+    );
+
+    expect(converted.exitCode).toBe(1);
+    expect(converted.cases.map((testCase) => testCase.id)).not.toContain("vitest:run-failed");
+    expect(converted.cases.filter((testCase) => testCase.status === "failed")).toHaveLength(1);
+  });
+
+  it("keeps a passing run passing when Vitest reports success", () => {
+    const converted = convertVitestJsonReport(vitestPayload({ success: true }), {
+      suite: "cases",
+    });
+
+    expect(converted.exitCode).toBe(0);
+    expect(converted.cases.map((testCase) => testCase.id)).not.toContain("vitest:run-failed");
+  });
+
   it("disambiguates duplicate test names across files", () => {
     const converted = convertVitestJsonReport(
       vitestPayload({
