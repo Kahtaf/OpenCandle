@@ -23,6 +23,8 @@
 - Starting a second chat while a run is active no longer queues a prompt that would run after the run stops.
 - Policy guidance no longer pushes allocation changes into review-only portfolio critiques, invents a trim or position percentage for an unverified ticker, or treats a protective put's strike-minus-premium as a whole-position floor; put guidance now sizes whole contracts against the stated share count and separates the premium at risk from stock loss.
 - Clearing all hosted data now reloads the browser as soon as the device is cleared instead of first waiting for a fresh in-page runtime to start, so a slow or failed runtime boot can no longer leave the old page showing while the data is already gone.
+- Product evaluations now recognize recommendations stated with common inflections such as "recommended", so a clear "stance is recommended" answer is no longer scored as evasive.
+- Protective-put benchmark checks now accept an answer that states the put's strike-level sell right for the covered shares, while still rejecting stop-loss levels, put-premium-only loss claims, and protection claims with no strike trigger.
 
 ## [0.15.0] - 2026-09-21
 

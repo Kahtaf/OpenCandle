@@ -400,6 +400,109 @@ describe("prompt-policy final answer assertions", () => {
 
     expect(result.passed).toBe(true);
   });
+
+  // Faithful excerpt of the 2026-09-25T00:39 live frozen answer
+  // (tests/evals/runs/2026-09-25T00-39-03-515Z_competitive-finance.json results[4]).
+  // The floor checker keys on its protective-put wording: "The strike price is
+  // the level at which you can sell your shares if the price drops." That is a
+  // strike-level sell right, not a generic sell level, and is accepted without
+  // a benchmark-specific literal.
+  const liveFrozenHedgeAnswer = [
+    "To provide downside protection for your 450 shares of AAPL through October 30, 2026, you should consider purchasing **4 or 5 put option contracts** with an expiration of **2026-10-30**.",
+    "",
+    "2. **Protection Level (Strike Price):** The strike price is the level at which you can sell your shares if the price drops.",
+    "* Choosing a higher strike price (closer to the current stock price, e.g., $335) provides more protection as your maximum loss is capped closer to the current price. However, it also costs more.",
+    "* Choosing a lower strike price (further out of the money, e.g., $325 or $330) provides less protection (you'd incur a larger loss before the put kicks in) but is cheaper.",
+    "",
+    "1. **Cost (Premium):** This is the price you pay for the protection.",
+    "3. **Time Decay (Theta):** Options lose value as they approach expiration.",
+    "* **Liquidity (Volume & Open Interest):** Higher volume and open interest generally indicate more liquid options, so be mindful of slippage and risk.",
+  ].join("\n");
+
+  it("accepts the live frozen hedge answer's strike-level sell right without the literal word floor", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(liveFrozenHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts a covered-share put sell right on an unrelated symbol and quantity", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "For the covered 300 MSFT shares, the put gives the right to sell at the strike when the underlying falls below it; the premium reduces net proceeds, theta decays the protection, liquidity affects execution, and the residual shares remain exposed to downside risk.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects a stop-loss level that is not a protective-put strike right", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "Set a stop-loss at the level at which you sell your shares; the premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a capped-loss claim with no put strike or protection mechanism", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "Your maximum loss is capped closer to the current price; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects put-premium-only wording that never ties the floor to the strike", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The put costs a premium; theta and liquidity matter, and the loss is limited to the premium paid, so risk is contained.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a protection claim with no strike trigger", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The puts protect your position from losses; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects an unsupported blanket all-shares protection claim", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "These puts protect all 450 shares from any loss; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a hedge answer that names a floor level but omits the premium cost", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace("The strike is the level at which you can sell; theta and liquidity matter."),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("premium");
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {

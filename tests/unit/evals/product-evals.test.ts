@@ -460,6 +460,132 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("accepts the preserved live NVDA answer's past-tense recommendation", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        // Faithful excerpt of the 2026-09-25T00:24 live answer.
+        text:
+          "Given the current market context for NVDA, a **Neutral to Cautious** stance is recommended. " +
+          "Valuation models suggest overvaluation and risk metrics are elevated, so downside risk matters.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("accepts a recommendation verb in unrelated symbol and text", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["MSFT"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "MSFT" } }],
+        text: "For MSFT, holding is recommended because valuation and downside risk are elevated.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("does not treat the noun 'recommendation' alone as a direct answer", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "A recommendation cannot be given without more information about your goals and risk tolerance.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      false,
+    );
+  });
+
+  it("documents that a bare 'no' token still satisfies direct_answer (pre-existing limitation)", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "No recommendation can be given without more information about your goals and risk tolerance.",
+      }),
+    );
+
+    // The pre-existing "no" alternative in the direct-answer regex matches
+    // here even though this is an explicit refusal, not a stance. Recorded as a
+    // known limitation rather than widened in this fix.
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails a single-asset answer that only lists considerations without a stance", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "NVDA has many considerations. Your decision depends on your goals, risk tolerance, and time horizon, so weigh the evidence carefully.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      false,
+    );
+  });
+
   it("counts a concrete portfolio allocation table as a direct construction answer", () => {
     const portfolioCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "portfolio-balanced-50k",

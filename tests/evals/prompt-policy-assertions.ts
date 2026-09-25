@@ -157,11 +157,15 @@ const HEDGE_RESIDUAL_QUALIFIER =
 const HEDGE_EXCESS_QUALIFIER =
   /\b(?:excess|extra|surplus|additional|over-?hedg\w*|over-?expos\w*|over-?cover\w*|beyond|above your|more\s+(?:shares?|than|exposure|protection))\b/;
 // Downside-protection floor mechanics: the literal floor word, or an explicit
-// bounded equivalent (protected from falling below the strike minus premium,
-// protection begins at/below, caps losses at). Deliberately not a blanket
-// "protection"/"risk" match.
+// bounded equivalent on the combined stock-plus-put position (protected from
+// falling below, protection begins at/below, caps losses at, strike minus
+// premium), or a put's strike-level sell right. Deliberately not a blanket
+// "protection"/"risk" match and not a generic sell/stop level: the put right
+// branch and the strike-level branch each require the strike itself, so a
+// stop-loss or price target phrased as "the level at which you sell" does not
+// count.
 const HEDGE_FLOOR_MECHANICS =
-  /\b(?:hedge|effective|downside)?\s*floor\b|\bprotected from (?:falling|dropping|declining|slipping) below\b|\bprotection (?:begins|starts|kicks in)(?: only)? (?:at|below|around|once)\b|\bdownside protection (?:begins|starts|level|at|below|once)\b|\bcaps? (?:your )?(?:losses|downside|risk|exposure) (?:at|below|around)\b|\b(?:strike|price)\s*(?:minus|[-–])\s*(?:the\s+)?premium\b/i;
+  /\b(?:hedge|effective|downside)?\s*floor\b|\bprotected from (?:falling|dropping|declining|slipping) below\b|\bprotection (?:begins|starts|kicks in)(?: only)? (?:at|below|around|once)\b|\bdownside protection (?:begins|starts|level|at|below|once)\b|\bcaps? (?:your )?(?:losses|downside|risk|exposure) (?:at|below|around)\b|\b(?:strike|price)\s*(?:minus|[-–])\s*(?:the\s+)?premium\b|\bputs?\b[^.\n]{0,80}\bright to sell\b[^.\n]{0,40}\bstrike\b|\bstrike\b[^.\n]{0,40}\blevel at which\b[^.\n]{0,60}\b(?:sell|exit|offload)\b/i;
 
 // Normal Markdown bold emphasis around a number must not change sizing, e.g.
 // "buy **4** put contracts" or "**5** puts". Strip paired ** / __ markers from
