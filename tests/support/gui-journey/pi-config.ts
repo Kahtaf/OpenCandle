@@ -1,7 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { findEnvKeys, getProviders } from "@earendil-works/pi-ai/compat";
-import { PROVIDERS } from "../../../src/onboarding/providers.js";
 
 /**
  * Test-only Pi/OpenCandle configuration for the deterministic GUI journey.
@@ -75,26 +73,4 @@ export function writeModelRuntimeConfig(options: {
     defaultProjectTrust: "never",
   };
   writeFileSync(join(options.agentDir, "settings.json"), JSON.stringify(settingsJson, null, 2));
-}
-
-/**
- * Every environment variable that could hand the child a credential, blanked
- * so the journey starts cold. Model-provider keys are discovered from Pi's own
- * registry (probing it with a recording proxy), and keyed data providers come
- * from OpenCandle's provider registry.
- */
-export function blankedCredentialEnv(): Record<string, string> {
-  const names = new Set<string>();
-  const probe = new Proxy({} as Record<string, string>, {
-    get: (_target, property) => {
-      if (typeof property !== "string") return undefined;
-      names.add(property);
-      return "probe";
-    },
-  });
-  for (const provider of getProviders()) findEnvKeys(provider, probe);
-  for (const descriptor of PROVIDERS) {
-    if (descriptor.kind === "api-key") names.add(descriptor.envVar);
-  }
-  return Object.fromEntries([...names].map((name) => [name, ""]));
 }

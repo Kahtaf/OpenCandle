@@ -4,47 +4,13 @@ import { createServer as createHttpServer, type Server as HttpServer } from "nod
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findEnvKeys, getProviders } from "@earendil-works/pi-ai/compat";
 import { type Browser, chromium, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ModelSetupRequirement } from "../../gui/server/model-setup.js";
 import { FIRST_RUN_ONBOARDING_SEEN_KEY } from "../../gui/web/src/features/onboarding/setup-dismissal.js";
-import { PROVIDERS } from "../../src/onboarding/providers.js";
+import { releaseSmokeServerEnv } from "../support/gui/server.js";
 
 const runGuiReleaseSmoke = process.env.OPENCANDLE_GUI_RELEASE_SMOKE === "1";
-
-/**
- * Every environment variable that could hand the smoke server a credential,
- * blanked so the run always starts from a genuinely cold home.
- *
- * The list is derived, never typed out: a hand-written list of four model keys
- * silently stopped covering the run the day a contributor put an
- * `OPENROUTER_API_KEY` in their `.env`, because Pi's model registry accepts
- * every provider it knows, not only the three OpenCandle offers in setup. Pi's
- * `findEnvKeys` reports only variables that are already set, so probe it with a
- * recording proxy that answers every lookup to get the full candidate list —
- * including keys the GUI server would read out of the repo `.env` itself, which
- * `loadEnv` skips for any variable already defined, empty string included.
- *
- * Keyed data providers come from OpenCandle's own provider registry for the
- * same reason: the diagnostics journey asserts the never-configured
- * presentation for all of them.
- */
-function blankedCredentialEnv(): Record<string, string> {
-  const names = new Set<string>();
-  const probe = new Proxy({} as Record<string, string>, {
-    get: (_target, property) => {
-      if (typeof property !== "string") return undefined;
-      names.add(property);
-      return "probe";
-    },
-  });
-  for (const provider of getProviders()) findEnvKeys(provider, probe);
-  for (const descriptor of PROVIDERS) {
-    if (descriptor.kind === "api-key") names.add(descriptor.envVar);
-  }
-  return Object.fromEntries([...names].map((name) => [name, ""]));
-}
 
 const releaseStatusValues = new Set<ModelSetupRequirement>([
   "ready",
@@ -69,15 +35,7 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     ({ server: probeServer, baseUrl: probeBaseUrl } = await startModelKeyProbeStub());
     serverProcess = spawn("npm", ["run", "gui"], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        HOME: join(smokeHome, "home"),
-        OPENCANDLE_HOME: join(smokeHome, "opencandle"),
-        OPENCANDLE_GUI_HOST: "127.0.0.1",
-        OPENCANDLE_GUI_PORT: String(port),
-        ...blankedCredentialEnv(),
-        OPENCANDLE_MODEL_KEY_PROBE_BASE_URL: probeBaseUrl,
-      },
+      env: releaseSmokeServerEnv({ smokeHome, port, probeBaseUrl }),
       stdio: ["ignore", "pipe", "pipe"],
     });
     serverProcess.stdout.on("data", (chunk) => {

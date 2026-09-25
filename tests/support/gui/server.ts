@@ -302,3 +302,21 @@ export function waitForExit(
     child.once("exit", onExit);
   });
 }
+
+/**
+ * Child environment for the GUI release-gate smoke (`npm run gui`): the
+ * isolated GUI baseline over `smokeHome`, plus the model-key probe stub URL.
+ */
+export function releaseSmokeServerEnv(options: {
+  smokeHome: string;
+  port: number;
+  probeBaseUrl: string;
+  parentEnv?: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  return isolatedGuiServerEnv({
+    homeDir: options.smokeHome,
+    port: options.port,
+    parentEnv: options.parentEnv,
+    overrides: { OPENCANDLE_MODEL_KEY_PROBE_BASE_URL: options.probeBaseUrl },
+  });
+}
