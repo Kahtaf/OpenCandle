@@ -163,6 +163,12 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("market cap of 3,680B")).toEqual([3.68e12]);
   });
 
+  it("does not merge comma-delimited metric values into one number", () => {
+    const nums = extractFinancialNumbers("P/E of 20,30");
+    expect(nums).toContain(20);
+    expect(nums).not.toContain(2030);
+  });
+
   it("applies a spelled-out trillion scale to a currency amount", () => {
     expect(extractFinancialNumbers("**Market Cap:** $3.697 Trillion")).toEqual([3.697e12]);
   });
@@ -384,6 +390,10 @@ describe("extractNumbersFromObject", () => {
     expect(nums).toContain(3.68e12);
     expect(nums).not.toContain(3);
     expect(nums).not.toContain(680e9);
+  });
+
+  it("keeps comma-delimited observations separate instead of merging them", () => {
+    expect(extractNumbersFromObject({ text: "P/E observations: 20,30" })).toEqual([20, 30]);
   });
 
   it("preserves a bare duration in tool strings instead of scaling it to millions", () => {
@@ -893,6 +903,30 @@ describe("tool-string magnitude grounding", () => {
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(false);
     expect(result.message).toContain("3680000000000");
+  });
+
+  it("grounds separate comma-delimited observations stated individually", () => {
+    const trace = makeTrace({
+      text: "P/E of 20 and P/E of 30",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,30" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a fabricated value stitched from comma-delimited observations", () => {
+    const trace = makeTrace({
+      text: "P/E of 2030",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,30" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2030");
   });
 });
 
