@@ -530,6 +530,42 @@ describe("GUI session journey", () => {
       expect(hasAbortedNvdaAnswer(snapshot.entries)).toBe(true);
       expect(hasCompletedNvdaAnswer(snapshot.entries)).toBe(false);
       expect(nvdaQuoteRequests(harness)).toBe(nvdaRequestsBefore);
+
+      // Reopen: the aborted answer renders as a Stopped turn, not as a
+      // complete-looking answer, and offers Retry.
+      await page.goto(`${harness.baseUrl}/sessions/${cancelledSessionId}`, {
+        waitUntil: "networkidle",
+      });
+      await expectVisible(page.getByText("Stopped").first(), 15_000);
+      await expectVisible(
+        page.getByText("Run stopped before it finished its answer.").first(),
+        15_000,
+      );
+      const retry = page.getByRole("button", { name: "Retry" });
+      await expectVisible(retry, 15_000);
+
+      // Retry after reload re-sends the stopped prompt as a fresh run.
+      const retryRequest = page.waitForRequest(
+        (request) =>
+          request.method() === "POST" &&
+          new URL(request.url()).pathname ===
+            `/api/sessions/${encodeURIComponent(cancelledSessionId)}/runs`,
+      );
+      await retry.click();
+      const retryBody = (await retryRequest).postDataJSON() as {
+        actionId?: string;
+        prompt?: string;
+      };
+      expect(retryBody.prompt).toBe(STREAM_HOLD_PROMPT);
+      expect(String(retryBody.actionId)).toMatch(/^chat-/);
+      expect(retryBody.actionId).not.toBe(runActionId);
+      await waitForRunIdle(page);
+      expect(
+        await waitFor(
+          () => hasCompletedNvdaAnswer(harness.readSessionEntries(cancelledSessionId)),
+          15_000,
+        ),
+      ).toBe(true);
     } finally {
       answerHold.release();
     }

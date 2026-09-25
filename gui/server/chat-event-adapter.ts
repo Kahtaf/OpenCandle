@@ -190,6 +190,17 @@ export function sessionEntriesToChatEvents(
         }
         continue;
       }
+      // Stop mid answer: Pi keeps the partial reply with stopReason "aborted".
+      // Keep any partial text, then mark the turn stopped (with Retry) so a
+      // reload never shows it as a complete answer. An empty aborted reply
+      // renders only the stopped notice.
+      const stopped = message.stopReason === "aborted";
+      if (stopped && !assistantHasVisibleContent(message)) {
+        events.push(
+          stoppedAssistantEvent(options.sessionId, messageId, false, lastRetryPrompt, seq++),
+        );
+        continue;
+      }
       events.push({
         type: "message.created",
         sessionId: options.sessionId,
@@ -228,6 +239,11 @@ export function sessionEntriesToChatEvents(
         content,
         seq: seq++,
       });
+      if (stopped) {
+        events.push(
+          stoppedAssistantEvent(options.sessionId, messageId, true, lastRetryPrompt, seq++),
+        );
+      }
       continue;
     }
 
@@ -293,6 +309,41 @@ function pairedAssistantFailureIds(entries: SessionEntry[]): Set<string> {
     }
   });
   return paired;
+}
+
+function assistantHasVisibleContent(message: Message): boolean {
+  if (message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  return message.content.some(
+    (part) =>
+      (part.type === "text" && part.text.trim() !== "") ||
+      part.type === "toolCall" ||
+      part.type === "image",
+  );
+}
+
+function stoppedAssistantEvent(
+  sessionId: string,
+  messageId: string,
+  partial: boolean,
+  retryPrompt: string | null,
+  seq: number,
+): ChatEvent {
+  return {
+    type: "custom.message",
+    sessionId,
+    messageId: `stopped-${messageId}`,
+    customType: "opencandle-run-cancelled",
+    content: [
+      {
+        type: "text",
+        text: partial
+          ? "Run stopped before it finished its answer."
+          : "Run stopped before it produced an answer.",
+      },
+    ],
+    details: { reason: "aborted", ...(retryPrompt ? { prompt: retryPrompt } : {}) },
+    seq,
+  };
 }
 
 function assistantFailure(message: Message): {

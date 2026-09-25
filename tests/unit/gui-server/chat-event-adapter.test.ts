@@ -945,6 +945,77 @@ describe("sessionEntriesToChatEvents", () => {
     expect(userMessages).toHaveLength(1);
   });
 
+  it("renders a Stop mid answer stream as a stopped turn that keeps the partial answer", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "Stream the NVDA answer",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          ...assistantMessage("NVDA is trading"),
+          stopReason: "aborted",
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "message.completed",
+        messageId: "a1",
+        content: [{ type: "text", text: "NVDA is trading" }],
+      }),
+    );
+    const stopped = events.filter(
+      (event) => event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+    );
+    expect(stopped).toEqual([
+      expect.objectContaining({
+        messageId: "stopped-a1",
+        content: [{ type: "text", text: "Run stopped before it finished its answer." }],
+        details: { reason: "aborted", prompt: "Stream the NVDA answer" },
+      }),
+    ]);
+    // The stopped notice follows the partial answer.
+    expect(events.indexOf(stopped[0]!)).toBeGreaterThan(
+      events.findIndex((event) => event.type === "message.completed" && event.messageId === "a1"),
+    );
+    // Stopping is not a model failure.
+    expect(
+      events.some(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-model-run-failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("renders an aborted turn with no answer text as stopped without an empty bubble", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", { role: "user", content: "hold", timestamp: Date.now() } as Message),
+        messageEntry("a1", {
+          ...assistantMessage(""),
+          content: [],
+          stopReason: "aborted",
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.some((event) => "messageId" in event && event.messageId === "a1")).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "stopped-a1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        details: { reason: "aborted", prompt: "hold" },
+      }),
+    );
+  });
+
   it("does not derive a user bubble when the cancelled marker has no text", () => {
     const events = sessionEntriesToChatEvents(
       [customEntry("cancel-2", "opencandle-run-cancelled", {})],
