@@ -1,3 +1,4 @@
+import { hasRiskFraming } from "./risk-framing.js";
 import type { ProductEvalCase, ProductEvalDimension, ScenarioTemplate } from "./types.js";
 
 const directAnswer: ProductEvalDimension = {
@@ -31,9 +32,11 @@ const missingDataHonesty: ProductEvalDimension = {
 
 const riskFraming: ProductEvalDimension = {
   id: "risk_framing",
-  description: "Names downside, uncertainty, invalidation, or tradeoffs.",
-  requiredPatterns: [
-    /\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss)\b/i,
+  description: "Names downside, uncertainty, invalidation, limitations, or tradeoffs.",
+  // Semantic contract instead of one keyword regex: accepts risk inflections
+  // and limitation framing, rejects directly negated markers. See risk-framing.ts.
+  requiredTextChecks: [
+    { name: "risk framing (unnegated risk/limitation marker)", test: hasRiskFraming },
   ],
   mandatory: true,
 };

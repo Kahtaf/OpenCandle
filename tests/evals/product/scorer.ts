@@ -176,6 +176,12 @@ function scoreDimension(
     }
   }
 
+  for (const check of dimension.requiredTextChecks ?? []) {
+    if (!check.test(text) && !passesFamilyAwareDimension(dimension.id, evalCase, trace, text)) {
+      issues.push(`missing ${check.name}`);
+    }
+  }
+
   for (const pattern of dimension.forbiddenPatterns ?? []) {
     if (pattern.test(text)) {
       issues.push(`forbidden pattern ${pattern}`);

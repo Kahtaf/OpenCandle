@@ -16,6 +16,10 @@ export interface ProductEvalDimension {
   expectedWorkflow?: WorkflowType;
   requiredPatterns?: RegExp[];
   forbiddenPatterns?: RegExp[];
+  // Named text predicates for contracts a single regex cannot express, such as
+  // rejecting a negated marker. Evaluated like requiredPatterns, including the
+  // family-aware fallback.
+  requiredTextChecks?: ProductEvalTextCheck[];
   requiredToolNames?: string[];
   forbiddenToolNames?: string[];
   expectedAskUserCount?: number;
@@ -24,6 +28,11 @@ export interface ProductEvalDimension {
   forbiddenResolvedSymbols?: string[];
   mandatory?: boolean;
   weight?: number;
+}
+
+export interface ProductEvalTextCheck {
+  name: string;
+  test: (text: string) => boolean;
 }
 
 export interface ScenarioTemplate {
