@@ -2843,6 +2843,19 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a reply to an active pay question with a bounded modifier", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you originally pay for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("does not treat a passive dividend-received question as a cost-basis request", async () => {
     const result = await route(
       {
@@ -2851,6 +2864,24 @@ describe("router cost-basis context guard", () => {
         priorTurns: [{ role: "assistant", text: "How much were you paid in AAPL dividends?" }],
       },
       outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not treat a target-price question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$200",
+        priorTurns: [
+          {
+            role: "assistant",
+            text: "What is your target price for AAPL shares bought yesterday?",
+          },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
     );
 
     expect(result.entities.costBasis).toBeUndefined();

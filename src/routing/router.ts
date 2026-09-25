@@ -1460,21 +1460,25 @@ function answersBasisQuestion(
 
 // A question counts as a cost-basis request with an explicit basis field or a
 // personal purchase-price intent. Payment must be active-personal ("did you
-// pay", "had you paid"), so passive "were you paid" receipts do not qualify;
-// personal acquisition may carry its price cue before or after the verb, all
-// within the bounded question. The explicit basis field (including plain
-// "basis") needs no pronoun.
+// pay", "had you originally paid"), so passive "were you paid" receipts do not
+// qualify; the price cue is linked to the user's acquisition in order, not by
+// independent presence. The explicit basis field (including plain "basis")
+// needs no pronoun.
 const COST_BASIS_REQUEST_FORM =
   /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
 const COST_BASIS_REQUEST_FIELD =
   /\b(?:cost\s*basis|basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
+// Bounded active modifiers ("originally") are allowed before the verb, but
+// passive auxiliaries are excluded.
+const ACTIVE_PAY_MODIFIER = String.raw`(?:(?!\b(?:were|was|are|is|be|been|being|get|got)\b)\w+\s+){0,2}`;
 const COST_BASIS_REQUEST_PRICE = new RegExp(
   [
-    String.raw`\b(?:did|do|does)\s+(?:you|i|we)\s+pay(?:ing)?\b`,
-    String.raw`\b(?:had|have|has)\s+(?:you|i|we)\s+paid\b`,
-    String.raw`\b(?:you|i|we)\s+(?:had|have|has)\s+paid\b`,
-    String.raw`(?<!\b(?:were|was|are|is|be|been|being|get|got)\s)\b(?:you|i|we)\s+paid\b`,
-    String.raw`(?=[^.?!]{0,80}\b(?:you|your|i|we)\b)(?=[^.?!]{0,80}\b(?:bought|purchased|acquired)\b)(?=[^.?!]{0,80}\b(?:price|per\s+share|cost|for)\b)`,
+    String.raw`\b(?:did|do|does)\s+(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}pay(?:ing)?\b`,
+    String.raw`\b(?:had|have|has)\s+(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`\b(?:you|i|we)\s+(?:had|have|has)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`(?<!\b(?:were|was|are|is|be|been|being|get|got)\s)\b(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`\b(?:price|per\s+share|cost|for)\b[^.?!]{0,40}\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b`,
+    String.raw`\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b[^.?!]{0,40}\b(?:price|per\s+share|cost|for)\b`,
   ].join("|"),
   "i",
 );
