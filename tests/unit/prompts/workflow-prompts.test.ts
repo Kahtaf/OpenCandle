@@ -353,7 +353,7 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Filter contracts matching: puts");
     expect(prompt).toContain("buying puts to hedge an existing long NVDA share position");
     expect(prompt).toContain("premium as a percent of the stock position");
-    expect(prompt).toContain("1 put contract per 100 shares");
+    expect(prompt).toContain("assuming 100 shares per put contract");
     expect(prompt).toContain("total premium for the required number of contracts");
     expect(prompt).toContain("hedge floor");
     expect(prompt).toContain("collar or put spread");

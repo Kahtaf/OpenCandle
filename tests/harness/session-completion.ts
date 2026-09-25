@@ -5,6 +5,18 @@ import type { AgentTrace, TerminalErrorCategory, TerminalStopReason } from "./ty
 
 /** All live eval entry points share this boundary, before answer scoring. */
 export function assertSessionCompleted(trace: AgentTrace): void {
+  if (
+    trace.customEntries?.some(
+      (entry) =>
+        entry.customType === "opencandle-workflow-complete" &&
+        typeof entry.data === "object" &&
+        entry.data !== null &&
+        "status" in entry.data &&
+        entry.data.status === "failed",
+    )
+  ) {
+    failSessionCompletion(trace, "workflow_failed");
+  }
   const outcome = trace.terminalOutcome;
   const reason = !outcome
     ? "missing_terminal_outcome"
@@ -27,6 +39,7 @@ export function failSessionCompletion(
     | "missing_terminal_outcome"
     | "terminal_error"
     | "empty_answer"
+    | "workflow_failed"
     | `terminal_${TerminalStopReason}`,
 ): never {
   const outcome = trace.terminalOutcome;

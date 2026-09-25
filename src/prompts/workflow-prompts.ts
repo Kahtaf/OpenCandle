@@ -9,6 +9,7 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
+import { buildProtectivePutSizingContract } from "../workflows/protective-put-output-validation.js";
 
 function tag(source: string | undefined): string {
   switch (source) {
@@ -325,9 +326,8 @@ Protective-put hedge guidance:
 - Treat ${s.symbol} as the option-chain underlying.
 - Rank put contracts by protection per dollar of premium: expiration fit, hedge floor, moneyness, liquidity, and premium as a percent of the stock position.
 - For "doesn't cost too much" or similar cost-sensitive language, prefer liquid puts modestly below the current stock price before far-OTM lottery hedges; explain the tradeoff between cheaper premium and weaker protection.
-- If share quantity is provided, use 1 put contract per 100 shares when discussing coverage and contract count.
-- If share quantity is provided, state total premium for the required number of contracts in the ranked table or top-pick explanation.
-- Include the hedge floor: approximate protected stock value at strike, net of premium where possible.
+${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuantity) : "- Ask for owned share quantity before giving personalized whole-contract sizing; verify the actual contract multiplier."}
+- Explain the hedge floor qualitatively; do not claim one numerical whole-position floor when contract coverage differs from owned shares.
 - Mention lower-cost alternatives such as a collar or put spread when outright put premium is high.
 - Long protective puts have premium/decay risk and exercise/exit choices; do not frame assignment risk like a short option sale.
 `
@@ -376,7 +376,7 @@ Response format:
 ${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - State the requested DTE target (${s.dteTarget}) and each candidate's numeric days to expiration alongside its expiry date, so the answer visibly confirms that the selected contracts fit the user's window.
-- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
+- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", qualitative hedge-floor mechanics" : ""}.
 - ${topPickExplanation}
 - Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.${catalystResponseInstruction}
 - Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : isProtectivePutContext ? "protective-put risks (premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost). Do not discuss short-option assignment risk" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Release evaluations now reject workflows that failed validation even when their final draft contains a complete-looking answer.
+
+- Protective-put workflows show whole-contract coverage and uncovered or excess shares, and check displayed premium percentages against the actual stock position.
+
 - Live evaluations now wait for the agent to finish provider retries and reject empty or unsuccessful final answers instead of accepting a partial run.
 
 ### Added

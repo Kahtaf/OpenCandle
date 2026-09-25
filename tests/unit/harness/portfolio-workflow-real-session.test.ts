@@ -6,7 +6,11 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it } from "vitest";
 import { resetConfigCache } from "../../../src/config.js";
 import { listApiKeyProviders } from "../../../src/onboarding/providers.js";
-import { runOpenCandleSession } from "../../harness/opencandle-runner.js";
+import { captureToolEvidence, extractAssistantText } from "../../../src/runtime/prompt-step.js";
+import {
+  drainOpenCandleCustomEntries,
+  runOpenCandleSession,
+} from "../../harness/opencandle-runner.js";
 import { installDeterministicFetchGuard } from "../../helpers/deterministic-fetch-guard.js";
 import {
   type ModelChatRequest,
@@ -323,21 +327,20 @@ describe("portfolio builder real-session evidence guard", () => {
       const modelRuntime = await createModelRuntime(modelServer.baseUrl);
       const sessionManager = SessionManager.create(process.cwd(), harness.sessionDir);
 
-      const result = await runOpenCandleSession({
-        prompt: USER_PROMPT,
-        cwd: process.cwd(),
-        openCandleHome: harness.openCandleHome,
-        modelRuntime,
-        sessionManager,
-        defaultProvider: PROVIDER_ID,
-        defaultModel: MODEL_ID,
-        timeoutMs: 60_000,
-      });
+      await expect(
+        runOpenCandleSession({
+          prompt: USER_PROMPT,
+          cwd: process.cwd(),
+          openCandleHome: harness.openCandleHome,
+          modelRuntime,
+          sessionManager,
+          defaultProvider: PROVIDER_ID,
+          defaultModel: MODEL_ID,
+          timeoutMs: 60_000,
+        }),
+      ).rejects.toThrow("workflow_failed");
 
-      const entries = (result.agentTrace.customEntries ?? []).map((entry) => ({
-        customType: entry.customType,
-        data: entry.data,
-      }));
+      const entries = drainOpenCandleCustomEntries(sessionManager);
       const workflow = summarizeWorkflow(entries);
 
       // 1. The router dispatched the real portfolio workflow.
@@ -360,14 +363,11 @@ describe("portfolio builder real-session evidence guard", () => {
         ),
       ).toBe(false);
 
-      // 4. No tool ever executed, and the trace preserves the fabricated
-      // no-tool draft as the final answer. This is the release symptom: the
-      // evidence guard fails the workflow internally, but the trace/eval sees a
-      // plausible portfolio plus an empty tool sequence.
-      expect(result.agentTrace.toolSequence).toEqual([]);
-      expect(result.agentTrace.finalText).toContain(REPAIR_DRAFT_MARKER);
-      expect(result.evalTrace.toolCalls).toEqual([]);
-      expect(result.evalTrace.classification.workflow).toBe("portfolio_builder");
+      // 4. The harness rejects this failed workflow instead of returning a
+      // scoreable answer. The persisted transcript retains the forensic draft
+      // and proves no tool ran; it remains available for independent review.
+      expect(captureToolEvidence(sessionManager.getEntries())).toEqual([]);
+      expect(extractAssistantText(sessionManager.getEntries())).toContain(REPAIR_DRAFT_MARKER);
 
       // 5. A deterministic, user-visible terminal notice is persisted so the
       // fabricated draft is not presented as a validated answer. It carries the

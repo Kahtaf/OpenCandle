@@ -40,6 +40,18 @@ describe("shared live-eval completion boundary", () => {
     expect(() => assertSessionCompleted(trace("stop"))).not.toThrow();
   });
 
+  it("blocks a failed workflow even when its final assistant message is complete", () => {
+    const failed = trace("stop");
+    failed.customEntries = [
+      {
+        customType: "opencandle-workflow-complete",
+        timestamp: "2026-01-01",
+        data: { status: "failed" },
+      },
+    ];
+    expect(() => assertSessionCompleted(failed)).toThrow("workflow_failed");
+  });
+
   it("cannot borrow a previous prompt's terminal outcome", () => {
     const incomplete = trace("stop");
     delete incomplete.terminalOutcome;

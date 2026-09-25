@@ -142,7 +142,7 @@ export async function runOpenCandleSession(
       );
       customEntries.push(...drained.entries);
       customEntryOffset = drained.nextEntryOffset;
-      assertSessionCompleted(collector.getTrace());
+      assertSessionCompleted({ ...collector.getTrace(), customEntries: drained.entries });
     }
 
     const agentTrace: AgentTrace = {
