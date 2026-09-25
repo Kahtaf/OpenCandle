@@ -184,6 +184,34 @@ function assistantEmptyEntry(): SessionEntry {
   } as SessionEntry;
 }
 
+/** Assistant turn that ended with a provider error (Pi may auto-retry it). */
+function assistantErrorEntry(): SessionEntry {
+  return {
+    type: "message",
+    id: nextId(),
+    parentId: null,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "assistant",
+      content: [],
+      api: "anthropic",
+      provider: "anthropic",
+      model: "claude-test",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "error",
+      errorMessage: "transient upstream failure",
+      timestamp: Date.now(),
+    },
+  } as SessionEntry;
+}
+
 function toolResultEntry(text: string): SessionEntry {
   return {
     type: "message",
@@ -691,6 +719,115 @@ describe("SessionCoordinator workflow runtime ownership", () => {
 
     expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+  });
+
+  it("completes a step whose errored assistant turn Pi auto-retried successfully", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    // Pi persists the errored attempt at 10ms but stays busy while it backs
+    // off and retries; the retry calls a tool and answers, then Pi goes idle.
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => entries.push(assistantToolOnlyEntry("get_stock_quote")), 40);
+        setTimeout(() => entries.push(toolResultEntry("quote result")), 45);
+        setTimeout(() => entries.push(assistantTextEntry("retried workflow response")), 50);
+        setTimeout(() => {
+          idle = true;
+        }, 60);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("auto-retried"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(35);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "auto-retried",
+      status: "completed",
+    });
+    expect(pi.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("fails a step whose errored assistant turn is final once Pi is idle", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => {
+          idle = true;
+        }, 20);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("terminal-error"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ workflow: "terminal-error", status: "failed" }),
+    );
+  });
+
+  it("fails a step when Pi's auto-retry also ends in an error", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => entries.push(assistantErrorEntry()), 40);
+        setTimeout(() => {
+          idle = true;
+        }, 60);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("retry-error"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ workflow: "retry-error", status: "failed" }),
+    );
   });
 
   it("does not treat an older in-flight answer as the queued workflow response", async () => {

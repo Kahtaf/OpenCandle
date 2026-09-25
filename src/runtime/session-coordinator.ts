@@ -151,11 +151,23 @@ function messageContentText(content: unknown): string {
     .trim();
 }
 
+/**
+ * Outcome of the expected prompt's assistant turns so far.
+ *
+ * - `success`: the latest terminal assistant message stopped normally.
+ * - `aborted`: the prompt was aborted. Pi never auto-retries an abort, so this
+ *   is final as soon as it is observed.
+ * - `error`: the latest terminal assistant message ended in an error. Pi may
+ *   still be auto-retrying it (the session stays busy during the backoff and
+ *   retry), so this is only final once the session is idle.
+ */
+type PromptTerminalOutcome = "success" | "aborted" | "error";
+
 function terminalAssistantOutcomeAfterPrompt(
   ctx: QueueContext,
   entryCount: number,
   expectedPrompt?: string,
-): "success" | "failure" | undefined {
+): PromptTerminalOutcome | undefined {
   const entries = readSessionEntries(ctx);
   const promptIndex = entries.findIndex((entry, index) => {
     if (index < entryCount || entry.type !== "message") return false;
@@ -167,16 +179,22 @@ function terminalAssistantOutcomeAfterPrompt(
   });
   if (promptIndex < 0) return undefined;
 
+  // Evaluate the latest terminal assistant message for this prompt, not the
+  // first: Pi keeps an auto-retried error in the transcript and appends the
+  // retry's messages after it.
+  let outcome: PromptTerminalOutcome | undefined;
   for (let index = promptIndex + 1; index < entries.length; index += 1) {
     const entry = entries[index];
     if (entry?.type !== "message") continue;
     const message = entry.message as { role?: unknown; stopReason?: unknown };
-    if (message.role === "user") return undefined;
+    if (message.role === "user") break;
     if (message.role !== "assistant") continue;
-    if (message.stopReason === "stop" || message.stopReason === "length") return "success";
-    if (message.stopReason === "error" || message.stopReason === "aborted") return "failure";
+    if (message.stopReason === "aborted") return "aborted";
+    if (message.stopReason === "stop" || message.stopReason === "length") outcome = "success";
+    else if (message.stopReason === "error") outcome = "error";
+    else outcome = undefined;
   }
-  return undefined;
+  return outcome;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -206,7 +224,9 @@ async function waitForPromptSettlement(
       options.entriesBeforePrompt !== undefined &&
       !hasPendingMessages(ctx) &&
       terminalAssistantOutcomeAfterPrompt(ctx, options.entriesBeforePrompt, options.expectedPrompt);
-    if (terminalOutcome === "failure") {
+    // An error is terminal only once Pi is idle: until then it may be
+    // auto-retrying the failed turn, and the retry's answer is what counts.
+    if (terminalOutcome === "aborted" || (terminalOutcome === "error" && ready)) {
       throw new Error("workflow_prompt_failed");
     }
     if (!ready) {
