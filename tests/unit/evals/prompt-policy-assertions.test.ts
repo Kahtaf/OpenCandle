@@ -154,6 +154,71 @@ describe("prompt-policy final answer assertions", () => {
     expect(result.passed).toBe(true);
   });
 
+  describe("bottom-line structural portfolio read contract", () => {
+    const assertion = "starts with a bottom-line structural portfolio read";
+
+    // Faithful excerpt of the 478d3515 canonical-run answer (frozen-portfolio-review-not-builder)
+    // that the keyword checker failed because it only matched the unhyphenated "bottom line".
+    const hyphenatedHeadingOpening =
+      "Here is our critical evaluation of a 60/40 portfolio for the next year.\n\n**Bottom-Line Structural Read**\n\nA 60/40 portfolio, comprised of 60% equities and 40% fixed income, offers a historically balanced approach designed for growth with a moderating influence from bonds. For the next year, its performance will hinge on the interplay between inflation, interest rate policy, and corporate earnings growth.\n\n**Sleeve-by-Sleeve Implications (Next 12 Months)**\n\n* Equity sleeve risks: valuations remain sensitive to rates.";
+
+    it.each([
+      [
+        "a lead-in sentence followed by a hyphenated bold bottom-line heading",
+        hyphenatedHeadingOpening,
+      ],
+      [
+        "a markdown BLUF heading",
+        "## BLUF\nThe 60/40 portfolio carries more duration and equity-valuation risk than its label implies.\n\n## Sleeves\nDetail.",
+      ],
+      [
+        "an inline verdict on the allocation",
+        "Verdict: this allocation is reasonably diversified but concentrated in US large-cap equity risk.\n\nDetails follow.",
+      ],
+      [
+        "an opening structural read with no explicit marker",
+        "The 60/40 portfolio is structurally exposed to a joint stock-bond drawdown if inflation re-accelerates.\n\n### Sleeves\nDetail.",
+      ],
+      [
+        "a read that explicitly declines to build a new portfolio",
+        "Rather than building a new portfolio, the bottom line on this 60/40 allocation is that its bond sleeve now pulls its weight.\n\nDetail.",
+      ],
+    ])("passes %s", (_label, text) => {
+      expect(evaluateFinalAnswerAssertion(assertion, trace(text)).passed).toBe(true);
+    });
+
+    it.each([
+      [
+        "an opening builder allocation",
+        "Here is a portfolio you could build: allocate 40% to a total US stock fund, 20% to international stocks, and 40% to bonds.\n\n**Bottom line**: this portfolio balances risk and reward.",
+      ],
+      [
+        "an opening budget question",
+        "How much do you plan to invest in this portfolio?\n\n**Bottom line**: the portfolio risk depends on your budget.",
+      ],
+      [
+        "a bottom line that only appears at the end",
+        "Markets have been through a volatile stretch as central banks wrestled with inflation and growth slowed across several regions.\n\n### Equities\nEarnings held up better than expected.\n\n### Bonds\nYields rose sharply.\n\n**Bottom line**: the 60/40 portfolio faces elevated risk next year.",
+      ],
+      [
+        "a negated bottom line",
+        "There is no bottom line here without more data.\n\nThe 60/40 portfolio details follow later.",
+      ],
+      ["an empty answer", ""],
+    ])("fails %s", (_label, text) => {
+      expect(evaluateFinalAnswerAssertion(assertion, trace(text)).passed).toBe(false);
+    });
+
+    it("applies the same contract to the macro risk/reward variant", () => {
+      expect(
+        evaluateFinalAnswerAssertion(
+          "starts with a bottom-line portfolio risk/reward read",
+          trace(hyphenatedHeadingOpening),
+        ).passed,
+      ).toBe(true);
+    });
+  });
+
   const hedgeSizingAssertion =
     "sizes hedge from 450 shares into 4 puts plus residual 50 shares or explicitly explains rounding";
 

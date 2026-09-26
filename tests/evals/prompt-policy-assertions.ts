@@ -532,31 +532,14 @@ function evaluateManifestAssertion(
     lowerAssertion.includes("bottom-line portfolio risk/reward") ||
     lowerAssertion.includes("bottom-line structural portfolio read")
   ) {
-    const startsWithStructuralRead = /^\s*(?:\*\*)?structural (?:allocation|portfolio) read/i.test(
-      trace.text,
-    );
-    const leadingParagraph = trace.text.split(/\n\s*\n/, 1)[0] ?? "";
-    const startsWithPortfolioOutlook =
-      /\bportfolio\b/i.test(leadingParagraph) &&
-      /\b(?:our read|suggests?|faces?|expect(?:s|ed)?|outlook)\b/i.test(leadingParagraph) &&
-      /\b(?:risk|reward|returns?|volatility|structural)\b/i.test(leadingParagraph);
-    const openingStructuralRead =
-      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
-      /structural (?:allocation|portfolio) read/i.test(trace.text.slice(0, 600));
-    const openingPortfolioRead =
-      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
-      /\b(?:risk|reward|returns?|volatility|structural|challenging)\b/i.test(
-        trace.text.slice(0, 600),
-      ) &&
-      /\b(?:commitment|analyst view|expect(?:s|ed)?|faces?|outlook|likely|positioned)\b/i.test(
-        trace.text.slice(0, 600),
-      );
-    return startsWithStructuralRead ||
-      startsWithPortfolioOutlook ||
-      openingStructuralRead ||
-      openingPortfolioRead
-      ? requires(/portfolio/, /risk|reward|returns?|volatility|structural|challenging/)
-      : requires(/bottom line/, /portfolio/, /risk|reward|structural/);
+    const passed = opensWithBottomLineStructuralRead(trace.text);
+    return {
+      passed,
+      reason: passed
+        ? "opening block (after at most one short lead-in sentence) gives a bottom-line or structural read of the portfolio"
+        : "expected the opening block (after at most one short lead-in sentence) to give a bottom-line or structural portfolio read, not a question, budget request, builder allocation, or unrelated preamble",
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("current macro evidence")) {
     return requiredTerms(
@@ -631,4 +614,96 @@ function evaluateManifestAssertion(
     return forbids(/analyst view|commitment|confidence band|invalidation level|reasoning chain/);
   }
   return undefined;
+}
+
+// General bottom-line markers: the phrase itself (any spacing/hyphenation), the BLUF
+// acronym, "verdict", and "overall/net read|assessment|view|take" summary labels.
+const BOTTOM_LINE_MARKER =
+  /\bbottom[\s-]*line\b|\bbluf\b|\bverdict\b|\b(?:overall|net) (?:read|assessment|view|take)\b/;
+const NEGATED_BOTTOM_LINE_MARKER =
+  /\bno (?:clear |real )?(?:bottom[\s-]*line|bluf|verdict|(?:overall|net) (?:read|assessment|view|take))\b/g;
+const PORTFOLIO_SUBJECT =
+  /\bportfolios?\b|\ballocations?\b|\b\d{1,3}\s*\/\s*\d{1,3}\b|\bsleeves?\b/;
+const STRUCTURAL_CHARACTERIZATION =
+  /\brisks?\b|\brewards?\b|\breturns?\b|\bvolatil|\bdiversif|\bconcentrat|\bduration\b|\bcorrelat|\bdrawdowns?\b|\bstructur|\bbalanc|\bhedg|\bexpos/;
+const BUDGET_REQUEST =
+  /\bbudget\b|\bhow much\b[^.?!]{0,30}\b(?:invest|allocate|put in)\b|\bamount (?:you|to)\b[^.?!]{0,20}\binvest\b/;
+const BUILDER_OPENING =
+  /\b(?:build|construct)(?:ing)?\b[^.?!]{0,40}\bportfolio\b|\bportfolio\b[^.?!]{0,40}\b(?:build|construct)\b|\ballocat(?:e|ing)\s+\d{1,3}\s*%/;
+
+function normalizeOpeningBlock(block: string): string {
+  return block
+    .replace(/[*_#>`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isHeadingOnlyBlock(block: string): boolean {
+  if (block.includes("\n")) return false;
+  if (/^#{1,6}\s/.test(block) || /^\*\*[^*]+\*\*:?$/.test(block)) return true;
+  const plain = normalizeOpeningBlock(block);
+  return plain.length > 0 && plain.length <= 80 && !/[.!?]$/.test(plain);
+}
+
+function isShortLeadInSentence(block: string): boolean {
+  const plain = normalizeOpeningBlock(block);
+  return (
+    !block.includes("\n") &&
+    plain.length > 0 &&
+    plain.length <= 200 &&
+    !/[.!?:;]\s+\S/.test(plain) &&
+    !isHeadingOnlyBlock(block)
+  );
+}
+
+const NEGATED_BUILDING =
+  /\b(?:not|never|rather than|instead of|without)\b[^.?!]{0,20}\b(?:build|construct)\w*/g;
+
+function isRejectedOpening(plain: string): boolean {
+  const firstSentence = plain.split(/(?<=[.!?])\s/, 1)[0] ?? "";
+  const asksUser = /\?$/.test(firstSentence) && /\byour?\b/.test(firstSentence);
+  return (
+    asksUser ||
+    BUDGET_REQUEST.test(plain) ||
+    BUILDER_OPENING.test(plain.replace(NEGATED_BUILDING, ""))
+  );
+}
+
+function isBottomLineStructuralRead(plain: string): boolean {
+  if (!PORTFOLIO_SUBJECT.test(plain)) return false;
+  const withoutNegatedMarkers = plain.replace(NEGATED_BOTTOM_LINE_MARKER, "");
+  return BOTTOM_LINE_MARKER.test(withoutNegatedMarkers) || STRUCTURAL_CHARACTERIZATION.test(plain);
+}
+
+/**
+ * "Starts with a bottom-line structural portfolio read": the opening unit (one heading plus its
+ * first paragraph, or the first paragraph) must read the portfolio as a whole, either under a
+ * bottom-line marker or as a risk/reward/structure characterization. At most one short lead-in
+ * sentence may precede it. Openings that ask a question, request a budget, or start building a
+ * new allocation fail, as does an answer whose bottom line only appears later.
+ */
+export function opensWithBottomLineStructuralRead(text: string): boolean {
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  let index = 0;
+  const first = blocks[0];
+  if (first === undefined) return false;
+  if (isRejectedOpening(normalizeOpeningBlock(first))) return false;
+  if (
+    isShortLeadInSentence(first) &&
+    !isBottomLineStructuralRead(normalizeOpeningBlock(first)) &&
+    blocks.length > 1
+  ) {
+    index = 1;
+  }
+  const leadBlock = blocks[index] ?? "";
+  const leadUnit =
+    isHeadingOnlyBlock(leadBlock) && blocks[index + 1] !== undefined
+      ? `${leadBlock}\n${blocks[index + 1]}`
+      : leadBlock;
+  const plain = normalizeOpeningBlock(leadUnit);
+  return !isRejectedOpening(plain) && isBottomLineStructuralRead(plain);
 }
