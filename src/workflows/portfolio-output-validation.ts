@@ -114,7 +114,14 @@ export function createPortfolioEvidenceValidation(
 
   return {
     validate(_rawText: string, context?: PromptValidationContext): string[] {
-      const evidence = [...(context?.currentEvidence ?? []), ...(context?.priorEvidence ?? [])];
+      // Pricing gathered in any completed step still prices the candidates,
+      // but risk_review must run its own risk tools: crypto history doubles as
+      // pricing and risk evidence, so a fetch_candidates history call must not
+      // let the risk step pass without any risk-review tool call.
+      const evidence =
+        options.step === "fetch_candidates"
+          ? [...(context?.currentEvidence ?? []), ...(context?.priorEvidence ?? [])]
+          : (context?.currentEvidence ?? []);
       if (hasUsableToolEvidence(evidence, requiredTools)) return [];
       return [
         options.step === "fetch_candidates"

@@ -132,6 +132,53 @@ describe("createPortfolioEvidenceValidation", () => {
     expect(errors).toEqual([]);
   });
 
+  it("does not let crypto history fetched in an earlier step satisfy risk_review for a mixed scope", () => {
+    const validation = createPortfolioEvidenceValidation({
+      step: "risk_review",
+      assetScope: "stocks_and_crypto",
+    });
+
+    const errors = validation.validate(
+      "Crypto drawdown reviewed.",
+      context([toolEvidence("get_stock_quote", "ok")], [toolEvidence("get_crypto_history", "ok")]),
+    );
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/no usable risk or correlation evidence/i);
+  });
+
+  it("does not let risk evidence from an earlier step satisfy risk_review for an equity scope", () => {
+    const validation = createPortfolioEvidenceValidation({
+      step: "risk_review",
+      assetScope: "stocks_only",
+    });
+
+    const errors = validation.validate(
+      "Risk reviewed.",
+      context([], [toolEvidence("analyze_risk", "ok"), toolEvidence("analyze_correlation", "ok")]),
+    );
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/no usable risk or correlation evidence/i);
+  });
+
+  it("accepts a crypto portfolio whose risk_review makes its own history call", () => {
+    const validation = createPortfolioEvidenceValidation({
+      step: "risk_review",
+      assetScope: "crypto_only",
+    });
+
+    const errors = validation.validate(
+      "Crypto drawdown reviewed.",
+      context(
+        [toolEvidence("get_crypto_history", "ok")],
+        [toolEvidence("get_crypto_history", "ok")],
+      ),
+    );
+
+    expect(errors).toEqual([]);
+  });
+
   it("does not count crypto history as risk evidence for a stock-only scope", () => {
     const validation = createPortfolioEvidenceValidation({
       step: "risk_review",
