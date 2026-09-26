@@ -80,11 +80,11 @@ describe("checkUrlWithRetry", () => {
     });
     expect(result.outcome).toBe("unverified");
     expect(result.detail).toContain("fetch failed");
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
-  it("recovers when a retry succeeds after a transient error", async () => {
+  it("verifies by GET after a HEAD transport error", async () => {
     const fetchImpl = vi
       .fn()
       .mockRejectedValueOnce(new Error("fetch failed"))
@@ -93,6 +93,6 @@ describe("checkUrlWithRetry", () => {
     const result = await checkUrlWithRetry({ url: "https://x.test", fetchImpl, sleep });
     expect(result.outcome).toBe("ok");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 });

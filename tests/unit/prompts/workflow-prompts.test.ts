@@ -93,12 +93,13 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("conservative");
   });
 
-  it("includes tool call instructions for default fund-building-block scope", () => {
+  it("includes pricing tool instructions for default fund-building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
     expect(prompt).toContain("get_stock_quote");
     expect(prompt).not.toContain("get_company_overview");
-    expect(prompt).toContain("analyze_risk");
-    expect(prompt).toContain("analyze_correlation");
+    // Risk tools belong to the later risk_review stage, not candidate acquisition.
+    expect(prompt).not.toContain("analyze_risk");
+    expect(prompt).not.toContain("analyze_correlation");
   });
 
   it("includes response format instructions", () => {
@@ -106,12 +107,14 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("assumption");
   });
 
-  it("requires a direct bottom-line portfolio commitment after assumptions", () => {
+  it("requests dated candidate evidence without the final portfolio format", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
-    expect(prompt).toContain('Then start the analysis with "Bottom line:"');
-    expect(prompt).toContain("directly say what portfolio you would build");
-    expect(prompt).toContain("horizon-specific risks");
-    expect(prompt).not.toContain("beginning exactly");
+    expect(prompt).toContain("current price returned by the quote tool and its as-of date");
+    expect(prompt).toContain("data gap");
+    expect(prompt).not.toContain('"Bottom line:"');
+    expect(prompt).not.toContain("Present an allocation table");
+    expect(prompt).not.toContain("rebalance cadence");
+    expect(prompt).not.toContain("Why this fits the horizon");
   });
 
   it("includes position count", () => {
@@ -154,8 +157,8 @@ describe("buildPortfolioPrompt", () => {
     const prompt = buildPortfolioPrompt(resolution);
     expect(prompt).not.toContain("get_company_overview");
     expect(prompt).toContain("get_stock_quote");
-    expect(prompt).toContain("analyze_risk");
-    expect(prompt).toContain("analyze_correlation");
+    expect(prompt).not.toContain("analyze_risk");
+    expect(prompt).not.toContain("analyze_correlation");
   });
 
   it("includes get_company_overview for stock-scoped portfolio", () => {
@@ -173,10 +176,10 @@ describe("buildPortfolioPrompt", () => {
     );
 
     expect(prompt).toContain("get_crypto_price");
-    expect(prompt).toContain("get_crypto_history");
+    expect(prompt).not.toContain("get_crypto_history");
     expect(prompt).toContain("canonical CoinGecko id");
-    expect(prompt).toContain("Do not send cryptocurrencies to stock-only");
-    expect(prompt).toContain("Use analyze_correlation only across the stock candidates");
+    expect(prompt).not.toContain("Do not send cryptocurrencies to stock-only");
+    expect(prompt).not.toContain("Use analyze_correlation only across the stock candidates");
   });
 
   it("does not include get_company_overview for diversified fund building-block scope", () => {
@@ -196,13 +199,8 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("international equity");
     expect(prompt).toContain("short-duration or cash-like stability");
     expect(prompt).toContain("horizons under 5 years");
-    expect(prompt).toContain("current price used");
     expect(prompt).toContain("role");
     expect(prompt).toContain("do not paste company descriptions");
-    expect(prompt).toContain("Why this fits the horizon");
-    expect(prompt).toContain("rebalance cadence");
-    expect(prompt).toContain("low-cost/liquid implementation");
-    expect(prompt).toContain("tax/account caveats");
   });
 });
 
@@ -355,7 +353,7 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Filter contracts matching: puts");
     expect(prompt).toContain("buying puts to hedge an existing long NVDA share position");
     expect(prompt).toContain("premium as a percent of the stock position");
-    expect(prompt).toContain("1 put contract per 100 shares");
+    expect(prompt).toContain("assuming 100 shares per put contract");
     expect(prompt).toContain("total premium for the required number of contracts");
     expect(prompt).toContain("hedge floor");
     expect(prompt).toContain("collar or put spread");

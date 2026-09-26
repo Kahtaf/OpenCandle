@@ -207,18 +207,73 @@ export function appendRunIndexEntry(input: {
   return path;
 }
 
-export function summarizeReleaseResults(results: SuiteResult[]): {
+export interface ReleaseSummary {
   exitCode: number;
   rows: Array<SuiteResult & { status: "PASS" | "FAIL" }>;
-} {
+  problems: string[];
+}
+
+export function summarizeReleaseResults(results: SuiteResult[]): ReleaseSummary {
   const rows = results.map((result) => ({
     ...result,
-    status: result.exitCode === 0 ? ("PASS" as const) : ("FAIL" as const),
+    status: isCleanExit(result.exitCode) ? ("PASS" as const) : ("FAIL" as const),
   }));
+
+  const problems: string[] = [];
+  if (results.length === 0) {
+    problems.push("no suite results were provided");
+  }
+
+  const counts = new Map<string, number>();
+  for (const result of results) {
+    counts.set(result.suite, (counts.get(result.suite) ?? 0) + 1);
+    if (!Number.isInteger(result.exitCode)) {
+      problems.push(
+        `suite "${result.suite}" returned a non-integer exit code (${String(result.exitCode)})`,
+      );
+    }
+  }
+
+  const expected = new Set<string>(RELEASE_SEQUENCE);
+  for (const suite of RELEASE_SEQUENCE) {
+    const count = counts.get(suite) ?? 0;
+    if (count === 0) {
+      problems.push(`missing result for suite "${suite}"`);
+    } else if (count > 1) {
+      problems.push(`duplicate results for suite "${suite}" (${count} found)`);
+    }
+  }
+  for (const suite of counts.keys()) {
+    if (!expected.has(suite)) {
+      problems.push(`unexpected suite "${suite}"`);
+    }
+  }
+
   return {
     rows,
-    exitCode: rows.some((row) => row.exitCode !== 0) ? 1 : 0,
+    problems,
+    exitCode: problems.length === 0 && rows.every((row) => row.status === "PASS") ? 0 : 1,
   };
+}
+
+function isCleanExit(exitCode: number): boolean {
+  return Number.isInteger(exitCode) && exitCode === 0;
+}
+
+/**
+ * Collapses a `spawnSync` result into the exit code the front door should
+ * propagate. A null status means the child was signaled, timed out, or failed
+ * to spawn; every one of those is a failure, never a clean exit. A non-null
+ * signal is authoritative even if a contradictory status of 0 is present.
+ */
+export function resolveChildExitCode(result: {
+  status: number | null;
+  signal?: NodeJS.Signals | null;
+  error?: unknown;
+}): number {
+  if (result.error) return 1;
+  if (result.signal) return 1;
+  return result.status ?? 1;
 }
 
 function command(

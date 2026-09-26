@@ -10,6 +10,7 @@ import {
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
+import { getStateDbPath } from "../../src/infra/opencandle-paths.js";
 import type {
   AnswerContractId,
   CapabilityGapId,
@@ -30,13 +31,16 @@ import {
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
 } from "./planning-evidence.js";
+import { assertSessionCompleted, failSessionCompletion } from "./session-completion.js";
 import {
   ANSWER_CONTRACT_REGISTRY,
   type FinalAnswerField,
   runStructuredChecks,
 } from "./structured-checks.js";
+import { classifyTerminalError } from "./terminal-outcome.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
+import { readWorkflowFailureEvents, summarizeWorkflowFailure } from "./workflow-failure-summary.js";
 
 const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
   "options_screener",
@@ -121,11 +125,18 @@ export async function runOpenCandleSession(
     for (const [promptIndex, prompt] of prompts.entries()) {
       collector.setPromptIndex(promptIndex);
       const sessionManager = session.sessionManager;
-      await promptAndWaitForSettle(session, prompt, {
-        resolveSettleGraceMs: () =>
-          options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
-        timeoutMs: options.timeoutMs ?? 900_000,
-      });
+      try {
+        await promptAndWaitForSettle(session, prompt, {
+          resolveSettleGraceMs: () =>
+            options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
+          timeoutMs: options.timeoutMs ?? 900_000,
+        });
+      } catch (error) {
+        failSessionCompletion(
+          collector.getTrace(),
+          classifyTerminalError(error instanceof Error ? error.message : undefined, undefined),
+        );
+      }
       const drained = drainOpenCandleCustomEntries(
         session.sessionManager,
         customEntryOffset,
@@ -133,12 +144,28 @@ export async function runOpenCandleSession(
       );
       customEntries.push(...drained.entries);
       customEntryOffset = drained.nextEntryOffset;
+      // The durable workflow event log lives in the harness home, which is
+      // removed in `finally`; summarize why a workflow failed while it exists.
+      const promptWorkflowFailure = summarizeWorkflowFailure({
+        customEntries: drained.entries,
+        eventLog: readWorkflowFailureEvents(getStateDbPath()),
+      });
+      assertSessionCompleted({
+        ...collector.getTrace(),
+        customEntries: drained.entries,
+        ...(promptWorkflowFailure === undefined ? {} : { workflowFailure: promptWorkflowFailure }),
+      });
     }
 
+    const workflowFailure = summarizeWorkflowFailure({
+      customEntries,
+      eventLog: readWorkflowFailureEvents(getStateDbPath()),
+    });
     const agentTrace: AgentTrace = {
       ...collector.getTrace(),
       ...(tagsPromptIndex ? { prompts } : {}),
       customEntries,
+      ...(workflowFailure === undefined ? {} : { workflowFailure }),
     };
     return {
       agentTrace,
@@ -220,7 +247,14 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
       answer: interaction.answer,
     })),
     text: agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
+    ...(agentTrace.retryEvents === undefined ? {} : { retryEvents: agentTrace.retryEvents }),
+    ...(agentTrace.terminalOutcome === undefined
+      ? {}
+      : { terminalOutcome: agentTrace.terminalOutcome }),
     customEntries: agentTrace.customEntries,
+    ...(agentTrace.workflowFailure === undefined
+      ? {}
+      : { workflowFailure: agentTrace.workflowFailure }),
   };
 }
 
@@ -263,6 +297,8 @@ async function promptAndWaitForSettle(
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let promptFinished = false;
+    let closed = false;
     let unsub = () => {};
     const timeoutTimer = setTimeout(() => {
       cleanup();
@@ -270,6 +306,7 @@ async function promptAndWaitForSettle(
     }, options.timeoutMs);
 
     const cleanup = () => {
+      closed = true;
       clearTimeout(timeoutTimer);
       if (settleTimer) {
         clearTimeout(settleTimer);
@@ -286,8 +323,12 @@ async function promptAndWaitForSettle(
     };
 
     const finishAfterGrace = () => {
+      if (closed) return;
       cancelSettle();
       settleTimer = setTimeout(() => {
+        // agent_end precedes Pi retry backoff and compaction. Only a fully
+        // settled session can be captured or disposed by the harness.
+        if (!promptFinished || session.isIdle === false) return;
         cleanup();
         resolve();
       }, options.resolveSettleGraceMs());
@@ -297,18 +338,28 @@ async function promptAndWaitForSettle(
       if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
         cancelSettle();
       }
-      if (event.type === "tool_execution_start") {
+      if (
+        event.type === "tool_execution_start" ||
+        event.type === "auto_retry_start" ||
+        event.type === "agent_start"
+      ) {
         cancelSettle();
       }
-      if (event.type === "agent_end") {
+      if ((event.type === "agent_end" && !event.willRetry) || event.type === "agent_settled") {
         finishAfterGrace();
       }
     });
 
-    void session.prompt(prompt).catch((error: unknown) => {
-      cleanup();
-      reject(error);
-    });
+    void session
+      .prompt(prompt)
+      .then(() => {
+        promptFinished = true;
+        finishAfterGrace();
+      })
+      .catch((error: unknown) => {
+        cleanup();
+        reject(error);
+      });
   });
 }
 
@@ -462,8 +513,9 @@ function planningTelemetryFromTrace(
           answerText: finalText,
           finalAnswerMetadata: {
             commitmentMode,
-            finalFields: inferFinalAnswerFieldsForEval(finalText),
-            sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords),
+            finalFields: inferFinalAnswerFieldsForEval(finalText, taskFamily),
+            freshness: inferFreshnessForEval(finalText),
+            sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords, taskFamily),
             disclosedProviderStatuses: inferDisclosedProviderStatusesForEval(
               finalText,
               evidenceRecords,
@@ -501,13 +553,18 @@ function planningTelemetryFromTrace(
   };
 }
 
-function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
+function inferFinalAnswerFieldsForEval(text: string, taskFamily?: string): FinalAnswerField[] {
   const lower = text.toLowerCase();
   const fields: FinalAnswerField[] = [];
+  const portfolioReviewShape =
+    taskFamily === "portfolio_review" &&
+    hasPortfolioReviewSubstantiveAssessment(lower) &&
+    hasPortfolioReviewDownside(lower);
   if (
     /\b(bottom line|framework|checklist|workflow|how it works|mental model|main risks?|steps?)\b/.test(
       lower,
-    )
+    ) ||
+    (portfolioReviewShape && hasPortfolioReviewSections(lower))
   ) {
     fields.push("framework_or_checklist");
   }
@@ -520,8 +577,12 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   if (/\b(buy|sell|hold|avoid|trim|add|recommend|bottom line: (?:yes|no))\b/.test(lower)) {
     fields.push("clear_commitment");
   }
+  if (portfolioReviewShape) {
+    fields.push("clear_commitment");
+  }
   if (
-    /\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)
+    /\b(unavailable|missing|cannot verify|not available|no live|unknown)\b/.test(lower) ||
+    disclosesObservedDataGap(lower)
   ) {
     fields.push("data_gap_disclosure");
   }
@@ -532,7 +593,7 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   ) {
     fields.push("data_gap_disclosure");
   }
-  if (/\b(as of|market closed|last trading day|freshness|quote date)\b/.test(lower)) {
+  if (inferFreshnessForEval(text) !== undefined) {
     fields.push("freshness_disclosure");
   }
   if (/\b(source|coverage|filing|news|reddit|twitter|x\/twitter)\b/.test(lower)) {
@@ -572,11 +633,100 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   return [...new Set(fields)];
 }
 
+/**
+ * Heuristic eval metadata for observed freshness only. It records a fact that
+ * is literally present in the final answer (an as-of ISO date, explicit
+ * market-closed wording, or a last-trading-day date) and never uses the wall
+ * clock or invents a timestamp. Expiry dates, generic "freshness" words, bare
+ * "last trading day" headings/phrases, and empty headings do not qualify. The
+ * field and object are derived from this same function so they always agree.
+ * This is not native production metadata.
+ */
+function inferFreshnessForEval(
+  text: string,
+): { asOfDate?: string; marketStatus?: string; lastTradingDay?: string } | undefined {
+  const freshness: { asOfDate?: string; marketStatus?: string; lastTradingDay?: string } = {};
+  const asOf = /\bas of\s+(\d{4}-\d{2}-\d{2})(?:T[0-9:.+-]+Z?)?/i.exec(text);
+  if (asOf?.[1]) {
+    freshness.asOfDate = asOf[1];
+  }
+  if (
+    /\bmarket[- ]closed\b/i.test(text) ||
+    /\bmarkets?\s+(?:is|are|was|were|has been|have been)\s+closed\b/i.test(text)
+  ) {
+    freshness.marketStatus = "closed";
+  }
+  const lastTradingDay = /\blast trading day\b\s*[:(]?\s*(\d{4}-\d{2}-\d{2})/i.exec(text);
+  if (lastTradingDay?.[1]) {
+    freshness.lastTradingDay = lastTradingDay[1];
+  }
+  return Object.keys(freshness).length > 0 ? freshness : undefined;
+}
+
+/**
+ * Heuristic review-shape read for `portfolio_review` only. It looks for a
+ * substantive evaluation sentence about the portfolio/allocation/sleeve plus
+ * downside context. This is deliberately a text heuristic, not a semantic
+ * parser: it does not establish that a trade recommendation was made, and it
+ * never runs for other task families. Headings and bare keyword fragments do
+ * not count as an evaluation sentence.
+ */
+function hasPortfolioReviewSubstantiveAssessment(lower: string): boolean {
+  const sentences = lower
+    .split(/\n+/)
+    .filter((line) => !/^\s*#{1,6}\s/.test(line))
+    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .map((sentence) => sentence.replace(/[*_#]/g, " ").replace(/\s+/g, " ").trim())
+    .filter((sentence) => sentence.length > 0);
+  return sentences.some((sentence) => {
+    const wordCount = sentence.split(" ").filter(Boolean).length;
+    if (wordCount < 8) return false;
+    const subject =
+      /\b(?:portfolio|allocation|allocat\w*|sleeve|asset mix|equity|equities|fixed[- ]income|bonds?|stocks?)\b/.test(
+        sentence,
+      );
+    const judgment =
+      /\b(?:faces?|facing|offers?|contends?|expected|likely|tested|challenging|rewarding|attractive|compelling|defensible|reasonable|effective|diversif\w*|pressure[sd]?|headwinds?|favou?rs?|prefers?|remains?|positioned|depends?|provides?|carries)\b/.test(
+        sentence,
+      );
+    return subject && judgment;
+  });
+}
+
+function hasPortfolioReviewDownside(lower: string): boolean {
+  return /\b(?:risk|risks|downside|downsides|headwinds?|drawdown|volatility|loss|pressured?|slowdown|challenging|uncertain|tested)\b/.test(
+    lower,
+  );
+}
+
+function hasPortfolioReviewSections(lower: string): boolean {
+  return /\b(?:implications?|risks?|downsides?|opportunit(?:y|ies)|watchlist|invalidation|assessment|conclusion|outlook)\b/.test(
+    lower,
+  );
+}
+
+/**
+ * Matches singular/plural "data gap" mentions only when the answer is not
+ * claiming there are none. A positive "no data gaps" statement must not be
+ * recorded as a disclosure of observed provider failures.
+ */
+function disclosesObservedDataGap(lower: string): boolean {
+  for (const match of lower.matchAll(/\bdata gaps?\b/g)) {
+    const before = lower.slice(Math.max(0, (match.index ?? 0) - 48), match.index ?? 0);
+    const negated = /\b(?:no|without|zero|free of|lacks?|lacking|lacked)\s+[a-z0-9%.\s-]*$/i.test(
+      before,
+    );
+    if (!negated) return true;
+  }
+  return false;
+}
+
 function inferSourceCoverageForEval(
   text: string,
   evidenceRecords: PlanningEvidenceRecord[],
+  taskFamily?: string,
 ): { sources: string[] } | undefined {
-  const fields = inferFinalAnswerFieldsForEval(text);
+  const fields = inferFinalAnswerFieldsForEval(text, taskFamily);
   if (!fields.includes("source_coverage")) return undefined;
   const sources = evidenceRecords.map(
     (record) => record.source.toolName ?? record.source.provider ?? record.evidenceType,
@@ -589,7 +739,7 @@ function inferDisclosedProviderStatusesForEval(
   evidenceRecords: PlanningEvidenceRecord[],
 ): string[] | undefined {
   if (
-    !/\b(unavailable|missing|skipped|credential|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(
+    !/\b(unavailable|missing|skipped|credentials?|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(
       text,
     )
   ) {

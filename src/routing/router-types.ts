@@ -85,6 +85,10 @@ export interface RouterLlmClient {
   /**
    * Run a single prompt → text completion. Router parses the returned text
    * as JSON; the client is not responsible for structured-output parsing.
+   *
+   * `signal` carries the run's cancellation. Real clients must forward it to
+   * the underlying HTTP request so a stopped run closes the connection; callers
+   * that omit it keep the previous behavior.
    */
-  complete(prompt: string): Promise<string>;
+  complete(prompt: string, signal?: AbortSignal): Promise<string>;
 }

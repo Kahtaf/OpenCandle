@@ -288,6 +288,8 @@ describe("policy cards", () => {
     expect(rendered).toContain("Do not build a new portfolio");
     expect(rendered).toContain("Structural allocation read");
     expect(rendered).toContain("rebalance");
+    // A review-only request must not be turned into a fixed adjustment section.
+    expect(rendered).not.toMatch(/use sections for[^.]*Actionable adjustment/i);
     expect(
       renderPolicyCardForPlanning({
         ...portfolioPlanning,
@@ -425,6 +427,35 @@ describe("policy cards", () => {
         behaviorMode: "observe_only",
       }),
     ).toBe("");
+  });
+
+  it("states the protective-put expiration floor contract for covered shares in the rendered policy", () => {
+    const optionsPlanning = planning({
+      taskFamily: "options_strategy",
+      commitmentMode: "decision",
+      policyCardId: "options_strategy",
+      evidencePlanId: "placeholder_options_strategy",
+      answerContractId: "options_strategy",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+    });
+
+    const rendered = renderPolicyCardForPlanning(optionsPlanning);
+
+    // The put's contractual sell right at the strike is the observable floor.
+    expect(rendered).toContain("right to sell");
+    // A single strike-minus-premium floor is gated on fully matched coverage.
+    expect(rendered).toContain("strike minus the premium");
+    expect(rendered).toContain("fully match the owned shares per covered share");
+    // Mismatched coverage must not be collapsed into one per-owned-share floor.
+    expect(rendered).toContain("do not quote a single numerical per-owned-share floor");
+    expect(rendered).toContain("surplus long put exposure");
+    // The standalone long-put loss is the premium; the combined position loss is larger.
+    expect(rendered).toContain("put leg");
+    expect(rendered).toContain("combined stock-plus-put");
+    // Extra owned shares stay exposed; excess contracts are tracked separately.
+    expect(rendered).toContain("remain fully exposed");
   });
 
   it("renders backtest policy only after the slice leaves observe-only mode", () => {

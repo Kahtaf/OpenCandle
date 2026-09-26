@@ -51,7 +51,7 @@ export function createTwitterSentimentTool(
     description:
       "Fetch recent tweets for a stock ticker or search query and compute engagement-weighted sentiment. Returns tweet data, sentiment score, and co-mentioned tickers. Requires twitter-cli and a browser X/Twitter session.",
     parameters: params,
-    async execute(_toolCallId, args, _signal, _onUpdate, ctx?: ExtensionContext) {
+    async execute(_toolCallId, args, signal, _onUpdate, ctx?: ExtensionContext) {
       const limit = Math.min(args.limit ?? 50, 200);
       const hours = args.hours ?? 24;
       const descriptor = getProvider("twitter");
@@ -91,6 +91,7 @@ export function createTwitterSentimentTool(
                 "X/Twitter sentiment needs the twitter-cli command and a browser session before it can fetch tweets.",
             },
             askUserHandler,
+            signal,
           );
 
           if (!promptResult.cancelled && promptResult.answer?.startsWith("Continue")) {

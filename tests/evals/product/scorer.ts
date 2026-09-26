@@ -24,14 +24,19 @@ export function scoreProductEvalCase(
     totalWeight > 0
       ? results.reduce((sum, result) => sum + result.score * result.weight, 0) / totalWeight
       : 1;
-  const mandatoryFailure = results.some((result) => result.mandatory && !result.passed);
+  const failedDimensions = results.filter((result) => !result.passed);
+  const mandatoryFailure = failedDimensions.some((result) => result.mandatory);
 
   return {
     id: evalCase.id,
     family: evalCase.family,
     prompt: evalCase.prompt,
     score: weightedScore,
-    passed: weightedScore >= PASS_THRESHOLD && !mandatoryFailure,
+    // Every emitted dimension must pass: a non-mandatory dimension (for
+    // example evidence_use or missing_data_honesty) can fail while the weighted
+    // score still clears the threshold, and that partial failure must block.
+    // `mandatoryFailure` is retained as the diagnostic subtype.
+    passed: weightedScore >= PASS_THRESHOLD && failedDimensions.length === 0,
     mandatoryFailure,
     dimensions: results,
     trace,
@@ -171,6 +176,12 @@ function scoreDimension(
     }
   }
 
+  for (const check of dimension.requiredTextChecks ?? []) {
+    if (!check.test(text) && !passesFamilyAwareDimension(dimension.id, evalCase, trace, text)) {
+      issues.push(`missing ${check.name}`);
+    }
+  }
+
   for (const pattern of dimension.forbiddenPatterns ?? []) {
     if (pattern.test(text)) {
       issues.push(`forbidden pattern ${pattern}`);
@@ -259,7 +270,9 @@ function passesFamilyAwareDimension(
       (/\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
         /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)) ||
       (/\b(?:missing sources?|unavailable)\b/i.test(text) &&
-        /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text))
+        /\b(?:gap|impact)\b.{0,80}\b(?:picture|signal|insights?)\b/i.test(text)) ||
+      missingSourceDivergence(text) ||
+      sentimentDataQualityRisk(text)
     );
   }
   if (dimensionId === "risk_framing" && evalCase.family === "macro") {
@@ -271,6 +284,108 @@ function passesFamilyAwareDimension(
     );
   }
   return false;
+}
+
+// A concrete data-quality limitation is itself sentiment risk: an unreliable
+// read still needs to be owned when every source returned. Canonical concepts
+// are noisy sentiment/data/signal, sparse coverage or sample, low sample count,
+// insufficient data, and a sample/evidence set that is not representative. Each
+// limitation is bound to a sentiment context and rejected when it sits under a
+// clause-local negation ("the signal is not particularly noisy", "no insufficient
+// data or sparse coverage"). "not representative" is itself the risk statement,
+// so it is deliberately kept outside the negation filter. Missing-source impact
+// is handled separately by missingSourceDivergence.
+function sentimentDataQualityRisk(text: string): boolean {
+  if (
+    /\b(?:sample|evidence|data|sources?|read|signal|sentiment)\b[^.;!?\n]{0,80}?\b(?:not|isn't|aren't)\s+(?:be\s+)?(?:fully\s+)?representative\b/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  return (
+    hasNoisySentimentRisk(text) ||
+    hasUnnegatedMatch(text, /\b(?:sparse|thin|limited)\s+(?:coverage|sample|data|sources?)\b/gi) ||
+    hasUnnegatedMatch(text, /\b(?:low|small|limited)\s+sample\s+(?:count|size)\b/gi) ||
+    hasUnnegatedMatch(text, /\binsufficient\s+(?:data|sample|coverage|evidence)\b/gi)
+  );
+}
+
+function hasNoisySentimentRisk(text: string): boolean {
+  for (const match of text.matchAll(/\b(?:noisy|noise)\b/gi)) {
+    const index = match.index;
+    if (index === undefined || limitationNegated(text, index)) continue;
+    const { start, end } = clauseBounds(text, index);
+    if (/\b(?:sentiment|signal|sample|sources?|data|read)\b/i.test(text.slice(start, end))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasUnnegatedMatch(text: string, pattern: RegExp): boolean {
+  for (const match of text.matchAll(pattern)) {
+    if (match.index !== undefined && !limitationNegated(text, match.index)) return true;
+  }
+  return false;
+}
+
+const DATA_QUALITY_MODIFIERS =
+  "(?:(?:particularly|especially|really|very|entirely|fully|completely|necessarily|actually)\\s+)*";
+const DATA_QUALITY_LIMITATION =
+  "(?:noisy|noise|sparse\\s+(?:coverage|sample|data|sources?)|thin\\s+(?:coverage|sample|data|sources?)|limited\\s+(?:coverage|sample|data|sources?)|(?:low|small)\\s+sample\\s+(?:count|size)|insufficient\\s+(?:data|sample|coverage|evidence))";
+
+// Negation is limitation-local: only a negation directly attached to the
+// limitation (optionally through a bounded be/have auxiliary and a small
+// modifier set) counts, plus a bounded coordinated denial such as "no
+// insufficient data or sparse coverage". An unrelated clause negation
+// ("not reliable because of sparse coverage", "do not trust the noisy signal")
+// is not suppression.
+function limitationNegated(text: string, anchorIndex: number): boolean {
+  const { start } = clauseBounds(text, anchorIndex);
+  const before = text.slice(start, anchorIndex);
+  const negation =
+    "(?:\\b(?:no|not|never|without|nor|neither|cannot)\\b|\\b(?:isn't|aren't|wasn't|weren't|doesn't|don't|didn't|can't|won't|wouldn't|shouldn't|couldn't|mustn't|hasn't|haven't)\\b)";
+  const auxiliary = "(?:(?:be|have)\\s+)?";
+  const directlyAttached = new RegExp(
+    `^.*${negation}\\s+${auxiliary}${DATA_QUALITY_MODIFIERS}(?:the\\s+)?$`,
+    "i",
+  ).test(before);
+  if (directlyAttached) return true;
+  return new RegExp(
+    `${negation}\\s+${auxiliary}${DATA_QUALITY_MODIFIERS}${DATA_QUALITY_LIMITATION}(?:\\s+(?:or|nor|and)\\s+${DATA_QUALITY_LIMITATION})*\\s+(?:or|nor|and)\\s+$`,
+    "i",
+  ).test(before);
+}
+
+function clauseBounds(text: string, index: number): { start: number; end: number } {
+  let start = 0;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (".;!?,\n".includes(text[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  let end = text.length;
+  for (let i = index; i < text.length; i += 1) {
+    if (".;!?,\n".includes(text[i])) {
+      end = i;
+      break;
+    }
+  }
+  return { start, end };
+}
+
+// A missing source is risk framing only when the answer also explains the gap's
+// effect: the sentiment/signal/sample/data/source read can differ from the other
+// sources that did return. The divergence must name a sentiment subject and a
+// real "other/available/remaining sources" comparison, so an unrelated
+// difference clause plus a bare "source unavailable" note does not qualify.
+function missingSourceDivergence(text: string): boolean {
+  if (!/\b(?:missing sources?|unavailable|no sources returned)\b/i.test(text)) return false;
+  return /\b(?:sentiment|signal|sample|data|sources?)\b[^.!?]{0,80}\b(?:may|might|could|can|would)\s+(?:differ|diverge|vary)\s+from\b[^.!?]{0,30}\b(?:other|available|remaining)\s+sources?\b/i.test(
+    text,
+  );
 }
 
 function toolCallIsUnavailable(call: EvalTrace["toolCalls"][number]): boolean {

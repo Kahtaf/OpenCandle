@@ -76,29 +76,19 @@ async function main() {
   }
 
   const failures = [];
-  const unverified = [];
   for (const [url, files] of candidates) {
     const { outcome, detail } = await checkUrlWithRetry({
       url,
       fetchImpl: fetchWithTimeout,
       attempts,
       delayMs: retryDelayMs,
+      onRetry: ({ attempt, detail }) => {
+        console.warn(`Retrying ${url}: attempt ${attempt}/${attempts} ${detail}`);
+      },
     });
-    if (outcome === "broken") {
-      failures.push(`${url} returned ${detail}\n  ${files.join("\n  ")}`);
-    } else if (outcome === "unverified") {
-      // Host unreachable from this runner (DNS/TLS/timeout) after retries — cannot verify,
-      // but not proof the link is broken. Report as a non-blocking skip so transient
-      // external outages do not fail the build; a genuine 404 still lands in `failures`.
-      unverified.push(`${url} ${detail}\n  ${files.join("\n  ")}`);
+    if (outcome !== "ok") {
+      failures.push(`${url} ${outcome}: ${detail}\n  ${files.join("\n  ")}`);
     }
-  }
-
-  if (unverified.length > 0) {
-    console.warn(
-      `Skipped ${unverified.length} unreachable external link(s) after ${attempts} attempt(s) (transient, not verified):`,
-    );
-    console.warn(unverified.join("\n\n"));
   }
 
   if (failures.length > 0) {
@@ -107,12 +97,7 @@ async function main() {
     process.exit(1);
   }
 
-  const checked = candidates.size - unverified.length;
-  console.log(
-    `Checked ${checked} public docs external link(s)${
-      unverified.length > 0 ? `; skipped ${unverified.length} unreachable` : ""
-    }.`,
-  );
+  console.log(`Checked ${candidates.size} public docs external link(s).`);
 }
 
 main().catch((error) => {

@@ -9,6 +9,7 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
+import { buildProtectivePutSizingContract } from "../workflows/protective-put-output-validation.js";
 
 function tag(source: string | undefined): string {
   switch (source) {
@@ -182,30 +183,23 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
   const toolSteps = isFundBuildingBlocks
     ? `1. Identify ${s.positionCount} diversified fund/ETF building-block candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
    Include distinct asset-class roles such as core domestic equity, international equity, fixed income, short-duration or cash-like stability, and inflation-sensitive ballast when appropriate.
-2. Use get_stock_quote for each candidate to get current prices.
-3. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
-4. Use analyze_correlation across all candidates to check diversification.`
+2. Use get_stock_quote for each candidate to get its current price.`
     : isStocksAndEtfs
       ? `1. ${candidateInstruction}
-2. Use get_stock_quote for each candidate to get current prices.
-3. Use get_company_overview only for individual-stock candidates; do not require company fundamentals for ETF candidates.
-4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
-5. Use analyze_correlation across all candidates to check diversification.`
+2. Use get_stock_quote for each candidate to get its current price.
+3. Use get_company_overview only for individual-stock candidates; do not require company fundamentals for ETF candidates.`
       : isStocksAndCrypto
         ? `1. ${candidateInstruction}
    Label every candidate as stock or cryptocurrency. For cryptocurrency candidates, include the canonical CoinGecko id used by the crypto tools.
-2. For each stock candidate, use get_stock_quote for current price, get_company_overview for fundamentals, and analyze_risk for volatility, Sharpe, and max drawdown.
-3. For each cryptocurrency candidate, use get_crypto_price with its canonical CoinGecko id for current price and get_crypto_history with that same id for dated price history. Do not send cryptocurrencies to stock-only quote, company, or risk tools.
-4. Use analyze_correlation only across the stock candidates. Assess stock/crypto diversification from the dated evidence available and explicitly disclose that a cross-asset correlation matrix is unavailable instead of substituting stock symbols for crypto ids.`
+2. For each stock candidate, use get_stock_quote for the current price and get_company_overview for fundamentals.
+3. For each cryptocurrency candidate, use get_crypto_price with its canonical CoinGecko id for the current price.`
         : `1. ${candidateInstruction}
-2. Use get_stock_quote for each candidate to get current prices.
-3. Use get_company_overview for fundamentals on each candidate.
-4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
-5. Use analyze_correlation across all candidates to check diversification.`;
+2. Use get_stock_quote for each candidate to get its current price.
+3. Use get_company_overview for fundamentals on each candidate.`;
 
   return `${currentDateLine()}
 
-Build a draft portfolio under these parameters:
+Identify candidate holdings under these parameters:
 - Budget: ${formatBudget(s.budget)}
 - Risk profile: ${s.riskProfile}${tag(sources.riskProfile)}
 - Time horizon: ${s.timeHorizon}${tag(sources.timeHorizon)}
@@ -216,26 +210,20 @@ Build a draft portfolio under these parameters:
 Steps:
 ${toolSteps}
 
-Portfolio construction guardrails:
-- Treat asset scope, position count, and maximum position size as hard constraints, not preferences.
-- Use exactly ${s.positionCount} eligible positions, make allocations sum to 100%, and keep every position at or below ${s.maxSinglePositionPct}%.
-- The eligible universe is "${s.assetScope}". Do not introduce an asset outside that universe during candidate selection or risk review.
+Candidate selection guardrails:
+- Treat asset scope and position count as hard constraints, not preferences.
+- Select exactly ${s.positionCount} eligible candidates. The eligible universe is "${s.assetScope}". Do not introduce an asset outside that universe.
 - For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
 - For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
-- If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
-- Keep rationale tied to each holding's role in this portfolio; do not paste company descriptions or generic issuer background.
+- Keep the evidence tied to each candidate's role; do not paste company descriptions or generic issuer background.
 
 ${disclosureBlock}
 
 Response format:
 ${ASSUMPTIONS_RESPONSE_INSTRUCTION}
-- Then start the analysis with "Bottom line:" and directly say what portfolio you would build for the user.
-- Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
-- Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
-- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff and horizon-specific risks for the stated time horizon.
-- Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
-- Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
-- Suggest what to change for more growth or more safety.`;
+- Report exactly ${s.positionCount} candidates. For each candidate give: symbol (and asset class or intended role), the current price returned by the quote tool and its as-of date, and one line of supporting evidence from the returned data.
+- Base every price and fundamental only on successful tool results. If a candidate's data is unavailable, name it as a data gap instead of filling it in.
+- Do not present a final allocation table, portfolio recommendation, risk metrics, or implementation notes in this step; the risk review and synthesis steps produce those.`;
 }
 
 export function buildOptionsScreenerPrompt(
@@ -338,9 +326,8 @@ Protective-put hedge guidance:
 - Treat ${s.symbol} as the option-chain underlying.
 - Rank put contracts by protection per dollar of premium: expiration fit, hedge floor, moneyness, liquidity, and premium as a percent of the stock position.
 - For "doesn't cost too much" or similar cost-sensitive language, prefer liquid puts modestly below the current stock price before far-OTM lottery hedges; explain the tradeoff between cheaper premium and weaker protection.
-- If share quantity is provided, use 1 put contract per 100 shares when discussing coverage and contract count.
-- If share quantity is provided, state total premium for the required number of contracts in the ranked table or top-pick explanation.
-- Include the hedge floor: approximate protected stock value at strike, net of premium where possible.
+${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuantity) : "- Ask for owned share quantity before giving personalized whole-contract sizing; verify the actual contract multiplier."}
+- Explain the hedge floor qualitatively; do not claim one numerical whole-position floor when contract coverage differs from owned shares.
 - Mention lower-cost alternatives such as a collar or put spread when outright put premium is high.
 - Long protective puts have premium/decay risk and exercise/exit choices; do not frame assignment risk like a short option sale.
 `
@@ -389,7 +376,7 @@ Response format:
 ${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - State the requested DTE target (${s.dteTarget}) and each candidate's numeric days to expiration alongside its expiry date, so the answer visibly confirms that the selected contracts fit the user's window.
-- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
+- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", qualitative hedge-floor mechanics" : ""}.
 - ${topPickExplanation}
 - Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.${catalystResponseInstruction}
 - Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : isProtectivePutContext ? "protective-put risks (premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost). Do not discuss short-option assignment risk" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;

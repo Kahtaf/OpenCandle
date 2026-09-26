@@ -1,5 +1,22 @@
 import { dirname } from "node:path";
+import type { FinalAnswerAssertionResult } from "./prompt-policy-assertions.js";
 import type { EvalTrace } from "./types.js";
+
+/**
+ * Version of the comparison-judge rubric and evidence context. Stamped on
+ * every new judgment so judgments from different rubrics are never compared
+ * as if they were the same instrument. Saved judgments without a stamp are
+ * read as "legacy" and are never rewritten.
+ *
+ * v2: the judge sees bounded tool-result evidence, the deterministic
+ * mandatory-check results, observed-only labels on heuristic structured
+ * checks, and explicit as-of-date / knowledge-cutoff guidance.
+ * v3: a figure missing from a truncated tool excerpt is unverified, not
+ * fabricated (calibration showed false "absent from evidence" claims on
+ * truncated option chains).
+ */
+export const COMPETITIVE_JUDGE_RUBRIC_VERSION = "competitive-judge-v3";
+export const LEGACY_JUDGE_RUBRIC_VERSION = "legacy";
 
 export interface GeneratedFinancePrompt {
   id: string;
@@ -150,6 +167,14 @@ export interface ComparisonJudgeInput {
   openCandleTrace: EvalTrace;
   competitorAnswers: CompetitorAnswer[];
   savedStateSummary?: string;
+  /** Deterministic mandatory-check results for the OpenCandle answer. */
+  hardAssertionResults?: readonly FinalAnswerAssertionResult[];
+}
+
+export interface ComparisonJudgeStamp {
+  provider?: string;
+  model?: string;
+  rubricVersion: string;
 }
 
 export interface ComparisonJudgment {
@@ -160,6 +185,18 @@ export interface ComparisonJudgment {
   openCandleDidBetter: string[];
   competitorsDidBetter: Record<string, string[]>;
   openCandleImprovementIdeas: string[];
+  /** Absent on legacy saved judgments. */
+  judge?: ComparisonJudgeStamp;
+}
+
+/**
+ * Outcome of the deterministic mandatory checks for one case. A judge
+ * preference never changes this; `failed` lists failing assertion names (or
+ * the completion-case reason when the case failed structurally).
+ */
+export interface CompetitiveMandatoryOutcome {
+  status: "passed" | "failed" | "not_evaluated";
+  failed: string[];
 }
 
 export interface CompetitiveCaseAnalysis {
@@ -184,6 +221,8 @@ export interface CompetitiveCaseAnalysis {
   };
   toolCalls: string[];
   cachedCompetitors: string[];
+  mandatory?: CompetitiveMandatoryOutcome;
+  judge?: ComparisonJudgeStamp;
 }
 
 export interface CompetitiveThemeSummary {
@@ -197,9 +236,13 @@ export interface CompetitiveReportAnalysis {
   generatedAt?: string;
   reportPath?: string;
   promptCount: number;
+  /** Judge preference wins: advisory, never a correctness verdict. */
   openCandleWins: number;
   losses: number;
   ties: number;
+  mandatory?: { passed: number; failed: number; notEvaluated: number };
+  openCandleWinsWithMandatoryPass?: number;
+  openCandleWinsWithMandatoryFailure?: number;
   cases: CompetitiveCaseAnalysis[];
   themeSummary: CompetitiveThemeSummary[];
 }
@@ -284,11 +327,64 @@ User prompt:
 ${prompt}`;
 }
 
+const JUDGE_TOOL_EVIDENCE_PER_CALL_CHARS = 1_500;
+const JUDGE_TOOL_EVIDENCE_TOTAL_CHARS = 8_000;
+
+/**
+ * Bounded, text-only excerpts of what each OpenCandle tool call returned, so
+ * the judge can check whether a figure in the answer is tool-backed instead
+ * of guessing from its own (possibly older) training data.
+ */
+function formatJudgeToolEvidence(trace: EvalTrace): string {
+  if (trace.toolCalls.length === 0) return "(no tool calls)";
+  let remaining = JUDGE_TOOL_EVIDENCE_TOTAL_CHARS;
+  const blocks: string[] = [];
+  trace.toolCalls.forEach((call, index) => {
+    const header = `[${index + 1}] ${call.name} ${JSON.stringify(call.args ?? {})}${
+      call.isError ? " (error)" : ""
+    }`;
+    const raw = toolResultText(call.result);
+    const budget = Math.max(0, Math.min(JUDGE_TOOL_EVIDENCE_PER_CALL_CHARS, remaining));
+    const excerpt = raw.length > budget ? `${raw.slice(0, budget)} [truncated]` : raw;
+    remaining -= Math.min(raw.length, budget);
+    blocks.push(`${header}\n${excerpt || "(no result text recorded)"}`);
+  });
+  return blocks.join("\n\n");
+}
+
+function toolResultText(result: unknown): string {
+  if (result === undefined || result === null) return "";
+  if (typeof result === "string") return result.trim();
+  if (isRecord(result) && Array.isArray(result.content)) {
+    const text = result.content
+      .flatMap((item) => (isRecord(item) && typeof item.text === "string" ? [item.text] : []))
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return "";
+  }
+}
+
+function formatJudgeMandatoryChecks(
+  results: readonly FinalAnswerAssertionResult[] | undefined,
+): string {
+  if (!results || results.length === 0)
+    return "(no deterministic mandatory checks for this prompt)";
+  return results
+    .map(
+      (result) =>
+        `- ${result.passed && result.deterministic ? "PASS" : "FAIL"}: ${result.assertion}${
+          result.passed && result.deterministic ? "" : ` (${result.reason})`
+        }`,
+    )
+    .join("\n");
+}
+
 export function buildComparisonJudgePrompt(input: ComparisonJudgeInput): string {
-  const toolCalls = input.openCandleTrace.toolCalls.map((call) => ({
-    name: call.name,
-    args: call.args,
-  }));
   const competitorAnswers = input.competitorAnswers
     .map(
       (
@@ -310,6 +406,7 @@ ${competitor.answer}`,
         structuredCheckFailures: input.openCandleTrace.planning.structuredCheckFailures.map(
           (failure) => ({
             checkId: failure.checkId,
+            observedOnly: failure.observedOnly,
             failureReason: failure.failureReason,
           }),
         ),
@@ -340,10 +437,13 @@ ${input.prompt.evaluationFocus}
 OpenCandle classification:
 ${JSON.stringify(input.openCandleTrace.classification)}
 
-OpenCandle tool calls:
-${JSON.stringify(toolCalls, null, 2)}
+OpenCandle tool evidence (what each tool call returned; excerpts are bounded):
+${formatJudgeToolEvidence(input.openCandleTrace)}
 
-OpenCandle planning metadata:
+OpenCandle deterministic mandatory checks (authoritative; computed by code, not by you):
+${formatJudgeMandatoryChecks(input.hardAssertionResults)}
+
+OpenCandle planning metadata (structured checks marked observedOnly are observed-only heuristics, not verdicts):
 ${JSON.stringify(planningMetadata, null, 2)}
 
 OpenCandle answer:
@@ -352,7 +452,9 @@ ${input.openCandleTrace.text}
 Generic no-tool agent answers:
 ${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated. Your training data may end before the current date, so a recent date or an unfamiliar recent value is not evidence of fabrication. A figure that matches the OpenCandle tool evidence is tool-backed, not fabricated; only call an OpenCandle figure fabricated when it contradicts that tool evidence, or is absent from an excerpt that is not truncated, and name the figure. When an excerpt is marked [truncated], a figure missing from it may be in the omitted part: treat it as unverified, not fabricated or unsupported.
+
+The deterministic mandatory checks above are authoritative for the prompt's required behaviors. Do not contradict them. When one failed, say so in your reason; your preference among the answers is advisory and never makes a failed mandatory check acceptable.
 
 ${
   input.savedStateSummary
@@ -474,10 +576,184 @@ export function parseComparisonJudgment(
   };
 }
 
+export function stampComparisonJudgment(
+  judgment: ComparisonJudgment,
+  judge: { provider: string; model: string },
+): ComparisonJudgment {
+  return {
+    ...judgment,
+    judge: {
+      provider: judge.provider,
+      model: judge.model,
+      rubricVersion: COMPETITIVE_JUDGE_RUBRIC_VERSION,
+    },
+  };
+}
+
+/**
+ * The deterministic mandatory outcome for a saved or in-flight result. A
+ * recorded completion case (`mandatory`) wins; otherwise the outcome is
+ * derived from `hardAssertionResults`, where a non-deterministic result counts
+ * as failed (an unknown checker cannot pass a mandatory requirement).
+ */
+export function mandatoryOutcomeFromResult(result: unknown): CompetitiveMandatoryOutcome {
+  if (!isRecord(result)) return { status: "not_evaluated", failed: [] };
+  if (isRecord(result.mandatory)) {
+    const status = stringValue(result.mandatory.status);
+    if (status === "passed") return { status: "passed", failed: [] };
+    if (status === "failed") {
+      const reason = stringValue(result.mandatory.reason);
+      return { status: "failed", failed: [reason || "completion case failed"] };
+    }
+  }
+  if (!Array.isArray(result.hardAssertionResults) || result.hardAssertionResults.length === 0) {
+    return { status: "not_evaluated", failed: [] };
+  }
+  const failed = result.hardAssertionResults.flatMap((item): string[] => {
+    if (!isRecord(item)) return ["malformed mandatory assertion result"];
+    const name = stringValue(item.assertion) || "unnamed mandatory assertion";
+    return item.passed === true && item.deterministic === true ? [] : [name];
+  });
+  return failed.length > 0 ? { status: "failed", failed } : { status: "passed", failed: [] };
+}
+
+export interface CompetitiveResultsSummary {
+  /** Judge preference wins: advisory, never a correctness verdict. */
+  openCandleWins: number;
+  competitorWins: Record<string, number>;
+  ties: number;
+  mandatory: { passed: number; failed: number; notEvaluated: number };
+  /** Preference wins on cases whose deterministic mandatory checks all passed. */
+  openCandleWinsWithMandatoryPass: number;
+  /** Preference wins on cases with a failed mandatory check: ineligible. */
+  openCandleWinsWithMandatoryFailure: number;
+}
+
+export function summarizeCompetitiveResults(
+  results: ReadonlyArray<{
+    judgment: { winner: string };
+    mandatory?: unknown;
+    hardAssertionResults?: unknown;
+  }>,
+): CompetitiveResultsSummary {
+  const competitorWins: Record<string, number> = {};
+  const mandatory = { passed: 0, failed: 0, notEvaluated: 0 };
+  let openCandleWins = 0;
+  let ties = 0;
+  let openCandleWinsWithMandatoryPass = 0;
+  let openCandleWinsWithMandatoryFailure = 0;
+  for (const result of results) {
+    const outcome = mandatoryOutcomeFromResult(result);
+    if (outcome.status === "passed") mandatory.passed += 1;
+    else if (outcome.status === "failed") mandatory.failed += 1;
+    else mandatory.notEvaluated += 1;
+    const winner = result.judgment.winner;
+    if (winner === "opencandle") {
+      openCandleWins += 1;
+      if (outcome.status === "passed") openCandleWinsWithMandatoryPass += 1;
+      if (outcome.status === "failed") openCandleWinsWithMandatoryFailure += 1;
+    } else if (winner === "tie") {
+      ties += 1;
+    } else {
+      competitorWins[winner] = (competitorWins[winner] ?? 0) + 1;
+    }
+  }
+  return {
+    openCandleWins,
+    competitorWins,
+    ties,
+    mandatory,
+    openCandleWinsWithMandatoryPass,
+    openCandleWinsWithMandatoryFailure,
+  };
+}
+
+/**
+ * Default comparison judge, independent of the model under test. Calibrated
+ * against the competitive-judge-v3 rubric; see
+ * docs/internal/competitive-benchmarking.md.
+ */
+export const DEFAULT_COMPETITIVE_JUDGE: Readonly<{ provider: string; model: string }> =
+  Object.freeze({ provider: "openai", model: "gpt-6-luna" });
+
+export interface CompetitiveJudgeSelection {
+  provider: string;
+  model: string;
+  /** Undefined means the judge call sends no temperature at all. */
+  temperature: number | undefined;
+}
+
+/**
+ * The comparison judge: the calibrated default unless both judge-only
+ * override variables are set. The calibrated default is a reasoning model
+ * that rejects an explicit temperature, so none is sent to it up front.
+ */
+export function selectCompetitiveJudgeModel(
+  env: Record<string, string | undefined>,
+): CompetitiveJudgeSelection {
+  const judge = selectCompetitiveJudgeModelOverride(env) ?? DEFAULT_COMPETITIVE_JUDGE;
+  const isCalibratedDefault =
+    judge.provider === DEFAULT_COMPETITIVE_JUDGE.provider &&
+    judge.model === DEFAULT_COMPETITIVE_JUDGE.model;
+  return {
+    provider: judge.provider,
+    model: judge.model,
+    temperature: isCalibratedDefault ? undefined : 0,
+  };
+}
+
+const PROVIDER_API_KEY_HINTS: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  google: "GEMINI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+};
+
+/** Loud failure text when the judge cannot be resolved or authenticated. */
+export function competitiveJudgeMissingAuthMessage(judge: {
+  provider: string;
+  model: string;
+}): string {
+  const keyHint = PROVIDER_API_KEY_HINTS[judge.provider] ?? `the API key for ${judge.provider}`;
+  return [
+    `The competitive judge ${judge.provider}/${judge.model} is not available.`,
+    `Set ${keyHint} (or configure ${judge.provider} auth in Pi), or choose another judge with OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER and OPENCANDLE_COMPETITIVE_JUDGE_MODEL.`,
+    "There is no fallback judge.",
+  ].join("\n");
+}
+
+/**
+ * Optional judge-only model override of DEFAULT_COMPETITIVE_JUDGE; these
+ * variables change only the judge, never the model under test. Both must be
+ * set together.
+ */
+export function selectCompetitiveJudgeModelOverride(
+  env: Record<string, string | undefined>,
+): { provider: string; model: string } | null {
+  const provider = env.OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER?.trim();
+  const model = env.OPENCANDLE_COMPETITIVE_JUDGE_MODEL?.trim();
+  if (!provider && !model) return null;
+  if (!provider || !model) {
+    throw new Error(
+      "Set both OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER and OPENCANDLE_COMPETITIVE_JUDGE_MODEL to override the competitive judge.",
+    );
+  }
+  return { provider, model };
+}
+
 export function analyzeCompetitiveReport(
   report: unknown,
   options: { reportPath?: string } = {},
 ): CompetitiveReportAnalysis {
+  // Unstamped (legacy) judgments: attribute to the report-level judge when
+  // recorded, but never invent a rubric version for them.
+  const reportJudge = isRecord(report) && isRecord(report.judge) ? report.judge : {};
+  const legacyProvider = stringValue(reportJudge.provider);
+  const legacyModel = stringValue(reportJudge.model);
+  const legacyJudge: ComparisonJudgeStamp = {
+    ...(legacyProvider ? { provider: legacyProvider } : {}),
+    ...(legacyModel ? { model: legacyModel } : {}),
+    rubricVersion: LEGACY_JUDGE_RUBRIC_VERSION,
+  };
   const cases = reportResults(report).flatMap((result): CompetitiveCaseAnalysis[] => {
     const prompt = promptFromResult(result);
     const judgment = judgmentFromResult(result);
@@ -506,17 +782,31 @@ export function analyzeCompetitiveReport(
         cachedCompetitors: competitorAnswersFromResult(result)
           .filter((answer) => answer.cachedFromReport)
           .map((answer) => answer.id),
+        mandatory: mandatoryOutcomeFromResult(result),
+        judge: judgment.judge ?? legacyJudge,
       },
     ];
   });
+  const openCandleWinCases = cases.filter((c) => c.winner === "opencandle");
 
   return {
     generatedAt: isRecord(report) ? stringValue(report.generatedAt) || undefined : undefined,
     reportPath: options.reportPath,
     promptCount: cases.length,
-    openCandleWins: cases.filter((c) => c.winner === "opencandle").length,
+    openCandleWins: openCandleWinCases.length,
     losses: cases.filter((c) => c.lostTo).length,
     ties: cases.filter((c) => c.winner === "tie").length,
+    mandatory: {
+      passed: cases.filter((c) => c.mandatory?.status === "passed").length,
+      failed: cases.filter((c) => c.mandatory?.status === "failed").length,
+      notEvaluated: cases.filter((c) => c.mandatory?.status === "not_evaluated").length,
+    },
+    openCandleWinsWithMandatoryPass: openCandleWinCases.filter(
+      (c) => c.mandatory?.status === "passed",
+    ).length,
+    openCandleWinsWithMandatoryFailure: openCandleWinCases.filter(
+      (c) => c.mandatory?.status === "failed",
+    ).length,
     cases: [...cases].sort((a, b) => b.scoreGap - a.scoreGap),
     themeSummary: summarizeImprovementThemes(cases),
   };
@@ -533,6 +823,17 @@ export function formatCompetitiveReportAnalysisMarkdown(
   lines.push(
     `Summary: OC wins ${analysis.openCandleWins}, losses ${analysis.losses}, ties ${analysis.ties}, cases ${analysis.promptCount}.`,
   );
+  lines.push(
+    "Judge preference is advisory: a preference win never makes a case correct. Deterministic mandatory checks decide correctness.",
+  );
+  if (analysis.mandatory) {
+    lines.push(
+      `Mandatory: ${analysis.mandatory.passed} passed, ${analysis.mandatory.failed} failed, ${analysis.mandatory.notEvaluated} not evaluated.`,
+    );
+    lines.push(
+      `OC preference wins with all mandatory checks passed: ${analysis.openCandleWinsWithMandatoryPass ?? 0}; preference wins on mandatory-failed cases (ineligible): ${analysis.openCandleWinsWithMandatoryFailure ?? 0}.`,
+    );
+  }
 
   if (analysis.themeSummary.length > 0) {
     lines.push("");
@@ -553,6 +854,22 @@ export function formatCompetitiveReportAnalysisMarkdown(
       `Winner: ${c.winner}. Scores: OC ${c.openCandleScore}${scores ? `, ${scores}` : ""}.`,
     );
     if (c.lostTo) lines.push(`Loss gap: ${c.lostTo} beat OC by ${c.scoreGap}.`);
+    if (c.mandatory?.status === "failed") {
+      lines.push(
+        `Mandatory: FAILED (${c.mandatory.failed.join("; ")}). Judge preference does not make this case correct.`,
+      );
+    } else if (c.mandatory?.status === "passed") {
+      lines.push("Mandatory: passed.");
+    } else if (c.mandatory) {
+      lines.push("Mandatory: not evaluated.");
+    }
+    if (c.judge) {
+      const model =
+        c.judge.provider && c.judge.model
+          ? `${c.judge.provider}/${c.judge.model}`
+          : "unrecorded model";
+      lines.push(`Judge: ${model}, rubric ${c.judge.rubricVersion}.`);
+    }
     lines.push(`Prompt: ${c.prompt}`);
     lines.push("");
     lines.push("Judge reason:");
@@ -788,6 +1105,15 @@ export function selectCompetitiveGeminiBaseline(env: Record<string, string | und
   return { mode: "acpx", provider: "acpx/gemini", model: "subscription" };
 }
 
+/**
+ * Some reasoning models (for example OpenAI GPT-6 Luna) reject an explicit
+ * temperature with a 400. The caller retries that one call without it; any
+ * other error keeps the normal retry policy.
+ */
+export function isUnsupportedTemperatureError(message: string): boolean {
+  return /unsupported parameter:?\s*'?temperature'?/i.test(message);
+}
+
 export function shouldRetryCompetitiveModelCall(
   message: string,
   attempt: number,
@@ -889,6 +1215,7 @@ function judgmentFromResult(result: unknown): ComparisonJudgment | null {
   const judgment = result.judgment;
   const winner = stringValue(judgment.winner);
   if (!winner) return null;
+  const judge = judgeStampFromValue(judgment.judge);
   return {
     winner,
     openCandleScore: numberValue(judgment.openCandleScore),
@@ -897,6 +1224,20 @@ function judgmentFromResult(result: unknown): ComparisonJudgment | null {
     openCandleDidBetter: stringArray(judgment.openCandleDidBetter),
     competitorsDidBetter: stringArrayRecord(judgment.competitorsDidBetter),
     openCandleImprovementIdeas: stringArray(judgment.openCandleImprovementIdeas),
+    ...(judge ? { judge } : {}),
+  };
+}
+
+function judgeStampFromValue(value: unknown): ComparisonJudgeStamp | undefined {
+  if (!isRecord(value)) return undefined;
+  const rubricVersion = stringValue(value.rubricVersion);
+  if (!rubricVersion) return undefined;
+  const provider = stringValue(value.provider);
+  const model = stringValue(value.model);
+  return {
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    rubricVersion,
   };
 }
 

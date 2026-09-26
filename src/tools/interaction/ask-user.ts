@@ -38,7 +38,7 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
       "ask_user: Ask the user a clarification question when their request is ambiguous or missing key details",
     parameters: AskUserParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const { question, question_type: questionType } = params;
 
       // Preserve the pre-refactor error message for the specific misuse case
@@ -78,6 +78,7 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
           reason: params.reason,
         },
         askUserHandler,
+        signal,
       );
 
       if (result.cancelled) {

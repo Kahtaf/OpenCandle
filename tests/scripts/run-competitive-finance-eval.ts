@@ -26,6 +26,11 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
+  completionCaseForPrompt,
+  selectCompetitiveReportCache,
+  writeCompetitorSkipMetadata,
+} from "../evals/competitive-completion.js";
+import {
   type AdapterBinaryResolution,
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
@@ -34,10 +39,12 @@ import {
   buildPortableAgentPath,
   buildPromptGenerationPrompt,
   buildSavedStateSummary,
+  COMPETITIVE_JUDGE_RUBRIC_VERSION,
   COMPETITIVE_STATE_FIXTURE,
   type ComparisonJudgment,
   type CompetitorAnswer,
   competitiveBenchmarkExitCode,
+  competitiveJudgeMissingAuthMessage,
   competitivePreflightTimeoutMs,
   competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
@@ -48,6 +55,7 @@ import {
   formatCompetitiveReportAnalysisMarkdown,
   frozenCompetitivePanelFromEnv,
   type GeneratedFinancePrompt,
+  isUnsupportedTemperatureError,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   resolveAdapterBinary,
@@ -57,9 +65,17 @@ import {
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectCompetitiveGeminiBaseline,
+  selectCompetitiveJudgeModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
+  stampComparisonJudgment,
+  summarizeCompetitiveResults,
 } from "../evals/competitive-finance.js";
+import {
+  buildCompletionReport,
+  type CompletionReportCase,
+  writeCompletionReport,
+} from "../evals/completion-report.js";
 import {
   evaluateFinalAnswerAssertion,
   type FinalAnswerAssertionResult,
@@ -73,6 +89,8 @@ interface CompetitiveRunResult {
   competitorAnswers: CompetitorAnswer[];
   judgment: ComparisonJudgment;
   hardAssertionResults?: FinalAnswerAssertionResult[];
+  /** Frozen-panel completion case: the deterministic verdict for this prompt. */
+  mandatory?: CompletionReportCase;
 }
 
 interface ResolvedModel {
@@ -104,6 +122,8 @@ interface CompetitorRunOptions {
 type AcpxAgent = "claude" | "codex" | "gemini";
 
 loadEnv();
+
+const startedAt = new Date().toISOString();
 
 // None of acpx, the Codex ACP adapter, or the Claude ACP adapter are
 // repo-local devDependencies. `npm run <script>` prepends the invoking
@@ -142,11 +162,22 @@ mkdirSync(competitorCwd, { recursive: true });
 registerBuiltInApiProviders();
 const modelRuntime = await ModelRuntime.create();
 const modelRegistry = new ModelRegistry(modelRuntime);
-const competitorAnswerCache = loadCompetitiveReportCache();
-const judgeModel = await resolveModelWithAuth(
+const competitorAnswerCache = selectCompetitiveReportCache(process.env, loadCompetitiveReportCache);
+// The model under test (OpenCandle's session model and the prompt generator).
+const competitiveModel = await resolveModelWithAuth(
   requestedProvider,
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
+);
+// The comparison judge is independent of the model under test: the
+// calibrated default (DEFAULT_COMPETITIVE_JUDGE) unless the judge-only
+// override is set. A missing judge fails loudly; there is no fallback judge.
+const judgeSelection = selectCompetitiveJudgeModel(process.env);
+const judgeModel = await resolveModelWithAuth(
+  judgeSelection.provider,
+  judgeSelection.model,
+  competitiveJudgeMissingAuthMessage(judgeSelection),
+  { requireKnownModel: true },
 );
 const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
 // The frozen panel's loss-class contracts live in the prompt-policy
@@ -173,7 +204,7 @@ const rawPrompts = frozenPanel
     ? [fixedPrompt]
     : parseGeneratedPrompts(
         await completeText(
-          judgeModel,
+          competitiveModel,
           buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
           { temperature: 0.8, maxTokens: 3000 },
         ),
@@ -218,6 +249,7 @@ if (
 }
 
 const results: CompetitiveRunResult[] = [];
+const completionCases: CompletionReportCase[] = [];
 for (const prompt of prompts.slice(0, promptCount)) {
   console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
   const openCandleTrace = await runOpenCandle(prompt.prompt);
@@ -280,17 +312,35 @@ for (const prompt of prompts.slice(0, promptCount)) {
       `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
     );
   }
-  const judgment = await completeComparisonJudgment(
-    buildComparisonJudgePrompt({
-      prompt,
-      asOfDate,
-      openCandleTrace,
-      competitorAnswers,
-      savedStateSummary,
-    }),
-    ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
+  // Only the frozen release panel has manifest-required hard assertions. A
+  // generated/fixed discovery run is not made to fail just because no frozen
+  // manifest exists; it is excluded from this completion helper entirely.
+  const mandatory = frozenPanel
+    ? completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults)
+    : undefined;
+  if (mandatory) completionCases.push(mandatory);
+  const judgment = stampComparisonJudgment(
+    await completeComparisonJudgment(
+      buildComparisonJudgePrompt({
+        prompt,
+        asOfDate,
+        openCandleTrace,
+        competitorAnswers,
+        savedStateSummary,
+        hardAssertionResults,
+      }),
+      ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
+    ),
+    { provider: judgeModel.model.provider, model: judgeModel.model.id },
   );
-  results.push({ prompt, openCandleTrace, competitorAnswers, judgment, hardAssertionResults });
+  results.push({
+    prompt,
+    openCandleTrace,
+    competitorAnswers,
+    judgment,
+    hardAssertionResults,
+    ...(mandatory ? { mandatory } : {}),
+  });
   const competitorScoreText = Object.entries(judgment.competitorScores)
     .map(([id, score]) => `${id}=${score}`)
     .join(" ");
@@ -301,7 +351,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
   }
 }
 
-const summary = summarize(results);
+const summary = summarizeCompetitiveResults(results);
 const report = {
   generatedAt: new Date().toISOString(),
   asOfDate,
@@ -311,6 +361,7 @@ const report = {
   judge: {
     provider: judgeModel.model.provider,
     model: judgeModel.model.id,
+    rubricVersion: COMPETITIVE_JUDGE_RUBRIC_VERSION,
   },
   competitors: allCompetitors.map((competitor) => ({
     id: competitor.id,
@@ -330,27 +381,60 @@ const outputPath = writeReport(report);
 const analysisPath = writeReportAnalysis(report, outputPath);
 
 console.log("\n--- Competitive Finance Summary ---");
-console.log(`OpenCandle wins: ${summary.openCandleWins}`);
+console.log("Judge preference is advisory; deterministic mandatory checks decide correctness.");
+console.log(
+  `Mandatory: ${summary.mandatory.passed} passed, ${summary.mandatory.failed} failed, ${summary.mandatory.notEvaluated} not evaluated`,
+);
+console.log(
+  `OpenCandle preference wins: ${summary.openCandleWins} (${summary.openCandleWinsWithMandatoryPass} with mandatory passed, ${summary.openCandleWinsWithMandatoryFailure} ineligible: mandatory failed)`,
+);
 for (const competitor of allCompetitors) {
   console.log(`${competitor.label} wins: ${summary.competitorWins[competitor.id] ?? 0}`);
 }
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
 console.log(`Analysis: ${analysisPath}`);
-const deterministicHardFailures = results.flatMap((result) =>
-  (result.hardAssertionResults ?? []).filter(
-    (assertion) => assertion.deterministic && !assertion.passed,
-  ),
-);
-if (frozenPanel && deterministicHardFailures.length > 0) {
-  console.error(
-    `\nFrozen panel FAILED ${deterministicHardFailures.length} deterministic hard assertion(s):`,
+// Optional competitor skips stay separate from the required prompt outcomes:
+// they are recorded in the main report's `skippedCompetitors` field and never
+// turn a prompt case into a pass or fail. The completion report is frozen-panel
+// evidence only; generated/fixed discovery runs are excluded from it.
+if (frozenPanel) {
+  const completionPath = writeCompletionReport(
+    buildCompletionReport({
+      suite: "competitive:frozen",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      cases: completionCases,
+      settings: {
+        provider: competitiveModel.model.provider,
+        model: competitiveModel.model.id,
+        mode: "frozen",
+        seed,
+        judge: `${judgeModel.model.provider}/${judgeModel.model.id}`,
+      },
+    }),
   );
-  for (const failure of deterministicHardFailures) {
-    console.error(`- ${failure.assertion}: ${failure.reason}`);
+  if (completionPath) {
+    console.log(`Completion report: ${completionPath}`);
+    const metadataPath = writeCompetitorSkipMetadata(
+      completionPath,
+      "competitive:frozen",
+      preflight.skipped,
+    );
+    console.log(`Competitor skip metadata: ${metadataPath}`);
+  }
+}
+const frozenCaseFailures = frozenPanel
+  ? completionCases.filter((testCase) => testCase.status === "failed")
+  : [];
+if (frozenCaseFailures.length > 0) {
+  console.error(`\nFrozen panel FAILED ${frozenCaseFailures.length} required prompt case(s):`);
+  for (const failure of frozenCaseFailures) {
+    console.error(`- ${failure.id}: ${failure.reason}`);
   }
   // A generous LLM judge must not be the only gate on a loss-class
-  // regression; the frozen run fails on its own manifest contracts.
+  // regression; the frozen run fails on its own manifest contracts, including
+  // a required assertion with no deterministic checker.
   process.exit(1);
 }
 process.exit(competitiveBenchmarkExitCode());
@@ -358,9 +442,10 @@ process.exit(competitiveBenchmarkExitCode());
 async function completeText(
   resolvedModel: ResolvedModel,
   prompt: string,
-  options: { temperature: number; maxTokens: number },
+  options: { temperature: number | undefined; maxTokens: number },
 ): Promise<string> {
   const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_MODEL_ATTEMPTS", 3);
+  let sendTemperature = options.temperature !== undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await completeSimple(
       resolvedModel.model,
@@ -369,7 +454,7 @@ async function completeText(
         tools: [],
       },
       {
-        temperature: options.temperature,
+        ...(sendTemperature ? { temperature: options.temperature } : {}),
         maxTokens: options.maxTokens,
         reasoning: "minimal",
         apiKey: resolvedModel.apiKey,
@@ -384,6 +469,14 @@ async function completeText(
         .trim();
     }
     const message = response.errorMessage ?? `model call failed: ${response.stopReason}`;
+    if (sendTemperature && isUnsupportedTemperatureError(message)) {
+      console.warn(
+        `${resolvedModel.model.provider}/${resolvedModel.model.id} rejects temperature; retrying without it.`,
+      );
+      sendTemperature = false;
+      attempt -= 1;
+      continue;
+    }
     if (!shouldRetryCompetitiveModelCall(message, attempt, maxAttempts)) {
       throw new Error(message);
     }
@@ -409,7 +502,10 @@ async function completeComparisonJudgment(
             invalidResponse: lastText,
             errorMessage: lastError,
           });
-    lastText = await completeText(judgeModel, candidatePrompt, { temperature: 0, maxTokens: 3000 });
+    lastText = await completeText(judgeModel, candidatePrompt, {
+      temperature: judgeSelection.temperature,
+      maxTokens: 3000,
+    });
     try {
       return parseComparisonJudgment(lastText, { allowedWinners });
     } catch (error) {
@@ -432,8 +528,8 @@ async function runOpenCandle(prompt: string): Promise<EvalTrace> {
   const result = await runOpenCandleSession({
     prompt,
     modelRuntime,
-    defaultProvider: judgeModel.model.provider,
-    defaultModel: judgeModel.model.id,
+    defaultProvider: competitiveModel.model.provider,
+    defaultModel: competitiveModel.model.id,
     openCandleHome,
     settleGraceMs: Number.isFinite(parsedSettleGraceMs) ? parsedSettleGraceMs : undefined,
     timeoutMs: 900_000,
@@ -683,24 +779,6 @@ function findExecutable(name: string): string | undefined {
   return result.stdout.trim() || undefined;
 }
 
-function summarize(results: CompetitiveRunResult[]): {
-  openCandleWins: number;
-  competitorWins: Record<string, number>;
-  ties: number;
-} {
-  const competitorWins: Record<string, number> = {};
-  for (const result of results) {
-    if (result.judgment.winner !== "opencandle" && result.judgment.winner !== "tie") {
-      competitorWins[result.judgment.winner] = (competitorWins[result.judgment.winner] ?? 0) + 1;
-    }
-  }
-  return {
-    openCandleWins: results.filter((result) => result.judgment.winner === "opencandle").length,
-    competitorWins,
-    ties: results.filter((result) => result.judgment.winner === "tie").length,
-  };
-}
-
 function writeReport(report: unknown): string {
   const dir = join(process.cwd(), "tests", "evals", "runs");
   mkdirSync(dir, { recursive: true });
@@ -827,8 +905,14 @@ async function resolveModelWithAuth(
   provider: string | undefined,
   modelId: string | undefined,
   missingAuthMessage: string,
+  options: { requireKnownModel?: boolean } = {},
 ): Promise<ResolvedModel> {
   const model = resolveModel(provider, modelId);
+  // An unknown provider/model pair resolves to undefined; name it instead of
+  // failing later inside the model call.
+  if (options.requireKnownModel && !model) {
+    throw new Error(`Unknown model ${provider}/${modelId}.\n${missingAuthMessage}`);
+  }
   // ModelRegistry.getApiKeyAndHeaders skips env-key fallback, so seed
   // provider env keys (e.g. GEMINI_API_KEY) as runtime AuthStorage
   // overrides when the registry has no stored credential. The override

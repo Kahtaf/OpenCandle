@@ -2,6 +2,10 @@ import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
+import {
+  buildProtectivePutSizingContract,
+  createProtectivePutValidation,
+} from "./protective-put-output-validation.js";
 
 export function buildOptionsScreenerWorkflowDefinition(
   resolution: SlotResolution<OptionsScreenerSlots>,
@@ -64,8 +68,7 @@ export function buildOptionsScreenerWorkflowDefinition(
 Protective-put requirements:
 - Treat this as buying puts to hedge an existing long ${s.symbol} share position, not buying calls.
 - The final answer MUST discuss hedge floor, premium as a percent of position value, expiration fit, moneyness, and liquidity.
-- If share quantity is available, translate shares into approximate contract count using 1 put contract per 100 shares.
-- If share quantity is available, state total premium for the required number of contracts.
+${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuantity) : "- Ask for owned share quantity before giving personalized whole-contract sizing; verify the actual contract multiplier."}
 - For cost-sensitive requests, explain the tradeoff between cheaper lower-strike puts and weaker protection.
 - Mention lower-cost alternatives such as collars or put spreads when outright put premium is high.
 - Do not frame assignment risk like a short option sale.
@@ -102,10 +105,13 @@ ${protectivePutFallback}
 Length constraints:
 - Max 1 sentence explaining the #1 pick.
 - Risk section: max 3 bullets.
-- Keep total response under 30 lines.`,
+- ${isProtectivePutContext && s.shareQuantity !== undefined ? "Keep prose concise; allow up to 45 lines to preserve both the position-sizing and premium calculation tables." : "Keep total response under 30 lines."}`,
         {
           requiredInputs: ["option_chain"],
           expectedOutputs: ["ranked_contracts"],
+          ...(isProtectivePutContext && s.shareQuantity !== undefined
+            ? { outputValidation: createProtectivePutValidation(s.shareQuantity) }
+            : {}),
         },
       ),
     ],

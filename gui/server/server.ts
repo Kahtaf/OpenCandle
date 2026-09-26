@@ -246,6 +246,7 @@ const httpRequestHandler = createHttpRequestHandler({
   quoteSnapshotStore,
   indicesSnapshotStore,
   localSessionCoordinator,
+  cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
 });
 
 const server = createServer((req, res) => {

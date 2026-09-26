@@ -26,6 +26,26 @@ const compareOutput: RouterOutput = {
   reasoning: "compare ETFs",
 };
 
+// Mirrors the router's minimalFallback output after persistent model validation failure.
+function minimalFallbackOutput(symbols: string[]): RouterOutput {
+  return {
+    routeKind: "agent_task",
+    workflow: "general_finance_qa",
+    entities: { symbols },
+    slots: {},
+    preference_updates: [],
+    missing_required: [],
+    tool_bundles: [],
+    diagnostics: [
+      {
+        code: "router_validation_failed",
+        message: "router validation failed persistently; emitted minimal fallback",
+      },
+    ],
+    reasoning: "router validation failed; emitted minimal fallback",
+  };
+}
+
 describe("planning layer", () => {
   it("selects a default task family, policy, evidence plan, contract, and checks", () => {
     const planning = buildPlanningEnvelope(input, compareOutput);
@@ -544,6 +564,85 @@ describe("planning layer", () => {
 
     expect(portfolioOptions.taskFamily).toBe("options_strategy");
     expect(stockPuts.taskFamily).toBe("options_strategy");
+  });
+
+  it("routes held-share downside-protection put prompts to options strategy after a minimal fallback route", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text:
+          "I own 450 shares of AAPL and want downside protection through the next month. " +
+          "How many puts should I consider and what tradeoffs matter?",
+      },
+      minimalFallbackOutput(["AAPL"]),
+    );
+
+    expect(planning.taskFamily).toBe("options_strategy");
+    expect(planning.policyCardId).toBe("options_strategy");
+    expect(planning.answerContractId).toBe("options_strategy");
+    expect(planning.commitmentMode).toBe("decision");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
+  it("recognizes held-share put protection across quantities and word order", () => {
+    const protectionFirst = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Downside protection with puts for my 120 shares of TSLA — what should I consider?",
+      },
+      minimalFallbackOutput(["TSLA"]),
+    );
+    const putsFirst = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "I have 300 shares of KO and want to know which puts provide protection over the next quarter.",
+      },
+      minimalFallbackOutput(["KO"]),
+    );
+
+    expect(protectionFirst.taskFamily).toBe("options_strategy");
+    expect(protectionFirst.policyCardId).toBe("options_strategy");
+    expect(putsFirst.taskFamily).toBe("options_strategy");
+    expect(putsFirst.policyCardId).toBe("options_strategy");
+  });
+
+  it("keeps pure puts education and non-options portfolio protection out of options strategy", () => {
+    const education = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "What are puts, and how do they provide downside protection?",
+      },
+      minimalFallbackOutput([]),
+    );
+    const conceptualOptions = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "What are protective puts and how do they work as options?",
+      },
+      minimalFallbackOutput([]),
+    );
+    const portfolioRisk = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "How should I protect my portfolio from downside risk without options?",
+      },
+      minimalFallbackOutput([]),
+    );
+    const verbPut = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Where should I put my shares for downside protection?",
+      },
+      minimalFallbackOutput([]),
+    );
+
+    expect(education.taskFamily).not.toBe("options_strategy");
+    expect(education.policyCardId).not.toBe("options_strategy");
+    expect(conceptualOptions.taskFamily).toBe("concept_explainer");
+    expect(conceptualOptions.policyCardId).toBe("concept_options_education");
+    expect(portfolioRisk.taskFamily).toBe("portfolio_review");
+    expect(verbPut.taskFamily).not.toBe("options_strategy");
+    expect(verbPut.policyCardId).not.toBe("options_strategy");
   });
 
   it("does not route generic macro hedge prompts to options strategy", () => {

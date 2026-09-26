@@ -906,6 +906,203 @@ describe("sessionEntriesToChatEvents", () => {
 
     expect(output?.details).toEqual(details);
   });
+
+  it("surfaces a durable cancelled turn with the original prompt before the stopped notice", () => {
+    const events = sessionEntriesToChatEvents(
+      [customEntry("cancel-1", "opencandle-run-cancelled", { text: "hold then stop" })],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toEqual([
+      expect.objectContaining({ type: "session.updated", seq: 1 }),
+      {
+        type: "message.created",
+        sessionId: "s1",
+        messageId: "cancelled-user-cancel-1",
+        role: "user",
+        seq: 2,
+      },
+      {
+        type: "message.completed",
+        sessionId: "s1",
+        messageId: "cancelled-user-cancel-1",
+        content: [{ type: "text", text: "hold then stop" }],
+        seq: 3,
+      },
+      {
+        type: "custom.message",
+        sessionId: "s1",
+        messageId: "cancel-1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        details: { text: "hold then stop", prompt: "hold then stop" },
+        seq: 4,
+      },
+    ]);
+    const userMessages = events.filter(
+      (event) => event.type === "message.created" && event.role === "user",
+    );
+    expect(userMessages).toHaveLength(1);
+  });
+
+  it("renders a Stop mid answer stream as a stopped turn that keeps the partial answer", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "Stream the NVDA answer",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          ...assistantMessage("NVDA is trading"),
+          stopReason: "aborted",
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "message.completed",
+        messageId: "a1",
+        content: [{ type: "text", text: "NVDA is trading" }],
+      }),
+    );
+    const stopped = events.filter(
+      (event) => event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+    );
+    expect(stopped).toEqual([
+      expect.objectContaining({
+        messageId: "stopped-a1",
+        content: [{ type: "text", text: "Run stopped before it finished its answer." }],
+        details: { reason: "aborted", prompt: "Stream the NVDA answer" },
+      }),
+    ]);
+    // The stopped notice follows the partial answer.
+    expect(events.indexOf(stopped[0]!)).toBeGreaterThan(
+      events.findIndex((event) => event.type === "message.completed" && event.messageId === "a1"),
+    );
+    // Stopping is not a model failure.
+    expect(
+      events.some(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-model-run-failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("renders an aborted turn whose persisted content is missing as stopped only", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", { role: "user", content: "hold", timestamp: Date.now() } as Message),
+        messageEntry("a1", {
+          ...assistantMessage(""),
+          content: undefined,
+          stopReason: "aborted",
+        } as unknown as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.some((event) => "messageId" in event && event.messageId === "a1")).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "stopped-a1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+      }),
+    );
+  });
+
+  it("renders an aborted turn with no answer text as stopped without an empty bubble", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", { role: "user", content: "hold", timestamp: Date.now() } as Message),
+        messageEntry("a1", {
+          ...assistantMessage(""),
+          content: [],
+          stopReason: "aborted",
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.some((event) => "messageId" in event && event.messageId === "a1")).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "custom.message",
+        messageId: "stopped-a1",
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        details: { reason: "aborted", prompt: "hold" },
+      }),
+    );
+  });
+
+  it("does not derive a user bubble when the cancelled marker has no text", () => {
+    const events = sessionEntriesToChatEvents(
+      [customEntry("cancel-2", "opencandle-run-cancelled", {})],
+      { sessionId: "s1", startSeq: 1 },
+    );
+    expect(
+      events.filter((event) => event.type === "message.created" && event.role === "user"),
+    ).toHaveLength(0);
+  });
+
+  it("replays an attachment-bearing cancelled turn from the original input, then a plain turn with no leak", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        customEntry("original-cancel", "opencandle-user-input", {
+          original: "am I too concentrated?",
+          attachments: [{ kind: "portfolio", label: "Portfolio" }],
+        }),
+        customEntry("cancel-3", "opencandle-run-cancelled", {
+          // The marker stores the expanded workflow prompt, not the user's words.
+          text: "Current date: 2026-07-15 Analyze the attached portfolio for concentration risk...",
+        }),
+        messageEntry("plain-user", {
+          role: "user",
+          content: "What is NVDA trading at?",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const userMessages = events.filter(
+      (event) => event.type === "message.created" && event.role === "user",
+    );
+    expect(userMessages.map((event) => event.messageId)).toEqual([
+      "cancelled-user-cancel-3",
+      "plain-user",
+    ]);
+
+    const cancelled = events.find(
+      (event) =>
+        event.type === "message.completed" && event.messageId === "cancelled-user-cancel-3",
+    );
+    expect(cancelled).toMatchObject({
+      content: [{ type: "text", text: "am I too concentrated?" }],
+      attachments: [{ kind: "portfolio", label: "Portfolio" }],
+    });
+    // Retry on the stopped turn re-sends the user's own words, not the
+    // expanded workflow prompt the marker stores.
+    expect(
+      events.find(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+      ),
+    ).toMatchObject({ details: { prompt: "am I too concentrated?" } });
+
+    const plain = events.find(
+      (event) => event.type === "message.completed" && event.messageId === "plain-user",
+    );
+    expect(plain).toMatchObject({
+      content: [{ type: "text", text: "What is NVDA trading at?" }],
+    });
+    expect(plain).not.toHaveProperty("attachments");
+  });
 });
 
 function messageEntry(id: string, message: Message): SessionEntry {

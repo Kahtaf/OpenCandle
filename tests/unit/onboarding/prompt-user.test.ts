@@ -193,3 +193,61 @@ describe("promptUser — injected askUserHandler", () => {
     expect(result).toEqual({ answer: null, cancelled: true });
   });
 });
+
+describe("promptUser — abort signal", () => {
+  it("returns cancelled without asking when the run was already stopped", async () => {
+    const handler: AskUserHandler = vi.fn(async () => ({ answer: "late", cancelled: false }));
+    const ui = createUi();
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await promptUser(
+      { hasUI: true, ui } as any,
+      { question: "Q", questionType: "select", options: ["a"] },
+      handler,
+      controller.signal,
+    );
+
+    expect(result).toEqual({ answer: null, cancelled: true });
+    expect(handler).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
+  });
+
+  it("forwards the run signal to the injected handler", async () => {
+    const handler: AskUserHandler = vi.fn(async () => ({ answer: "a", cancelled: false }));
+    const controller = new AbortController();
+
+    await promptUser(
+      { hasUI: false, ui: {} } as any,
+      { question: "Q", questionType: "select", options: ["a"] },
+      handler,
+      controller.signal,
+    );
+
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ question: "Q" }), {
+      signal: controller.signal,
+    });
+  });
+
+  it("dismisses the TUI dialog and reports cancelled when the run is stopped", async () => {
+    const controller = new AbortController();
+    const ui = createUi();
+    ui.confirm.mockImplementationOnce(
+      (_title: string, _message: string, opts?: { signal?: AbortSignal }) =>
+        new Promise<boolean>((resolve) => {
+          opts?.signal?.addEventListener("abort", () => resolve(false), { once: true });
+        }),
+    );
+
+    const pending = promptUser(
+      { hasUI: true, ui } as any,
+      { question: "Proceed?", questionType: "confirm" },
+      undefined,
+      controller.signal,
+    );
+    controller.abort();
+
+    await expect(pending).resolves.toEqual({ answer: null, cancelled: true });
+    expect(ui.confirm).toHaveBeenCalledWith("Proceed?", "", { signal: controller.signal });
+  });
+});

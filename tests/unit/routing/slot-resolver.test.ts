@@ -33,6 +33,8 @@ describe("resolvePortfolioSlots", () => {
     expect(result.sources.riskProfile).toBe("default");
     expect(result.resolved.timeHorizon).toBe("1y_plus");
     expect(result.sources.timeHorizon).toBe("default");
+    expect(result.resolved.assetScope).toBe("diversified_etf_building_blocks");
+    expect(result.sources.assetScope).toBe("default");
     expect(result.resolved.positionCount).toBe(6);
     expect(result.sources.positionCount).toBe("default");
     expect(result.resolved.maxSinglePositionPct).toBe(20);
@@ -141,6 +143,11 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.resolved.dteTarget).toBe("25_to_45_days");
     expect(result.sources.dteTarget).toBe("user");
     expect(result.resolved.objective).toBe("balanced_leverage_and_probability");
+    expect(result.sources.objective).toBe("default");
+    expect(result.resolved.moneynessPreference).toBe("atm_to_slightly_otm");
+    expect(result.sources.moneynessPreference).toBe("default");
+    expect(result.resolved.liquidityMinimum).toBe("high_open_interest_and_tight_spread");
+    expect(result.sources.liquidityMinimum).toBe("default");
   });
 
   it("flags missing required slot when no symbol", () => {
@@ -170,8 +177,12 @@ describe("resolveOptionsScreenerSlots", () => {
     };
     const result = resolveOptionsScreenerSlots(entities);
 
+    expect(result.resolved.dteTarget).toBe("25_to_45_days");
+    expect(result.sources.dteTarget).toBe("default");
     expect(result.defaultsUsed).toContain("dteTarget");
     expect(result.defaultsUsed).toContain("objective");
+    expect(result.defaultsUsed).toContain("moneynessPreference");
+    expect(result.defaultsUsed).toContain("liquidityMinimum");
     expect(result.defaultsUsed).not.toContain("symbol");
     expect(result.defaultsUsed).not.toContain("direction");
   });

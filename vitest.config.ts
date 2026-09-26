@@ -3,6 +3,8 @@ import {
   agentToolsProject,
   evalsProject,
   guiBrowserProject,
+  guiIntegrationProject,
+  guiJourneyProject,
   guiReleaseProject,
   siteProject,
   unitProject,
@@ -22,11 +24,42 @@ export default defineConfig({
       agentToolsProject,
       evalsProject,
       guiBrowserProject,
+      guiIntegrationProject,
+      guiJourneyProject,
       guiReleaseProject,
     ],
     coverage: {
       provider: "v8",
-      include: ["src/**/*.ts"],
+      // Measure only in-process (Node) execution. Browser, child-process, and
+      // WebContainer-only surfaces are still listed so an uninstrumented file
+      // stays in the denominator; scripts/coverage-report.mjs labels every
+      // surface that this run cannot execute instead of reporting it as zero.
+      include: [
+        "src/**/*.{ts,tsx,js,jsx}",
+        "gui/server/**/*.{ts,tsx,js,jsx}",
+        "gui/shared/**/*.{ts,tsx,js,jsx}",
+        "gui/web/src/**/*.{ts,tsx,js,jsx}",
+        "gui/hosted/src/**/*.{ts,tsx,js,jsx}",
+        "gui/hosted/runtime/**/*.{ts,tsx,js,jsx}",
+        "packages/ui/src/**/*.{ts,tsx,js,jsx}",
+        "workers/provider-relay/src/**/*.{ts,tsx,js,jsx}",
+      ],
+      // Generated declarations/source and build output only, with reasons.
+      // Never excluded: real source that is merely difficult to execute.
+      exclude: [
+        "**/*.d.ts", // generated TypeScript declarations
+        "**/*.generated.{ts,tsx,js,jsx}", // generated source (e.g. pi model catalog)
+        "**/worker-configuration.d.ts", // generated Cloudflare worker env declaration
+        "**/node_modules/**", // vendored dependencies
+        "**/dist/**", // built artifacts
+        "**/*.{test,spec}.{ts,tsx,js,jsx}", // test files, not production source
+        "**/*.config.{ts,js,mjs,cjs}", // tooling configuration
+      ],
+      // `json` writes coverage/unit/coverage-final.json, the raw Istanbul map
+      // that scripts/coverage-merge.mjs merges with the relay lane. The other
+      // reporters keep this lane's own human-readable report.
+      reporter: ["text-summary", "json", "json-summary", "lcov"],
+      reportsDirectory: "coverage/unit",
     },
   },
 });

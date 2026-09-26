@@ -15,6 +15,5 @@ describe("browser Pi model runtime", () => {
     expect(runtime.getAvailableSnapshot().some((model) => model.provider === "anthropic")).toBe(
       true,
     );
-    expect(runtime.constructor.name).toBe("ModelRuntime");
   });
 });

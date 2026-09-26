@@ -20,6 +20,10 @@ import { guardModelRuntimeApiKeyLogins } from "./model-key-login-guard.js";
 import openCandleExtensionCore, {
   type OpenCandleExtensionOptions,
 } from "./opencandle-extension-core.js";
+import {
+  attachSessionCancellationState,
+  createSessionCancellationState,
+} from "./session-cancellation.js";
 
 export interface CreateOpenCandleSessionOptions {
   cwd?: string;
@@ -47,6 +51,17 @@ export interface CreateOpenCandleSessionResult extends CreateAgentSessionResult 
   waitForSettled(): Promise<void>;
 }
 
+// Session-bound coordinator lookup for host code (local GUI) that holds the
+// AgentSession but not the coordinator created inside the extension factory.
+const sessionCoordinators = new WeakMap<object, SessionCoordinator>();
+
+export function getSessionCoordinator(
+  session: object | null | undefined,
+): SessionCoordinator | undefined {
+  if (!session || typeof session !== "object") return undefined;
+  return sessionCoordinators.get(session);
+}
+
 export async function createOpenCandleSessionCore(
   options: CreateOpenCandleSessionOptions = {},
 ): Promise<CreateOpenCandleSessionResult> {
@@ -58,6 +73,10 @@ export async function createOpenCandleSessionCore(
   const useInlineExtension = options.useInlineExtension ?? true;
   if (options.modelRuntime) guardModelRuntimeApiKeyLogins(options.modelRuntime);
   let coordinator: SessionCoordinator | undefined;
+  // One cancellation state per created session. It is passed to the extension
+  // so input-hook routing can abandon a cancelled turn, then attached to the
+  // session object so the owning GUI can reach the current run token.
+  const cancellation = createSessionCancellationState();
   const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
         cwd,
@@ -68,6 +87,7 @@ export async function createOpenCandleSessionCore(
             openCandleExtensionCore(pi, {
               askUserHandler: options.askUserHandler,
               modelRuntime: options.modelRuntime,
+              cancellation,
               stateDatabaseFactory: options.stateDatabaseFactory,
               toolDefinitions: options.toolDefinitions,
               routerLlmClient: options.routerLlmClient,
@@ -100,6 +120,9 @@ export async function createOpenCandleSessionCore(
     noTools: "builtin",
   });
   guardModelRuntimeApiKeyLogins(result.session.modelRuntime);
+
+  attachSessionCancellationState(result.session, cancellation);
+  if (coordinator) sessionCoordinators.set(result.session, coordinator);
 
   await applySavedDefaultModel(result);
 

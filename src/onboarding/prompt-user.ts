@@ -31,21 +31,40 @@ export interface PromptResult {
  * handler takes precedence over `ctx.ui` and provides the answer directly.
  *
  * When neither a handler nor a UI is available, returns `{answer: null, cancelled: true}`.
+ *
+ * `signal` is the asking tool's run signal: a stopped run never opens a new
+ * question, and an open one is dismissed and reported as cancelled.
  */
 export async function promptUser(
   ctx: ExtensionContext | undefined,
   opts: PromptOptions,
   handler?: AskUserHandler,
+  signal?: AbortSignal,
 ): Promise<PromptResult> {
+  if (signal?.aborted) return { answer: null, cancelled: true };
+  const result = await askOnce(ctx, opts, handler, signal);
+  return signal?.aborted ? { answer: null, cancelled: true } : result;
+}
+
+async function askOnce(
+  ctx: ExtensionContext | undefined,
+  opts: PromptOptions,
+  handler: AskUserHandler | undefined,
+  signal: AbortSignal | undefined,
+): Promise<PromptResult> {
+  const dialogOptions = signal ? [{ signal }] : [];
   // Priority: injected handler > UI > no-UI fallback.
   if (handler) {
-    const result = await handler({
-      question: opts.question,
-      questionType: opts.questionType,
-      options: opts.options,
-      placeholder: opts.placeholder,
-      reason: opts.reason,
-    });
+    const result = await handler(
+      {
+        question: opts.question,
+        questionType: opts.questionType,
+        options: opts.options,
+        placeholder: opts.placeholder,
+        reason: opts.reason,
+      },
+      ...dialogOptions,
+    );
     if (result.cancelled) {
       return { answer: null, cancelled: true };
     }
@@ -62,7 +81,7 @@ export async function promptUser(
       if (options.length === 0) {
         return { answer: null, cancelled: true };
       }
-      const choice = await ctx.ui.select(opts.question, options);
+      const choice = await ctx.ui.select(opts.question, options, ...dialogOptions);
       if (choice === undefined) {
         return { answer: null, cancelled: true };
       }
@@ -70,7 +89,7 @@ export async function promptUser(
     }
 
     case "text": {
-      const input = await ctx.ui.input(opts.question, opts.placeholder ?? "");
+      const input = await ctx.ui.input(opts.question, opts.placeholder ?? "", ...dialogOptions);
       if (input === undefined || input.trim() === "") {
         return { answer: null, cancelled: true };
       }
@@ -78,7 +97,7 @@ export async function promptUser(
     }
 
     case "confirm": {
-      const confirmed = await ctx.ui.confirm(opts.question, opts.reason ?? "");
+      const confirmed = await ctx.ui.confirm(opts.question, opts.reason ?? "", ...dialogOptions);
       return { answer: confirmed ? "Yes" : "No", cancelled: false };
     }
   }

@@ -47,7 +47,7 @@ export function createSentimentSummaryTool(
     description:
       "Cross-source sentiment summary combining Twitter, Reddit, and web/news. Returns per-source scores, aggregate sentiment, and divergence detection.",
     parameters: params,
-    async execute(_toolCallId, args, _signal, _onUpdate, ctx?: ExtensionContext) {
+    async execute(_toolCallId, args, signal, _onUpdate, ctx?: ExtensionContext) {
       const hours = args.hours ?? 24;
       const config = getConfig();
       const warnings: string[] = [];
@@ -94,7 +94,7 @@ export function createSentimentSummaryTool(
         const twitterResult = await executeTwitter(
           "summary-twitter",
           { query: args.query, limit: 50, hours },
-          undefined,
+          signal,
           undefined,
           ctx,
         );
@@ -126,7 +126,7 @@ export function createSentimentSummaryTool(
               "options",
             ],
           },
-          undefined,
+          signal,
           undefined,
           ctx,
         );

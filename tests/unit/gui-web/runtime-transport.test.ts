@@ -81,6 +81,33 @@ describe("loopback runtime transport", () => {
     await expect(transport.createSession()).rejects.toThrow("writer is read-only");
   });
 
+  it("posts an explicit run cancellation targeting the original action id", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      requests.push({ url, init });
+      return jsonResponse({ ok: true, cancelled: true, duplicate: false });
+    });
+    const transport = createLoopbackRuntimeTransport({ fetchImpl });
+
+    const result = await transport.cancelChatRun("session/one", {
+      sessionId: "session/one",
+      actionId: "stop-1",
+      targetActionId: "chat-1",
+    });
+
+    expect(result).toEqual({ ok: true, cancelled: true, duplicate: false });
+    expect(requests[0]?.url).toBe("/api/sessions/session%2Fone/run-cancel");
+    expect(requests[0]?.init).toMatchObject({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+      sessionId: "session/one",
+      actionId: "stop-1",
+      targetActionId: "chat-1",
+    });
+  });
+
   it("opens the existing websocket channel and exposes a bounded connection surface", () => {
     const constructed: string[] = [];
     let openedSocket: FakeWebSocket | undefined;

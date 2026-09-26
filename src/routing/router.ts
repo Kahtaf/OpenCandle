@@ -43,31 +43,55 @@ const VALID_CONFIDENCE = new Set(["high", "medium", "low"]);
  * validation failure with a corrective message. Falls back to a minimal
  * `agent_task` output on persistent failure.
  *
+ * `signal` carries the run's cancellation through to the client transport. An
+ * aborted signal must not open a new request, including the validation retry.
+ *
  * The LLM client is injected so unit tests can supply deterministic responses.
  */
 export async function route(
   input: RouterInputContext,
   client: RouterLlmClient,
+  signal?: AbortSignal,
 ): Promise<RouterOutput> {
   const prompt = buildRouterPrompt(input);
+  if (signal?.aborted) throw abortErrorFor(signal);
 
   let firstError: string | undefined;
   try {
-    const raw = await client.complete(prompt);
+    const raw = await client.complete(prompt, signal);
     return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch (err) {
+    // Never turn an abort into the validation retry: that would open a second
+    // request for a run the user already stopped.
+    if (isAbortLikeError(err, signal)) throw err;
     firstError = err instanceof Error ? err.message : String(err);
   }
+
+  if (signal?.aborted) throw abortErrorFor(signal);
 
   // Retry once with error feedback.
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
-    const raw = await client.complete(retryPrompt);
+    const raw = await client.complete(retryPrompt, signal);
     return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
-  } catch {
+  } catch (err) {
+    if (isAbortLikeError(err, signal)) throw err;
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
     return postProcessRouterOutput(input.text, minimalFallback(input.text), input);
   }
+}
+
+function isAbortLikeError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function abortErrorFor(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error) return reason;
+  const error = new Error("router LLM call aborted");
+  error.name = "AbortError";
+  return error;
 }
 
 export function validateRouterOutput(raw: string): RouterOutput {
@@ -306,6 +330,24 @@ export function postProcessRouterOutput(
       };
     }
   }
+
+  // The entity block above runs before follow-up symbol recovery, so the model's
+  // cost basis is validated here against the final resolved symbols. This keeps
+  // the extracted fallback and the model's original candidate untouched.
+  next = {
+    ...next,
+    entities: {
+      ...next.entities,
+      costBasis: resolveCostBasis(
+        text,
+        output.entities.costBasis,
+        extracted.costBasis,
+        extracted.heldSymbol,
+        inputContext,
+        next.entities.symbols,
+      ),
+    },
+  };
 
   if (isPortfolioEvaluationRequest(text)) {
     const savedSymbols = inputContext?.portfolioPositions?.map((position) => position.symbol) ?? [];
@@ -1345,6 +1387,124 @@ function readPortfolioPosition(
         }
       : {}),
   };
+}
+
+// Absence-of-basis-role-context guard. A model-emitted cost basis is dropped
+// only when nothing establishes a basis/purchase/holding role: the current turn,
+// a same-symbol prior user turn, a reply to a preceding assistant basis
+// question, or a saved position. This is role presence, not numeric grounding,
+// so derived, scaled, or spelled amounts stay the model's interpretation and the
+// deterministic extractor remains the fallback. An assistant quote alone is
+// never a source.
+function resolveCostBasis(
+  text: string,
+  modelCostBasis: number | undefined,
+  extractedCostBasis: number | undefined,
+  heldSymbol: string | undefined,
+  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+  symbols: string[],
+): number | undefined {
+  if (modelCostBasis === undefined) return extractedCostBasis;
+  if (extractedCostBasis !== undefined) return modelCostBasis;
+  if (hasBasisRoleContext(text, heldSymbol, symbols, inputContext)) return modelCostBasis;
+  return extractedCostBasis;
+}
+
+const COST_BASIS_CONTEXT =
+  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
+
+function hasBasisRoleContext(
+  text: string,
+  heldSymbol: string | undefined,
+  symbols: string[],
+  inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+): boolean {
+  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text)) return true;
+  if (answersBasisQuestion(symbols, inputContext?.priorTurns)) return true;
+  const turns = inputContext?.priorTurns ?? [];
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
+    if (turn.role !== "user") continue;
+    const turnEntities = extractEntities(turn.text);
+    if (
+      turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
+      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text))
+    ) {
+      return true;
+    }
+    if (
+      answersBasisQuestion(symbols, turns.slice(0, index)) &&
+      suppliesBasisReply(turn.text, turnEntities)
+    ) {
+      return true;
+    }
+  }
+  return symbols.some(
+    (symbol) =>
+      readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
+  );
+}
+
+// A historical reply to a basis question qualifies only when it actually supplies
+// a basis amount or holding context; a non-answer such as "I don't know" leaves
+// no basis role for a later turn to inherit.
+const BASIS_REPLY_AMOUNT = /(?<![A-Za-z\d])\$?\d[\d,]*(?:\.\d+)?(?![A-Za-z\d])/;
+
+function suppliesBasisReply(text: string, entities: ReturnType<typeof extractEntities>): boolean {
+  return (
+    entities.costBasis !== undefined ||
+    entities.heldSymbol !== undefined ||
+    COST_BASIS_CONTEXT.test(text) ||
+    BASIS_REPLY_AMOUNT.test(text)
+  );
+}
+
+// The user turn immediately after an assistant request for a cost/purchase price
+// replies to it; callers pass only the turns preceding the user turn, so a later
+// assistant question never applies backwards. An assistant quote has no request
+// form and never qualifies.
+function answersBasisQuestion(
+  symbols: string[],
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
+): boolean {
+  const lastAssistant = [...(priorTurns ?? [])].reverse().find((turn) => turn.role === "assistant");
+  if (!lastAssistant || !asksForCostBasis(lastAssistant.text)) return false;
+  const askedSymbols = extractEntities(lastAssistant.text).symbols;
+  return (
+    askedSymbols.length === 0 ||
+    symbols.length === 0 ||
+    askedSymbols.some((symbol) => symbols.includes(symbol))
+  );
+}
+
+// A question counts as a cost-basis request with an explicit basis field or a
+// personal purchase-price intent. Payment must be active-personal ("did you
+// pay", "had you originally paid"), so passive "were you paid" receipts do not
+// qualify; the price cue is linked to the user's acquisition in order, not by
+// independent presence. The explicit basis field (including plain "basis")
+// needs no pronoun.
+const COST_BASIS_REQUEST_FORM =
+  /\?|\b(?:what|which|how|tell\s+me|give\s+me|share|confirm|state)\b/i;
+const COST_BASIS_REQUEST_FIELD =
+  /\b(?:cost\s*basis|basis|purchase\s+price|average\s+cost|avg\s+cost|entry\s+price)\b/i;
+// Bounded active modifiers ("originally") are allowed before the verb, but
+// passive auxiliaries are excluded.
+const ACTIVE_PAY_MODIFIER = String.raw`(?:(?!\b(?:were|was|are|is|be|been|being|get|got)\b)\w+\s+){0,2}`;
+const COST_BASIS_REQUEST_PRICE = new RegExp(
+  [
+    String.raw`\b(?:did|do|does)\s+(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}pay(?:ing)?\b`,
+    String.raw`\b(?:had|have|has)\s+(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`\b(?:you|i|we)\s+(?:had|have|has)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`(?<!\b(?:were|was|are|is|be|been|being|get|got)\s)\b(?:you|i|we)\s+${ACTIVE_PAY_MODIFIER}paid\b`,
+    String.raw`\b(?:price|per\s+share|cost|for)\b[^.?!]{0,40}\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b`,
+    String.raw`\b(?:you|your|i|we)\b[^.?!]{0,40}\b(?:bought|purchased|acquired)\b[^.?!]{0,40}\b(?:price|per\s+share|cost|for)\b`,
+  ].join("|"),
+  "i",
+);
+
+function asksForCostBasis(text: string): boolean {
+  if (!COST_BASIS_REQUEST_FORM.test(text)) return false;
+  return COST_BASIS_REQUEST_FIELD.test(text) || COST_BASIS_REQUEST_PRICE.test(text);
 }
 
 function isConversationalRiskPreferenceUpdate(

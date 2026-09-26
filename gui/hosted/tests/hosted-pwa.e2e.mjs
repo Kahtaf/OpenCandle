@@ -6,13 +6,136 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import initSqlJs from "sql.js";
+import {
+  classifyHostedRequest,
+  HOSTED_GUARD_PROBE_URL,
+} from "./hosted-deterministic-network.mjs";
+
+// The hosted smoke has two explicit lanes:
+//   - default `test:browser`: deterministic, credential-free. Public provider
+//     HTTP is answered at the browser transport boundary by fixtures, and any
+//     unexpected external provider/model request fails the run. WebContainer
+//     boot infrastructure (stackblitz.com, *.staticblitz.com,
+//     *.webcontainer-api.io) still reaches the real network on purpose and is
+//     documented in hosted-deterministic-network.mjs; this lane is
+//     provider-isolated, not offline.
+//   - `test:browser:live` (OPENCANDLE_HOSTED_LIVE=1): the original live probes,
+//     including direct browser provider/CORS fetches and real model-key turns.
+const live = process.env.OPENCANDLE_HOSTED_LIVE === "1";
+// The relay smoke proves real relay authorization, so it is only meaningful in
+// the live lane. Fail loudly instead of silently downgrading the run.
+if (process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1" && !live) {
+  process.stderr.write(
+    "OPENCANDLE_PROVIDER_RELAY_E2E requires OPENCANDLE_HOSTED_LIVE=1; run npm run test:browser:live.\n",
+  );
+  process.exit(1);
+}
+const relayE2e = live && process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1";
 
 const port = process.env.OPENCANDLE_HOSTED_TEST_PORT
   ? Number.parseInt(process.env.OPENCANDLE_HOSTED_TEST_PORT, 10)
   : 30_000 + (process.pid % 20_000);
 const origin = `http://127.0.0.1:${port}`;
-const relayE2e = process.env.OPENCANDLE_PROVIDER_RELAY_E2E === "1";
 const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-5-mini");
+
+// Model and data credentials are read only in the live lane, so the default
+// lane can never consume them even when they happen to be present in the
+// ambient environment.
+const apiKey = live ? String(process.env.OPENAI_API_KEY || "").trim() : "";
+const googleApiKey = live ? String(process.env.GEMINI_API_KEY || "").trim() : "";
+const alphaVantageKey = live ? String(process.env.ALPHA_VANTAGE_API_KEY || "").trim() : "";
+
+// Fail-closed live model sublane. Requesting the model turn is explicit, and a
+// request that cannot be honored (no live lane or no real key) is a non-zero
+// exit rather than a silent skip. The default fixture lane never requests it.
+const modelE2e = process.env.OPENCANDLE_HOSTED_MODEL_E2E === "1";
+if (modelE2e && !apiKey) {
+  process.stderr.write(
+    "OPENCANDLE_HOSTED_MODEL_E2E requires OPENCANDLE_HOSTED_LIVE=1 and a real OPENAI_API_KEY.\n",
+  );
+  process.exit(1);
+}
+
+// These are the model/data credential env names this repo's providers use. The
+// scrub below is defense-in-depth for the static preview server only: it is a
+// best-effort allowlist, not an exhaustive one, and the authoritative
+// guarantee that the default lane consumes no credential is the `live` gate on
+// every credential read above. Never print a value from this list.
+const CREDENTIAL_ENV_NAMES = [
+  "OPENAI_API_KEY",
+  "GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "ALPHA_VANTAGE_API_KEY",
+  "FRED_API_KEY",
+  "FINNHUB_API_KEY",
+  "BRAVE_API_KEY",
+  "EXA_API_KEY",
+  "LSE_API_KEY",
+];
+function browserServerEnv() {
+  if (live) return process.env;
+  const env = { ...process.env };
+  for (const name of CREDENTIAL_ENV_NAMES) delete env[name];
+  return env;
+}
+
+// Deterministic-lane routing bookkeeping. The route guard answers expected
+// provider transports from fixtures and aborts everything else; a separate
+// context request observer independently records every external URL the browser
+// context sees, so a request that bypasses routing still fails the run.
+const fixtureHits = new Map();
+const routedFixtureIds = new Set();
+const routedFixtureUrls = new Set();
+const observedExternal = new Map();
+const unexpectedRequests = new Set();
+const guardProbeHits = [];
+let guardProbeObserved = 0;
+function observeExternalRequest(request) {
+  const raw = request.url();
+  if (!raw.startsWith("http://") && !raw.startsWith("https://")) return;
+  const classification = classifyHostedRequest(raw, origin);
+  if (classification.kind === "local" || classification.kind === "infrastructure") return;
+  const href = classification.url?.href ?? raw;
+  // The deliberate guard probe proves the observer sees an external unexpected
+  // URL; it is not an application-issued request, so it does not fail the run.
+  if (href === HOSTED_GUARD_PROBE_URL) {
+    guardProbeObserved += 1;
+    observedExternal.set(href, "guard-probe");
+    return;
+  }
+  observedExternal.set(href, classification.kind);
+  if (classification.kind !== "fixture") {
+    unexpectedRequests.add(`${request.method()} ${href}`);
+  }
+}
+async function installDeterministicNetwork(context) {
+  await context.route("**/*", async (route, request) => {
+    const target = request.url();
+    // Playwright hands only http(s) requests to the router; anything else
+    // (blob:, data:, about:) is not a provider transport.
+    if (!target.startsWith("http://") && !target.startsWith("https://")) return route.continue();
+    const classification = classifyHostedRequest(target, origin);
+    if (classification.kind === "local" || classification.kind === "infrastructure") {
+      return route.continue();
+    }
+    if (classification.kind === "fixture") {
+      const { fixture, url } = classification;
+      fixtureHits.set(fixture.id, (fixtureHits.get(fixture.id) ?? 0) + 1);
+      routedFixtureIds.add(fixture.id);
+      routedFixtureUrls.add(url.href);
+      return route.fulfill({
+        status: 200,
+        contentType: fixture.contentType,
+        body: fixture.body(url),
+      });
+    }
+    const href = classification.url?.href ?? target;
+    if (href === HOSTED_GUARD_PROBE_URL) guardProbeHits.push(href);
+    return route.abort("blockedbyclient");
+  });
+  context.on("request", observeExternalRequest);
+}
 const prompt = relayE2e
   ? "Use get_stock_quote, get_stock_history, and get_options_chain for AAPL. Report its price, five-day direction, and one current option quote."
   : 'I am a conservative long-term investor. Use get_event_probabilities to search Polymarket for "SpaceX". Report one returned market and its probability in one sentence.';
@@ -32,7 +155,7 @@ const server = spawn(
   {
     cwd: new URL("..", import.meta.url),
     detached: true,
-    env: process.env,
+    env: browserServerEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   },
 );
@@ -55,6 +178,8 @@ try {
   await waitForServer(origin, 30_000);
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ serviceWorkers: "allow" });
+  // Route installation must finish before any page request is issued.
+  if (!live) await installDeterministicNetwork(context);
   page = await context.newPage();
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
@@ -94,6 +219,24 @@ try {
   await assertInstallable(page);
   await assertNoHorizontalOverflow(page, "desktop first launch");
 
+  if (!live) {
+    // Red/green guard proof: an allowed-by-CSP, CORS-enabled provider path that
+    // is intentionally not fixtured must be aborted by the routing guard. If
+    // routing were missing this fetch would resolve against the real provider.
+    stage = "unexpected provider guard";
+    const rejected = await page.evaluate(async (probeUrl) => {
+      try {
+        await fetch(probeUrl, { credentials: "omit" });
+        return false;
+      } catch {
+        return true;
+      }
+    }, HOSTED_GUARD_PROBE_URL);
+    assert(rejected, "unexpected provider request is rejected in the deterministic lane");
+    assert(guardProbeHits.length >= 1, "unexpected provider request reached the routing guard");
+    assert(guardProbeObserved >= 1, "unexpected provider request reached the context observer");
+  }
+
   if (relayE2e) {
     stage = "provider relay negotiation";
     await page.getByRole("link", { name: "Diagnostics" }).click();
@@ -103,63 +246,62 @@ try {
     await waitForText(page, "Market research, on your machine", 30_000);
   }
 
-  stage = "direct browser provider proof";
-  const polymarketProof = await page.evaluate(async () => {
-    const response = await fetch(
-      "https://gamma-api.polymarket.com/public-search?q=fed%20rate%20cut&limit=1",
-      { credentials: "omit" },
-    );
-    const body = await response.json();
-    return {
-      ok: response.ok,
-      bounded: JSON.stringify(body).length < 1_000_000,
-      hasMarkets: Array.isArray(body?.events) || Array.isArray(body?.markets) || Array.isArray(body),
-    };
-  });
-  assert(polymarketProof.ok, "Polymarket direct-browser response");
-  assert(polymarketProof.bounded, "Polymarket bounded direct-browser response");
-  assert(polymarketProof.hasMarkets, "Polymarket direct-browser market payload");
-
-  const coinGeckoProof = await page.evaluate(async () => {
-    const response = await fetch(
-      "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false",
-      { credentials: "omit" },
-    );
-    const body = await response.json();
-    return {
-      ok: response.ok,
-      bounded: JSON.stringify(body).length < 1_000_000,
-      hasMarketData: body?.id === "bitcoin" && typeof body?.market_data === "object",
-    };
-  });
-  assert(coinGeckoProof.ok, "CoinGecko direct-browser response");
-  assert(coinGeckoProof.bounded, "CoinGecko bounded direct-browser response");
-  assert(coinGeckoProof.hasMarketData, "CoinGecko direct-browser market payload");
-
-  const alphaVantageKey = String(process.env.ALPHA_VANTAGE_API_KEY || "").trim();
-  if (alphaVantageKey) {
-    const alphaVantageProof = await page.evaluate(async (apiKey) => {
-      const url = new URL("https://www.alphavantage.co/query");
-      url.search = new URLSearchParams({
-        function: "OVERVIEW",
-        symbol: "AAPL",
-        apikey: apiKey,
-      }).toString();
-      const response = await fetch(url, { credentials: "omit" });
+  if (live) {
+    stage = "direct browser provider proof";
+    const polymarketProof = await page.evaluate(async () => {
+      const response = await fetch(
+        "https://gamma-api.polymarket.com/public-search?q=fed%20rate%20cut&limit=1",
+        { credentials: "omit" },
+      );
       const body = await response.json();
       return {
         ok: response.ok,
-        hasOverview: body?.Symbol === "AAPL" && typeof body?.Name === "string",
+        bounded: JSON.stringify(body).length < 1_000_000,
+        hasMarkets: Array.isArray(body?.events) || Array.isArray(body?.markets) || Array.isArray(body),
       };
-    }, alphaVantageKey);
-    assert(alphaVantageProof.ok, "Alpha Vantage direct-browser response");
-    assert(alphaVantageProof.hasOverview, "Alpha Vantage direct-browser company payload");
+    });
+    assert(polymarketProof.ok, "Polymarket direct-browser response");
+    assert(polymarketProof.bounded, "Polymarket bounded direct-browser response");
+    assert(polymarketProof.hasMarkets, "Polymarket direct-browser market payload");
+
+    const coinGeckoProof = await page.evaluate(async () => {
+      const response = await fetch(
+        "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false",
+        { credentials: "omit" },
+      );
+      const body = await response.json();
+      return {
+        ok: response.ok,
+        bounded: JSON.stringify(body).length < 1_000_000,
+        hasMarketData: body?.id === "bitcoin" && typeof body?.market_data === "object",
+      };
+    });
+    assert(coinGeckoProof.ok, "CoinGecko direct-browser response");
+    assert(coinGeckoProof.bounded, "CoinGecko bounded direct-browser response");
+    assert(coinGeckoProof.hasMarketData, "CoinGecko direct-browser market payload");
+
+    if (alphaVantageKey) {
+      const alphaVantageProof = await page.evaluate(async (apiKey) => {
+        const url = new URL("https://www.alphavantage.co/query");
+        url.search = new URLSearchParams({
+          function: "OVERVIEW",
+          symbol: "AAPL",
+          apikey: apiKey,
+        }).toString();
+        const response = await fetch(url, { credentials: "omit" });
+        const body = await response.json();
+        return {
+          ok: response.ok,
+          hasOverview: body?.Symbol === "AAPL" && typeof body?.Name === "string",
+        };
+      }, alphaVantageKey);
+      assert(alphaVantageProof.ok, "Alpha Vantage direct-browser response");
+      assert(alphaVantageProof.hasOverview, "Alpha Vantage direct-browser company payload");
+    }
   }
 
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const googleApiKey = String(process.env.GEMINI_API_KEY || "").trim();
   let completedLiveTurn = false;
-  if (apiKey) {
+  if (live && apiKey) {
     stage = "model setup";
     await page.getByRole("button", { name: "Skip" }).click();
     await page.getByRole("button", { name: /^OpenAI/ }).click();
@@ -586,6 +728,35 @@ try {
     assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
   }
 
+  if (!live) {
+    // The context request observer is the independent check: an external URL it
+    // saw that the route did not answer is either unexpected or escaped routing.
+    const observedFixtureUrls = [...observedExternal.entries()]
+      .filter(([, kind]) => kind === "fixture")
+      .map(([href]) => href);
+    const bypassedFixtures = observedFixtureUrls.filter((href) => !routedFixtureUrls.has(href));
+    assert(
+      unexpectedRequests.size === 0,
+      `no unexpected external provider/model requests: ${[...unexpectedRequests].slice(0, 5).join("; ")}`,
+    );
+    assert(
+      bypassedFixtures.length === 0,
+      `expected provider requests were not intercepted by routing: ${bypassedFixtures.slice(0, 5).join("; ")}`,
+    );
+    assert(
+      observedFixtureUrls.length >= 1,
+      "the browser context observed the app's external provider transport",
+    );
+    assert(
+      routedFixtureIds.size >= 1,
+      "routing served the app's expected provider transport at the HTTP boundary",
+    );
+    assert(
+      (fixtureHits.get("ticker-line-metadata") ?? 0) >= 1,
+      "the Ticker Line metadata fixture actually served the app provider path",
+    );
+  }
+
   const secretErrors = apiKey ? browserErrors.filter((message) => message.includes(apiKey)) : [];
   if (googleApiKey) {
     secretErrors.push(...browserErrors.filter((message) => message.includes(googleApiKey)));
@@ -594,14 +765,14 @@ try {
   assert(!apiKey || !serverOutput.includes(apiKey), "model key absent from static host logs");
   assert(!googleApiKey || !serverOutput.includes(googleApiKey), "Google key absent from static host logs");
   process.stdout.write(
-    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} livePi=${completedLiveTurn ? "PASS" : "SKIP"} marketState=PASS multiTab=PASS offline=PASS archive=PASS mobile=PASS\n`,
+    `HOSTED_PWA_SMOKE PASS chromium=${browser.version()} lane=${live ? "live" : "fixtured"} livePi=${completedLiveTurn ? "PASS" : "SKIP"} modelE2e=${modelE2e ? "requested" : "off"} routedProviderFixtures=${[...routedFixtureIds].join("+") || "none"} marketState=PASS multiTab=PASS offline=PASS archive=PASS mobile=PASS\n`,
   );
 } catch (error) {
   const pageText = await page?.locator("body").innerText().catch(() => "");
   const followerText = await follower?.locator("body").innerText().catch(() => "");
   process.stderr.write(
     redact(
-      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nFOLLOWER=${String(followerText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
+      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nFOLLOWER=${String(followerText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nUNEXPECTED=${[...unexpectedRequests].join("\n").slice(-2_000)}\nOBSERVED=${[...observedExternal.keys()].join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
     ),
   );
   process.exitCode = 1;
@@ -638,10 +809,27 @@ async function assertInstallable(page) {
 }
 
 async function credentialsAreAbsent(page) {
-  return page.evaluate(() => {
-    const key = "opencandle.hosted.credentials.v1";
-    return localStorage.getItem(key) === null && sessionStorage.getItem(key) === null;
-  });
+  // Clear-all and archive import both reload the document. A read can land
+  // while that navigation is tearing the execution context down, so retry
+  // against the new document rather than treating the transient error as a
+  // credential leak. A genuinely present key still returns false immediately.
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    try {
+      return await page.evaluate(() => {
+        const key = "opencandle.hosted.credentials.v1";
+        return localStorage.getItem(key) === null && sessionStorage.getItem(key) === null;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const navigatedAway =
+        message.includes("Execution context was destroyed") ||
+        message.includes("Cannot find context with specified id");
+      if (!navigatedAway || Date.now() >= deadline) throw error;
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
 }
 
 async function inspectStateArchive(stateBase64) {

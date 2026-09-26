@@ -1,0 +1,110 @@
+{
+  "timeseries": {
+    "result": [
+      {
+        "meta": { "type": ["annualTotalRevenue"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualTotalRevenue": [
+          { "reportedValue": { "raw": 416161000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 391035000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualGrossProfit"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualGrossProfit": [
+          { "reportedValue": { "raw": 195061000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 180683000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualOperatingIncome"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualOperatingIncome": [
+          { "reportedValue": { "raw": 133050000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 123216000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualNetIncome"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualNetIncome": [
+          { "reportedValue": { "raw": 112010000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 93736000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualDilutedEPS"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualDilutedEPS": [
+          { "reportedValue": { "raw": 7.46 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 6.08 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualTotalAssets"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualTotalAssets": [
+          { "reportedValue": { "raw": 359241000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 364980000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualTotalLiabilitiesNetMinorityInterest"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualTotalLiabilitiesNetMinorityInterest": [
+          { "reportedValue": { "raw": 285508000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 308030000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualStockholdersEquity"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualStockholdersEquity": [
+          { "reportedValue": { "raw": 73733000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 56950000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualOperatingCashFlow"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualOperatingCashFlow": [
+          { "reportedValue": { "raw": 122333000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 118254000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualFreeCashFlow"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualFreeCashFlow": [
+          { "reportedValue": { "raw": 108807000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 100000000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualTotalDebt"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualTotalDebt": [
+          { "reportedValue": { "raw": 98186000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 111088000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualCashAndCashEquivalents"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualCashAndCashEquivalents": [
+          { "reportedValue": { "raw": 29943000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 29965000000 }, "periodType": "annual" }
+        ]
+      },
+      {
+        "meta": { "type": ["annualOrdinarySharesNumber"] },
+        "timestamp": [1758931200, 1727481600],
+        "annualOrdinarySharesNumber": [
+          { "reportedValue": { "raw": 14948000000 }, "periodType": "annual" },
+          { "reportedValue": { "raw": 15343783000 }, "periodType": "annual" }
+        ]
+      }
+    ]
+  }
+}

@@ -27,12 +27,25 @@ function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
   });
 }
 
+// Stable Wednesday 11:00 AM ET — a weekday inside the NY regular options
+// session. Freezing "now" here keeps quote-status branches independent of the
+// wall clock. Tests that need a different session override the time explicitly.
+const REGULAR_SESSION = new Date("2026-05-20T15:00:00.000Z");
+
 describe("get_option_chain tool", () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     cache.clear();
     clearCrumbCache();
+    // Fake only the clock; keep timers real so the rate limiter and fetch
+    // scheduling behave like production.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(REGULAR_SESSION);
+    // Re-anchor the shared bucket to the frozen clock; otherwise its
+    // module-load "last refill" stays on the real wall clock and a negative
+    // elapsed time makes acquire() wait for an absurd duration.
+    rateLimiter.configure("yahoo", 5, 5);
   });
 
   afterEach(() => {
@@ -48,8 +61,6 @@ describe("get_option_chain tool", () => {
   });
 
   it("returns formatted text with strikes, Greeks, and summary", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-05T16:00:00.000Z"));
     rateLimiter.configure("yahoo", 1000, 1000);
     mockCrumbAndOptions();
     const result = await optionChainTool.execute("call-1", { symbol: "AAPL" });
@@ -84,6 +95,8 @@ describe("get_option_chain tool", () => {
     expect(result.details.puts.length).toBeGreaterThan(0);
     expect(result.details.underlyingPrice).toBe(248.8);
     expect(result.details.freshness.providerDataAt).toBe("2024-03-22T20:00:00.000Z");
+    expect(result.details.quoteStatus.marketSession).toBe("regular");
+    expect(result.details.quoteStatus.warning).toBeUndefined();
   });
 
   it("uppercases the symbol", async () => {
@@ -142,7 +155,8 @@ describe("get_option_chain tool", () => {
   });
 
   it("warns that all-zero bid/ask quotes are stale before options market open", async () => {
-    vi.useFakeTimers();
+    // Intentional pre-market case: pin the pre-market clock explicitly so the
+    // warning path is exercised regardless of when the suite runs.
     vi.setSystemTime(new Date("2026-05-20T12:26:00Z")); // 8:26 AM EDT
     rateLimiter.configure("yahoo", 5, 5);
     const fixture = structuredClone(optionsFixture);

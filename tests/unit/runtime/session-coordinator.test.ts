@@ -184,6 +184,34 @@ function assistantEmptyEntry(): SessionEntry {
   } as SessionEntry;
 }
 
+/** Assistant turn that ended with a provider error (Pi may auto-retry it). */
+function assistantErrorEntry(): SessionEntry {
+  return {
+    type: "message",
+    id: nextId(),
+    parentId: null,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "assistant",
+      content: [],
+      api: "anthropic",
+      provider: "anthropic",
+      model: "claude-test",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "error",
+      errorMessage: "transient upstream failure",
+      timestamp: Date.now(),
+    },
+  } as SessionEntry;
+}
+
 function toolResultEntry(text: string): SessionEntry {
   return {
     type: "message",
@@ -259,6 +287,53 @@ function multiStepWorkflowDefinition(): WorkflowDefinition {
         skippable: true,
         requiredInputs: [],
         expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+/** Two non-structured steps, to observe whether a required prompt settled. */
+function twoStepSettlementDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "settlement-race",
+    steps: [
+      {
+        stepType: "first",
+        description: "first step",
+        prompt: "first prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "second",
+        description: "second step",
+        prompt: "second prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+/** Single step that only validates once the repair draft is observed. */
+function validationWorkflowDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "repair-race",
+    steps: [
+      {
+        stepType: "fetch_candidates",
+        description: "fetch step",
+        prompt: "fetch prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+        outputValidation: {
+          validate: (rawText: string) =>
+            rawText.includes("REPAIR_OK") ? [] : ["missing evidence"],
+          repairPrompt: () => "repair prompt",
+        },
       },
     ],
   };
@@ -441,10 +516,18 @@ describe("SessionCoordinator runtime composition", () => {
 });
 
 describe("SessionCoordinator workflow runtime ownership", () => {
-  it("finishes a workflow when the terminal assistant response is recorded before the queue reports idle", async () => {
+  it("finishes a workflow after the terminal response is recorded and the queue becomes idle", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
     const entries: SessionEntry[] = [];
+    // Terminal response at 10ms, queue idle at 20ms. Pi settles its run
+    // independently of this coordinator, so a real queue always returns to
+    // idle after a turn; the coordinator must observe that transition before
+    // it settles the required prompt (ever-busy is not a production state).
+    let idle = false;
+    setTimeout(() => {
+      idle = true;
+    }, 20);
     let sendCount = 0;
     const pi = {
       sendUserMessage: vi.fn((prompt: string) => {
@@ -467,7 +550,7 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     coord.executeWorkflow(
       pi as never,
       multiStepWorkflowDefinition(),
-      fakeQueueContext(() => false, entries),
+      fakeQueueContext(() => idle, entries),
     );
 
     let completed = false;
@@ -580,6 +663,13 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
     const entries: SessionEntry[] = [];
+    // Pi persists the terminal assistant response at 10ms and releases the run
+    // at 20ms; the coordinator needs the idle transition, not a permanently
+    // busy queue (which never occurs with a real Pi session).
+    let idle = false;
+    setTimeout(() => {
+      idle = true;
+    }, 20);
     const pi = {
       sendUserMessage: vi.fn((prompt: string) => {
         entries.push(userTextEntry(prompt));
@@ -593,7 +683,7 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     coord.executeWorkflow(
       pi as never,
       workflowDefinition("stale-context"),
-      fakeQueueContext(() => false, entries),
+      fakeQueueContext(() => idle, entries),
     );
 
     await vi.advanceTimersByTimeAsync(500);
@@ -631,10 +721,127 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
   });
 
+  it("completes a step whose errored assistant turn Pi auto-retried successfully", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    // Pi persists the errored attempt at 10ms but stays busy while it backs
+    // off and retries; the retry calls a tool and answers, then Pi goes idle.
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => entries.push(assistantToolOnlyEntry("get_stock_quote")), 40);
+        setTimeout(() => entries.push(toolResultEntry("quote result")), 45);
+        setTimeout(() => entries.push(assistantTextEntry("retried workflow response")), 50);
+        setTimeout(() => {
+          idle = true;
+        }, 60);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("auto-retried"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(35);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "auto-retried",
+      status: "completed",
+    });
+    expect(pi.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("fails a step whose errored assistant turn is final once Pi is idle", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => {
+          idle = true;
+        }, 20);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("terminal-error"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ workflow: "terminal-error", status: "failed" }),
+    );
+  });
+
+  it("fails a step when Pi's auto-retry also ends in an error", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantErrorEntry()), 10);
+        setTimeout(() => entries.push(assistantErrorEntry()), 40);
+        setTimeout(() => {
+          idle = true;
+        }, 60);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("retry-error"),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ workflow: "retry-error", status: "failed" }),
+    );
+  });
+
   it("does not treat an older in-flight answer as the queued workflow response", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
     const entries: SessionEntry[] = [userTextEntry("older question")];
+    // The older turn's answer lands at 10ms, the queued workflow prompt is
+    // dequeued at 30ms, and its own response lands at 50ms. The queue returns
+    // to idle at 60ms, after the real response, so the older answer cannot be
+    // mistaken for the queued prompt's terminal outcome.
+    let idle = false;
+    setTimeout(() => {
+      idle = true;
+    }, 60);
     let sendCount = 0;
     const pi = {
       sendUserMessage: vi.fn((prompt: string) => {
@@ -662,7 +869,7 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     coord.executeWorkflow(
       pi as never,
       multiStepWorkflowDefinition(),
-      fakeQueueContext(() => false, entries),
+      fakeQueueContext(() => idle, entries),
     );
     const completion = coord.waitForActiveWorkflow();
 
@@ -779,6 +986,179 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     coord.cancelActiveWorkflow();
   });
 
+  it("does not settle a required prompt from the prior turn's busy-to-idle transition", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    // The prior turn finishes and the queue reports idle; the next required
+    // prompt has still not been observed.
+    setTimeout(() => {
+      idle = true;
+    }, 100);
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        // Pi has not dequeued the second prompt yet.
+        if (prompt === "second prompt") return;
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry(`${prompt} response`)), 10);
+      }),
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      twoStepSettlementDefinition(),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(200);
+    // The queue is idle, but a busy-to-idle transition of the prior turn must
+    // not stand in for the queued second prompt's own terminal outcome.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+    expect(pi.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.anything(),
+    );
+
+    // Pi now dequeues and completes the queued prompt.
+    entries.push(userTextEntry("second prompt"));
+    entries.push(assistantTextEntry("second prompt response"));
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "settlement-race",
+      status: "completed",
+    });
+  });
+
+  it("does not fail a workflow from the prior turn's idle transition before the queued repair runs", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let idle = false;
+    // The first attempt's terminal response is recorded while the session is
+    // still busy, then the queue reports idle before Pi dequeues the repair.
+    setTimeout(() => {
+      idle = true;
+    }, 50);
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        // Pi accepted the repair but has not started it yet.
+        if (prompt === "repair prompt") return;
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => entries.push(assistantTextEntry("no-evidence draft")), 10);
+      }),
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      validationWorkflowDefinition(),
+      fakeQueueContext(() => idle, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(150);
+    // One repair was queued after the initial validation failure. The prior
+    // turn's idle transition must not re-validate the unobserved repair and
+    // record a second terminal failure.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("running");
+    const failureEvents = pi.appendEntry.mock.calls
+      .filter(([entryType]) => entryType === "opencandle-workflow-event")
+      .map(([, data]) => data as { eventType?: string; repairAttempted?: boolean });
+    expect(
+      failureEvents.filter(
+        (event) => event.eventType === "output_validation_failed" && event.repairAttempted === true,
+      ),
+    ).toHaveLength(0);
+
+    // Pi now dequeues the repair and returns an acceptable draft.
+    entries.push(userTextEntry("repair prompt"));
+    entries.push(assistantTextEntry("REPAIR_OK"));
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(coord.getRunner().getActiveRun()?.status).toBe("completed");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-complete", {
+      workflow: "repair-race",
+      status: "completed",
+    });
+  });
+
+  it("does not send a repair while Pi is still busy with the prior attempt", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    // Model Pi's real queue: `pi.sendUserMessage(prompt)` without a
+    // `deliverAs` mode is rejected while a run is active ("Agent is already
+    // processing"), and the extension wrapper swallows that rejection. The
+    // prompt is therefore never dispatched. The prior attempt's terminal
+    // response is persisted at 10ms while the run stays busy until 100ms; the
+    // coordinator must not treat the persisted terminal as permission to send
+    // the repair into that busy queue.
+    let busy = false;
+    const strandedWhileBusy: string[] = [];
+    const sentPrompts: string[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        if (busy) {
+          strandedWhileBusy.push(prompt);
+          return;
+        }
+        sentPrompts.push(prompt);
+        entries.push(userTextEntry(prompt));
+        busy = true;
+        setTimeout(() => {
+          // The attempt's own terminal response lands before the run settles.
+          entries.push(assistantTextEntry("no-evidence draft"));
+        }, 10);
+        setTimeout(() => {
+          busy = false;
+        }, 100);
+      }),
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      validationWorkflowDefinition(),
+      fakeQueueContext(() => !busy, entries),
+    );
+
+    // The first attempt's terminal response is recorded and the repair would
+    // otherwise be considered here, but the queue has not returned to idle.
+    await vi.advanceTimersByTimeAsync(150);
+    expect(strandedWhileBusy).toEqual([]);
+
+    // Once the queue is idle the one repair runs, still fails validation, and
+    // the workflow settles as failed without a false success.
+    await vi.advanceTimersByTimeAsync(200);
+    await coord.waitForActiveWorkflow();
+
+    expect(sentPrompts.filter((prompt) => prompt === "repair prompt")).toHaveLength(1);
+    expect(coord.getRunner().getActiveRun()?.status).toBe("failed");
+    const failureEvents = pi.appendEntry.mock.calls
+      .filter(([entryType]) => entryType === "opencandle-workflow-event")
+      .map(([, data]) => data as { eventType?: string; repairAttempted?: boolean });
+    const validationFailures = failureEvents.filter(
+      (event) => event.eventType === "output_validation_failed",
+    );
+    expect(validationFailures).toHaveLength(2);
+    expect(validationFailures.filter((event) => event.repairAttempted === true)).toHaveLength(1);
+    expect(pi.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("settles a transformed first step from Pi's persisted original user input", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
@@ -866,6 +1246,48 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     await vi.advanceTimersByTimeAsync(26);
 
     expect(getProviderTracker()).toBe(newTracker);
+  });
+
+  it("records a durable cancelled closure and terminal marker when cancelActiveWorkflow stops an active workflow", async () => {
+    vi.useFakeTimers();
+    const database = initDatabase(":memory:");
+    const coord = new SessionCoordinator({ stateDatabaseFactory: () => database });
+    coord.initSession("cancel-workflow-session");
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries) as never,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    const runId = coord.getRunner().getActiveRun()?.runId ?? "";
+    expect(runId).not.toBe("");
+
+    coord.cancelActiveWorkflow();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const events = database
+      .prepare("SELECT event_type FROM workflow_events WHERE run_id = ?")
+      .all(runId) as Array<{ event_type: string }>;
+    const types = events.map((event) => event.event_type);
+    // `workflow_cancelled` is the durable closure written by runner.cancel().
+    expect(types).toContain("workflow_cancelled");
+    // The transcript terminal marker must still be recorded even though the
+    // cancelled run never completes normally.
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-workflow-complete",
+      expect.objectContaining({ status: "failed", reason: "stopped" }),
+    );
+    // No later workflow step may be queued after the stop.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(1);
+    database.close();
   });
 
   it("captures tool evidence from each workflow step without leaking between steps", async () => {

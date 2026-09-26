@@ -1,5 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { getSessionCancellationState } from "../../src/pi/session-cancellation.js";
 import type {
   LocalSessionCoordinator,
   SessionActionEnvelope,
@@ -61,10 +62,25 @@ export interface SessionActionMeta {
   allowProxy?: boolean;
 }
 
+/**
+ * Raised when a destructive session switch (new/open/delete-current) is asked
+ * for while the current session still has an active GUI run. Passive
+ * navigation (e.g. re-entering the home screen) must not implicitly abort a
+ * live run; the caller retries after the run settles.
+ */
+export class SessionBusyError extends Error {
+  readonly code = "session_busy";
+  constructor() {
+    super("Session already has an active run");
+    this.name = "SessionBusyError";
+  }
+}
+
 export function createSessionActionsController({
   role,
   cwd,
   sessionDir,
+  getSession,
   getSessionManager,
   askUserBridge,
   runtime,
@@ -75,6 +91,14 @@ export function createSessionActionsController({
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");
+  }
+
+  function assertCurrentSessionIdle(): void {
+    const session = getSession();
+    const activeRun = getSessionCancellationState(session)?.current;
+    if (activeRun || session.isStreaming || session.pendingMessageCount > 0) {
+      throw new SessionBusyError();
+    }
   }
 
   async function handleAskUserAnswer(
@@ -105,12 +129,14 @@ export function createSessionActionsController({
 
   async function handleNewSession(): Promise<void> {
     ensureWriter();
+    assertCurrentSessionIdle();
     const result = await runtime.newSession();
     if (result.cancelled) throw new Error("Session switch cancelled");
   }
 
   async function handleOpenSession(path: string): Promise<void> {
     ensureWriter();
+    assertCurrentSessionIdle();
     const sessions = await SessionManager.list(cwd, sessionDir);
     const match = sessions.find((candidate) => candidate.path === path);
     if (!match) throw new Error("Unknown saved session");
@@ -133,6 +159,7 @@ export function createSessionActionsController({
   async function handleDeleteSession(client: SessionActionClient, path: string): Promise<void> {
     ensureWriter();
     const deletingCurrent = getSessionManager().getSessionFile() === path;
+    if (deletingCurrent) assertCurrentSessionIdle();
     await deleteSessionFile(cwd, sessionDir, path);
     if (deletingCurrent) {
       await handleNewSession();

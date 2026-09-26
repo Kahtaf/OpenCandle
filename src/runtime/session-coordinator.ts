@@ -34,6 +34,7 @@ import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type { EvidenceRecord } from "./evidence.js";
+import { classifyToolOutcome } from "./evidence.js";
 import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import {
@@ -150,11 +151,23 @@ function messageContentText(content: unknown): string {
     .trim();
 }
 
+/**
+ * Outcome of the expected prompt's assistant turns so far.
+ *
+ * - `success`: the latest terminal assistant message stopped normally.
+ * - `aborted`: the prompt was aborted. Pi never auto-retries an abort, so this
+ *   is final as soon as it is observed.
+ * - `error`: the latest terminal assistant message ended in an error. Pi may
+ *   still be auto-retrying it (the session stays busy during the backoff and
+ *   retry), so this is only final once the session is idle.
+ */
+type PromptTerminalOutcome = "success" | "aborted" | "error";
+
 function terminalAssistantOutcomeAfterPrompt(
   ctx: QueueContext,
   entryCount: number,
   expectedPrompt?: string,
-): "success" | "failure" | undefined {
+): PromptTerminalOutcome | undefined {
   const entries = readSessionEntries(ctx);
   const promptIndex = entries.findIndex((entry, index) => {
     if (index < entryCount || entry.type !== "message") return false;
@@ -166,16 +179,22 @@ function terminalAssistantOutcomeAfterPrompt(
   });
   if (promptIndex < 0) return undefined;
 
+  // Evaluate the latest terminal assistant message for this prompt, not the
+  // first: Pi keeps an auto-retried error in the transcript and appends the
+  // retry's messages after it.
+  let outcome: PromptTerminalOutcome | undefined;
   for (let index = promptIndex + 1; index < entries.length; index += 1) {
     const entry = entries[index];
     if (entry?.type !== "message") continue;
     const message = entry.message as { role?: unknown; stopReason?: unknown };
-    if (message.role === "user") return undefined;
+    if (message.role === "user") break;
     if (message.role !== "assistant") continue;
-    if (message.stopReason === "stop" || message.stopReason === "length") return "success";
-    if (message.stopReason === "error" || message.stopReason === "aborted") return "failure";
+    if (message.stopReason === "aborted") return "aborted";
+    if (message.stopReason === "stop" || message.stopReason === "length") outcome = "success";
+    else if (message.stopReason === "error") outcome = "error";
+    else outcome = undefined;
   }
-  return undefined;
+  return outcome;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -205,14 +224,33 @@ async function waitForPromptSettlement(
       options.entriesBeforePrompt !== undefined &&
       !hasPendingMessages(ctx) &&
       terminalAssistantOutcomeAfterPrompt(ctx, options.entriesBeforePrompt, options.expectedPrompt);
-    if (terminalOutcome === "failure") {
+    // An error is terminal only once Pi is idle: until then it may be
+    // auto-retrying the failed turn, and the retry's answer is what counts.
+    if (terminalOutcome === "aborted" || (terminalOutcome === "error" && ready)) {
       throw new Error("workflow_prompt_failed");
     }
     if (!ready) {
       sawBusyOrPending = true;
     }
 
-    if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
+    if (requiresObservableActivity) {
+      // When Pi's transcript is observable, only the expected prompt's own
+      // terminal assistant outcome proves it ran. A prior turn's busy-to-idle
+      // transition can otherwise settle a queued prompt (for example a repair)
+      // that Pi has not dequeued yet, which re-validates stale/empty output and
+      // fails the run before that prompt ever executes.
+      //
+      // The terminal outcome alone is also insufficient: Pi persists the
+      // assistant message before the run releases the session (its
+      // `_emitAgentSettled` sets the run-inactive flag in `_runAgentPrompt`'s
+      // finally, independently of this coordinator). Sending a follow-up prompt
+      // without a `deliverAs` mode into that still-busy session is rejected and
+      // swallowed, so the repair/next prompt is never dispatched. Require the
+      // queue to report idle with no pending messages as well.
+      if (terminalOutcome === "success" && ready) {
+        return true;
+      }
+    } else if ((sawBusyOrPending && ready) || terminalOutcome === "success") {
       return true;
     }
 
@@ -247,6 +285,13 @@ export class SessionCoordinator {
   private activeWorkflowType: string | undefined;
   private activeStepCapture: ActiveStepCapture | null = null;
   private workflowEventCaptureInstalled = false;
+  /**
+   * Set when a workflow step throws after its output validation still failed
+   * following the single repair attempt. `finishWorkflowRun` uses it to emit a
+   * user-visible terminal notice so an unvalidated draft is never presented as
+   * a successful answer.
+   */
+  private outputValidationFailure: { workflowType: string; stepType: string } | null = null;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
@@ -578,6 +623,7 @@ export class SessionCoordinator {
     }
     runner.cancel();
     this.activeWorkflowType = definition.workflowType;
+    this.outputValidationFailure = null;
 
     const [firstStep] = definition.steps;
     let entriesBeforeActivePrompt = readSessionEntries(ctx).length;
@@ -604,7 +650,7 @@ export class SessionCoordinator {
       .start(
         definition.workflowType,
         stepDefs,
-        async (step, stepIndex, _priorEvidence, context) => {
+        async (step, stepIndex, priorStepEvidence, context) => {
           try {
             let entriesBeforeStep = entriesBeforeActivePrompt;
             const eventCapture = this.startStepCapture();
@@ -685,7 +731,12 @@ export class SessionCoordinator {
             }
 
             const outputValidation = definition.steps[stepIndex].outputValidation;
-            let validationErrors = outputValidation?.validate(rawText) ?? [];
+            const validationContext = {
+              stepType: step.stepType,
+              currentEvidence: output.evidence,
+              priorEvidence: priorStepEvidence,
+            };
+            let validationErrors = outputValidation?.validate(rawText, validationContext) ?? [];
             if (outputValidation && validationErrors.length > 0) {
               this.appendWorkflowEvent(pi, "output_validation_failed", {
                 stepType: step.stepType,
@@ -694,7 +745,10 @@ export class SessionCoordinator {
               const entriesBeforeRepair = readSessionEntries(ctx).length;
               entriesBeforeActivePrompt = entriesBeforeRepair;
               eventCapture.rawText = "";
-              const repairPrompt = outputValidation.repairPrompt(validationErrors);
+              const repairPrompt = outputValidation.repairPrompt(
+                validationErrors,
+                validationContext,
+              );
               activePrompt = repairPrompt;
               pi.sendUserMessage(repairPrompt);
               const repairSettled = await waitForPromptSettlement(ctx, () => runRef.active, {
@@ -705,19 +759,35 @@ export class SessionCoordinator {
               if (!repairSettled || !runRef.active) {
                 throw new Error("run_cancelled");
               }
-              stepEntries = readSessionEntries(ctx).slice(entriesBeforeRepair);
+              const allStepEntries = readSessionEntries(ctx);
+              stepEntries = allStepEntries.slice(entriesBeforeRepair);
               rawText = capturedText(eventCapture, stepEntries);
               output = promptStepOutput(stepIndex, step.stepType, {
-                evidence: capturedEvidence(eventCapture, stepEntries),
+                // Evidence spans the whole step (original attempt + repair);
+                // the repair-only slice would drop the original attempt's
+                // session-entry evidence. Live capture already accumulates
+                // every attempt, and the complete step slice lists each
+                // session-entry tool event once.
+                evidence: capturedEvidence(eventCapture, allStepEntries.slice(entriesBeforeStep)),
                 rawText,
               });
-              validationErrors = outputValidation.validate(rawText);
+              validationErrors = outputValidation.validate(rawText, {
+                stepType: step.stepType,
+                // Re-validation sees the complete step evidence (original
+                // attempt + repair), from live capture or session entries.
+                currentEvidence: output.evidence,
+                priorEvidence: priorStepEvidence,
+              });
               if (validationErrors.length > 0) {
                 this.appendWorkflowEvent(pi, "output_validation_failed", {
                   stepType: step.stepType,
                   errors: validationErrors,
                   repairAttempted: true,
                 });
+                this.outputValidationFailure = {
+                  workflowType: definition.workflowType,
+                  stepType: step.stepType,
+                };
                 throw new Error(
                   `workflow_output_validation_failed: ${validationErrors.join("; ")}`,
                 );
@@ -822,6 +892,8 @@ export class SessionCoordinator {
   ): void {
     if (this.activeWorkflowRunRef !== runRef) return;
     const reason = runRef.interruptedReason;
+    const validationFailure = this.outputValidationFailure;
+    this.outputValidationFailure = null;
     // An interrupted run is a failed run: it never reached its answer, so it
     // must not settle as a silent cancellation with no terminal marker.
     const status =
@@ -837,6 +909,30 @@ export class SessionCoordinator {
         status,
         ...(reason ? { reason } : {}),
       });
+      // A clean terminal output-validation rejection leaves the fabricated
+      // draft as the last assistant message. Emit a deterministic, visible
+      // notice (no new model turn) so that draft is not presented as a
+      // validated answer. The failed terminal marker and the captured draft
+      // remain in the forensic trace.
+      if (status === "failed" && !reason && validationFailure) {
+        pi.sendMessage(
+          {
+            customType: "Workflow validation failed",
+            content: [
+              {
+                type: "text",
+                text: buildWorkflowValidationFailureText(validationFailure.workflowType),
+              },
+            ],
+            display: true,
+            details: {
+              workflow: validationFailure.workflowType,
+              reason: "output_validation_failed",
+            },
+          },
+          { triggerTurn: false },
+        );
+      }
     } catch (error) {
       // A workflow can outlive its session context when the session is disposed
       // without Pi's awaited `session_shutdown` handoff. The transcript marker
@@ -855,12 +951,16 @@ export class SessionCoordinator {
   cancelActiveWorkflow(): void {
     const activeRef = this.activeWorkflowRunRef;
     if (activeRef) {
-      activeRef.active = false;
+      // Keep the ref so the workflow promise's terminal path
+      // (finishWorkflowRun) still runs: it records the durable
+      // `workflow_interrupted` closure and appends the failed terminal marker
+      // instead of leaving a silent stop with no transcript trace.
+      this.markWorkflowInterrupted(activeRef, "stopped");
       clearRunContext(activeRef.contextToken);
-      this.activeWorkflowRunRef = null;
+    } else {
+      this.runner?.cancel();
     }
     this.activeStepCapture = null;
-    this.runner?.cancel();
   }
 
   private startStepCapture(): ActiveStepCapture {
@@ -991,6 +1091,19 @@ function isStaleExtensionContextError(error: unknown): boolean {
   return error instanceof Error && error.message.includes("extension ctx is stale");
 }
 
+/**
+ * User-visible terminal notice for a workflow that failed because a step's
+ * output could not be validated against captured evidence. Deliberately says
+ * nothing about the specific validation or provider failure.
+ */
+function buildWorkflowValidationFailureText(workflowType: string): string {
+  const subject = workflowType === "portfolio_builder" ? "portfolio" : "workflow result";
+  return [
+    `This ${subject} draft failed validation, so I can't stand behind its figures.`,
+    `Treat any ${subject} draft above as unverified and do not rely on its allocations, prices, or risk metrics.`,
+  ].join(" ");
+}
+
 function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {
   return capture.rawText.trim() || extractAssistantText(entries);
 }
@@ -1068,6 +1181,7 @@ function toolEvidenceRecord(input: {
     value: {
       tool: input.tool,
       args: truncateToolValue(serializeToolValue(input.args), 500),
+      outcome: classifyToolOutcome(input.result, input.isError, input.tool),
       ...(freshness ? { freshness } : {}),
       resultDigest: {
         preview: truncateToolValue(serializedResult, 500),

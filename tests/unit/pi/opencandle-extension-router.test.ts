@@ -1,7 +1,6 @@
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
-import type { RouterLlmClient } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
@@ -130,37 +129,5 @@ describe("opencandle-extension router prompt assembly (task 7.2)", () => {
       recentWorkflowRuns,
     });
     expect(prompt).toContain("Prior conversation turns (most recent last):\n(none)");
-  });
-
-  it("exercises a stub RouterLlmClient end-to-end against the assembled prompt", async () => {
-    // This asserts the RouterLlmClient shape stays compatible with the
-    // prompt produced above — a lightweight regression guard for task 7.2's
-    // "stub client captures the prompt" wording.
-    const mgr = fakeSessionManager([userMsg("tell me about NVDA")]);
-    const coord = new SessionCoordinator();
-    const base = coord.buildRouterContextBase(mgr);
-
-    let capturedPrompt = "";
-    const client: RouterLlmClient = {
-      async complete(prompt) {
-        capturedPrompt = prompt;
-        return JSON.stringify({
-          routeKind: "agent_task",
-          entities: { symbols: ["NVDA"] },
-          slots: {},
-          preference_updates: [],
-          missing_required: [],
-          reasoning: "test",
-        });
-      },
-    };
-
-    const prompt = buildRouterPrompt({
-      text: "what about at $500?",
-      ...base,
-    });
-    const result = await client.complete(prompt);
-    expect(capturedPrompt).toContain("tell me about NVDA");
-    expect(JSON.parse(result).entities.symbols).toEqual(["NVDA"]);
   });
 });

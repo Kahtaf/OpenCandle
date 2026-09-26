@@ -17,6 +17,7 @@ spikes/browser-runtime/
 validation-output/
 dogfood-output/
 design-inspo/
+coverage/
 
 # PR runtime evidence stays machine-local; durable decision records go in docs/internal/ as markdown
 docs/internal/pr-evidence/

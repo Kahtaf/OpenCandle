@@ -1,0 +1,26 @@
+Assumptions (reproduce this block exactly — do not relabel sources):
+  User-specified: symbol (AAPL), direction (bearish), DTE target (25_to_45_days), option strategy (protective_put), share quantity (450 shares), catalystSymbols (MANY)
+  Defaults: objective (balanced_leverage_and_probability), moneyness (atm_to_slightly_otm), liquidity (high_open_interest_and_tight_spread)
+  Workflow constraints: delta >= 0.20 (balanced objective), prefer ATM to slightly OTM
+
+Interpretation: Treating this as buying protective puts on an existing long AAPL share position.
+
+AAPL is trading at $335.82 as of 2026-09-25. For the requested 25-45 day target DTE, we are considering expirations around October 23 and October 30, 2026. The options chain data showed $0.00/$0.00 bid/ask spreads and unreliable Greeks, indicating illiquidity. Therefore, the following ranking is based on reported 'Last' prices and open interest, but requires strict broker verification. For 450 shares, 5 put contracts are typically needed.
+
+**Top Protective Puts for AAPL (Approx. 25-45 Days to Expiration)**
+
+| Strike | Expiry | DTE | Est. Premium (per share) | Total Premium (5 contracts) | OI | Hedge Floor | Premium % of Position |
+|:-------|:-------|:----|:-------------------------|:----------------------------|:---|:------------|:----------------------|
+| $325.00| 2026-10-23 | 28 | $3.90                    | $1,950.00                   | 980| $321.10     | 1.16%                 |
+| $330.00| 2026-10-23 | 28 | $5.50                    | $2,750.00                   | 875| $324.50     | 1.64%                 |
+| $325.00| 2026-10-30 | 35 | $5.91                    | $2,955.00                   | 445| $319.09     | 1.76%                 |
+
+The AAPL 2026-10-23 $325.00 Put is ranked highest due to its balance of moderate cost, slightly OTM moneyness, and a reasonable hedge floor, offering protection within the target DTE.
+
+**Protective Put Risks:**
+*   **Premium Decay**: Options lose value over time (theta decay). If AAPL's price does not fall significantly, the put will lose value.
+*   **Liquidity**: The reported $0.00/$0.00 bid/ask spreads indicate potential illiquidity. It's crucial to verify live bid/ask spreads with your broker to ensure fair entry/exit pricing.
+*   **Opportunity Cost**: The cost of the premium is an expense. If AAPL rises, this premium is lost, reducing overall portfolio gains.
+*   **Imperfect Hedge**: Protection only fully kicks in below the strike price. Your position remains exposed to losses down to the strike.
+
+Consider lower-cost alternatives like a put spread or a collar if the outright put premium is deemed too high.

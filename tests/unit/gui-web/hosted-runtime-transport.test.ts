@@ -127,6 +127,47 @@ describe("hosted runtime transport", () => {
     );
   });
 
+  it("forwards the caller abort signal to the hosted streaming boundary", async () => {
+    const host = createHost();
+    const controller = new AbortController();
+    let observedSignal: AbortSignal | undefined;
+    host.streamRequest = vi.fn(
+      async (
+        _operation: string,
+        _payload: Record<string, unknown>,
+        options?: { signal?: AbortSignal },
+      ) => {
+        observedSignal = options?.signal;
+        return new Response(
+          new ReadableStream({
+            start(streamController) {
+              streamController.enqueue(
+                new TextEncoder().encode('data: {"type":"run.started"}\n\n'),
+              );
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      },
+    );
+    const transport = createHostedRuntimeTransport({ host });
+
+    const response = await transport.startChatRun(
+      "session-1",
+      { prompt: "What changed?", actionId: "chat-1" },
+      controller.signal,
+    );
+    // The adapter hands the caller's signal to the host boundary. The real host
+    // (browser-runtime-host streamRequest) turns that abort into a server-side
+    // { type: "cancel", requestId } frame; this test only proves propagation,
+    // not full hosted cancellation (the host is mocked here).
+    expect(observedSignal).toBe(controller.signal);
+
+    controller.abort();
+    expect(observedSignal?.aborted).toBe(true);
+    await response.body?.cancel().catch(() => {});
+  });
+
   it("merges browser-owned model setup into the canonical bootstrap", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

@@ -6,6 +6,8 @@ import {
 } from "../../../src/prompts/context-builder.js";
 import { getPolicyCard, renderPolicyCardForPlanning } from "../../../src/prompts/policy-cards.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
+import { buildPlanningEnvelope } from "../../../src/routing/planning.js";
+import type { RouterOutput } from "../../../src/routing/router-types.js";
 import type { ResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
 describe("truncateTobudget", () => {
@@ -242,7 +244,7 @@ describe("PromptContextBuilder", () => {
     const result = builder.build();
     expect(result).toContain("Ticker Disambiguation Policy");
     expect(result).toContain("distinguish the current primary ticker from a legacy ticker");
-    expect(result).toContain("lead with a risk-first trim/hedge/hold framework");
+    expect(result).toContain("risk-first trim/hedge/hold framework that stays conditional");
     expect(result).not.toContain("Sentiment Snapshot Policy");
     expect(result).not.toContain("Asset Compare Policy");
   });
@@ -444,6 +446,68 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Options Strategy Policy");
     expect(result).toContain("option-chain underlying");
     expect(result).toContain("protective put");
+  });
+
+  it("injects the options strategy card when a held-share protection prompt falls back to general finance QA", () => {
+    const userInput =
+      "I own 450 shares of AAPL and want downside protection through the next month. " +
+      "How many puts should I consider and what tradeoffs matter?";
+    const fallbackOutput: RouterOutput = {
+      routeKind: "agent_task",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["AAPL"] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      tool_bundles: [],
+      diagnostics: [
+        {
+          code: "router_validation_failed",
+          message: "router validation failed persistently; emitted minimal fallback",
+        },
+      ],
+      reasoning: "router validation failed; emitted minimal fallback",
+    };
+    const planning = buildPlanningEnvelope(
+      { text: userInput, priorTurns: [], profileSnapshot: {}, recentWorkflowRuns: [] },
+      fallbackOutput,
+    );
+
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput,
+        priorTurns: [],
+        routeKind: "agent_task",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["AAPL"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "options"],
+        activeToolNames: ["get_stock_quote", "get_option_chain"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["AAPL"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning,
+      } satisfies ResolvedTurnContext,
+    });
+
+    expect(planning.policyCardId).toBe("options_strategy");
+    const renderedPrompt = builder.build();
+    expect(renderedPrompt).toContain("Options Strategy Policy");
+    // The fallback path still injects the real floor contract for covered shares.
+    expect(renderedPrompt).toContain("right to sell");
+    expect(renderedPrompt).toContain("strike minus the premium");
+    expect(renderedPrompt).toContain("remain fully exposed");
+    // Mismatched coverage must not be collapsed into one per-owned-share floor.
+    expect(renderedPrompt).toContain("do not quote a single numerical per-owned-share floor");
   });
 
   it("uses the stateful tracking policy without deleting agent-task context", () => {

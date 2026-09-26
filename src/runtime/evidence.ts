@@ -24,6 +24,50 @@ export interface EvidenceRecord {
   provenance: Provenance;
 }
 
+/**
+ * Usability of a captured tool result as market evidence.
+ * `ok` means the tool returned structured data; `error` and `unavailable`
+ * results carry no usable evidence and must not satisfy evidence guards.
+ */
+export type ToolEvidenceOutcome = "ok" | "error" | "unavailable";
+
+/**
+ * Classify a tool result's usability from its runtime envelope
+ * (`{ content, details }` plus the `isError` flag). Unavailable tools return
+ * `details: null`, an empty payload, or — for `get_price_comparison` — a
+ * metadata envelope with no aligned series. Thrown failures are flagged
+ * `isError`.
+ */
+export function classifyToolOutcome(
+  result: unknown,
+  isError: boolean,
+  toolName?: string,
+): ToolEvidenceOutcome {
+  if (isError) return "error";
+  if (!isPlainRecord(result)) return "unavailable";
+  if (toolName === "get_price_comparison") {
+    // The comparison tool always returns range/interval/freshness metadata,
+    // even when it found fewer than two usable aligned series. Only actual
+    // series constitute pricing evidence, and the legacy no-envelope path
+    // must not qualify a comparison either.
+    const details = isPlainRecord(result.details) ? result.details : undefined;
+    return Array.isArray(details?.series) && details.series.length > 0 ? "ok" : "unavailable";
+  }
+  // A missing `details` envelope carries no inspected evidence; only non-empty
+  // structured details are usable.
+  return hasUsableDetails(result.details) ? "ok" : "unavailable";
+}
+
+function hasUsableDetails(details: unknown): boolean {
+  if (Array.isArray(details)) return details.length > 0;
+  if (isPlainRecord(details)) return Object.keys(details).length > 0;
+  return false;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Successful provider result. */
 export interface ProviderResultOk<T> {
   status: "ok";

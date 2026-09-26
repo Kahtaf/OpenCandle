@@ -144,6 +144,200 @@ describe("extractFinancialNumbers", () => {
     expect(extractFinancialNumbers("P/E of 28.5")).toContain(28.5);
     expect(extractFinancialNumbers("yield of 3.5")).toContain(3.5);
   });
+
+  it("scales a bare compact magnitude in a financial metric without an unscaled duplicate", () => {
+    expect(extractFinancialNumbers("market cap of 3.68T")).toEqual([3.68e12]);
+  });
+
+  it("scales a bare spelled magnitude in a financial metric", () => {
+    expect(extractFinancialNumbers("Market Cap of 3.68 Trillion")).toEqual([3.68e12]);
+  });
+
+  it("emits a single signed value for a signed bare compact magnitude", () => {
+    expect(extractFinancialNumbers("market cap of -3.68T")).toEqual([-3.68e12]);
+    expect(extractFinancialNumbers("The change was -3.68T")).toEqual([-3.68e12]);
+    expect(extractFinancialNumbers("The change was +3.68T")).toEqual([3.68e12]);
+  });
+
+  it("reads a comma-grouped magnitude as one scaled value", () => {
+    expect(extractFinancialNumbers("market cap of 3,680B")).toEqual([3.68e12]);
+  });
+
+  it("does not merge comma-delimited metric values into one number", () => {
+    const nums = extractFinancialNumbers("P/E of 20,30");
+    expect(nums).toContain(20);
+    expect(nums).not.toContain(2030);
+  });
+
+  it("does not end a grouped number mid digit sequence", () => {
+    expect(extractFinancialNumbers("P/E of 20,3000")).not.toContain(20300);
+  });
+
+  it("applies a spelled-out trillion scale to a currency amount", () => {
+    expect(extractFinancialNumbers("**Market Cap:** $3.697 Trillion")).toEqual([3.697e12]);
+  });
+
+  it("applies spelled-out billion and million scales to currency amounts", () => {
+    expect(extractFinancialNumbers("Revenue was $1.2 Billion")).toEqual([1.2e9]);
+    expect(extractFinancialNumbers("Profit was $394 million")).toEqual([394e6]);
+  });
+
+  it("does not double count a currency amount with a spelled-out scale", () => {
+    expect(extractFinancialNumbers("The raise was $2.5 trillion")).toEqual([2.5e12]);
+    expect(extractFinancialNumbers("The raise was -$2.5 million")).toEqual([-2.5e6]);
+  });
+
+  it("treats an unambiguous abbreviated duration as time, not millions", () => {
+    expect(extractFinancialNumbers("~15m delayed")).toEqual([]);
+    expect(extractFinancialNumbers("15m ago")).toEqual([]);
+    expect(extractFinancialNumbers("5m delay")).toEqual([]);
+  });
+
+  it("keeps a million amount before an ambiguous connective word financial", () => {
+    expect(extractFinancialNumbers("raised 15M before fees")).toEqual([15e6]);
+    expect(extractFinancialNumbers("15M after fees")).toEqual([15e6]);
+  });
+
+  it("still reads a lowercase m suffix as millions outside duration context", () => {
+    expect(extractFinancialNumbers("$15m")).toEqual([15e6]);
+    expect(extractFinancialNumbers("15m")).toEqual([15e6]);
+  });
+
+  it("keeps a negative sign that precedes the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was -$2.50")).toEqual([-2.5]);
+  });
+
+  it("keeps a negative sign that follows the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was $-2.50")).toEqual([-2.5]);
+  });
+
+  it("keeps a positive sign that precedes the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was +$3.25")).toEqual([3.25]);
+  });
+
+  it("keeps a positive sign that follows the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was $+3.25")).toEqual([3.25]);
+  });
+
+  it("normalizes a financial Unicode minus before the dollar sign", () => {
+    expect(extractFinancialNumbers("The change was \u2212$4.75")).toEqual([-4.75]);
+  });
+
+  it("preserves unsigned currency with commas and decimals", () => {
+    expect(extractFinancialNumbers("AAPL closed at $1,234.56")).toEqual([1234.56]);
+  });
+
+  it("keeps the magnitude suffix on unsigned currency without an unsigned duplicate", () => {
+    expect(extractFinancialNumbers("Revenue was $394B")).toEqual([394e9]);
+  });
+
+  it("keeps the sign and magnitude suffix without a sign-losing duplicate", () => {
+    expect(extractFinancialNumbers("The raise was -$2.5B")).toEqual([-2.5e9]);
+  });
+
+  it("reads a compact currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100-$200")).toEqual([100, 200]);
+  });
+
+  it("reads a spaced currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100 - $200")).toEqual([100, 200]);
+  });
+
+  it("keeps the sign on each endpoint of a compact range", () => {
+    expect(extractFinancialNumbers("-$100-$200")).toEqual([-100, 200]);
+    expect(extractFinancialNumbers("$-100-$200")).toEqual([-100, 200]);
+  });
+
+  it("still reads a unary minus after a word as a loss", () => {
+    expect(extractFinancialNumbers("The loss was -$200")).toEqual([-200]);
+  });
+
+  it("keeps a negative on the next line separate from the preceding currency amount", () => {
+    expect(extractFinancialNumbers("$100\n-$200")).toEqual([100, -200]);
+  });
+
+  it("reads a Unicode en-dash currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $100\u2013$200")).toEqual([100, 200]);
+  });
+
+  it("keeps the sign on each endpoint of a suffixed currency range", () => {
+    expect(extractFinancialNumbers("The range is $1.5M-$2M")).toEqual([1.5e6, 2e6]);
+  });
+
+  it("reads a spelled-out currency range as two positive endpoints", () => {
+    expect(extractFinancialNumbers("The range is $1 million-$2 million")).toEqual([1e6, 2e6]);
+    expect(extractFinancialNumbers("The range is $1 million - $2 million")).toEqual([1e6, 2e6]);
+  });
+
+  it("keeps a real spelled-out negative separate across a line break", () => {
+    expect(extractFinancialNumbers("$1 million\n-$2 million")).toEqual([1e6, -2e6]);
+  });
+
+  it("signs an unsigned percent negative when a decrease word is adjacent", () => {
+    expect(extractFinancialNumbers("a decrease of 2.47%")).toEqual([-2.47]);
+  });
+
+  it("signs an unsigned percent negative for down, fell, dropped, declined, and loss wording", () => {
+    expect(extractFinancialNumbers("down 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("fell by 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("dropped 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("declined 2.47%")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("a loss of 2.47%")).toEqual([-2.47]);
+  });
+
+  it("keeps an unsigned percent positive for increase, up, gained, and rose wording", () => {
+    expect(extractFinancialNumbers("an increase of 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("up 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("gained 2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("rose 2.47%")).toEqual([2.47]);
+  });
+
+  it("leaves an unsigned percent positive when no direction word is adjacent", () => {
+    expect(extractFinancialNumbers("The yield was 2.47%.")).toEqual([2.47]);
+  });
+
+  it("does not re-sign an unrelated downside phrase", () => {
+    expect(extractFinancialNumbers("The downside risk leaves 2.47% of assets exposed")).toEqual([
+      2.47,
+    ]);
+  });
+
+  it("does not re-sign across a sentence boundary", () => {
+    expect(extractFinancialNumbers("The stock is down. The yield is 2.47%.")).toEqual([2.47]);
+  });
+
+  it("uses a preceding direction word regardless of trailing prose", () => {
+    expect(extractFinancialNumbers("up 2.47% down from yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("down 2.47% up from yesterday")).toEqual([-2.47]);
+  });
+
+  it("leaves trailing transition verbs and up/down prose unsigned", () => {
+    expect(extractFinancialNumbers("4% falling to 3%")).toEqual([4, 3]);
+    expect(extractFinancialNumbers("4% down from 5%")).toEqual([4, 5]);
+    expect(extractFinancialNumbers("2.47% down from yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("2.47% up from 1.23%")).toEqual([2.47, 1.23]);
+    expect(extractFinancialNumbers("2.47% dropped yesterday")).toEqual([2.47]);
+    expect(extractFinancialNumbers("2.47% declining")).toEqual([2.47]);
+  });
+
+  it("signs a trailing change noun directly after the percent", () => {
+    expect(extractFinancialNumbers("The stock had a 2.47% decrease")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% decline")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% drop")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% fall")).toEqual([-2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% loss")).toEqual([-2.47]);
+  });
+
+  it("keeps a trailing positive change noun positive", () => {
+    expect(extractFinancialNumbers("The stock had a 2.47% increase")).toEqual([2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% gain")).toEqual([2.47]);
+    expect(extractFinancialNumbers("The stock had a 2.47% rise")).toEqual([2.47]);
+  });
+
+  it("lets an explicit sign win over a contradictory direction word", () => {
+    expect(extractFinancialNumbers("a decrease of +2.47%")).toEqual([2.47]);
+    expect(extractFinancialNumbers("an increase of -2.47%")).toEqual([-2.47]);
+  });
 });
 
 describe("extractNumbersFromObject", () => {
@@ -166,6 +360,121 @@ describe("extractNumbersFromObject", () => {
   it("extracts numbers from strings", () => {
     const nums = extractNumbersFromObject({ formatted: "$185.50" });
     expect(nums).toContain(185.5);
+  });
+
+  it("scales a bare compact magnitude in tool strings without an unscaled duplicate", () => {
+    const nums = extractNumbersFromObject({ text: "market capitalization of 3.68T" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("scales a bare spelled magnitude in tool strings", () => {
+    const nums = extractNumbersFromObject({ text: "market capitalization of 3.68 Trillion" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("keeps the sign on a bare signed compact magnitude in tool strings", () => {
+    const nums = extractNumbersFromObject({ text: "change of -3.68T" });
+    expect(nums).toContain(-3.68e12);
+    expect(nums).not.toContain(3.68e12);
+    expect(nums).not.toContain(-3.68);
+  });
+
+  it("reads independent currency and bare magnitudes without double counting", () => {
+    const nums = extractNumbersFromObject({ text: "Revenue $1.2B and market cap 3.68T" });
+    expect(nums).toContain(1.2e9);
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(1.2);
+    expect(nums).not.toContain(3.68);
+  });
+
+  it("reads a comma-grouped bare magnitude as one scaled value", () => {
+    const nums = extractNumbersFromObject({ text: "market cap 3,680B" });
+    expect(nums).toContain(3.68e12);
+    expect(nums).not.toContain(3);
+    expect(nums).not.toContain(680e9);
+  });
+
+  it("keeps comma-delimited observations separate instead of merging them", () => {
+    expect(extractNumbersFromObject({ text: "P/E observations: 20,30" })).toEqual([20, 30]);
+  });
+
+  it("keeps a partial thousands group separate from the following digits", () => {
+    expect(extractNumbersFromObject({ text: "P/E observations: 20,3000" })).toEqual([20, 3000]);
+  });
+
+  it("preserves a bare duration in tool strings instead of scaling it to millions", () => {
+    expect(extractNumbersFromObject({ text: "~15m delayed" })).toEqual([15]);
+  });
+
+  it("keeps a negative sign that precedes the dollar sign in strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.50" });
+    expect(nums).toContain(-2.5);
+    expect(nums).not.toContain(2.5);
+  });
+
+  it("keeps a negative sign that follows the dollar sign in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$-2.50" })).toContain(-2.5);
+  });
+
+  it("keeps a positive sign on currency strings", () => {
+    expect(extractNumbersFromObject({ formatted: "+$3.25" })).toContain(3.25);
+  });
+
+  it("normalizes a financial Unicode minus before the dollar sign in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "\u2212$4.75" })).toContain(-4.75);
+  });
+
+  it("does not drop other numeric evidence beside a signed currency string", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.50 (down 1.2%)" });
+    expect(nums).toContain(-2.5);
+    // "down 1.2%" is signed the same way it would be in answer text.
+    expect(nums).toContain(-1.2);
+  });
+
+  it("extracts comma-grouped currency strings as one signed value", () => {
+    expect(extractNumbersFromObject({ formatted: "$1,234.56" })).toContain(1234.56);
+  });
+
+  it("keeps the magnitude suffix on signed currency strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "-$2.5B" });
+    expect(nums).toContain(-2.5e9);
+    expect(nums).not.toContain(-2.5);
+    expect(nums).not.toContain(2.5e9);
+  });
+
+  it("reads a compact currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$100-$200" })).toEqual([100, 200]);
+  });
+
+  it("applies a spelled-out currency scale in strings", () => {
+    const nums = extractNumbersFromObject({ formatted: "Market cap: $3.697 Trillion" });
+    expect(nums).toContain(3.697e12);
+    expect(nums).not.toContain(3.697);
+  });
+
+  it("reads a spaced currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$100 - $200" })).toEqual([100, 200]);
+  });
+
+  it("reads a spelled-out currency range in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "$1 million-$2 million" })).toEqual([1e6, 2e6]);
+    expect(extractNumbersFromObject({ formatted: "$1 million\n-$2 million" })).toEqual([1e6, -2e6]);
+  });
+
+  it("keeps the pre-existing sign on a bare-number sequence in strings", () => {
+    expect(extractNumbersFromObject({ formatted: "100-200" })).toEqual([100, -200]);
+    expect(extractNumbersFromObject({ formatted: "100 -200" })).toEqual([100, -200]);
+    expect(extractNumbersFromObject({ formatted: "volume 1000 -$200" })).toEqual([1000, -200]);
+  });
+
+  it("keeps a negative on the next line separate from the preceding currency amount", () => {
+    expect(extractNumbersFromObject({ formatted: "$100\n-$200" })).toEqual([100, -200]);
+  });
+
+  it("keeps a unary negative currency string after a word", () => {
+    expect(extractNumbersFromObject({ formatted: "loss of -$200" })).toEqual([-200]);
   });
 });
 
@@ -201,6 +510,565 @@ describe("scoreDataFaithfulness", () => {
 
   it("scores 1.0 when no financial numbers in response", () => {
     const trace = makeTrace({ text: "Here is your analysis." });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a faithful negative change whose minus precedes the dollar sign", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a faithful negative change whose minus follows the dollar sign", () => {
+    const trace = makeTrace({
+      text: "The change was $-4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails when a positive currency sign is reversed versus negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "The change was +$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4.75");
+  });
+
+  it("fails when a negative currency sign is reversed versus positive tool evidence", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.75",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: 4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4.75");
+  });
+
+  it("does not ignore an incorrect dollar-then-minus amount", () => {
+    const trace = makeTrace({
+      text: "The change was $-9.25",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("9.25");
+  });
+
+  it("preserves 1% tolerance for signed values", () => {
+    const trace = makeTrace({
+      text: "The change was -$4.73",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -4.75 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+  });
+
+  it("grounds a signed currency amount that carries a magnitude suffix", () => {
+    const trace = makeTrace({
+      text: "The raise was -$2.5B",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: { change: -2.5e9 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a compact currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $100-$200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, high: 200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a spaced currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $100 - $200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, high: 200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a spelled-out currency range against matching low/high tool evidence", () => {
+    const trace = makeTrace({
+      text: "The range is $1 million-$2 million",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 1e6, high: 2e6 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("still grounds a unary negative loss after the range fix", () => {
+    const trace = makeTrace({
+      text: "The loss was -$240",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -240 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("still fails a reversed sign after the range fix", () => {
+    const trace = makeTrace({
+      text: "The value was +$240",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { change: -240 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("240");
+  });
+
+  it("keeps a line-broken negative separate from the preceding currency amount", () => {
+    const trace = makeTrace({
+      text: "$100\n-$200",
+      toolCalls: [{ name: "get_range", args: {}, result: { low: 100, change: -200 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a stated decrease against negative percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails an increase statement against negative percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was an increase of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("fails an unsigned percent without direction against negative evidence", () => {
+    const trace = makeTrace({
+      text: "The change was 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("fails a decrease statement against positive percent evidence", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of 2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("does not re-sign an unrelated downside phrase in scoring", () => {
+    const trace = makeTrace({
+      text: "The downside risk leaves 2.47% of assets exposed",
+      toolCalls: [{ name: "get_risk", args: {}, result: { exposure: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("lets an explicit sign win over a contradictory direction word in scoring", () => {
+    const trace = makeTrace({
+      text: "The change was a decrease of +2.47%",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("uses a preceding direction word regardless of trailing prose in scoring", () => {
+    const upTrace = makeTrace({
+      text: "up 2.47% down from yesterday",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const upResult = scoreDataFaithfulness(upTrace);
+    expect(upResult.passed).toBe(true);
+    expect(upResult.score).toBe(1.0);
+
+    const downTrace = makeTrace({
+      text: "down 2.47% up from yesterday",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const downResult = scoreDataFaithfulness(downTrace);
+    expect(downResult.passed).toBe(true);
+    expect(downResult.score).toBe(1.0);
+  });
+
+  it("grounds a positive yield level written as down from a higher level", () => {
+    const trace = makeTrace({
+      text: "The yield is 4% down from 5%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 5 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a positive yield level written as up from a lower level", () => {
+    const trace = makeTrace({
+      text: "The yield is 4% up from 3%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 3 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a level range stated with trailing prose", () => {
+    const trace = makeTrace({
+      text: "The yield was 4% falling to 3%",
+      toolCalls: [{ name: "get_yield", args: {}, result: { yield: 4, previousYield: 3 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a trailing change noun against matching negative evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% decrease",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a trailing change noun against opposite-sign evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% decrease",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("grounds a trailing positive change noun against positive evidence", () => {
+    const trace = makeTrace({
+      text: "The stock had a 2.47% gain",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: 2.47 } }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+});
+
+describe("direction-worded percent symmetry", () => {
+  it("signs a direction-worded percent in tool-result text like answer text", () => {
+    expect(extractNumbersFromObject("AAPL fell 2.47% today")).toEqual([-2.47]);
+    expect(extractNumbersFromObject("a 2.47% decrease")).toEqual([-2.47]);
+    expect(extractNumbersFromObject("rose 2.47%")).toEqual([2.47]);
+    expect(extractNumbersFromObject("a decrease of +2.47%")).toEqual([2.47]);
+    expect(extractNumbersFromObject("4% down from 5%")).toEqual([4, 5]);
+  });
+
+  it("grounds a fell answer against tool text that also says fell", () => {
+    const trace = makeTrace({
+      text: "AAPL fell 2.47% today",
+      toolCalls: [
+        { name: "get_stock_quote", args: {}, result: { summary: "AAPL fell 2.47% today" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("grounds a fell answer against signed numeric tool evidence", () => {
+    const trace = makeTrace({
+      text: "AAPL fell 2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(true);
+  });
+
+  it("fails a rose answer against tool text that says fell", () => {
+    const trace = makeTrace({
+      text: "AAPL rose 2.47% today",
+      toolCalls: [
+        { name: "get_stock_quote", args: {}, result: { summary: "AAPL fell 2.47% today" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2.47");
+  });
+
+  it("signs a Unicode-minus percent in answer text like tool-result text", () => {
+    for (const minus of ["−", "﹣", "－"]) {
+      expect(extractFinancialNumbers(`AAPL changed ${minus}2.47% today`)).toEqual([-2.47]);
+      expect(extractNumbersFromObject(`${minus}2.47%`)).toEqual([-2.47]);
+    }
+  });
+
+  it("grounds a Unicode-minus percent answer against identical tool text", () => {
+    const trace = makeTrace({
+      text: "AAPL changed −2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: "−2.47%" } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(true);
+  });
+
+  it("fails a rose answer against signed numeric tool evidence", () => {
+    const trace = makeTrace({
+      text: "AAPL rose 2.47% today",
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { changePercent: -2.47 } }],
+    });
+    expect(scoreDataFaithfulness(trace).passed).toBe(false);
+  });
+});
+
+describe("market-cap scale and duration diagnostic replay", () => {
+  const marketCapText = "**Market Cap:** $3.697 Trillion (as of 2026-09-25 00:23 ET, ~15m delayed)";
+  const marketCapTool = { market_cap_basic: 3697401799030.4814 };
+
+  it("grounds the sanitized market-cap excerpt instead of emitting truncated and duration numbers", () => {
+    const trace = makeTrace({
+      text: marketCapText,
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("does not count the ~15m duration as ungrounded millions", () => {
+    const trace = makeTrace({
+      text: "The quote is ~15m delayed; market cap is $3.697 Trillion",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a wrong market-cap value at the spelled-out trillion scale", () => {
+    const trace = makeTrace({
+      text: marketCapText,
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { market_cap_basic: 2697401799030.4814 } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3697000000000");
+  });
+
+  it("fails a wrong market-cap unit stated as billions", () => {
+    const trace = makeTrace({
+      text: "**Market Cap:** $3.697 Billion",
+      toolCalls: [{ name: "get_fundamentals", args: {}, result: marketCapTool }],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3697000000");
+  });
+
+  it("grounds an answer against a spelled-out scale in a tool result string", () => {
+    const trace = makeTrace({
+      text: "**Market Cap:** $3.697T (as of 2026-09-25 00:23 ET, ~15m delayed)",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "Market cap: $3.697 Trillion" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+});
+
+describe("tool-string magnitude grounding", () => {
+  const response = "Market Cap $3.68 Trillion";
+  const searchResult = (text: string) => [{ name: "search_web", args: {}, result: { text } }];
+
+  it("grounds a market cap stated with a bare compact magnitude in a tool string", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails when the tool string states the same value in the wrong unit", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68B.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
+  });
+
+  it("fails when the tool string states the opposite sign", () => {
+    const trace = makeTrace({
+      text: response,
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of -3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
+  });
+
+  it("fails when the response value differs from the bare tool magnitude", () => {
+    const trace = makeTrace({
+      text: "Market Cap $4.68 Trillion",
+      toolCalls: searchResult(
+        "MSFT Key Statistics: the company has a market capitalization of 3.68T.",
+      ),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("4680000000000");
+  });
+
+  it("grounds a negative signed bare response against matching negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "Market cap of -3.68T",
+      toolCalls: searchResult("MSFT Key Statistics: market cap -3.68T."),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a positive signed bare response against negative tool evidence", () => {
+    const trace = makeTrace({
+      text: "Market cap of 3.68T",
+      toolCalls: searchResult("MSFT Key Statistics: market cap -3.68T."),
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("3680000000000");
+  });
+
+  it("grounds separate comma-delimited observations stated individually", () => {
+    const trace = makeTrace({
+      text: "P/E of 20 and P/E of 30",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,30" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a fabricated value stitched from comma-delimited observations", () => {
+    const trace = makeTrace({
+      text: "P/E of 2030",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,30" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("2030");
+  });
+
+  it("grounds separate observations around a partial thousands group", () => {
+    const trace = makeTrace({
+      text: "P/E of 20 and P/E of 3000",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,3000" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1.0);
+  });
+
+  it("fails a fabricated value stitched from a partial thousands group", () => {
+    const trace = makeTrace({
+      text: "P/E of 20300",
+      toolCalls: [
+        { name: "get_fundamentals", args: {}, result: { text: "P/E observations: 20,3000" } },
+      ],
+    });
+    const result = scoreDataFaithfulness(trace);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("20300");
+  });
+});
+
+describe("quote-accuracy diagnostic replay", () => {
+  it("grounds the preserved AAPL quote trace whose decrease is stated in words", () => {
+    // Inline replay of validation-output/eval-diagnostics/2026-09-25T02-49-29-850Z_quote-accuracy_42737-pcfcs3.json
+    // (preserved live evidence; no live API call).
+    const trace = makeTrace({
+      prompt: "What's the current price of AAPL?",
+      text: "The current price of AAPL is $335.92, a decrease of 0.33%. The market is closed as of 2026-09-24 16:00 ET.",
+      toolCalls: [
+        {
+          name: "get_stock_quote",
+          args: { symbol: "AAPL" },
+          result: {
+            content: [
+              {
+                type: "text",
+                text: "AAPL: $335.92 (-0.33%)\nOpen: $336.72 | High: $338.91 | Low: $334.30\nVolume: 24,364,559 | Market Cap: N/A\n52W Range: $243.42 - $345.34\nAs of 2026-09-24 16:00 ET (market closed).",
+              },
+            ],
+            details: {
+              symbol: "AAPL",
+              name: "Apple Inc.",
+              price: 335.92,
+              change: -1.099999999999966,
+              changePercent: -0.3263901252151106,
+              open: 336.7200012207031,
+              high: 338.91,
+              low: 334.3,
+              previousClose: 337.02,
+              volume: 24364559,
+              marketCap: 0,
+              pe: null,
+              week52High: 345.34,
+              week52Low: 243.42,
+              extendedPrice: 335.91,
+              extendedChange: -0.010009766,
+              extendedChangePercent: -0.0029798062,
+            },
+          },
+        },
+      ],
+    });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
     expect(result.score).toBe(1.0);

@@ -22,7 +22,9 @@ export function createPiAiRouterClient(
   complete: PiModelCompletion = defaultPiModelCompletion,
 ): RouterLlmClient {
   return {
-    async complete(prompt: string): Promise<string> {
+    async complete(prompt: string, signal?: AbortSignal): Promise<string> {
+      // Never open a request for an already-aborted run.
+      signal?.throwIfAborted?.();
       const request = {
         messages: [
           {
@@ -38,16 +40,20 @@ export function createPiAiRouterClient(
         ...(model.reasoning ? {} : { temperature: 0 }),
         maxTokens: 2000,
         reasoning: "minimal" as const,
+        ...(signal ? { signal } : {}),
       };
       let response: CompleteSimpleResponse;
       try {
         response = await complete(model, request, options);
       } catch (error) {
         if (!isUnsupportedTemperatureError(error)) throw error;
+        // Do not open the temperature retry for a run the user already stopped.
+        signal?.throwIfAborted?.();
         const { temperature: _temperature, ...retryOptions } = options;
         response = await complete(model, request, retryOptions);
       }
       if (response.stopReason === "error" && isUnsupportedTemperatureError(response.errorMessage)) {
+        signal?.throwIfAborted?.();
         const { temperature: _temperature, ...retryOptions } = options;
         response = await complete(model, request, retryOptions);
       }

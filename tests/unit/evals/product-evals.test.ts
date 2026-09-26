@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { PRODUCT_EVAL_CASES, PRODUCT_SCENARIO_TEMPLATES } from "../../evals/product/cases.js";
 import { productEvalExitCode } from "../../evals/product/reporting.js";
 import { scoreProductEvalCase, summarizeProductEvalResults } from "../../evals/product/scorer.js";
-import type { ProductEvalCase } from "../../evals/product/types.js";
+import type {
+  ProductEvalCase,
+  ProductEvalCaseResult,
+  ProductEvalReport,
+} from "../../evals/product/types.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
@@ -18,6 +22,43 @@ function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
     askUserTranscript: [],
     text: "",
     ...overrides,
+  };
+}
+
+// Fixtures are constructed explicitly per case, not derived from one another
+// by spreading a "valid" base. Each report declares its own summary counts, so
+// an invalid fixture cannot accidentally inherit a consistent summary.
+function caseResult(input: {
+  id: string;
+  passed: boolean | undefined;
+  mandatoryFailure: boolean | undefined;
+}): ProductEvalCaseResult {
+  return {
+    id: input.id,
+    family: "single_asset",
+    prompt: `prompt for ${input.id}`,
+    score: input.passed === true ? 1 : 0,
+    passed: input.passed as boolean,
+    mandatoryFailure: input.mandatoryFailure as boolean,
+    dimensions: [],
+  };
+}
+
+function reportFixture(input: {
+  results: ProductEvalCaseResult[];
+  caseCount: number;
+  passed: number;
+  failed: number;
+}): ProductEvalReport {
+  return {
+    generatedAt: "2026-07-05T00:00:00.000Z",
+    aggregate: input.caseCount > 0 ? input.passed / input.caseCount : 0,
+    caseCount: input.caseCount,
+    passed: input.passed,
+    failed: input.failed,
+    byFamily: {},
+    byDimension: {},
+    results: input.results,
   };
 }
 
@@ -94,6 +135,73 @@ describe("product eval scoring", () => {
     expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(
       false,
     );
+  });
+
+  // A mandatory dimension failure is not the only way a case can be wrong: an
+  // emitted non-mandatory dimension (for example evidence_use or
+  // missing_data_honesty) can fail while the weighted score still clears 0.8.
+  // The case must still block; `mandatoryFailure` stays as a diagnostic subtype.
+  const nonMandatoryCase: ProductEvalCase = {
+    id: "non-mandatory-masking-synthetic",
+    family: "single_asset",
+    prompt: "isolated product scorer fixture",
+    dimensions: [
+      {
+        id: "direct_answer",
+        description: "Answers directly.",
+        requiredPatterns: [/\bhold\b/i],
+        mandatory: true,
+      },
+      {
+        id: "risk_framing",
+        description: "Names risk.",
+        requiredPatterns: [/\brisks?\b/i],
+        mandatory: true,
+      },
+      {
+        id: "evidence_use",
+        description: "Uses concrete evidence.",
+        requiredPatterns: [/\bpositive catalyst\b/i],
+        weight: 0.25,
+      },
+    ],
+  };
+
+  it("fails a partially failed non-mandatory dimension even when the weighted score clears the threshold", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({ text: "I would hold here; downside risk is elevated." }),
+    );
+
+    expect(result.score).toBeGreaterThanOrEqual(0.8);
+    expect(result.mandatoryFailure).toBe(false);
+    expect(
+      result.dimensions.filter((dimension) => !dimension.passed).map((dimension) => dimension.id),
+    ).toEqual(["evidence_use"]);
+    expect(result.passed).toBe(false);
+  });
+
+  it("passes the same case when every emitted dimension passes", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({
+        text: "I would hold here; downside risk is elevated and the positive catalyst supports it.",
+      }),
+    );
+
+    expect(result.mandatoryFailure).toBe(false);
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("propagates a non-mandatory dimension failure to a failing product eval exit code", () => {
+    const result = scoreProductEvalCase(
+      nonMandatoryCase,
+      makeTrace({ text: "I would hold here; downside risk is elevated." }),
+    );
+    const summary = summarizeProductEvalResults([result]);
+
+    expect(productEvalExitCode({ ...summary, results: [result] })).toBe(1);
   });
 
   it("aggregates scores by prompt family and dimension", () => {
@@ -198,6 +306,25 @@ describe("product eval scoring", () => {
     expect(
       suitableComparison.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed,
     ).toBe(true);
+  });
+
+  it("recognizes a hyphenated or bold bottom-line conclusion as a direct answer", () => {
+    const ratesCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "macro-rates-growth-stocks",
+    );
+    if (!ratesCase) throw new Error("missing macro eval case");
+    const directAnswerPassed = (text: string) =>
+      scoreProductEvalCase(ratesCase, makeTrace({ text })).dimensions.find(
+        (dimension) => dimension.id === "direct_answer",
+      )?.passed;
+
+    expect(directAnswerPassed("**Bottom-line:** falling rates tend to lift growth stocks.")).toBe(
+      true,
+    );
+    expect(directAnswerPassed("**Bottom line:** falling rates tend to lift growth stocks.")).toBe(
+      true,
+    );
+    expect(directAnswerPassed("Falling rates tend to lift growth stocks over time.")).toBe(false);
   });
 
   it("recognizes direct macro impact and risk conclusions", () => {
@@ -419,6 +546,132 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("accepts the preserved live NVDA answer's past-tense recommendation", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        // Faithful excerpt of the 2026-09-25T00:24 live answer.
+        text:
+          "Given the current market context for NVDA, a **Neutral to Cautious** stance is recommended. " +
+          "Valuation models suggest overvaluation and risk metrics are elevated, so downside risk matters.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("accepts a recommendation verb in unrelated symbol and text", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["MSFT"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "MSFT" } }],
+        text: "For MSFT, holding is recommended because valuation and downside risk are elevated.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("does not treat the noun 'recommendation' alone as a direct answer", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "A recommendation cannot be given without more information about your goals and risk tolerance.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      false,
+    );
+  });
+
+  it("documents that a bare 'no' token still satisfies direct_answer (pre-existing limitation)", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "No recommendation can be given without more information about your goals and risk tolerance.",
+      }),
+    );
+
+    // The pre-existing "no" alternative in the direct-answer regex matches
+    // here even though this is an explicit refusal, not a stance. Recorded as a
+    // known limitation rather than widened in this fix.
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails a single-asset answer that only lists considerations without a stance", () => {
+    const nvdaCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "single-asset-nvda-recommendation",
+    );
+    if (!nvdaCase) throw new Error("missing single-asset nvda eval case");
+
+    const result = scoreProductEvalCase(
+      nvdaCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "general_finance_qa",
+          entities: { symbols: ["NVDA"] },
+        },
+        toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+        text: "NVDA has many considerations. Your decision depends on your goals, risk tolerance, and time horizon, so weigh the evidence carefully.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(
+      false,
+    );
+  });
+
   it("counts a concrete portfolio allocation table as a direct construction answer", () => {
     const portfolioCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "portfolio-balanced-50k",
@@ -601,6 +854,380 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("accepts the full saved sentiment answer's noisy/incomplete-evidence caveat as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim 2026-09-25 live answer preserved in
+        // validation-output/sentiment-failed-answer.txt. risk_framing previously
+        // failed on the generic keyword pattern alone even though the answer
+        // names source/coverage uncertainty.
+        text:
+          '**Sentiment for "AI stocks" is currently Leaning Bullish (+0.07) based on an aggregate of Twitter, Reddit, and Web/News sentiment from the last 24 hours.**\n\n' +
+          "**Detailed Breakdown:**\n\n" +
+          "*   **Twitter:** +0.07 (Leaning Bullish) from 40 records\n" +
+          "*   **Reddit:** +0.07 (Leaning Bullish) from 95 records\n" +
+          "*   **Web/News:** +0.25 (Leaning Bullish) from 4 records\n\n" +
+          "The overall confidence in this aggregate sentiment is high (0.71), though many records were neutral or lacked keyword sentiment evidence.\n\n" +
+          "**Key Drivers:**\n\n" +
+          '*   **Positive:** Terms like "buy," "long," and "calls" were frequently associated with bullish sentiment.\n' +
+          '*   **Negative:** Terms such as "sell," "short," and "bubble" contributed to bearish sentiment.\n' +
+          "*   **Mixed:** A significant portion of the evidence showed offsetting bullish and bearish signals.\n\n" +
+          "**Data gaps:**\n" +
+          'The sentiment summary incorporates data from Twitter, Reddit, and general web/news sources, which are the primary sentiment data sources available through OpenCandle\'s tools. There are no other distinct, actively missing sentiment tools that could contribute to this specific "AI stocks" query. However, sentiment data can be noisy, and while these sources provide a good overview, they may not capture the entirety of market sentiment or less prominent discussions.',
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts an independently worded data-quality limitation as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment sources are noisy and may not fully reflect the broader market.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("accepts a data-quality limitation on its own even when every source returned", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "All sentiment sources returned data, but the signal is noisy.",
+      }),
+    );
+    // Supersedes the earlier incorrect rule that required a negative coverage
+    // verb: noisy sentiment is a data-quality risk even at full coverage.
+    const noisyButComplete = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment data is noisy but captures the full picture.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(
+      noisyButComplete.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+    ).toBe(true);
+  });
+
+  it("accepts a not-representative sentiment sample as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "The sentiment sample is sparse, so this read may not be representative.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("accepts each canonical data-quality limitation as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const positiveTexts = [
+      "The sentiment signal is noisy.",
+      "The sentiment read shows sparse coverage.",
+      "The sentiment read rests on a low sample count.",
+      "There is insufficient data for a sentiment read.",
+      "The sentiment sample may not be representative.",
+    ];
+
+    for (const text of positiveTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(true);
+    }
+  });
+
+  it("accepts a data-quality limitation despite an unrelated negation in the clause", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const positiveTexts = [
+      // The "not reliable/reassuring" negation is not attached to the limitation.
+      "The sentiment read is not reliable because of sparse coverage.",
+      "Do not trust the noisy sentiment signal.",
+    ];
+
+    for (const text of positiveTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects clause-local negation of each data-quality limitation", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const negatedTexts = [
+      // Intervening modifier between the negation and the noise word.
+      "The sentiment signal is not particularly noisy; all sources returned data.",
+      // Shared "no ... or ..." scope must negate both coordinated limitations.
+      "There is no insufficient data or sparse coverage.",
+      "There is no sparse coverage in the sentiment read.",
+      "There is no low sample count in the sentiment read.",
+      "There is no insufficient data for the sentiment read.",
+      // Ordinary negative verb forms bound to the limitation.
+      "The sentiment read does not have sparse coverage.",
+      "The sentiment signal cannot be noisy.",
+    ];
+
+    for (const text of negatedTexts) {
+      const result = scoreProductEvalCase(
+        sentimentCase,
+        makeTrace({
+          toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+          text,
+        }),
+      );
+      expect(
+        result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed,
+        text,
+      ).toBe(false);
+      expect(result.passed, text).toBe(false);
+    }
+  });
+
+  it("still fails sentiment answers with no risk framing, unrelated noise, or negated noise", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const plainBullish = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment for AI stocks is leaning bullish across Twitter and Reddit.",
+      }),
+    );
+    const neutralNoise = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment is neutral; the market noise is unrelated to this question.",
+      }),
+    );
+    const steadyPositive = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Sentiment for AI stocks is mildly positive, with steady discussion volume.",
+      }),
+    );
+    // Unrelated noise about another domain is not a sentiment data-quality risk.
+    const unrelatedNoise = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Shipping times are noisy, but all sentiment sources returned data.",
+      }),
+    );
+    // An explicit negation of noise is not a hazard.
+    const negatedNoise = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "The sentiment signal is not noisy, and all sources returned data.",
+      }),
+    );
+
+    for (const result of [
+      plainBullish,
+      neutralNoise,
+      steadyPositive,
+      unrelatedNoise,
+      negatedNoise,
+    ]) {
+      expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+        false,
+      );
+      expect(result.passed).toBe(false);
+    }
+  });
+
+  it("accepts the full saved data-quality answer's sparse-sample and noise disclosure", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim live answer preserved in
+        // validation-output/sentiment-data-quality.txt.
+        text:
+          'The sentiment around "AI stocks" in the last 24 hours is **Leaning Bullish** with an aggregate score of +0.10.\n\n' +
+          "Here's a breakdown by source:\n\n" +
+          "*   **Twitter:** +0.20 (Leaning Bullish) from 40 records\n" +
+          "*   **Reddit:** +0.07 (Leaning Bullish) from 95 records\n" +
+          "*   **Web/News:** +0.00 (Neutral) from 2 records\n\n" +
+          '**Positive drivers** include mentions of "buy," "long," and "calls." **Negative drivers** are "sell," "short," and "bubble."\n\n' +
+          "**Data gaps:**\n" +
+          'All three sentiment sources (Twitter, Reddit, and Web/News) were able to provide some data for the query "AI stocks." However, the confidence score for the aggregate sentiment is high (0.71), but this is primarily because most records were neutral or had no keyword sentiment match, indicating sparse coverage and potential noise in the signal. The "Web/News" source only provided 2 records, which is a very low sample count and may not be representative. The tool also indicated "Insufficient data for divergence analysis," meaning a comparison with price action could not be made.',
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts the full saved source-divergence answer's missing-source gap explanation", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        // Verbatim live answer preserved in
+        // validation-output/sentiment-source-divergence.txt.
+        text:
+          'Sentiment around "AI stocks" is currently **Leaning Bullish** with an aggregate score of +0.07 based on 103 records from Reddit and Web/News over the last 24 hours.\n\n' +
+          "**Key Drivers:**\n" +
+          '*   **Positive:** "buy", "long", "calls"\n' +
+          '*   **Negative:** "sell", "short", "bubble"\n\n' +
+          "**Missing Sources:**\n" +
+          "*   **Twitter:** Twitter sentiment is unavailable due to a Twitter API error (HTTP 404). This is a significant data gap as Twitter can provide real-time public sentiment that may differ from other sources.\n\n" +
+          "**Data gaps**:\n" +
+          "*   Twitter: Twitter sentiment unavailable (Twitter API error (HTTP 404): Twitter API error 404: ).",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+    expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts an independent missing-source divergence explanation as risk framing", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Reddit is unavailable, and its sentiment may diverge from the available sources.",
+      }),
+    );
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it("still fails a bare missing-source note and a fully covered bullish answer", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+
+    const missingOnly = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Twitter sentiment is unavailable right now.",
+      }),
+    );
+    const allCovered = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "All sources returned data; sentiment for AI stocks is bullish.",
+      }),
+    );
+    // An unrelated "may differ from other …" clause must not be read as a
+    // sentiment source-divergence explanation.
+    const unrelatedDifference = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+        text: "Twitter is unavailable. Shipping times may differ from other estimates.",
+      }),
+    );
+
+    for (const result of [missingOnly, allCovered, unrelatedDifference]) {
+      expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+        false,
+      );
+      expect(result.passed).toBe(false);
+    }
+  });
+
   it("recognizes plural risk headings in education answers", () => {
     const educationCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "education-options-greeks",
@@ -714,9 +1341,122 @@ describe("product eval scoring", () => {
     ).toMatchObject({ passed: true });
   });
 
-  it("maps failed product eval reports to a failing process exit code", () => {
-    expect(productEvalExitCode({ failed: 0 })).toBe(0);
-    expect(productEvalExitCode({ failed: 1 })).toBe(1);
+  it("passes only an internally consistent product eval report with completed cases", () => {
+    const valid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(valid)).toBe(0);
+  });
+
+  it("fails a product eval report with a nonzero failed count", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: false, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 1,
+      failed: 1,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails an empty product eval report instead of reading zero failures as success", () => {
+    const invalid = reportFixture({ results: [], caseCount: 0, passed: 0, failed: 0 });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report whose failed count hides a failed result", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: false, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report whose counts are inconsistent with its results", () => {
+    const results = [
+      caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+      caseResult({ id: "case-b", passed: true, mandatoryFailure: false }),
+    ];
+
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 3, passed: 2, failed: 0 })),
+    ).toBe(1);
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 2, passed: 1, failed: 0 })),
+    ).toBe(1);
+    expect(
+      productEvalExitCode(reportFixture({ results, caseCount: 2, passed: 2, failed: 1 })),
+    ).toBe(1);
+  });
+
+  it("fails a report with a result that has no completed pass/fail outcome", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-b", passed: undefined, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report with an empty or whitespace-only result id", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "   ", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a report with duplicate result ids", () => {
+    const invalid = reportFixture({
+      results: [
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+        caseResult({ id: "case-a", passed: true, mandatoryFailure: false }),
+      ],
+      caseCount: 2,
+      passed: 2,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
+  });
+
+  it("fails a mandatory dimension failure even when the passed flag is incorrectly true", () => {
+    const invalid = reportFixture({
+      results: [caseResult({ id: "case-a", passed: true, mandatoryFailure: true })],
+      caseCount: 1,
+      passed: 1,
+      failed: 0,
+    });
+
+    expect(productEvalExitCode(invalid)).toBe(1);
   });
 });
 

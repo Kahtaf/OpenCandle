@@ -28,6 +28,8 @@ vi.mock("../../evals/baseline.js", () => ({
   buildReport: vi.fn(() => ({})),
   formatReport: vi.fn(() => ""),
   saveRun: vi.fn(() => "unused"),
+  failedLayerNames: vi.fn(() => []),
+  saveFailureDiagnostic: vi.fn(() => null),
 }));
 
 // Regression test for the vitest-evals 0.14 upgrade: describeEval's root

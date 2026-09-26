@@ -6,7 +6,12 @@ import type {
 import type { ClassificationResult, WorkflowType } from "../../src/routing/types.js";
 import type { PlanningEvidenceRecord } from "../harness/planning-evidence.js";
 import type { RetryEligibilityTrace, StructuredCheckResult } from "../harness/structured-checks.js";
-import type { CustomEntryTrace } from "../harness/types.js";
+import type {
+  CustomEntryTrace,
+  RetryEventTrace,
+  TerminalOutcomeTrace,
+  WorkflowFailureSummary,
+} from "../harness/types.js";
 import type { SeededMarketStateFixture } from "./competitive-finance.js";
 import type { SavedMarketStateFidelityAssertion } from "./scorers/saved-market-state-fidelity.js";
 
@@ -58,7 +63,12 @@ export interface EvalTrace {
   toolCalls: TraceToolCall[];
   askUserTranscript: Array<{ question: string; answer: string | null }>;
   text: string;
+  /** Sanitized terminal outcome of the last assistant message, when observed. */
+  terminalOutcome?: TerminalOutcomeTrace;
+  retryEvents?: RetryEventTrace[];
   customEntries?: CustomEntryTrace[];
+  /** Why a workflow failed (bounded, redacted); absent when no workflow failed. */
+  workflowFailure?: WorkflowFailureSummary;
 }
 
 /** A single eval case definition. */

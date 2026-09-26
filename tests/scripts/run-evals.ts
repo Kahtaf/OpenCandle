@@ -1,16 +1,20 @@
 #!/usr/bin/env tsx
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { loadEnv } from "../../src/config.js";
+import {
+  createRealReleaseDependencies,
+  releaseArgumentProblem,
+  runReleaseWithEvidence,
+} from "./release-eval-evidence.js";
 import {
   appendRunIndexEntry,
   diffRunReports,
-  RELEASE_SEQUENCE,
   type ResolvedEvalCommand,
+  resolveChildExitCode,
   resolveEvalCommand,
-  type SuiteResult,
   snapshotRunReports,
   suiteListText,
-  summarizeReleaseResults,
 } from "./run-evals-table.js";
 
 const cwd = process.cwd();
@@ -31,31 +35,30 @@ try {
 }
 
 function runRelease(argv: string[]): number {
+  const argumentProblem = releaseArgumentProblem(argv);
+  if (argumentProblem) {
+    console.error(argumentProblem);
+    return 1;
+  }
   const startedAt = new Date().toISOString();
   const runsDir = join(cwd, "tests", "evals", "runs");
   const before = snapshotRunReports(runsDir);
-  const results: SuiteResult[] = [];
 
-  for (const suite of RELEASE_SEQUENCE) {
-    results.push({ suite, exitCode: runResolved(resolveEvalCommand(suite, [])) });
-  }
-
-  const summary = summarizeReleaseResults(results);
-  console.log("\n--- Eval Release Summary ---");
-  for (const row of summary.rows) {
-    console.log(`${row.suite.padEnd(22)} ${row.status} exit=${row.exitCode}`);
-  }
+  // Load local credentials before sanitizing; cleanReleaseEnv pins every
+  // selector so a .env filter cannot narrow the release coverage.
+  loadEnv();
+  const outcome = runReleaseWithEvidence(createRealReleaseDependencies({ cwd, env: process.env }));
 
   appendRunIndexEntry({
     cwd,
     suite: "release",
     startedAt,
     finishedAt: new Date().toISOString(),
-    exitCode: summary.exitCode,
+    exitCode: outcome.exitCode,
     reports: diffRunReports(runsDir, before, cwd),
-    argv: ["release", ...argv],
+    argv: ["release"],
   });
-  return summary.exitCode;
+  return outcome.exitCode;
 }
 
 function runSuite(suite: string, argv: string[]): number {
@@ -86,9 +89,8 @@ function runResolved(resolved: ResolvedEvalCommand): number {
   });
   if (result.error) {
     console.error(result.error.message);
-    return 1;
   }
-  return result.status ?? 1;
+  return resolveChildExitCode(result);
 }
 
 function printResolved(resolved: ResolvedEvalCommand): void {

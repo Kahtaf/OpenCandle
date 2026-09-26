@@ -107,7 +107,9 @@ export function evaluateFinalAnswerAssertion(
       pattern:
         /bottom line|practical workflow|quick checklist|core mental model|where it misleads|cross-checks/i,
       passed:
-        /bottom line/.test(text) && /practical workflow/.test(text) && /quick checklist/.test(text),
+        /bottom[- ]line/.test(text) &&
+        /practical workflow/.test(text) &&
+        /quick checklist/.test(text),
       reason: "expected educational section shape",
     },
   ];
@@ -143,6 +145,120 @@ function asksForTickerClarification(trace: EvalTrace): boolean {
       /\b(?:ticker|symbol|company)\b/i.test(question) &&
       /\b(?:which|clarify|confirm|correct|intended|mean)\b/i.test(question),
   );
+}
+
+// Only puts, put options/contracts, or plain contracts count as the hedge unit.
+// An intervening adjective ("4 call contracts") or generic "options" must not.
+const HEDGE_PUT_UNIT = "(?:puts?|put\\s+(?:option\\s+)?contracts?|put\\s+options?|contracts?)";
+const HEDGE_OWNED_SHARES =
+  /(?<![\d.])450(?![\d.])\s*[- ]?\s*(?:shares?|sh\b)|\bfour\s+hundred(?:\s+and)?\s+fifty\s+shares?\b/;
+const HEDGE_RESIDUAL_QUALIFIER =
+  /\b(?:residual|remainder|remaining|leftover|unhedged|uncovered|unprotected|not hedged|not covered)\b/;
+// Actual excess/overhedge semantics only: bare rounding/fractional language is
+// not an explanation of the 50 shares of excess exposure.
+const HEDGE_EXCESS_QUALIFIER =
+  /\b(?:excess|extra|surplus|additional|over-?hedg\w*|over-?expos\w*|over-?cover\w*|beyond|above your|more\s+(?:shares?|than|exposure|protection))\b/;
+// Downside-protection floor mechanics: the literal floor word, or an explicit
+// bounded equivalent on the combined stock-plus-put position (protected from
+// falling below, protection begins at/below, caps losses at, strike minus
+// premium), or a put's strike-level sell right. Deliberately not a blanket
+// "protection"/"risk" match and not a generic sell/stop level: the put right
+// branch and the strike-level branch each require the strike itself, so a
+// stop-loss or price target phrased as "the level at which you sell" does not
+// count.
+const HEDGE_FLOOR_MECHANICS =
+  /\b(?:hedge|effective|downside)?\s*floor\b|\bprotected from (?:falling|dropping|declining|slipping) below\b|\bprotection (?:begins|starts|kicks in)(?: only)? (?:at|below|around|once)\b|\bdownside protection (?:begins|starts|level|at|below|once)\b|\bcaps? (?:your )?(?:losses|downside|risk|exposure) (?:at|below|around)\b|\b(?:strike|price)\s*(?:minus|[-–])\s*(?:the\s+)?premium\b|\bputs?\b[^.\n]{0,80}\bright to sell\b[^.\n]{0,40}\bstrike\b|\bstrike\b[^.\n]{0,40}\blevel at which\b[^.\n]{0,60}\b(?:sell|exit|offload)\b/i;
+
+// Explicit protective-put hazard concepts. The literal "risk" stays accepted,
+// but an answer may instead state the concrete hazard: the put-leg premium that
+// can be lost, unprotected/remaining shares, time or premium decay, or theta
+// eroding the option's time value. A bare "tradeoff"/"consider" heading, a
+// generic "downside protection begins at the strike" floor sentence, an
+// unrelated word such as "fall season", or the protection-only floor sentences
+// "the put caps your losses at the strike" and "limits your maximum loss at the
+// strike" does not count. Loss language is deliberately bounded to the
+// premium/put/option leg, so naming a capped or limited stock loss is not
+// mistaken for a hazard.
+const HEDGE_DOWNSIDE_HAZARD =
+  /\brisks?\b|\b(?:unprotected|unhedged|uncovered)\b|\b(?:time|premium|option|theta)\s+decay\b|\btheta\b[^.\n]{0,40}\b(?:erod|reduc|eats?|drains?)\w*\b|\b(?:erod|reduc)\w*\b[^.\n]{0,40}\b(?:option|time)\s+value\b|\b(?:put|option)s?\b[^.\n]{0,20}\blose\b|\blose\s+(?:the\s+|your\s+|entire\s+)?premium\b|\b(?:premium|put|option)(?:\s+leg)?\s+loss(?:es)?\b|\bloss(?:es)?\s+(?:of|on|from)\s+(?:the\s+)?(?:premium|put|option|leg)\b|\bpremium\s+(?:is\s+)?(?:at\s+risk|lost)\b/i;
+
+// Normal Markdown bold emphasis around a number must not change sizing, e.g.
+// "buy **4** put contracts" or "**5** puts". Strip paired ** / __ markers from
+// the matching copy only; unmatched markers are left untouched.
+function stripMarkdownEmphasis(text: string): string {
+  return text.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, "$2");
+}
+
+// A put quantity tied to its option unit, so numbered-list digits ("4."),
+// unrelated figures (strikes, dates), call contracts, and generic options do
+// not satisfy the sizing. The trailing boundary keeps "4 putative" out.
+function hasHedgePutQuantity(text: string, digit: string, word: string): boolean {
+  const digitPattern = new RegExp(`(?<![\\d.])${digit}(?![\\d.])\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  const wordPattern = new RegExp(`\\b${word}\\b\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  return digitPattern.test(text) || wordPattern.test(text);
+}
+
+// A 50-share quantity stated with its share unit (not the "50" inside 450/"$50"
+// premium/50 delta) and a residual or excess qualifier in the same context.
+function hasFiftyShareMentionNear(text: string, qualifier: RegExp): boolean {
+  const pattern =
+    /(?<![\d.])(?:50|fifty)(?:-(?:share|shares)\b|\s+(?:[a-z][a-z-]*\s+){0,2}(?:share|shares)\b)/gi;
+  for (const match of text.matchAll(pattern)) {
+    const start = Math.max(0, match.index - 100);
+    const end = Math.min(text.length, match.index + match[0].length + 100);
+    if (qualifier.test(text.slice(start, end))) return true;
+  }
+  return false;
+}
+
+function evaluateHedgeSizingFromShares(text: string): {
+  passed: boolean;
+  reason: string;
+  deterministic: boolean;
+} {
+  const normalized = stripMarkdownEmphasis(text);
+  const ownedShares = HEDGE_OWNED_SHARES.test(normalized);
+  const fourUnits = hasHedgePutQuantity(normalized, "4", "four");
+  const fiveUnits = hasHedgePutQuantity(normalized, "5", "five");
+  const residual = hasFiftyShareMentionNear(normalized, HEDGE_RESIDUAL_QUALIFIER);
+  const excess = hasFiftyShareMentionNear(normalized, HEDGE_EXCESS_QUALIFIER);
+
+  if (!ownedShares) {
+    return {
+      passed: false,
+      reason:
+        "expected the sized hedge to reference the owned 450 shares (digits or words), not a different position",
+      deterministic: true,
+    };
+  }
+  if (fourUnits && residual && fiveUnits && !excess) {
+    return {
+      passed: false,
+      reason:
+        "expected a reconciled sizing: a 4-put/50-share-residual recommendation and a 5-contract recommendation contradict without an explicit excess explanation",
+      deterministic: true,
+    };
+  }
+  if (fourUnits && residual) {
+    return {
+      passed: true,
+      reason: "observed 4 put contracts with the 50-share residual made explicit",
+      deterministic: true,
+    };
+  }
+  if (fiveUnits && excess) {
+    return {
+      passed: true,
+      reason: "observed 5 put contracts with the 50-share excess or overhedge made explicit",
+      deterministic: true,
+    };
+  }
+  return {
+    passed: false,
+    reason:
+      "expected a put/contract quantity for the owned 450 shares with an explicit 50-share residual or an explained 50-share excess/overhedge; incidental digits, call contracts, generic options, or unqualified 500-share coverage do not count",
+    deterministic: true,
+  };
 }
 
 function evaluateManifestAssertion(
@@ -386,40 +502,46 @@ function evaluateManifestAssertion(
     return forbids(/bullish call|bull call|call spread|covered call/);
   }
   if (lowerAssertion.includes("sizes hedge from 450 shares")) {
-    return requires(/450/, /\b4\b|four/, /50|residual|unhedged|round/);
+    return evaluateHedgeSizingFromShares(text);
   }
   if (lowerAssertion.includes("hedge floor, premium")) {
-    return requires(/hedge floor|floor/, /premium/, /delta|theta|greeks?/, /liquidity/, /risk/);
+    const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/);
+    if (!base.passed) return base;
+    if (!HEDGE_DOWNSIDE_HAZARD.test(text)) {
+      return {
+        passed: false,
+        reason:
+          "expected an explicit protective-put hazard, such as the put-leg loss/loses/premium at risk, unprotected or unhedged shares, or time/theta decay of the option's value, not only premium/Greeks/liquidity mechanics",
+        deterministic: true,
+      };
+    }
+    if (!HEDGE_FLOOR_MECHANICS.test(text)) {
+      return {
+        passed: false,
+        reason:
+          "expected explicit downside-protection floor mechanics, such as shares protected from falling below the strike minus premium or protection beginning at/below a strike",
+        deterministic: true,
+      };
+    }
+    return {
+      passed: true,
+      reason:
+        "observed premium, Greeks, liquidity, an explicit protective-put hazard, and explicit downside-protection floor mechanics",
+      deterministic: true,
+    };
   }
   if (
     lowerAssertion.includes("bottom-line portfolio risk/reward") ||
     lowerAssertion.includes("bottom-line structural portfolio read")
   ) {
-    const startsWithStructuralRead = /^\s*(?:\*\*)?structural (?:allocation|portfolio) read/i.test(
-      trace.text,
-    );
-    const leadingParagraph = trace.text.split(/\n\s*\n/, 1)[0] ?? "";
-    const startsWithPortfolioOutlook =
-      /\bportfolio\b/i.test(leadingParagraph) &&
-      /\b(?:our read|suggests?|faces?|expect(?:s|ed)?|outlook)\b/i.test(leadingParagraph) &&
-      /\b(?:risk|reward|returns?|volatility|structural)\b/i.test(leadingParagraph);
-    const openingStructuralRead =
-      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
-      /structural (?:allocation|portfolio) read/i.test(trace.text.slice(0, 600));
-    const openingPortfolioRead =
-      /\bportfolio\b/i.test(trace.text.slice(0, 600)) &&
-      /\b(?:risk|reward|returns?|volatility|structural|challenging)\b/i.test(
-        trace.text.slice(0, 600),
-      ) &&
-      /\b(?:commitment|analyst view|expect(?:s|ed)?|faces?|outlook|likely|positioned)\b/i.test(
-        trace.text.slice(0, 600),
-      );
-    return startsWithStructuralRead ||
-      startsWithPortfolioOutlook ||
-      openingStructuralRead ||
-      openingPortfolioRead
-      ? requires(/portfolio/, /risk|reward|returns?|volatility|structural|challenging/)
-      : requires(/bottom line/, /portfolio/, /risk|reward|structural/);
+    const passed = opensWithBottomLineStructuralRead(trace.text);
+    return {
+      passed,
+      reason: passed
+        ? "opening block (after at most one short lead-in sentence) gives a bottom-line or structural read of the portfolio"
+        : "expected the opening block (after at most one short lead-in sentence) to give a bottom-line or structural portfolio read, not a question, budget request, builder allocation, or unrelated preamble",
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("current macro evidence")) {
     return requiredTerms(
@@ -494,4 +616,96 @@ function evaluateManifestAssertion(
     return forbids(/analyst view|commitment|confidence band|invalidation level|reasoning chain/);
   }
   return undefined;
+}
+
+// General bottom-line markers: the phrase itself (any spacing/hyphenation), the BLUF
+// acronym, "verdict", and "overall/net read|assessment|view|take" summary labels.
+const BOTTOM_LINE_MARKER =
+  /\bbottom[\s-]*line\b|\bbluf\b|\bverdict\b|\b(?:overall|net) (?:read|assessment|view|take)\b/;
+const NEGATED_BOTTOM_LINE_MARKER =
+  /\bno (?:clear |real )?(?:bottom[\s-]*line|bluf|verdict|(?:overall|net) (?:read|assessment|view|take))\b/g;
+const PORTFOLIO_SUBJECT =
+  /\bportfolios?\b|\ballocations?\b|\b\d{1,3}\s*\/\s*\d{1,3}\b|\bsleeves?\b/;
+const STRUCTURAL_CHARACTERIZATION =
+  /\brisks?\b|\brewards?\b|\breturns?\b|\bvolatil|\bdiversif|\bconcentrat|\bduration\b|\bcorrelat|\bdrawdowns?\b|\bstructur|\bbalanc|\bhedg|\bexpos/;
+const BUDGET_REQUEST =
+  /\bbudget\b|\bhow much\b[^.?!]{0,30}\b(?:invest|allocate|put in)\b|\bamount (?:you|to)\b[^.?!]{0,20}\binvest\b/;
+const BUILDER_OPENING =
+  /\b(?:build|construct)(?:ing)?\b[^.?!]{0,40}\bportfolio\b|\bportfolio\b[^.?!]{0,40}\b(?:build|construct)\b|\ballocat(?:e|ing)\s+\d{1,3}\s*%/;
+
+function normalizeOpeningBlock(block: string): string {
+  return block
+    .replace(/[*_#>`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isHeadingOnlyBlock(block: string): boolean {
+  if (block.includes("\n")) return false;
+  if (/^#{1,6}\s/.test(block) || /^\*\*[^*]+\*\*:?$/.test(block)) return true;
+  const plain = normalizeOpeningBlock(block);
+  return plain.length > 0 && plain.length <= 80 && !/[.!?]$/.test(plain);
+}
+
+function isShortLeadInSentence(block: string): boolean {
+  const plain = normalizeOpeningBlock(block);
+  return (
+    !block.includes("\n") &&
+    plain.length > 0 &&
+    plain.length <= 200 &&
+    !/[.!?:;]\s+\S/.test(plain) &&
+    !isHeadingOnlyBlock(block)
+  );
+}
+
+const NEGATED_BUILDING =
+  /\b(?:not|never|rather than|instead of|without)\b[^.?!]{0,20}\b(?:build|construct)\w*/g;
+
+function isRejectedOpening(plain: string): boolean {
+  const firstSentence = plain.split(/(?<=[.!?])\s/, 1)[0] ?? "";
+  const asksUser = /\?$/.test(firstSentence) && /\byour?\b/.test(firstSentence);
+  return (
+    asksUser ||
+    BUDGET_REQUEST.test(plain) ||
+    BUILDER_OPENING.test(plain.replace(NEGATED_BUILDING, ""))
+  );
+}
+
+function isBottomLineStructuralRead(plain: string): boolean {
+  if (!PORTFOLIO_SUBJECT.test(plain)) return false;
+  const withoutNegatedMarkers = plain.replace(NEGATED_BOTTOM_LINE_MARKER, "");
+  return BOTTOM_LINE_MARKER.test(withoutNegatedMarkers) || STRUCTURAL_CHARACTERIZATION.test(plain);
+}
+
+/**
+ * "Starts with a bottom-line structural portfolio read": the opening unit (one heading plus its
+ * first paragraph, or the first paragraph) must read the portfolio as a whole, either under a
+ * bottom-line marker or as a risk/reward/structure characterization. At most one short lead-in
+ * sentence may precede it. Openings that ask a question, request a budget, or start building a
+ * new allocation fail, as does an answer whose bottom line only appears later.
+ */
+export function opensWithBottomLineStructuralRead(text: string): boolean {
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  let index = 0;
+  const first = blocks[0];
+  if (first === undefined) return false;
+  if (isRejectedOpening(normalizeOpeningBlock(first))) return false;
+  if (
+    isShortLeadInSentence(first) &&
+    !isBottomLineStructuralRead(normalizeOpeningBlock(first)) &&
+    blocks.length > 1
+  ) {
+    index = 1;
+  }
+  const leadBlock = blocks[index] ?? "";
+  const leadUnit =
+    isHeadingOnlyBlock(leadBlock) && blocks[index + 1] !== undefined
+      ? `${leadBlock}\n${blocks[index + 1]}`
+      : leadBlock;
+  const plain = normalizeOpeningBlock(leadUnit);
+  return !isRejectedOpening(plain) && isBottomLineStructuralRead(plain);
 }

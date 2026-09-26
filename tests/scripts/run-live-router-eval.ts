@@ -24,6 +24,11 @@ import { route } from "../../src/routing/router.js";
 import { createPiAiRouterClient } from "../../src/routing/router-llm-client.js";
 import type { RouterInputContext, RouterOutput } from "../../src/routing/router-types.js";
 import { selectDefaultCompetitiveModel } from "../evals/competitive-finance.js";
+import {
+  buildCompletionReport,
+  type CompletionReportCase,
+  writeCompletionReport,
+} from "../evals/completion-report.js";
 import { stripNonContract } from "../evals/router-live-contract.js";
 
 interface RouterFixture {
@@ -95,6 +100,8 @@ async function main(): Promise<void> {
   const latencies: number[] = [];
   let pass = 0;
   const failures: Array<{ name: string; diffs: string[] }> = [];
+  const completionCases: CompletionReportCase[] = [];
+  const startedAt = new Date().toISOString();
 
   console.log(
     `Running live router eval against ${fixtures.length} fixtures with model=${model.provider}/${model.id}...\n`,
@@ -115,10 +122,12 @@ async function main(): Promise<void> {
         client,
       );
     } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
       failures.push({
         name,
-        diffs: [`threw: ${err instanceof Error ? err.message : String(err)}`],
+        diffs: [`threw: ${reason}`],
       });
+      completionCases.push({ id: name, status: "failed", reason: truncateReason(reason) });
       console.log(`FAIL ${name}: threw`);
       continue;
     }
@@ -135,9 +144,15 @@ async function main(): Promise<void> {
     );
     if (diffs.length === 0) {
       pass += 1;
+      completionCases.push({ id: name, status: "passed" });
       console.log(`PASS ${name} (${elapsed}ms)`);
     } else {
       failures.push({ name, diffs });
+      completionCases.push({
+        id: name,
+        status: "failed",
+        reason: truncateReason(diffs.join("; ")),
+      });
       console.log(`FAIL ${name} (${elapsed}ms)`);
       for (const d of diffs) console.log(`  ${d}`);
     }
@@ -153,9 +168,24 @@ async function main(): Promise<void> {
     console.log(`failures: ${failures.map((f) => f.name).join(", ")}`);
   }
 
+  const completionPath = writeCompletionReport(
+    buildCompletionReport({
+      suite: "router-live",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      cases: completionCases,
+      settings: { provider: model.provider, model: model.id },
+    }),
+  );
+  if (completionPath) console.log(`Completion report: ${completionPath}`);
+
   if (passRate < 1.0) {
     process.exitCode = 1;
   }
+}
+
+function truncateReason(reason: string): string {
+  return reason.length > 900 ? `${reason.slice(0, 899)}…` : reason;
 }
 
 function resolveRouterModel(modelRuntime: ModelRuntime, modelRegistry: ModelRegistry): Model<Api> {

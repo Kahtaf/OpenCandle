@@ -17,6 +17,29 @@ const mockedMkdirSync = vi.mocked(mkdirSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedWriteFileSync = vi.mocked(writeFileSync);
 
+// Every env key config.ts (`loadEnv`/`loadConfig`) reads, plus the generic key
+// the parser tests exercise. Tests must not inherit these from the outer shell
+// or a developer .env: an inherited empty value is a real override in
+// `resolveConfig`, and an inherited non-empty value defeats the dotenv
+// precedence assertions. `afterEach` restores the exact original snapshot.
+const CONFIG_ENV_KEYS = [
+  "API_KEY",
+  "OPENAI_API_KEY",
+  "ALPHA_VANTAGE_API_KEY",
+  "FRED_API_KEY",
+  "BRAVE_API_KEY",
+  "EXA_API_KEY",
+  "FINNHUB_API_KEY",
+  "LSE_API_KEY",
+  "OPENCANDLE_HOME",
+  "OPENCANDLE_ROUTER_MODE",
+  "OPENCANDLE_DEBATE",
+] as const;
+
+function clearConfigEnv(): void {
+  for (const key of CONFIG_ENV_KEYS) delete process.env[key];
+}
+
 describe("loadEnv", () => {
   const originalEnv = { ...process.env };
 
@@ -26,6 +49,7 @@ describe("loadEnv", () => {
   });
 
   beforeEach(() => {
+    clearConfigEnv();
     mockedExistsSync.mockReturnValue(false);
     mockedMkdirSync.mockImplementation(() => undefined);
   });
@@ -82,6 +106,7 @@ describe("loadConfig", () => {
   });
 
   beforeEach(() => {
+    clearConfigEnv();
     process.env.OPENCANDLE_HOME = openCandleHome;
     mockedExistsSync.mockReturnValue(false);
     mockedMkdirSync.mockImplementation(() => undefined);

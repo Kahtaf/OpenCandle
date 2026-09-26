@@ -16,11 +16,17 @@ export type {
  * Handler for `ask_user` tool invocations in non-UI contexts (e.g. test harness).
  * When provided to `createOpenCandleSession`, the ask-user tool calls this handler
  * instead of `ctx.ui.*` methods.
+ *
+ * `options.signal` is the asking tool's run signal. A handler that waits on a
+ * person should settle as cancelled once it aborts, so a stopped run can end.
  */
-export type AskUserHandler = (params: {
-  question: string;
-  questionType: "select" | "text" | "confirm";
-  options?: string[];
-  placeholder?: string;
-  reason?: string;
-}) => Promise<{ answer: string | null; cancelled: boolean }>;
+export type AskUserHandler = (
+  params: {
+    question: string;
+    questionType: "select" | "text" | "confirm";
+    options?: string[];
+    placeholder?: string;
+    reason?: string;
+  },
+  options?: { signal?: AbortSignal },
+) => Promise<{ answer: string | null; cancelled: boolean }>;

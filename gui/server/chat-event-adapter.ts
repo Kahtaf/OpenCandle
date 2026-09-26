@@ -68,6 +68,54 @@ export function sessionEntriesToChatEvents(
       continue;
     }
 
+    // Durable cancelled-turn marker from the extension input hook. Without
+    // this mapping `entry.type === "custom"` is dropped and a stopped turn
+    // would leave no transcript trace to pair with the terminal run.failed.
+    // The early input hook handled the turn before Pi wrote a user message, so
+    // replay the original prompt from the marker as a stable user bubble before
+    // the stopped notice; otherwise the user's words vanish on reload.
+    if (isCustomEntry(entry, "opencandle-run-cancelled")) {
+      lastEntryWasUserMessage = false;
+      const details = customEntryData(entry);
+      // The marker's `text` is the expanded workflow prompt. When the early
+      // input hook recorded the user's own words in an `opencandle-user-input`
+      // marker, prefer that original text and attachments, then clear them so
+      // they cannot leak onto the next user turn.
+      const originalText = pendingOriginalInput ?? stringField(details, "text");
+      const originalAttachments = pendingOriginalAttachments;
+      pendingOriginalInput = null;
+      pendingOriginalAttachments = [];
+      if (originalText) {
+        const cancelledUserId = `cancelled-user-${entry.id}`;
+        events.push({
+          type: "message.created",
+          sessionId: options.sessionId,
+          messageId: cancelledUserId,
+          role: "user",
+          seq: seq++,
+        });
+        events.push({
+          type: "message.completed",
+          sessionId: options.sessionId,
+          messageId: cancelledUserId,
+          content: [{ type: "text", text: originalText }],
+          ...(originalAttachments.length > 0 ? { attachments: originalAttachments } : {}),
+          seq: seq++,
+        });
+      }
+      events.push({
+        type: "custom.message",
+        sessionId: options.sessionId,
+        messageId: entry.id,
+        customType: "opencandle-run-cancelled",
+        content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+        // Retry re-sends the user's own words, never the expanded prompt.
+        details: originalText ? { ...details, prompt: originalText } : details,
+        seq: seq++,
+      });
+      continue;
+    }
+
     if (entry.type !== "message") {
       lastEntryWasUserMessage = false;
       continue;
@@ -142,6 +190,17 @@ export function sessionEntriesToChatEvents(
         }
         continue;
       }
+      // Stop mid answer: Pi keeps the partial reply with stopReason "aborted".
+      // Keep any partial text, then mark the turn stopped (with Retry) so a
+      // reload never shows it as a complete answer. An empty aborted reply
+      // renders only the stopped notice.
+      const stopped = message.stopReason === "aborted";
+      if (stopped && !assistantHasVisibleContent(message)) {
+        events.push(
+          stoppedAssistantEvent(options.sessionId, messageId, false, lastRetryPrompt, seq++),
+        );
+        continue;
+      }
       events.push({
         type: "message.created",
         sessionId: options.sessionId,
@@ -180,6 +239,11 @@ export function sessionEntriesToChatEvents(
         content,
         seq: seq++,
       });
+      if (stopped) {
+        events.push(
+          stoppedAssistantEvent(options.sessionId, messageId, true, lastRetryPrompt, seq++),
+        );
+      }
       continue;
     }
 
@@ -245,6 +309,41 @@ function pairedAssistantFailureIds(entries: SessionEntry[]): Set<string> {
     }
   });
   return paired;
+}
+
+function assistantHasVisibleContent(message: Message): boolean {
+  if (message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  return message.content.some(
+    (part) =>
+      (part.type === "text" && part.text.trim() !== "") ||
+      part.type === "toolCall" ||
+      part.type === "image",
+  );
+}
+
+function stoppedAssistantEvent(
+  sessionId: string,
+  messageId: string,
+  partial: boolean,
+  retryPrompt: string | null,
+  seq: number,
+): ChatEvent {
+  return {
+    type: "custom.message",
+    sessionId,
+    messageId: `stopped-${messageId}`,
+    customType: "opencandle-run-cancelled",
+    content: [
+      {
+        type: "text",
+        text: partial
+          ? "Run stopped before it finished its answer."
+          : "Run stopped before it produced an answer.",
+      },
+    ],
+    details: { reason: "aborted", ...(retryPrompt ? { prompt: retryPrompt } : {}) },
+    seq,
+  };
 }
 
 function assistantFailure(message: Message): {

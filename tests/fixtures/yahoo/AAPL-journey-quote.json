@@ -1,0 +1,35 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "AAPL",
+          "longName": "Apple Inc.",
+          "regularMarketPrice": 189.42,
+          "previousClose": 187.0,
+          "regularMarketOpen": 187.55,
+          "regularMarketDayHigh": 190.11,
+          "regularMarketDayLow": 186.9,
+          "regularMarketVolume": 48234567,
+          "regularMarketTime": 1784145600,
+          "marketCap": 2950000000000,
+          "fiftyTwoWeekHigh": 199.62,
+          "fiftyTwoWeekLow": 143.9,
+          "currency": "USD"
+        },
+        "timestamp": [1784145600],
+        "indicators": {
+          "quote": [
+            {
+              "open": [187.55],
+              "high": [190.11],
+              "low": [186.9],
+              "close": [189.42],
+              "volume": [48234567]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

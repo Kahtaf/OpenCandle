@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildMarketStateQuoteSnapshot,
@@ -5,13 +8,15 @@ import {
   createSavedSymbolsMemo,
   getInstrumentOverviewSnapshot,
   getInstrumentQuoteSnapshot,
+  getSavedMarketStateSymbols,
   resetInstrumentOverviewMemoForTests,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
+import { projectDashboard } from "../../../gui/server/projector.js";
 import { cache } from "../../../src/infra/cache.js";
 import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { initDatabase } from "../../../src/memory/sqlite.js";
+import { initDatabase, initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { getQuote, getYahooCompanyOverview } from "../../../src/providers/yahoo-finance.js";
 import type { CompanyOverview } from "../../../src/types/fundamentals.js";
 import type { StockQuote } from "../../../src/types/market.js";
@@ -144,6 +149,59 @@ describe("market-state API helpers", () => {
     now += 30_000;
     expect(memo()).toEqual(["SYM2"]);
     expect(calls).toBe(2);
+  });
+
+  it("seeds the dashboard quote scope from an isolated default database", () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-market-state-"));
+    const previousHome = process.env.OPENCANDLE_HOME;
+    process.env.OPENCANDLE_HOME = home;
+    const db = initDefaultDatabase();
+    try {
+      // The loader must resolve the temporary home, never the developer's real
+      // ~/.opencandle/state.db whose saved watchlists/portfolios differ per machine.
+      expect(db.name).toBe(join(home, "state.db"));
+      const service = new MarketStateService(db);
+      // The same symbol saved twice (case/whitespace differ) collapses to one request.
+      service.addWatchlistItem({
+        instrument: { symbol: " aapl ", assetType: "equity", provider: "yahoo", currency: "USD" },
+      });
+      service.addWatchlistItem({
+        instrument: { symbol: "AAPL", assetType: "equity", provider: "yahoo", currency: "USD" },
+      });
+      // A blank saved symbol is malformed durable data and must not become a request.
+      service.addWatchlistItem({
+        instrument: { symbol: "   ", assetType: "equity", provider: "yahoo", currency: "USD" },
+      });
+      service.addPortfolioLot({
+        instrument: { symbol: "msft", assetType: "equity", provider: "yahoo", currency: "USD" },
+        quantity: 1,
+        avgCost: 100,
+        currency: "USD",
+      });
+      // AAPL is also held in a portfolio; the quote scope still asks for it once.
+      service.addPortfolioLot({
+        instrument: { symbol: "AAPL", assetType: "equity", provider: "yahoo", currency: "USD" },
+        quantity: 2,
+        avgCost: 100,
+        currency: "USD",
+      });
+
+      const savedSymbols = getSavedMarketStateSymbols();
+      expect(savedSymbols).toEqual(["AAPL", "MSFT"]);
+      // The dashboard's known-symbol scope is what later quote requests are built from.
+      expect(projectDashboard([], "session-1", savedSymbols).knownSymbols).toEqual([
+        "AAPL",
+        "MSFT",
+      ]);
+    } finally {
+      try {
+        db.close();
+      } finally {
+        if (previousHome === undefined) delete process.env.OPENCANDLE_HOME;
+        else process.env.OPENCANDLE_HOME = previousHome;
+        rmSync(home, { recursive: true, force: true });
+      }
+    }
   });
 
   it("returns resolver candidates for GUI autocomplete", async () => {

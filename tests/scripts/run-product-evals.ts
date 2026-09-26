@@ -2,11 +2,20 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  buildCompletionReport,
+  type CompletionReportCase,
+  writeCompletionReport,
+} from "../evals/completion-report.js";
 import { PRODUCT_EVAL_CASES } from "../evals/product/cases.js";
 import { productEvalExitCode } from "../evals/product/reporting.js";
 import { buildProductEvalReport, scoreProductEvalCase } from "../evals/product/scorer.js";
 import { seedProductEvalMarketState } from "../evals/product/state-fixtures.js";
-import type { ProductEvalCase, PromptFamily } from "../evals/product/types.js";
+import type {
+  ProductEvalCase,
+  ProductEvalCaseResult,
+  PromptFamily,
+} from "../evals/product/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
 const selectedCases = selectCases(PRODUCT_EVAL_CASES);
@@ -14,7 +23,8 @@ if (selectedCases.length === 0) {
   throw new Error("No product eval cases selected");
 }
 
-const results = [];
+const startedAt = new Date().toISOString();
+const results: ProductEvalCaseResult[] = [];
 for (const evalCase of selectedCases) {
   console.log(`\n=== ${evalCase.id}: ${evalCase.prompt}`);
   const openCandleHome = evalCase.setup?.marketStateFixture
@@ -50,7 +60,32 @@ console.log(`Aggregate: ${formatPct(report.aggregate)}`);
 console.log(`Passed: ${report.passed}`);
 console.log(`Failed: ${report.failed}`);
 console.log(`Report: ${outputPath}`);
+const completionCases: CompletionReportCase[] = results.map((result) =>
+  result.passed
+    ? { id: result.id, status: "passed" }
+    : { id: result.id, status: "failed", reason: productEvalFailureReason(result) },
+);
+const completionPath = writeCompletionReport(
+  buildCompletionReport({
+    suite: "product",
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    cases: completionCases,
+  }),
+);
+if (completionPath) console.log(`Completion report: ${completionPath}`);
 process.exitCode = productEvalExitCode(report);
+
+function productEvalFailureReason(result: ProductEvalCaseResult): string {
+  const failedDimensions = result.dimensions.filter((dimension) => !dimension.passed);
+  const reason =
+    failedDimensions.length > 0
+      ? failedDimensions.map((dimension) => `${dimension.id}: ${dimension.message}`).join("; ")
+      : result.mandatoryFailure
+        ? "mandatory dimension failed"
+        : "score below pass threshold";
+  return reason.length > 900 ? `${reason.slice(0, 899)}…` : reason;
+}
 
 function selectCases(cases: ProductEvalCase[]): ProductEvalCase[] {
   const id = process.env.PRODUCT_EVAL_CASE?.trim();

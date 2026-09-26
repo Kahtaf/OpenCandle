@@ -84,6 +84,35 @@ describe("onboarding state — defaults and persistence", () => {
     expect(loadOnboardingState()).toEqual(getDefaultOnboardingState());
   });
 
+  it("upgrades a legacy state that has no version field to the current ONBOARDING_VERSION", () => {
+    // A state written before versioning shipped must not be rejected; it is
+    // read with the current schema version so later migrations can see it.
+    writeFileSync(join(tempDir, "onboarding.json"), JSON.stringify({ providers: {} }), "utf-8");
+    expect(loadOnboardingState().version).toBe(ONBOARDING_VERSION);
+  });
+
+  it("preserves a persisted welcomeShownAt timestamp", () => {
+    writeFileSync(
+      join(tempDir, "onboarding.json"),
+      JSON.stringify({
+        version: 2,
+        welcomeShownAt: "2026-04-12T00:00:00.000Z",
+        providers: {},
+      }),
+      "utf-8",
+    );
+    expect(loadOnboardingState().welcomeShownAt).toBe("2026-04-12T00:00:00.000Z");
+  });
+
+  it("drops a non-string welcomeShownAt instead of treating it as shown", () => {
+    writeFileSync(
+      join(tempDir, "onboarding.json"),
+      JSON.stringify({ version: 2, welcomeShownAt: 12345, providers: {} }),
+      "utf-8",
+    );
+    expect(loadOnboardingState().welcomeShownAt).toBeUndefined();
+  });
+
   it("partial presence in the providers map is legal", () => {
     const state: OnboardingState = {
       version: 2,

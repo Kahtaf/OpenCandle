@@ -317,6 +317,83 @@ describe("route()", () => {
     expect(result.tool_bundles).toContain("core_market");
   });
 
+  it("forwards the abort signal to the router client", async () => {
+    const seen: Array<AbortSignal | undefined> = [];
+    const client: RouterLlmClient = {
+      async complete(_prompt, signal) {
+        seen.push(signal);
+        return JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "x",
+        });
+      },
+    };
+    const controller = new AbortController();
+
+    await route(BASE_INPUT, client, controller.signal);
+
+    expect(seen).toEqual([controller.signal]);
+  });
+
+  it("does not issue a router request when the signal is already aborted", async () => {
+    let calls = 0;
+    const client: RouterLlmClient = {
+      async complete() {
+        calls += 1;
+        throw new Error("router client must not be called for an aborted signal");
+      },
+    };
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(route(BASE_INPUT, client, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(calls).toBe(0);
+  });
+
+  it("closes a held router request on abort and does not retry into a new request", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const client: RouterLlmClient = {
+      complete(_prompt, signal) {
+        calls += 1;
+        return new Promise<string>((_resolve, reject) => {
+          const onAbort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    };
+
+    const pending = route(BASE_INPUT, client, controller.signal);
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toBe(1);
+  });
+
+  it("does not retry validation after the router client reports an abort", async () => {
+    let calls = 0;
+    const client: RouterLlmClient = {
+      async complete() {
+        calls += 1;
+        throw Object.assign(new Error("router request aborted"), { name: "AbortError" });
+      },
+    };
+
+    await expect(route(BASE_INPUT, client)).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toBe(1);
+  });
+
   it("normalizes dispatchable compare workflow emitted as agent_task to workflow_dispatch", async () => {
     const result = await route(
       {
@@ -707,6 +784,35 @@ describe("route()", () => {
     );
 
     expect(result.entities.symbols).toEqual(["AI"]);
+  });
+
+  it("keeps a cashtag-positive acronym on the generic quote contract", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Get me a quote on $IV" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["IV"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "quote request with an explicit cashtag",
+        }),
+      ),
+    );
+
+    // $IV is a cashtag-positive signal: IV must survive acronym disambiguation,
+    // and a quote-only agent task needs only core_market (the 007 AAPL quote
+    // contract). A workflow label would demand the broad single_asset_analysis
+    // bundles the router does not select for a quote.
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBeUndefined();
+    expect(result.entities.symbols).toEqual(["IV"]);
+    expect(result.tool_bundles).toEqual(["core_market"]);
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "symbol_dropped" }),
+    );
   });
 
   it("drops finance acronyms without a direct ticker signal from LLM output", async () => {
@@ -2558,6 +2664,463 @@ describe("live-router deterministic context recovery", () => {
 
     expect(result.entities.symbols).toEqual(["AMD"]);
     expect(result.entities.catalystSymbols).toBeUndefined();
+  });
+});
+
+describe("router cost-basis context guard", () => {
+  function outputFor(entities: Record<string, unknown>): RouterLlmClient {
+    return fixedClient(
+      JSON.stringify({
+        routeKind: "agent_task",
+        entities,
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "test",
+      }),
+    );
+  }
+
+  it("drops a model cost basis invented from a bare follow-up price", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [
+          { role: "user", text: "tell me about NVDA" },
+          { role: "assistant", text: "NVDA is trading around $450, up 1.2% today." },
+        ],
+      },
+      outputFor({ symbols: ["NVDA"], costBasis: 500 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("drops a model cost basis for a different ticker and amount", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about MSFT at $250?",
+        priorTurns: [
+          { role: "user", text: "tell me about NVDA" },
+          { role: "assistant", text: "NVDA is trading around $450." },
+        ],
+      },
+      outputFor({ symbols: ["MSFT"], costBasis: 250 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not take an assistant quote as cost-basis support", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about it?",
+        priorTurns: [{ role: "assistant", text: "NVDA is trading around $450." }],
+      },
+      outputFor({ symbols: ["NVDA"], costBasis: 450 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps the amount the user gives in reply to an assistant cost-basis question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not take an unrelated assistant question as cost-basis support", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is AAPL's P/E ratio?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("rejects a cost-basis question reply for a different holding", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["MSFT"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a cost-basis question reply when the question omits the symbol", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What was your purchase price?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a cost-basis question reply when the model omits symbols", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: [], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to a per-share purchase question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you pay per share for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to a plain personal pay question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you pay?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to a plain personal basis question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "What is your basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to a price-before-verb purchase question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "At what price had you bought AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a reply to an active pay question with a bounded modifier", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$150",
+        priorTurns: [{ role: "assistant", text: "How much did you originally pay for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not treat a passive dividend-received question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much were you paid in AAPL dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not treat a target-price question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "$200",
+        priorTurns: [
+          {
+            role: "assistant",
+            text: "What is your target price for AAPL shares bought yesterday?",
+          },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not treat a dividend question as a cost-basis request", async () => {
+    const plain = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much does AAPL pay in dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+    const perShare = await route(
+      {
+        ...BASE_INPUT,
+        text: "$1",
+        priorTurns: [{ role: "assistant", text: "How much does AAPL pay per share in dividends?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(plain.entities.costBasis).toBeUndefined();
+    expect(perShare.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not treat a quantity holding question as a cost-basis request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "100",
+        priorTurns: [{ role: "assistant", text: "How many shares of AAPL do you own?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps the basis from an earlier question-and-answer turn in a later follow-up", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "$150" },
+          { role: "assistant", text: "Got it." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("drops a model basis in a later follow-up when the earlier basis reply gave no value", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "I don't know" },
+          { role: "assistant", text: "No problem." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 180 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a later follow-up basis when the earlier basis reply gave holding context without a value", async () => {
+    // Holding context is basis-role presence, matching how the guard treats a
+    // same-symbol holding turn: the model keeps its interpretation.
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "I bought 100 shares last year" },
+          { role: "assistant", text: "Thanks." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a derived basis from a purchase total", async () => {
+    // The user states quantity and total, not a per-share price: role presence
+    // is enough, and the model keeps the interpretation.
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 shares of AVGO for $15,000. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AVGO"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not use another holding's prior question as basis context", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for MSFT?" },
+          { role: "user", text: "$150" },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps an explicitly stated cost basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
+      outputFor({ symbols: ["DRAM"], costBasis: 51 }),
+    );
+
+    expect(result.entities.costBasis).toBe(51);
+  });
+
+  it("keeps a natural purchase wording basis", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 shares of DRAM at $51. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["DRAM"], costBasis: 51 }),
+    );
+
+    expect(result.entities.costBasis).toBe(51);
+  });
+
+  it("keeps a model basis corroborated by ownership-at wording", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 100 shares of AAPL at $150. What covered call should I sell?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a model basis corroborated by a recognized held position", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I have 100 shares of AAPL at $150. Suggest covered calls.",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.heldSymbol).toBe("AAPL");
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a basis established by an earlier user turn for the same symbol", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [{ role: "user", text: "I bought 100 shares of NVDA at $400." }],
+      },
+      outputFor({ symbols: ["NVDA"], costBasis: 400 }),
+    );
+
+    expect(result.entities.costBasis).toBe(400);
+  });
+
+  it("revalidates the model basis after follow-up symbol recovery", async () => {
+    // The model returns no symbols, so the basis only becomes attributable once
+    // the follow-up recovery restores NVDA from the prior user turn.
+    const recovered = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [{ role: "user", text: "I bought 100 shares of NVDA at $400." }],
+      },
+      outputFor({ symbols: [], costBasis: 400 }),
+    );
+    const noBasisContext = await route(
+      {
+        ...BASE_INPUT,
+        text: "what about at $500?",
+        priorTurns: [
+          { role: "user", text: "tell me about NVDA" },
+          { role: "assistant", text: "NVDA is trading around $450." },
+        ],
+      },
+      outputFor({ symbols: [], costBasis: 500 }),
+    );
+
+    expect(recovered.entities.symbols).toEqual(["NVDA"]);
+    expect(recovered.entities.costBasis).toBe(400);
+    expect(noBasisContext.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a model cost basis corroborated by the saved position", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "should I add to my AMD position?",
+        portfolioPositions: [{ symbol: "AMD", quantity: 100, costBasis: 52, currency: "USD" }],
+      },
+      outputFor({ symbols: ["AMD"], costBasis: 52 }),
+    );
+
+    expect(result.entities.costBasis).toBe(52);
+  });
+
+  it("keeps an explicit hypothetical/scenario basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "What if I bought AAPL at $220? What covered call should I sell?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 220 }),
+    );
+
+    expect(result.entities.costBasis).toBe(220);
+  });
+
+  it("keeps a politely phrased purchase basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Could you suggest covered calls on AAPL? I bought at $150." },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
   });
 });
 

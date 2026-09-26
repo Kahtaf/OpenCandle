@@ -1,0 +1,31 @@
+{
+  "core": ["check", "test", "relay:test", "test:agent-tools"],
+  "full": [
+    "check",
+    "test",
+    "relay:test",
+    "test:agent-tools",
+    "test:site",
+    "test:gui:integration",
+    "test:gui:journey",
+    "test:gui:release-smoke",
+    "test:gui:hosted",
+    "package:contents:check",
+    "test:coverage"
+  ],
+  "release": [
+    "check",
+    "test",
+    "relay:test",
+    "test:agent-tools",
+    "test:site",
+    "test:gui:integration",
+    "test:gui:journey",
+    "test:gui:release-smoke",
+    "test:gui:hosted",
+    "package:contents:check",
+    "test:coverage",
+    "test:packed-install",
+    "docs:links:check"
+  ]
+}

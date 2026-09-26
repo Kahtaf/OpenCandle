@@ -32,7 +32,7 @@ For release-facing changes, run the same local gate that release and publish pat
 npm run release:check
 ```
 
-That command runs typecheck, `test:scripts:typecheck`, Biome CI, unit tests, `test:gui:release-smoke`, docs build, package-content validation, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. Before version or tag mutation, `scripts/release.mjs` also asks you to confirm that `npm run eval -- release` was run and its results were acceptable; `--skip-eval-confirm` is an emergency bypass.
+That command runs the shared `release` gate: typecheck and lint, unit/relay/agent-tool tests, the docs site build, GUI integration and release smoke, hosted PWA smoke, package-content validation, coverage, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. `scripts/release.mjs` commits the final version candidate first, then runs `release:check`, prepares the exact release package, runs the live provider release smoke (`npm run test:providers:release`), and reruns fresh `npm run eval -- release` against that unchanged candidate; it tags and pushes only if every proof passes. There is no eval-confirmation prompt and no bypass flag.
 
 ## First-Run Release Smoke
 
@@ -149,7 +149,8 @@ Useful knobs (all optional):
 - `COMPETITIVE_PROMPT_COUNT` / `COMPETITIVE_PROMPT_SEED`: size and reproducibility of the generated prompt set.
 - `OPENCANDLE_COMPETITIVE_PANEL=frozen`: rerun the fixed historical-loss panel instead of generating prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
-- `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
+- `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: OpenCandle session and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
+- `OPENCANDLE_COMPETITIVE_JUDGE_PROVIDER` / `OPENCANDLE_COMPETITIVE_JUDGE_MODEL`: judge-only override (set both). The default judge is `openai/gpt-6-luna`, chosen by calibration (see `docs/internal/competitive-benchmarking.md`); it needs `OPENAI_API_KEY` and never falls back to another judge. The judge's winner is advisory and never overrides a failed mandatory check.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides (each defaults to a global install on PATH, else `npx --yes <package>@<pinned range>`), timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls. See `docs/internal/competitive-benchmarking.md` for the exact resolution order and the `CODEX_PATH`/`CLAUDE_CODE_EXECUTABLE` env vars the runner sets so each ACP adapter drives your own global CLI/account instead of a bundled one.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window (ms) used by the competitive eval runner when it calls the shared harness.
 

@@ -10,10 +10,8 @@ export function isAcceptedStatus(status) {
   return (status >= 200 && status < 400) || ACCEPTED_STATUSES.has(status);
 }
 
-// A completed HTTP response is definitive: 2xx/3xx (or an accepted auth/method/rate-limit status)
-// means the link resolves; any other status means it is genuinely broken. A thrown error
-// (DNS, TCP, TLS, timeout/abort) means the host was unreachable from here — unverifiable,
-// not proof the link is broken.
+// Classify the final result after the bounded retry budget. Unreachable endpoints
+// remain unverified, distinct from a broken HTTP response; both block the docs gate.
 export function classifyLinkOutcome({ status, error } = {}) {
   if (error != null) return "unverified";
   if (typeof status !== "number") return "unverified";
@@ -23,29 +21,39 @@ export function classifyLinkOutcome({ status, error } = {}) {
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Resolve a single URL to { outcome, detail, status? }. HEAD first, falling back to GET only
-// when the server rejects HEAD (405/501). Any definitive HTTP status returns immediately;
-// only transient network errors are retried, up to `attempts` times with `delayMs` backoff.
+// when HEAD is unsupported (405/501) or fails (including redirect loops). Each attempt
+// makes at most one HEAD and one GET fetch; 5xx and network failures share the same
+// bounded attempt budget. Other HTTP results return immediately.
 export async function checkUrlWithRetry({
   url,
   fetchImpl,
   attempts = 3,
   delayMs = 500,
   sleep = defaultSleep,
+  onRetry = () => {},
 }) {
   let last = { outcome: "unverified", detail: "not attempted" };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      let response = await fetchImpl(url, "HEAD");
-      let status = response.status;
-      if (status === 405 || status === 501) {
-        response = await fetchImpl(url, "GET");
-        status = response.status;
+      let response;
+      try {
+        response = await fetchImpl(url, "HEAD");
+      } catch {
+        // A server may reject HEAD via a redirect loop even though GET works.
       }
-      return { outcome: classifyLinkOutcome({ status }), detail: `HTTP ${status}`, status };
+      if (!response || response.status === 405 || response.status === 501) {
+        response = await fetchImpl(url, "GET");
+      }
+      const status = response.status;
+      last = { outcome: classifyLinkOutcome({ status }), detail: `HTTP ${status}`, status };
+      if (status < 500 || status >= 600) return last;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       last = { outcome: "unverified", detail: `failed: ${message}` };
-      if (attempt < attempts) await sleep(delayMs);
+    }
+    if (attempt < attempts) {
+      onRetry({ attempt, detail: last.detail });
+      await sleep(delayMs);
     }
   }
   return last;

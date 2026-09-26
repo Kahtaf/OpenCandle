@@ -84,6 +84,10 @@ describe("buildPortfolioWorkflowDefinition", () => {
     expect(riskReview.prompt).toContain("risk metrics undermine its intended role");
     expect(riskReview.prompt).toContain("lower its allocation");
     expect(riskReview.prompt).toContain("role-equivalent candidate");
+    // The step receives selected candidates, not an already-allocated draft.
+    expect(riskReview.prompt).toContain("selected candidates");
+    expect(riskReview.prompt).toContain("Propose a draft allocation");
+    expect(riskReview.prompt).not.toContain("this draft portfolio");
   });
 
   it("synthesis table includes price, shares, role, and concise rationale guidance", () => {
@@ -97,6 +101,10 @@ describe("buildPortfolioWorkflowDefinition", () => {
     expect(synthesize.prompt).toContain("Why this fits the horizon");
     expect(synthesize.prompt).toContain("rebalance cadence");
     expect(synthesize.prompt).toContain("tax/account caveats");
+    // The final stage names parameters but must carry the earlier disclosure's
+    // user/saved/default source attribution forward.
+    expect(synthesize.prompt).toContain("source attribution");
+    expect(synthesize.prompt).toContain("do not relabel sources");
   });
 
   it("preserves hard portfolio constraints through every workflow step", () => {
@@ -105,8 +113,7 @@ describe("buildPortfolioWorkflowDefinition", () => {
     );
 
     expect(def.steps[0]?.prompt).toContain("exactly 8 individual listed common-stock candidates");
-    expect(def.steps[0]?.prompt).toContain("allocations sum to 100%");
-    expect(def.steps[0]?.prompt).toContain("at or below 15%");
+    expect(def.steps[0]?.prompt).toContain('eligible universe is "stocks_only"');
     expect(def.steps[1]?.prompt).toContain('asset scope "stocks_only"');
     expect(def.steps[1]?.prompt).toContain("exactly 8 positions");
     expect(def.steps[2]?.prompt).toContain("no position above 15%");

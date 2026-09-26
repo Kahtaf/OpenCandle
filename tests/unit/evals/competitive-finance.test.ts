@@ -481,6 +481,12 @@ describe("competitive finance benchmarking", () => {
     ).toBe("warning: adapter exited non-zero");
   });
 
+  it("reports a signaled CLI child as an unknown failure instead of a clean exit", () => {
+    expect(selectCliFailureMessage({ stdout: "", stderr: "", status: null })).toBe(
+      "exit status unknown",
+    );
+  });
+
   it("builds a portable agent PATH without user-specific toolchain paths", () => {
     const path = buildPortableAgentPath({
       HOME: "/home/alice",
@@ -677,6 +683,19 @@ describe("competitive finance benchmarking", () => {
         promptsById.get(prompt.promptPolicyManifestId)?.expected.finalAnswerHardAssertions?.length,
       ).toBeGreaterThan(0);
     }
+  });
+
+  it("wires the frozen panel exit gate to required assertion failures in the real runner", () => {
+    const runnerSource = readFileSync("tests/scripts/run-competitive-finance-eval.ts", "utf-8");
+
+    // The frozen runner writes a completion report and fails the process when
+    // any required prompt case is failed, including a required assertion with
+    // no deterministic checker.
+    expect(runnerSource).toContain("writeCompletionReport(");
+    expect(runnerSource).toContain('suite: "competitive:frozen"');
+    expect(runnerSource).toMatch(
+      /if \(frozenCaseFailures\.length > 0\) \{[\s\S]*?process\.exit\(1\);/,
+    );
   });
 
   it("finds cached competitor answers by exact prompt text and competitor id", () => {

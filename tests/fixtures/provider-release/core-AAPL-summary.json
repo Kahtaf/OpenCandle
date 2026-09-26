@@ -1,0 +1,38 @@
+{
+  "runId": "2026-09-24T18-52-18-889Z-51059",
+  "candidateCommit": "ec3633a1bebb3027569317fe465efc5d3158e908",
+  "startedAt": "2026-09-24T18:52:18.890Z",
+  "finishedAt": "2026-09-24T18:52:19.965Z",
+  "scope": "core",
+  "symbol": "AAPL",
+  "provider": "yahoo",
+  "fixtureVersion": "none",
+  "strict": true,
+  "timedOut": false,
+  "fatal": false,
+  "totals": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "corePassed": 2,
+    "coreSkipped": 0,
+    "optionalSkipped": 0
+  },
+  "cases": [
+    {
+      "name": "get_stock_quote:AAPL",
+      "status": "passed",
+      "durationMs": 551,
+      "provider": "yahoo",
+      "fixtureVersion": "none"
+    },
+    {
+      "name": "get_stock_history:AAPL",
+      "status": "passed",
+      "durationMs": 79,
+      "provider": "yahoo",
+      "fixtureVersion": "none"
+    }
+  ]
+}

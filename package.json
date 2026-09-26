@@ -103,8 +103,8 @@
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test:scripts:typecheck && npm run relay:typecheck && biome ci .",
-    "gates": "npm run check && npm test && npm run relay:test && npm run test:agent-tools",
-    "gates:full": "npm run gates && npm run test:site && npm run test:gui:release-smoke && npm run test:gui:hosted && npm run package:contents:check",
+    "gates": "node scripts/test-gate.mjs core",
+    "gates:full": "node scripts/test-gate.mjs full",
     "bootstrap:agent": "node scripts/agent-bootstrap.mjs",
     "pretest": "npm run check:node",
     "test": "vitest run --project unit",
@@ -115,6 +115,7 @@
     "test:e2e:cli": "tsx tests/e2e/cli.test.ts",
     "test:e2e:credential": "tsx tests/e2e/credential-prompt.test.ts && tsx tests/e2e/credential-snooze.test.ts && tsx tests/e2e/credential-soft-fallback.test.ts && tsx tests/e2e/credential-per-workflow-cap.test.ts",
     "test:gui:browser": "OPENCANDLE_GUI_BROWSER=1 vitest run --project gui-browser",
+    "test:gui:journey": "npm run gui:web:build && vitest run --project gui-journey",
     "test:gui:hosted": "npm --workspace @opencandle/gui-hosted run test:browser",
     "test:gui:release-smoke": "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --project gui-release",
     "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
@@ -128,10 +129,19 @@
     "version:major": "npm version major --no-git-tag-version",
     "prepublishOnly": "npm run release:check",
     "publish:dry": "npm run release:check && npm publish --access public --dry-run",
-    "release:check": "npx tsc --noEmit && npm run test:scripts:typecheck && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run test:site && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
+    "release:check": "node scripts/test-gate.mjs release",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major"
+    "release:major": "node scripts/release.mjs major",
+    "test:coverage": "npm run coverage:node && npm run coverage:check && npm run coverage:browser",
+    "coverage:baseline": "node scripts/coverage-report.mjs --update-baseline",
+    "test:inventory": "node scripts/test-inventory.mjs",
+    "test:providers:release": "tsx tests/e2e/provider-release-smoke.ts",
+    "test:gui:integration": "npm run gui:web:build && OPENCANDLE_GUI_INTEGRATION=1 vitest run --project gui-integration",
+    "test:coverage:browser": "npm run coverage:node && npm run coverage:browser",
+    "coverage:node": "vitest run --project unit --coverage && npm --workspace @opencandle/provider-relay run test -- --coverage && node scripts/coverage-merge.mjs --out coverage",
+    "coverage:check": "node scripts/coverage-report.mjs --input coverage/coverage-summary.json --baseline scripts/coverage-baseline.json --check",
+    "coverage:browser": "node -e \"for (const d of ['coverage/browser', 'coverage/merged']) require('node:fs').rmSync(d, { recursive: true, force: true })\" && npm run gui:web:build -- -- --sourcemap && OPENCANDLE_BROWSER_COVERAGE=1 OPENCANDLE_GUI_INTEGRATION=1 vitest run --project gui-integration --project gui-journey && node scripts/coverage-browser.mjs && node scripts/coverage-merge.mjs --out coverage/merged --browser coverage/browser/coverage-final.json && node scripts/coverage-report.mjs --input coverage/merged/coverage-summary.json --informational --metadata coverage/browser/metadata.json"
   },
   "engines": {
     "node": "^22.22.2 || >=24.0.0 <27"
@@ -161,6 +171,7 @@
     "@types/node": "^26.6.2",
     "@types/semver": "^7.8.0",
     "@types/sql.js": "^1.4.11",
+    "@vitest/coverage-v8": "^5.0.1",
     "jsdom": "^30.1.0",
     "lightweight-charts": "^5.2.1",
     "playwright-core": "^1.63.0",
@@ -168,6 +179,9 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "@vitest/istanbul-lib-coverage": "^1.0.1",
+    "@vitest/istanbul-lib-report": "^1.0.1",
+    "ast-v8-to-istanbul": "^1.0.7"
   }
 }

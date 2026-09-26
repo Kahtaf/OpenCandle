@@ -153,6 +153,520 @@ describe("prompt-policy final answer assertions", () => {
 
     expect(result.passed).toBe(true);
   });
+
+  describe("educational section shape", () => {
+    const assertion = "uses bottom line, practical workflow, and quick checklist sections";
+
+    it("accepts a hyphenated bold bottom-line section", () => {
+      const result = evaluateFinalAnswerAssertion(
+        assertion,
+        trace(
+          "**Bottom-line:** P/E is a starting point.\n\n### Practical workflow\nSteps.\n\n### Quick checklist\n- Item",
+        ),
+      );
+
+      expect(result.passed).toBe(true);
+    });
+
+    it("still requires every educational section", () => {
+      const result = evaluateFinalAnswerAssertion(
+        assertion,
+        trace("**Bottom-line:** P/E is a starting point.\n\n### Practical workflow\nSteps."),
+      );
+
+      expect(result.passed).toBe(false);
+    });
+  });
+
+  describe("bottom-line structural portfolio read contract", () => {
+    const assertion = "starts with a bottom-line structural portfolio read";
+
+    // Faithful excerpt of the 478d3515 canonical-run answer (frozen-portfolio-review-not-builder)
+    // that the keyword checker failed because it only matched the unhyphenated "bottom line".
+    const hyphenatedHeadingOpening =
+      "Here is our critical evaluation of a 60/40 portfolio for the next year.\n\n**Bottom-Line Structural Read**\n\nA 60/40 portfolio, comprised of 60% equities and 40% fixed income, offers a historically balanced approach designed for growth with a moderating influence from bonds. For the next year, its performance will hinge on the interplay between inflation, interest rate policy, and corporate earnings growth.\n\n**Sleeve-by-Sleeve Implications (Next 12 Months)**\n\n* Equity sleeve risks: valuations remain sensitive to rates.";
+
+    it.each([
+      [
+        "a lead-in sentence followed by a hyphenated bold bottom-line heading",
+        hyphenatedHeadingOpening,
+      ],
+      [
+        "a markdown BLUF heading",
+        "## BLUF\nThe 60/40 portfolio carries more duration and equity-valuation risk than its label implies.\n\n## Sleeves\nDetail.",
+      ],
+      [
+        "an inline verdict on the allocation",
+        "Verdict: this allocation is reasonably diversified but concentrated in US large-cap equity risk.\n\nDetails follow.",
+      ],
+      [
+        "an opening structural read with no explicit marker",
+        "The 60/40 portfolio is structurally exposed to a joint stock-bond drawdown if inflation re-accelerates.\n\n### Sleeves\nDetail.",
+      ],
+      [
+        "a read that explicitly declines to build a new portfolio",
+        "Rather than building a new portfolio, the bottom line on this 60/40 allocation is that its bond sleeve now pulls its weight.\n\nDetail.",
+      ],
+    ])("passes %s", (_label, text) => {
+      expect(evaluateFinalAnswerAssertion(assertion, trace(text)).passed).toBe(true);
+    });
+
+    it.each([
+      [
+        "an opening builder allocation",
+        "Here is a portfolio you could build: allocate 40% to a total US stock fund, 20% to international stocks, and 40% to bonds.\n\n**Bottom line**: this portfolio balances risk and reward.",
+      ],
+      [
+        "an opening budget question",
+        "How much do you plan to invest in this portfolio?\n\n**Bottom line**: the portfolio risk depends on your budget.",
+      ],
+      [
+        "a bottom line that only appears at the end",
+        "Markets have been through a volatile stretch as central banks wrestled with inflation and growth slowed across several regions.\n\n### Equities\nEarnings held up better than expected.\n\n### Bonds\nYields rose sharply.\n\n**Bottom line**: the 60/40 portfolio faces elevated risk next year.",
+      ],
+      [
+        "a negated bottom line",
+        "There is no bottom line here without more data.\n\nThe 60/40 portfolio details follow later.",
+      ],
+      ["an empty answer", ""],
+    ])("fails %s", (_label, text) => {
+      expect(evaluateFinalAnswerAssertion(assertion, trace(text)).passed).toBe(false);
+    });
+
+    it("applies the same contract to the macro risk/reward variant", () => {
+      expect(
+        evaluateFinalAnswerAssertion(
+          "starts with a bottom-line portfolio risk/reward read",
+          trace(hyphenatedHeadingOpening),
+        ).passed,
+      ).toBe(true);
+    });
+  });
+
+  const hedgeSizingAssertion =
+    "sizes hedge from 450 shares into 4 puts plus residual 50 shares or explicitly explains rounding";
+
+  // Faithful excerpt of the observed live answer that the pre-fix keyword checker passed.
+  const observedLiveHedgeAnswer = [
+    "To protect your 450 shares of AAPL for the next month, you should consider purchasing **5 put option contracts**. Each standard option contract covers 100 shares, so 5 contracts would provide protection for 500 shares, effectively covering your 450 shares.",
+    "",
+    "### Tradeoffs to Consider:",
+    "",
+    "1.  **Cost (Premium)**: Buying 5 contracts would cost **$5,000**.",
+    "2.  **Strike Price Selection**: A $340 strike put is more expensive.",
+    "3.  **Time Decay (Theta)**: The put loses value each day.",
+    "4.  **Implied Volatility (IV)**: High IV makes options more expensive.",
+    "5.  **Delta**: The put gains $0.427 per share for each $1 drop.",
+    "6.  **Breakeven Point**: The effective floor is strike minus premium.",
+    "",
+    "### Commitment:",
+    "An analyst would suggest buying **5 put option contracts with the 2026-10-30 expiration**.",
+  ].join("\n");
+
+  // Faithful excerpt of the focused live probe answer
+  // (tests/evals/runs/2026-09-24T22-24-44-070Z_competitive-finance.json results[0]).
+  // It states the floor mechanics semantically ("protected from falling below
+  // the strike minus the premium") without using the literal word "floor".
+  const liveProbeHedgeAnswer = [
+    "To protect your 450 shares of AAPL against downside risk through the next month, you should consider purchasing **4 or 5 put options contracts** expiring on October 23, 2026. Each standard option contract controls 100 shares.",
+    "",
+    "*   **4 Contracts:** This would cover 400 of your 450 shares, leaving 50 shares (11%) exposed to downside risk below the chosen strike price.",
+    "*   **5 Contracts:** This would cover all 450 of your shares, plus an additional 50 shares, increasing your total premium cost.",
+    "",
+    "**Key Tradeoffs:**",
+    "1.  **Premium Cost (The Cost of Protection):** Puts closer to the current price cost more; the premium is a sunk cost.",
+    "2.  **Protection Level:** A put with a strike of $335 means your shares are protected from falling below $335 (minus the premium paid) by the expiration date.",
+    "3.  **Time Decay (Theta):** Options lose value as they get closer to expiration.",
+    "4.  **Implied Volatility (Vega):** Higher implied volatility means higher option premiums.",
+    "5.  **Liquidity:** A wide bid-ask spread or low open interest can make it harder to enter or exit at a fair price.",
+    "",
+    "**Analyst View:** For a balance of cost and protection, buying 4 contracts of the $330 strike puts would provide protection for 400 shares.",
+    "**Commitment:** purchasing 4 to 5 put option contracts at a strike between $330 and $335 offers a reasonable balance of cost and protection for your 450 shares.",
+    "**Confidence Band:** Moderate conviction. This is a standard protective put strategy.",
+  ].join("\n");
+
+  it("rejects the observed live 5-contract answer that never explains the 50-share excess", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(observedLiveHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.deterministic).toBe(true);
+  });
+
+  it("rejects a 5-contract answer that only claims to cover 500 shares with no excess tradeoff", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("Buy 5 put contracts. They cover 500 shares, which fully protects your 450 shares."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("ignores a numbered-list 4 and 450/500 substrings when no put quantity is stated", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("1. Cost\n2. Strike\n3. Theta\n4. Volatility\n450 shares trade near $500."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects unrelated strikes and premiums that merely contain the digits", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares. 4. Strike selection: the $450 strike costs about $50 in premium."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects contradictory 4-put residual and unexplained 5-contract recommendations", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(
+        "You own 450 shares. Buy 4 puts and leave the residual 50 shares unhedged. Commitment: buy 5 contracts.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects unit confusion where 50 refers to delta or premium rather than shares", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(
+        "You own 450 shares. Buy 4 puts. The position delta is 50 and the premium is $50 per contract.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a call-contract quantity as a downside put hedge", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares; buy 4 call contracts and leave 50 shares unhedged."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a generic options quantity as a downside put hedge", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares; buy 4 options, leaving 50 shares unhedged."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects bare rounding language as a substitute for a 50-share excess explanation", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares. Round to 5 contracts leaving 50 shares unhedged."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a different share position that merely contains the digits", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 300 shares; buy 4 puts and leave 50 shares unhedged."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("accepts four puts plus an explicit 50-share residual for the owned 450 shares (digits)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(
+        "You own 450 shares. Buy 4 puts to cover 400 shares, leaving a residual 50 shares unhedged.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts four puts plus an explicit fifty-share residual (words)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own four hundred fifty shares; buy four puts; fifty shares remain unhedged."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts rounding up to five contracts with an explicit 50-share overhedge (digits)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(
+        "450 shares / 100 = 4.5 contracts, so round up to 5 put contracts covering 500 shares: a 50-share excess over your position.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts rounding up to five contracts with an explicit fifty-share excess (words)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace(
+        "You own 450 shares. Half contracts are not available, so round up to five contracts, an extra fifty shares of protection.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts Markdown-bold put quantities with a 50-share residual (digits)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("450 shares: buy **4** put contracts; 50 shares remain unhedged."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts Markdown-bold put quantities with an explicit 50-share excess (digits)", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares. **5** puts with 50 excess shares."),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("does not treat a word starting with put as a put option unit", () => {
+    const result = evaluateFinalAnswerAssertion(
+      hedgeSizingAssertion,
+      trace("You own 450 shares; 4 putative contracts leave 50 shares unhedged."),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("keeps the hedge-risk assertion failing when liquidity disclosure is missing", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(observedLiveHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("liquidity");
+  });
+
+  it("accepts the live probe answer's semantic downside-protection floor without the literal word floor", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(liveProbeHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects a hedge-risk answer that omits downside-protection floor mechanics", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The premium is the cost of the puts, theta erodes them, liquidity and bid-ask spreads matter, and the main risk is capped upside.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("passes the hedge-risk assertion only with explicit liquidity and protective-put risk", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The hedge floor is strike minus premium; check theta and delta; liquidity and bid/ask spreads matter; protective-put risk includes paying premium for capped upside.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  // Faithful excerpt of the 2026-09-25T00:39 live frozen answer
+  // (tests/evals/runs/2026-09-25T00-39-03-515Z_competitive-finance.json results[4]).
+  // The floor checker keys on its protective-put wording: "The strike price is
+  // the level at which you can sell your shares if the price drops." That is a
+  // strike-level sell right, not a generic sell level, and is accepted without
+  // a benchmark-specific literal.
+  const liveFrozenHedgeAnswer = [
+    "To provide downside protection for your 450 shares of AAPL through October 30, 2026, you should consider purchasing **4 or 5 put option contracts** with an expiration of **2026-10-30**.",
+    "",
+    "2. **Protection Level (Strike Price):** The strike price is the level at which you can sell your shares if the price drops.",
+    "* Choosing a higher strike price (closer to the current stock price, e.g., $335) provides more protection as your maximum loss is capped closer to the current price. However, it also costs more.",
+    "* Choosing a lower strike price (further out of the money, e.g., $325 or $330) provides less protection (you'd incur a larger loss before the put kicks in) but is cheaper.",
+    "",
+    "1. **Cost (Premium):** This is the price you pay for the protection.",
+    "3. **Time Decay (Theta):** Options lose value as they approach expiration.",
+    "* **Liquidity (Volume & Open Interest):** Higher volume and open interest generally indicate more liquid options, so be mindful of slippage and risk.",
+  ].join("\n");
+
+  it("accepts the live frozen hedge answer's strike-level sell right without the literal word floor", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(liveFrozenHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts a covered-share put sell right on an unrelated symbol and quantity", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "For the covered 300 MSFT shares, the put gives the right to sell at the strike when the underlying falls below it; the premium reduces net proceeds, theta decays the protection, liquidity affects execution, and the residual shares remain exposed to downside risk.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects a stop-loss level that is not a protective-put strike right", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "Set a stop-loss at the level at which you sell your shares; the premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a capped-loss claim with no put strike or protection mechanism", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "Your maximum loss is capped closer to the current price; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects put-premium-only wording that never ties the floor to the strike", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The put costs a premium; theta and liquidity matter, and the loss is limited to the premium paid, so risk is contained.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a protection claim with no strike trigger", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The puts protect your position from losses; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects an unsupported blanket all-shares protection claim", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "These puts protect all 450 shares from any loss; premium, theta, liquidity, and risk matter.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+  });
+
+  it("rejects a hedge answer that names a floor level but omits the premium cost", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace("The strike is the level at which you can sell; theta and liquidity matter."),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("premium");
+  });
+
+  // Faithful excerpt of the preserved 2026-09-25T03-58-04-569Z competitive-finance
+  // trace (results[0].openCandleTrace.text). It explains the put premium as the
+  // maximum loss, the 50 unprotected shares, potential downside, time decay, and
+  // liquidity slippage without ever using the word "risk".
+  const preservedLiveHedgeAnswer = [
+    "To protect your 450 shares of AAPL for the next month, you should consider buying **5 put option contracts** with the **2026-10-30 expiration**.",
+    "",
+    "**4 Contracts:** Would cover 400 shares, leaving 50 shares (approximately 11% of your holdings) unprotected. This would result in a lower premium cost.",
+    "",
+    "**Higher Strike:** They provide immediate protection closer to the current market price, limiting your potential downside from the current level.",
+    "",
+    "Per-share hedge floor for covered shares: $335 (strike) - $9.75 (premium per share) = $325.25.",
+    "Max loss for the *put leg itself*: $4,875 (the premium paid).",
+    "",
+    "**Premium Cost:** The price you pay for the put option is the maximum you can lose on the option contract if AAPL's price does not fall below your chosen strike by expiration.",
+    "",
+    "**Time Decay (Theta):** Options lose value as they approach expiration; the $335 strike put has a Theta of -0.123.",
+    "",
+    "**Liquidity:** The bid/ask spreads can be wide, making it more challenging to enter or exit positions at favorable prices.",
+  ].join("\n");
+
+  it("accepts the preserved live hedge answer that explains loss, downside, and decay without the word risk", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(preservedLiveHedgeAnswer),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts a hazard explanation on an independent ticker and quantity without the word risk", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "For the covered 300 MSFT shares, the put gives the right to sell at the $250 strike; the maximum loss on the put is the premium paid, the 100 remaining shares stay unprotected, theta erodes the option's time value as expiry nears, and the wide bid-ask spread adds liquidity slippage.",
+      ),
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects floor mechanics with 'fall season' but no actual put hazard", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The downside protection begins at the $350 strike; the premium, delta, and theta are quoted; liquidity is fine; fall season can affect trading volume.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
+
+  it("rejects a protection-only sentence where the put caps losses at the strike", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace("The put caps your losses at the strike; premium, delta, and liquidity are quoted."),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
+
+  it("rejects a protection-only maximum-loss sentence that names no put hazard", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+      trace(
+        "The put's downside protection begins at the $350 strike and limits your maximum loss at the strike; premium, delta, and liquidity are quoted.",
+      ),
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reason).toContain("hazard");
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {

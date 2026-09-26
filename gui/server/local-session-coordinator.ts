@@ -59,15 +59,16 @@ export function createLocalSessionCoordinator(
     const active = activeActions.get(actionKey);
     if (active) return { ok: true, duplicate: true, result: (await active) as T };
 
+    // Admission is first-come: any distinct run admission (chat prompt or tool
+    // invoke) is rejected while this session already has a run in flight.
+    // Queueing a second chat let a later Stop or session state change retire
+    // the first run while the queued prompt still executed afterwards.
     const runAdmissionAction = isRunAdmissionAction(action);
-    const queueChatPrompt = action.actionType === "chat.prompt";
-    const previousRun = queueChatPrompt ? sessionRunTails.get(action.sessionId) : undefined;
-    if (runAdmissionAction && !queueChatPrompt && sessionRunTails.has(action.sessionId)) {
+    if (runAdmissionAction && sessionRunTails.has(action.sessionId)) {
       return { ok: false, code: "session_busy", message: BUSY_MESSAGE };
     }
 
     const runAction = (async () => {
-      if (previousRun) await previousRun;
       const result = await handler(action);
       acceptedActions.set(actionKey, {
         expiresAt: now() + dedupeRetentionMs,

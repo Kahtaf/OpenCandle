@@ -293,4 +293,22 @@ describe("ask_user tool with injected handler", () => {
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("AAPL");
   });
+
+  it("settles as cancelled without asking when the run was stopped", async () => {
+    const handler: AskUserHandler = vi.fn(async () => ({ answer: "late", cancelled: false }));
+    const stoppedTool = captureRegisteredTool(handler);
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await stoppedTool.execute(
+      "call-1",
+      { question: "Which ticker?", question_type: "text" },
+      controller.signal,
+      undefined,
+      undefined,
+    );
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(result.details.cancelled).toBe(true);
+  });
 });

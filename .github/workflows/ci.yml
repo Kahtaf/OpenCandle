@@ -34,45 +34,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check (typecheck, test-scripts typecheck, relay typecheck, lint)
-        if: matrix.node-version == '24.x'
-        run: npm run check
-
-      # test:site builds the site and runs the public-site build contract
-      # tests against it; package-contents validation below reuses the
-      # website/dist output it leaves behind.
-      - name: Run site tests
-        if: matrix.node-version == '24.x'
-        run: npm run test:site
-
-      - name: Validate package contents
-        if: matrix.node-version == '24.x'
-        run: npm run package:contents:check
-
-      - name: Run tests
-        if: matrix.node-version == '24.x'
-        run: npm test
-
-      - name: Run provider relay tests
-        if: matrix.node-version == '24.x'
-        run: npm run relay:test
-
-      - name: Run agent tool tests
-        if: matrix.node-version == '24.x'
-        run: npm run test:agent-tools
-
-      - name: Install Chromium for GUI release smoke
+      # Node 24 is the canonical proof runtime: one `gates:full` run covers
+      # check, unit/relay/agent-tool tests, site, browser integration, GUI
+      # release smoke, hosted PWA smoke, package contents, and coverage.
+      - name: Install Chromium for GUI browser gates
         if: matrix.node-version == '24.x'
         run: npx playwright-core install --with-deps chromium
 
-      - name: Run GUI release smoke
+      - name: Run full gate
         if: matrix.node-version == '24.x'
-        run: npm run test:gui:release-smoke
+        run: npm run gates:full
 
-      - name: Run hosted PWA browser smoke
+      # Kept as an explicit canonical-runtime step: the shared `full` policy
+      # does not include the external public-doc link check, and this preserves
+      # the check CI ran before the shared gate runner existed.
+      - name: Check public docs external links
         if: matrix.node-version == '24.x'
-        run: npm run test:gui:hosted
+        run: npm run docs:links:check
 
+      # Coverage is uploaded even when the gate above fails so the failure is
+      # diagnosable; a missing summary on the proof runtime is itself an error.
+      - name: Upload coverage
+        if: always() && matrix.node-version == '24.x'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            coverage/
+            coverage/coverage-summary.json
+            validation-output/gates/*.json
+          if-no-files-found: error
+          retention-days: 7
+
+      # Every supported runtime keeps the packed-install and CLI-boot proof, so
+      # a packaging regression is caught across the whole matrix.
       - name: Packed install smoke
         run: npm run test:packed-install
 
@@ -81,7 +76,3 @@ jobs:
           expected_version="$(node -p "require('./package.json').version")"
           test "$(node dist/cli.js --version)" = "$expected_version"
           node dist/cli.js --help > /dev/null
-
-      - name: Check public docs external links
-        if: matrix.node-version == '24.x'
-        run: npm run docs:links:check

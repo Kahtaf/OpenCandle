@@ -175,8 +175,16 @@ export function AppShell() {
     resolveSessionScopedCoordination(gui.coordination, sessionView.activeSessionId),
   );
 
+  const historyOpenerRef = useRef(null);
   const openDrawer = useCallback(
     (drawer) => {
+      if (drawer === "history") {
+        // The history drawer opens from plain app-shell buttons rather than a
+        // Radix Drawer.Trigger, so capture the focused opener here and let
+        // SessionDrawer restore focus to it when the sheet closes.
+        const active = typeof document === "undefined" ? null : document.activeElement;
+        historyOpenerRef.current = active instanceof HTMLElement ? active : null;
+      }
       void navigate({ search: (current) => ({ ...current, drawer }) });
     },
     [navigate],
@@ -609,6 +617,7 @@ export function AppShell() {
               send={gui.send}
               startChatRun={startRoutedChatRun}
               stopRun={chatRun.stopRun}
+              retryRun={chatRun.retryRun}
               invokeTool={invokeToolForVisibleSession}
               setToast={gui.setToast}
               draft={draft}
@@ -629,7 +638,12 @@ export function AppShell() {
         <ToolDrawerInline />
       </div>
       <ToolDrawerOverlay />
-      <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />
+      <SessionDrawer
+        open={sessionsOpen}
+        {...sidebarProps}
+        onClose={closeDrawer}
+        returnFocusRef={historyOpenerRef}
+      />
       <Suspense fallback={null}>
         {catalogOpen ? (
           <CatalogOverlay

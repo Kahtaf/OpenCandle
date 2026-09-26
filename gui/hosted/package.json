@@ -8,7 +8,8 @@
     "build": "npm run build:runtime && vite build && node scripts/build-service-worker.mjs",
     "dev": "npm run build:runtime && vite",
     "preview": "vite preview",
-    "test:browser": "npm run build && node tests/hosted-pwa.e2e.mjs"
+    "test:browser": "npm run build && node tests/hosted-pwa.e2e.mjs",
+    "test:browser:live": "npm run build && OPENCANDLE_HOSTED_LIVE=1 node tests/hosted-pwa.e2e.mjs"
   },
   "dependencies": {
     "@opencandle/gui-web": "*",

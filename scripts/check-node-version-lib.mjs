@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 
+import { buildNpmInvocation } from "./npm-command.mjs";
+
 const supportedNodeRange = "22.22.2+ or 24.x-26.x";
 
 export function isSupportedNodeVersion(version) {
@@ -42,10 +44,10 @@ export function getNativeDependencyErrorMessage(
 }
 
 export async function rebuildNativeDependency(dependencyName) {
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const invocation = buildNpmInvocation("npm", ["rebuild", dependencyName]);
 
   await new Promise((resolve, reject) => {
-    const child = spawn(npmCommand, ["rebuild", dependencyName], {
+    const child = spawn(invocation.command, invocation.args, {
       stdio: "inherit",
     });
 

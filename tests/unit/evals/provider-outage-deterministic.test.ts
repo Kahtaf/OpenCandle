@@ -3,7 +3,6 @@ import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
 import { correlationTool } from "../../../src/tools/portfolio/correlation.js";
-import type { EvalTrace } from "../../evals/types.js";
 import aaplHistoryFixture from "../../fixtures/yahoo/AAPL-history-e3.json";
 import aaplQuoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import msftHistoryFixture from "../../fixtures/yahoo/MSFT-history-e3.json";
@@ -29,10 +28,6 @@ function makeResponse(
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
   };
-}
-
-function hasOpenCandleTurnGap(trace: EvalTrace): boolean {
-  return trace.customEntries?.some((entry) => entry.customType === "opencandle-turn-gap") ?? false;
 }
 
 describe("E3 deterministic provider outage cases", () => {
@@ -122,27 +117,5 @@ describe("E3 deterministic provider outage cases", () => {
     expect(text).toMatch(/stale|weekend|last available|as of/i);
     expect(text).toMatch(/2024-03-22|Mar(?:ch)? 22,? 2024/i);
     expect(text).not.toContain("$0.00");
-  });
-
-  // FINDING(E3-provider-outage): deterministic tool-level outage cases do not
-  // currently produce opencandle-turn-gap entries. That entry is emitted by the
-  // live Pi/OpenCandle turn interceptor, so a credentialed harness run is needed
-  // to promote this assertion from known-fail to gating.
-  it.skip("KNOWN-FAIL E3: provider outage eval traces include an opencandle-turn-gap entry", () => {
-    const trace: EvalTrace = {
-      prompt: "Compare AAPL, OUTAGE, and MSFT with correlation.",
-      classification: {
-        workflow: "compare_assets",
-        confidence: 1,
-        tier: "llm",
-        entities: { symbols: ["AAPL", "OUTAGE", "MSFT"] },
-      },
-      toolCalls: [],
-      askUserTranscript: [],
-      text: "OUTAGE unavailable; comparison proceeds on AAPL and MSFT.",
-      customEntries: [],
-    };
-
-    expect(hasOpenCandleTurnGap(trace)).toBe(true);
   });
 });

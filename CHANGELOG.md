@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+- Public documentation link checks retry temporary server failures, verify HEAD failures with GET, and block release when a link remains unreachable.
+
+- Release evaluations now reject workflows that failed validation even when their final draft contains a complete-looking answer.
+
+- Protective-put workflows show whole-contract coverage and uncovered or excess shares, and check displayed premium percentages against the actual stock position.
+
+- Live evaluations now wait for the agent to finish provider retries and reject empty or unsuccessful final answers instead of accepting a partial run.
+
+### Added
+
+- `npm run gates`, `npm run gates:full`, and `npm run release:check` now share one checked-in, sequential proof battery that stops on the first failure, never retries, and reports each run.
+- Release preparation validates a candidate fingerprint and its eval evidence, rejecting stale, mismatched, skipped, or retry-after-failure evidence.
+- `npm run test:coverage` now measures line, function, and branch coverage per production surface and fails on a regression against the committed baseline.
+- A deterministic agent/session journey test proves a tool-backed quote answer and an honest unavailable-provider answer through the real session stack, offline.
+- Release preparation now produces a compact fail-closed summary that ties each release to exact candidate evidence, accepts a fresh success while preserving earlier history, and blocks mismatched, incomplete, skipped, failed, or expired runs.
+
+### Fixed
+
+- Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
+- A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.
+- An analysis no longer fails when a temporary model error is retried automatically and the retry succeeds.
+- A GUI reply stopped partway through now shows as Stopped with Retry, including after a reload, instead of looking like a finished answer.
+- Pressing Stop in the GUI while a question is waiting for your answer now ends the run and closes the question, so your next message is accepted instead of being refused as still working.
+- The portfolio builder now acquires and reports candidate prices before recommending an allocation, and when its evidence validation still fails after one repair it shows a visible warning that any draft above is unverified instead of presenting it as a validated portfolio.
+- The portfolio builder's risk review now requires its own risk, correlation, or crypto history results, so prices fetched earlier in the run no longer let it pass without checking risk.
+- Answering a cost basis question with something like "I don't know" no longer lets a later price you mention be treated as your cost basis.
+- A workflow no longer treats the previous turn going idle as proof that a queued repair prompt finished, so the repair response is produced before the run reports its result.
+- A workflow repair or next-step prompt is now sent only once the session is idle, so a prompt submitted while the prior turn is still settling is no longer dropped and the run finishes instead of stalling.
+
+- `npm run eval -- release` now writes interruption-safe, candidate-scoped evidence under `validation-output/release-evals/v2/<commit>/<run-id>`, so an interrupted or malformed run for the current candidate blocks a later green run while unrelated historical and other-candidate runs no longer do.
+- A follow-up price question no longer invents a cost basis when the conversation never mentioned a basis, purchase, or holding; a basis from your own turn, a same-symbol earlier user turn, or a saved position is still kept.
+- A GUI chat whose writer-lock acquisition fails during setup no longer leaves its session stuck as busy, so the next prompt on that session runs once lock storage recovers.
+- `npm run eval -- release` now fails on skipped or inconsistent required cases instead of reporting a false green.
+- The local GUI's mobile session drawer now returns focus to the control that opened it after Escape, a backdrop click, or close.
+- When more than one data source falls back in a single turn, the recorded data-gap note now names every affected source instead of only the first.
+- A chat stopped before the model replies now saves the original prompt and a stopped marker to the session file, so a reload shows the cancelled turn and its text instead of losing them.
+- Starting a new chat, opening another session, or deleting the current one while GUI work is still answering no longer cancels that run; the GUI reports the session as busy instead.
+- Cancelling a run that had a staged attachment no longer replays that attachment into the next turn.
+- Release and build subprocesses now invoke npm without a shell on Windows, avoiding failures when launching npm.cmd.
+- Test inventory collection now works with Windows npm installations, so `npm run test:inventory` no longer fails when it launches npx.
+- Starting a second chat while a run is active no longer queues a prompt that would run after the run stops.
+- Policy guidance no longer pushes allocation changes into review-only portfolio critiques, invents a trim or position percentage for an unverified ticker, or treats a protective put's strike-minus-premium as a whole-position floor; put guidance now sizes whole contracts against the stated share count and separates the premium at risk from stock loss.
+- Protective-put answers now state the put's contractual right to sell the covered shares at the strike, quote a net premium floor only when contracts fully match the owned shares, and otherwise report qualitative covered-share protection with total premium and separate residual-uncovered or surplus-put exposure.
+- Clearing all hosted data now reloads the browser as soon as the device is cleared instead of first waiting for a fresh in-page runtime to start, so a slow or failed runtime boot can no longer leave the old page showing while the data is already gone.
+- Product evaluations now recognize recommendations stated with common inflections such as "recommended", so a clear "stance is recommended" answer is no longer scored as evasive.
+- Protective-put benchmark checks now accept an answer that states the put's strike-level sell right for the covered shares, while still rejecting stop-loss levels, put-premium-only loss claims, and protection claims with no strike trigger.
+- Eval runs now fail and report a regression when any scoring layer or product eval dimension fails, even if the case's aggregate score clears the suite threshold, and keep a redacted response-and-tool trace to diagnose the failure.
+- Data-faithfulness scoring now preserves the sign on currency amounts written as `-$2.50` or `$-2.50`, so a faithful negative change is no longer flagged and a reversed or wrong-signed amount is no longer silently accepted.
+- Data-faithfulness scoring now reads an unsigned percentage decrease stated in words (for example `a decrease of 0.33%`) as negative, while an explicit sign still wins and an increase or undirected percentage is never silently re-signed.
+- Protective-put benchmark checks now accept an explicit put-leg premium loss (or time/theta decay of the option's value) in place of the literal word "risk", so a hedge answer that states the put premium as the maximum loss on the option leg is no longer scored as omitting protective-put risk.
+- Data-faithfulness scoring now reads a spelled-out currency scale such as `$3.697 Trillion` at face value, including ranges like `$1 million-$2 million`, and no longer misreads a duration such as `15m delayed` as a millions amount.
+- Failed eval diagnostics now redact API credentials echoed in provider rate-limit messages.
+- Product evaluations now recognize a concrete sentiment data-quality limitation (noisy sentiment, sparse coverage or sample, a low sample count, or a non-representative sample) as risk framing, so an honest data-quality caveat is no longer scored as omitting risk even when every source returned.
+- Product evaluations now also recognize a sentiment answer that explains a missing source's divergence from the sources that returned, so a "Twitter is unavailable and its sentiment may differ from other sources" gap disclosure is no longer scored as omitting risk framing.
+- Data-faithfulness scoring now scales signed bare compact and spelled-out magnitudes, including comma-grouped forms, in tool text and financial metrics (for example `3.68T`, `-3.68T`, or `3,680B`), so a market cap quoted from a tool result is grounded instead of flagged as ungrounded.
+- The portfolio builder now requires captured, successful pricing tool evidence before candidate selection and captured risk or correlation evidence before the risk review, so a portfolio draft cannot complete without any successful market-data tool results.
+- Failed eval diagnostics now record the final assistant message's terminal stop reason and a sanitized error category, so an empty response is diagnosable without exposing provider error text.
+
 ## [0.15.0] - 2026-09-21
 
 ### Changed

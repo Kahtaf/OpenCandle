@@ -4,7 +4,6 @@
   "profileSnapshot": {},
   "expectedRouterOutput": {
     "routeKind": "agent_task",
-    "workflow": "single_asset_analysis",
     "entities": {
       "symbols": [
         "IV"
@@ -14,14 +13,10 @@
     "preference_updates": [],
     "missing_required": [],
     "tool_bundles": [
-      "core_market",
-      "options",
-      "sentiment",
-      "sec",
-      "clarification"
+      "core_market"
     ],
     "diagnostics": [],
-    "reasoning": "$IV is an explicit ticker signal."
+    "reasoning": "$IV is an explicit ticker signal; a quote-only request needs core_market."
   },
   "tags": [
     "acronym-disambiguation",

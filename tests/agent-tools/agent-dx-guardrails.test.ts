@@ -83,11 +83,11 @@ describe("agent developer guardrails", () => {
     );
     expect(packageJson.scripts["bootstrap:agent"]).toBe("node scripts/agent-bootstrap.mjs");
 
-    // `gates` must cover typecheck, lint, unit tests, and agent-tool tests.
-    // Scripts may delegate through an intermediate script (e.g. a shared
-    // `check` script bundling typecheck + lint), so resolve one level of
-    // `npm run <name>` indirection before asserting on the composed text,
-    // rather than pinning the exact composition string.
+    // `gates` dispatches the shared core policy. Scripts may delegate through
+    // an intermediate script (e.g. a shared `check` script bundling typecheck +
+    // lint), so resolve the core policy steps and one level of `npm run <name>`
+    // indirection before asserting on the composed text, rather than pinning
+    // the exact composition string.
     const resolveScripts = (script: string): string => {
       let resolved = script;
       for (const match of script.matchAll(/npm run ([\w:-]+)/g)) {
@@ -97,20 +97,27 @@ describe("agent developer guardrails", () => {
       return resolved;
     };
 
-    const gates = resolveScripts(packageJson.scripts.gates);
+    expect(packageJson.scripts.gates).toBe("node scripts/test-gate.mjs core");
+    expect(packageJson.scripts["gates:full"]).toBe("node scripts/test-gate.mjs full");
+
+    const gatePolicy = JSON.parse(
+      readFileSync(repoPath("scripts/test-gate-policy.json"), "utf8"),
+    ) as { core: string[]; full: string[]; release: string[] };
+    expect(gatePolicy.core).toEqual(["check", "test", "relay:test", "test:agent-tools"]);
+
+    const gates = resolveScripts(
+      gatePolicy.core.map((step) => packageJson.scripts[step]).join(" && "),
+    );
     expect(gates, "gates must run typecheck").toMatch(/\btypecheck\b/);
     expect(gates, "gates must run lint (biome ci)").toMatch(/\bbiome ci\b/);
-    expect(gates, "gates must run unit tests").toMatch(/\bnpm test\b/);
-    expect(gates, "gates must run agent-tool tests").toMatch(/\btest:agent-tools\b/);
+    expect(gates, "gates must run unit tests").toMatch(/vitest run --project unit/);
+    expect(gates, "gates must run agent-tool tests").toMatch(/vitest run --project agent-tools/);
     // The eval/benchmark scripts live outside the main tsconfig, so their
     // typecheck has to be gated explicitly or it silently rots until a
     // release:check run trips over it.
     expect(gates, "gates must typecheck the test scripts").toMatch(/\btest:scripts:typecheck\b/);
 
-    expect(packageJson.scripts["gates:full"], "gates:full must build on gates").toMatch(
-      /\bnpm run gates\b/,
-    );
-    expect(packageJson.scripts["review:pr"]).toContain("npm run gates");
+    expect(packageJson.scripts["review:pr"]).toContain("npm run gates:full");
   });
 
   it("pins the delegation contract fields and standing clauses", () => {
@@ -118,7 +125,8 @@ describe("agent developer guardrails", () => {
     expect(existsSync(contractPath)).toBe(true);
     if (!existsSync(contractPath)) return;
 
-    const contract = readFileSync(contractPath, "utf8");
+    // Collapse incidental line wrapping so clause checks are not whitespace-sensitive.
+    const contract = readFileSync(contractPath, "utf8").replace(/\s+/g, " ");
     for (const requiredPhrase of [
       "Owned tasks",
       "Commit policy",
@@ -135,6 +143,10 @@ describe("agent developer guardrails", () => {
       "never print",
       "CHANGELOG",
       "Codex review",
+      "diagnose the cause",
+      "fix the actual cause",
+      "focused run",
+      "Preserve all failed evidence",
     ]) {
       expect(contract).toContain(requiredPhrase);
     }
@@ -145,9 +157,18 @@ describe("agent developer guardrails", () => {
     expect(existsSync(resumePath)).toBe(true);
     if (!existsSync(resumePath)) return;
 
-    const resumeTemplate = readFileSync(resumePath, "utf8");
+    // Collapse incidental line wrapping so clause checks are not whitespace-sensitive.
+    const resumeTemplate = readFileSync(resumePath, "utf8").replace(/\s+/g, " ");
     expect(resumeTemplate).toContain("working tree");
     expect(resumeTemplate).toContain("npm run gates");
+    for (const requiredPhrase of [
+      "diagnose the cause",
+      "fix the actual cause",
+      "focused run",
+      "Preserve all failed evidence",
+    ]) {
+      expect(resumeTemplate).toContain(requiredPhrase);
+    }
   });
 
   describe("agent bootstrap", () => {

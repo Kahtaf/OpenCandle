@@ -67,7 +67,7 @@ export function createRedditSentimentTool(
     description:
       "Analyze sentiment from financial Reddit communities. Supports single subreddit, multi-subreddit, and topic filtering. Returns scored posts with comment analysis and trend context.",
     parameters: params,
-    async execute(_toolCallId, args, _signal, _onUpdate, ctx?: ExtensionContext) {
+    async execute(_toolCallId, args, signal, _onUpdate, ctx?: ExtensionContext) {
       const limit = Math.min(args.limit ?? 25, 100);
       const config = getConfig();
       const state = loadOnboardingState();
@@ -124,6 +124,7 @@ export function createRedditSentimentTool(
                 reason: "Reddit sentiment needs rdt-cli and a Reddit browser session.",
               },
               askUserHandler,
+              signal,
             );
 
             if (!promptResult.cancelled && promptResult.answer?.startsWith("Continue")) {
