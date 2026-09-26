@@ -2939,6 +2939,42 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("drops a model basis in a later follow-up when the earlier basis reply gave no value", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "I don't know" },
+          { role: "assistant", text: "No problem." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 180 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a later follow-up basis when the earlier basis reply gave holding context without a value", async () => {
+    // Holding context is basis-role presence, matching how the guard treats a
+    // same-symbol holding turn: the model keeps its interpretation.
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What about AAPL at 180?",
+        priorTurns: [
+          { role: "assistant", text: "What is your cost basis for AAPL?" },
+          { role: "user", text: "I bought 100 shares last year" },
+          { role: "assistant", text: "Thanks." },
+        ],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("keeps a derived basis from a purchase total", async () => {
     // The user states quantity and total, not a per-share price: role presence
     // is enough, and the model keeps the interpretation.

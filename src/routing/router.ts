@@ -1432,11 +1432,30 @@ function hasBasisRoleContext(
     ) {
       return true;
     }
-    if (answersBasisQuestion(symbols, turns.slice(0, index))) return true;
+    if (
+      answersBasisQuestion(symbols, turns.slice(0, index)) &&
+      suppliesBasisReply(turn.text, turnEntities)
+    ) {
+      return true;
+    }
   }
   return symbols.some(
     (symbol) =>
       readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
+  );
+}
+
+// A historical reply to a basis question qualifies only when it actually supplies
+// a basis amount or holding context; a non-answer such as "I don't know" leaves
+// no basis role for a later turn to inherit.
+const BASIS_REPLY_AMOUNT = /(?<![A-Za-z\d])\$?\d[\d,]*(?:\.\d+)?(?![A-Za-z\d])/;
+
+function suppliesBasisReply(text: string, entities: ReturnType<typeof extractEntities>): boolean {
+  return (
+    entities.costBasis !== undefined ||
+    entities.heldSymbol !== undefined ||
+    COST_BASIS_CONTEXT.test(text) ||
+    BASIS_REPLY_AMOUNT.test(text)
   );
 }
 
