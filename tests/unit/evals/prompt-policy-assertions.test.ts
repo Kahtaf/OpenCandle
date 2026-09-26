@@ -154,6 +154,30 @@ describe("prompt-policy final answer assertions", () => {
     expect(result.passed).toBe(true);
   });
 
+  describe("educational section shape", () => {
+    const assertion = "uses bottom line, practical workflow, and quick checklist sections";
+
+    it("accepts a hyphenated bold bottom-line section", () => {
+      const result = evaluateFinalAnswerAssertion(
+        assertion,
+        trace(
+          "**Bottom-line:** P/E is a starting point.\n\n### Practical workflow\nSteps.\n\n### Quick checklist\n- Item",
+        ),
+      );
+
+      expect(result.passed).toBe(true);
+    });
+
+    it("still requires every educational section", () => {
+      const result = evaluateFinalAnswerAssertion(
+        assertion,
+        trace("**Bottom-line:** P/E is a starting point.\n\n### Practical workflow\nSteps."),
+      );
+
+      expect(result.passed).toBe(false);
+    });
+  });
+
   describe("bottom-line structural portfolio read contract", () => {
     const assertion = "starts with a bottom-line structural portfolio read";
 

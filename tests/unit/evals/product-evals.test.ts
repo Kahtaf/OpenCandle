@@ -308,6 +308,25 @@ describe("product eval scoring", () => {
     ).toBe(true);
   });
 
+  it("recognizes a hyphenated or bold bottom-line conclusion as a direct answer", () => {
+    const ratesCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "macro-rates-growth-stocks",
+    );
+    if (!ratesCase) throw new Error("missing macro eval case");
+    const directAnswerPassed = (text: string) =>
+      scoreProductEvalCase(ratesCase, makeTrace({ text })).dimensions.find(
+        (dimension) => dimension.id === "direct_answer",
+      )?.passed;
+
+    expect(directAnswerPassed("**Bottom-line:** falling rates tend to lift growth stocks.")).toBe(
+      true,
+    );
+    expect(directAnswerPassed("**Bottom line:** falling rates tend to lift growth stocks.")).toBe(
+      true,
+    );
+    expect(directAnswerPassed("Falling rates tend to lift growth stocks over time.")).toBe(false);
+  });
+
   it("recognizes direct macro impact and risk conclusions", () => {
     const ratesCase = PRODUCT_EVAL_CASES.find(
       (evalCase) => evalCase.id === "macro-rates-growth-stocks",

@@ -107,7 +107,9 @@ export function evaluateFinalAnswerAssertion(
       pattern:
         /bottom line|practical workflow|quick checklist|core mental model|where it misleads|cross-checks/i,
       passed:
-        /bottom line/.test(text) && /practical workflow/.test(text) && /quick checklist/.test(text),
+        /bottom[- ]line/.test(text) &&
+        /practical workflow/.test(text) &&
+        /quick checklist/.test(text),
       reason: "expected educational section shape",
     },
   ];

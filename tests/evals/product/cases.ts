@@ -9,7 +9,7 @@ const directAnswer: ProductEvalDimension = {
     // the bare stem missed direct answers such as "a Neutral to Cautious stance
     // is recommended" because "recommended" has no word boundary after
     // "recommend". The noun "recommendation" is intentionally not a marker.
-    /\b(yes|no|use|compare|reasonable|valid|recommend|recommends|recommended|recommending|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line)\b/i,
+    /\b(yes|no|use|compare|reasonable|valid|recommend|recommends|recommended|recommending|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom[- ]line)\b/i,
   ],
   mandatory: true,
 };
