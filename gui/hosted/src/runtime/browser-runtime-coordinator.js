@@ -53,6 +53,16 @@ class BrowserRuntimeCoordinator {
       this.notify({ type: "invalidate", reason: "network", epoch: this.epoch });
     this.eventTarget.addEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.addEventListener?.("offline", this.handleNetworkChange);
+    // Browsers can keep a hidden page in the back/forward cache without ever
+    // unloading it (`pagehide` with `persisted`). A cached page is frozen and
+    // cannot answer forwarded requests, so stop advertising it as the writer;
+    // restore the hint if the page comes back while still owning the lock.
+    this.handlePageHide = () => this.clearWriterHintIfOwned();
+    this.handlePageShow = (event) => {
+      if (event?.persisted && this.role === "writer" && !this.disposed) this.writeWriterHint();
+    };
+    this.eventTarget.addEventListener?.("pagehide", this.handlePageHide);
+    this.eventTarget.addEventListener?.("pageshow", this.handlePageShow);
     this.writerLockPromise = null;
     this.restoreWriterHint();
     this.queueWriterLock();
@@ -216,6 +226,8 @@ class BrowserRuntimeCoordinator {
     this.pending.clear();
     this.eventTarget.removeEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.removeEventListener?.("offline", this.handleNetworkChange);
+    this.eventTarget.removeEventListener?.("pagehide", this.handlePageHide);
+    this.eventTarget.removeEventListener?.("pageshow", this.handlePageShow);
     const heldWriterLock = typeof this.releaseWriter === "function";
     this.releaseWriter?.();
     if (heldWriterLock) await this.writerLockPromise;
@@ -231,7 +243,7 @@ class BrowserRuntimeCoordinator {
     this.epoch = nextEpoch;
     this.storage.setItem(EPOCH_KEY, String(this.epoch));
     this.writerId = this.tabId;
-    this.storage.setItem(WRITER_HINT_KEY, JSON.stringify({ epoch: this.epoch, writerId: this.tabId }));
+    this.writeWriterHint();
     this.role = "writer";
     const host = this.createHost({ sessionCredential: this.sessionCredential });
     this.host = host;
@@ -758,6 +770,10 @@ class BrowserRuntimeCoordinator {
     this.role = "follower";
     this.resolveReady();
     this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
+  }
+
+  writeWriterHint() {
+    this.storage.setItem(WRITER_HINT_KEY, JSON.stringify({ epoch: this.epoch, writerId: this.tabId }));
   }
 
   clearWriterHintIfOwned() {

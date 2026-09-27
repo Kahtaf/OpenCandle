@@ -652,6 +652,50 @@ describe("browser runtime coordinator", () => {
     expect(storage.getItem("opencandle.hosted.runtime-writer.v1")).toBeNull();
   });
 
+  it("drops its writer hint when the page is hidden into the back/forward cache", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    const listeners = new Map<string, Set<(event: { persisted?: boolean }) => void>>();
+    const eventTarget = {
+      addEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        const entries = listeners.get(type) ?? new Set();
+        entries.add(listener);
+        listeners.set(type, entries);
+      },
+      removeEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+      dispatch(type: string, event: { persisted?: boolean }) {
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      },
+    };
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({ request: vi.fn(), handleCommand: vi.fn(), dispose: vi.fn() }),
+      lockManager: new FakeLockManager(),
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      eventTarget,
+    });
+    await coordinator.ready();
+    const hintKey = "opencandle.hosted.runtime-writer.v1";
+    const ownHint = storage.getItem(hintKey);
+    expect(ownHint).not.toBeNull();
+
+    // A cached page is frozen and cannot answer forwarded reads, so the next
+    // page load must not start as its follower.
+    eventTarget.dispatch("pagehide", { persisted: true });
+    expect(storage.getItem(hintKey)).toBeNull();
+
+    // Restored from the cache while still holding the writer lock: advertise
+    // ownership again for other tabs.
+    eventTarget.dispatch("pageshow", { persisted: true });
+    expect(storage.getItem(hintKey)).toBe(ownHint);
+
+    await coordinator.dispose();
+    expect(listeners.get("pagehide")?.size ?? 0).toBe(0);
+    expect(listeners.get("pageshow")?.size ?? 0).toBe(0);
+  });
+
   it("retries an in-flight session load with the promoted writer", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
