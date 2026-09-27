@@ -195,6 +195,10 @@ class BrowserRuntimeCoordinator {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    // Page teardown (pagehide) rarely lets the asynchronous writer shutdown
+    // finish. Drop our durable writer hint now so the next page load does not
+    // start as a follower of this departed tab.
+    this.clearWriterHintIfOwned();
     for (const active of this.activeForwardedStreams.values()) {
       active.controller.abort();
       void active.reader?.cancel("Hosted runtime coordinator closed");
@@ -823,8 +827,7 @@ function shouldRetryAfterWriterChange(error, operation, payload, signal, dispose
     !disposed &&
     !signal?.aborted &&
     error?.code === "HOSTED_WRITER_CHANGED" &&
-    operation === "gui" &&
-    (payload?.action === "bootstrap" || payload?.action === "load_session")
+    isRecoverableGuiRead(operation, payload)
   );
 }
 
