@@ -53,6 +53,24 @@ class BrowserRuntimeCoordinator {
       this.notify({ type: "invalidate", reason: "network", epoch: this.epoch });
     this.eventTarget.addEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.addEventListener?.("offline", this.handleNetworkChange);
+    // Browsers can keep a hidden page in the back/forward cache without ever
+    // unloading it (`pagehide` with `persisted`). A cached page is frozen and
+    // cannot answer forwarded requests, so stop advertising it as the writer;
+    // restore the hint if the page comes back while still owning the writer
+    // epoch. If another tab advanced the epoch while this page was cached, it
+    // is the writer now: yield instead of overwriting its hint.
+    this.handlePageHide = () => this.clearWriterHintIfOwned();
+    this.handlePageShow = (event) => {
+      if (!event?.persisted || this.role !== "writer" || this.disposed) return;
+      if (readStoredEpoch(this.storage) === this.epoch) {
+        this.writeWriterHint();
+        this.broadcastStatus();
+        return;
+      }
+      this.releaseWriter?.();
+    };
+    this.eventTarget.addEventListener?.("pagehide", this.handlePageHide);
+    this.eventTarget.addEventListener?.("pageshow", this.handlePageShow);
     this.writerLockPromise = null;
     this.restoreWriterHint();
     this.queueWriterLock();
@@ -195,6 +213,10 @@ class BrowserRuntimeCoordinator {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    // Page teardown (pagehide) rarely lets the asynchronous writer shutdown
+    // finish. Drop our durable writer hint now so the next page load does not
+    // start as a follower of this departed tab.
+    this.clearWriterHintIfOwned();
     for (const active of this.activeForwardedStreams.values()) {
       active.controller.abort();
       void active.reader?.cancel("Hosted runtime coordinator closed");
@@ -212,6 +234,8 @@ class BrowserRuntimeCoordinator {
     this.pending.clear();
     this.eventTarget.removeEventListener?.("online", this.handleNetworkChange);
     this.eventTarget.removeEventListener?.("offline", this.handleNetworkChange);
+    this.eventTarget.removeEventListener?.("pagehide", this.handlePageHide);
+    this.eventTarget.removeEventListener?.("pageshow", this.handlePageShow);
     const heldWriterLock = typeof this.releaseWriter === "function";
     this.releaseWriter?.();
     if (heldWriterLock) await this.writerLockPromise;
@@ -227,7 +251,7 @@ class BrowserRuntimeCoordinator {
     this.epoch = nextEpoch;
     this.storage.setItem(EPOCH_KEY, String(this.epoch));
     this.writerId = this.tabId;
-    this.storage.setItem(WRITER_HINT_KEY, JSON.stringify({ epoch: this.epoch, writerId: this.tabId }));
+    this.writeWriterHint();
     this.role = "writer";
     const host = this.createHost({ sessionCredential: this.sessionCredential });
     this.host = host;
@@ -380,6 +404,13 @@ class BrowserRuntimeCoordinator {
     if (!this.disposed) {
       this.role = "follower";
       this.writerId = "";
+      // Follow a writer that already took over (for example while this page
+      // sat in the back/forward cache) instead of waiting for its next status.
+      const hint = readWriterHint(this.storage);
+      if (hint && hint.writerId !== this.tabId && hint.epoch > this.epoch) {
+        this.epoch = hint.epoch;
+        this.writerId = hint.writerId;
+      }
       this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
     }
   }
@@ -756,6 +787,10 @@ class BrowserRuntimeCoordinator {
     this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
   }
 
+  writeWriterHint() {
+    this.storage.setItem(WRITER_HINT_KEY, JSON.stringify({ epoch: this.epoch, writerId: this.tabId }));
+  }
+
   clearWriterHintIfOwned() {
     const hint = readWriterHint(this.storage);
     if (hint?.epoch === this.epoch && hint.writerId === this.tabId) {
@@ -810,6 +845,10 @@ class BrowserRuntimeCoordinator {
   }
 }
 
+function readStoredEpoch(storage) {
+  return Number.parseInt(storage.getItem(EPOCH_KEY) ?? "0", 10);
+}
+
 function writerChangedError() {
   const error = new Error(
     "The hosted writer changed before the action completed. Check the current state, then retry.",
@@ -823,8 +862,7 @@ function shouldRetryAfterWriterChange(error, operation, payload, signal, dispose
     !disposed &&
     !signal?.aborted &&
     error?.code === "HOSTED_WRITER_CHANGED" &&
-    operation === "gui" &&
-    (payload?.action === "bootstrap" || payload?.action === "load_session")
+    isRecoverableGuiRead(operation, payload)
   );
 }
 

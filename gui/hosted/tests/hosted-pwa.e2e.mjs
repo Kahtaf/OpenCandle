@@ -246,6 +246,44 @@ try {
     await waitForText(page, "Market research, on your machine", 30_000);
   }
 
+  // Return visit: leave the app and load it again in the same tab. The
+  // departed page must not leave a writer hint behind, or the new page starts
+  // as a follower of a tab that can no longer answer and its first reads
+  // (including the Markets strip) fail.
+  stage = "return visit";
+  await page.addInitScript(() => {
+    try {
+      globalThis.__opencandleInitialWriterHint = localStorage.getItem(
+        "opencandle.hosted.runtime-writer.v1",
+      );
+    } catch {
+      // about:blank has no storage.
+    }
+  });
+  await page.goto("about:blank");
+  await page.goto(origin, { waitUntil: "domcontentloaded" });
+  assert(
+    (await page.evaluate(() => globalThis.__opencandleInitialWriterHint)) === null,
+    "a return visit starts without the departed page's writer hint",
+  );
+  await waitForRuntimeReady(page, 120_000);
+  await waitForText(page, "What are we watching?", 60_000);
+  if (relayE2e) {
+    // Only the relay lane has live index data; the deterministic lane has no
+    // index fixture, so the strip is correctly hidden there.
+    await waitFor(
+      async () =>
+        /\$[\d,]+\.\d{2}/.test(
+          await page
+            .locator("[data-slot=home-indices-strip]")
+            .innerText({ timeout: 1_000 })
+            .catch(() => ""),
+        ),
+      60_000,
+      "Markets strip quotes on a return visit",
+    );
+  }
+
   if (live) {
     stage = "direct browser provider proof";
     const polymarketProof = await page.evaluate(async () => {

@@ -64,4 +64,85 @@ describe("MarketIndicesStore", () => {
 
     expect(store.getState()).toEqual({ loading: false, quotes: [], unavailable: true });
   });
+
+  it("recovers from a first-load failure within the retry backoff instead of waiting for the poll", async () => {
+    const getMarketIndices = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("The hosted writer changed before the action completed."))
+      .mockResolvedValue({ indices: [{ symbol: "^GSPC", status: "ok", price: 6310.12 }] });
+    const store = new MarketIndicesStore({ transport: { getMarketIndices } as never });
+
+    await store.start();
+    expect(store.getState()).toEqual({ loading: false, quotes: [], unavailable: true });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(getMarketIndices).toHaveBeenCalledTimes(2);
+    expect(store.getState()).toEqual({
+      loading: false,
+      quotes: [{ symbol: "^GSPC", status: "ok", price: 6310.12 }],
+      unavailable: false,
+    });
+    store.stop();
+  });
+
+  it("backs off between retries and stops retrying once stopped", async () => {
+    const getMarketIndices = vi.fn().mockRejectedValue(new Error("offline"));
+    const store = new MarketIndicesStore({ transport: { getMarketIndices } as never });
+
+    await store.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(getMarketIndices).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(getMarketIndices).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getMarketIndices).toHaveBeenCalledTimes(3);
+
+    store.stop();
+    await vi.advanceTimersByTimeAsync(QUOTE_REFRESH_INTERVAL_MS);
+    expect(getMarketIndices).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    { name: "a request failure", next: () => Promise.reject(new Error("offline")) },
+    {
+      name: "a response with zero available symbols",
+      next: () =>
+        Promise.resolve({
+          indices: [{ symbol: "^GSPC", status: "unavailable", reason: "missing" }],
+        }),
+    },
+  ])("keeps the last good quotes after $name", async ({ next }) => {
+    const good = { symbol: "^GSPC", status: "ok", price: 6310.12 };
+    const getMarketIndices = vi
+      .fn()
+      .mockResolvedValueOnce({ indices: [good] })
+      .mockImplementationOnce(next)
+      .mockResolvedValue({ indices: [{ ...good, price: 6320 }] });
+    const store = new MarketIndicesStore({ transport: { getMarketIndices } as never });
+
+    await store.start();
+    await vi.advanceTimersByTimeAsync(QUOTE_REFRESH_INTERVAL_MS);
+
+    expect(getMarketIndices).toHaveBeenCalledTimes(2);
+    // The last good prices stay visible, marked with the shared retained-quote
+    // signal so the strip shows its last-known-price warning.
+    expect(store.getState()).toEqual({
+      loading: false,
+      quotes: [
+        {
+          ...good,
+          stale: true,
+          refreshStatus: "unavailable",
+          refreshReason: expect.any(String),
+          refreshFailedAt: expect.any(String),
+        },
+      ],
+      unavailable: false,
+    });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(store.getState().quotes).toEqual([{ ...good, price: 6320 }]);
+    store.stop();
+  });
 });

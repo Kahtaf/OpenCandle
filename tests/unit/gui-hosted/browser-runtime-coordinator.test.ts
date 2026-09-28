@@ -537,16 +537,26 @@ describe("browser runtime coordinator", () => {
     await follower.dispose();
   });
 
-  it("rejects an in-flight forwarded read immediately when the writer epoch changes", async () => {
+  it("retries an in-flight market read with the promoted writer instead of failing it", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
     const storage = createStorage();
+    let hostNumber = 0;
     const options = {
-      createHost: () => ({
-        request: vi.fn(() => new Promise(() => {})),
-        handleCommand: vi.fn(),
-        dispose: vi.fn(),
-      }),
+      createHost: () => {
+        const ownHostNumber = ++hostNumber;
+        return {
+          request: vi.fn(async (_operation: string, payload: { action?: string }) => {
+            if (ownHostNumber === 1) return new Promise(() => {});
+            if (payload?.action === "bootstrap") {
+              return { sessionId: "session-1", sessions: [], snapshot: {} };
+            }
+            return { indices: [{ symbol: "^GSPC", status: "ok", price: 6310.12 }] };
+          }),
+          handleCommand: vi.fn(),
+          dispose: vi.fn(),
+        };
+      },
       lockManager: locks,
       channelFactory: (name: string) => new FakeBroadcastChannel(name),
       storage,
@@ -558,13 +568,185 @@ describe("browser runtime coordinator", () => {
     const writer = first.getRole() === "writer" ? first : second;
     const follower = writer === first ? second : first;
 
-    const forwarded = follower.request("gui", { action: "market_state" });
+    const forwarded = follower.request("gui", { action: "market_indices" });
     await settle();
     await writer.dispose();
 
-    await expect(forwarded).rejects.toThrow("writer changed before the action completed");
+    // The retry must land on the promoted writer promptly, not after the
+    // 10s request deadline.
+    await expect(forwarded).resolves.toMatchObject({
+      indices: [{ symbol: "^GSPC", status: "ok" }],
+    });
     expect(follower.getRole()).toBe("writer");
     await follower.dispose();
+  });
+
+  it("recovers first reads forwarded to a stale writer hint when this tab takes the lock", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    // A previous page unloaded without clearing its hint, so the new page
+    // starts as a follower of a writer that no longer exists.
+    storage.setItem("opencandle.hosted.runtime-epoch.v1", "1");
+    storage.setItem(
+      "opencandle.hosted.runtime-writer.v1",
+      JSON.stringify({ epoch: 1, writerId: "departed-tab" }),
+    );
+    let grantLock!: () => void;
+    const lockGranted = new Promise<void>((resolve) => {
+      grantLock = resolve;
+    });
+    const locks = {
+      request(_name: string, callback: (lock: object) => Promise<void>) {
+        return lockGranted.then(() => callback({ name: "writer" }));
+      },
+    };
+    const request = vi.fn(async (_operation: string, payload: { action?: string }) => {
+      if (payload?.action === "market_indices") {
+        return { indices: [{ symbol: "^GSPC", status: "ok", price: 6310.12 }] };
+      }
+      return { sessionId: "session-1", sessions: [], snapshot: {} };
+    });
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({ request, handleCommand: vi.fn(), dispose: vi.fn() }),
+      lockManager: locks,
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 10_000,
+    });
+    await coordinator.ready();
+    expect(coordinator.getRole()).toBe("follower");
+
+    const indices = coordinator.request("gui", { action: "market_indices" });
+    const marketState = coordinator.request("gui", { action: "market_state" });
+    await settle();
+    grantLock();
+
+    await expect(indices).resolves.toMatchObject({
+      indices: [{ symbol: "^GSPC", status: "ok" }],
+    });
+    await expect(marketState).resolves.toMatchObject({ sessionId: "session-1" });
+    expect(coordinator.getRole()).toBe("writer");
+    await coordinator.dispose();
+  });
+
+  it("clears its own writer hint synchronously when disposal starts", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({
+        request: vi.fn(),
+        handleCommand: vi.fn(),
+        // Page teardown rarely lets an asynchronous host disposal finish.
+        dispose: vi.fn(() => new Promise<void>(() => {})),
+      }),
+      lockManager: new FakeLockManager(),
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      requestTimeoutMs: 1_000,
+    });
+    await coordinator.ready();
+    expect(storage.getItem("opencandle.hosted.runtime-writer.v1")).not.toBeNull();
+
+    void coordinator.dispose();
+
+    expect(storage.getItem("opencandle.hosted.runtime-writer.v1")).toBeNull();
+  });
+
+  it("drops its writer hint when the page is hidden into the back/forward cache", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    const listeners = new Map<string, Set<(event: { persisted?: boolean }) => void>>();
+    const eventTarget = {
+      addEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        const entries = listeners.get(type) ?? new Set();
+        entries.add(listener);
+        listeners.set(type, entries);
+      },
+      removeEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+      dispatch(type: string, event: { persisted?: boolean }) {
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      },
+    };
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({ request: vi.fn(), handleCommand: vi.fn(), dispose: vi.fn() }),
+      lockManager: new FakeLockManager(),
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      eventTarget,
+    });
+    await coordinator.ready();
+    const hintKey = "opencandle.hosted.runtime-writer.v1";
+    const ownHint = storage.getItem(hintKey);
+    expect(ownHint).not.toBeNull();
+
+    // A cached page is frozen and cannot answer forwarded reads, so the next
+    // page load must not start as its follower.
+    eventTarget.dispatch("pagehide", { persisted: true });
+    expect(storage.getItem(hintKey)).toBeNull();
+
+    // Restored from the cache while still holding the writer lock: advertise
+    // ownership again for other tabs.
+    eventTarget.dispatch("pageshow", { persisted: true });
+    expect(storage.getItem(hintKey)).toBe(ownHint);
+
+    await coordinator.dispose();
+    expect(listeners.get("pagehide")?.size ?? 0).toBe(0);
+    expect(listeners.get("pageshow")?.size ?? 0).toBe(0);
+  });
+
+  it("yields instead of re-advertising a stale writer restored from the back/forward cache", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    const listeners = new Map<string, Set<(event: { persisted?: boolean }) => void>>();
+    const eventTarget = {
+      addEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        const entries = listeners.get(type) ?? new Set();
+        entries.add(listener);
+        listeners.set(type, entries);
+      },
+      removeEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+      dispatch(type: string, event: { persisted?: boolean }) {
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      },
+    };
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({ request: vi.fn(), handleCommand: vi.fn(), dispose: vi.fn() }),
+      // The first grant is ours; once released, the other tab holds the lock.
+      lockManager: {
+        grants: 0,
+        request(_name: string, callback: (lock: object) => Promise<void>) {
+          this.grants += 1;
+          if (this.grants > 1) return new Promise<void>(() => {});
+          return callback({ name: "writer" });
+        },
+      },
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      eventTarget,
+    });
+    await coordinator.ready();
+    expect(coordinator.getRole()).toBe("writer");
+    const hintKey = "opencandle.hosted.runtime-writer.v1";
+    const epochKey = "opencandle.hosted.runtime-epoch.v1";
+
+    eventTarget.dispatch("pagehide", { persisted: true });
+    // While this page sat in the cache, another tab became the writer.
+    const nextEpoch = coordinator.getEpoch() + 1;
+    const otherHint = JSON.stringify({ epoch: nextEpoch, writerId: "other-tab" });
+    storage.setItem(epochKey, String(nextEpoch));
+    storage.setItem(hintKey, otherHint);
+
+    eventTarget.dispatch("pageshow", { persisted: true });
+    await settle();
+
+    expect(storage.getItem(hintKey)).toBe(otherHint);
+    expect(coordinator.getRole()).toBe("follower");
+    expect(coordinator.getEpoch()).toBe(nextEpoch);
+    await coordinator.dispose();
   });
 
   it("retries an in-flight session load with the promoted writer", async () => {
