@@ -56,10 +56,18 @@ class BrowserRuntimeCoordinator {
     // Browsers can keep a hidden page in the back/forward cache without ever
     // unloading it (`pagehide` with `persisted`). A cached page is frozen and
     // cannot answer forwarded requests, so stop advertising it as the writer;
-    // restore the hint if the page comes back while still owning the lock.
+    // restore the hint if the page comes back while still owning the writer
+    // epoch. If another tab advanced the epoch while this page was cached, it
+    // is the writer now: yield instead of overwriting its hint.
     this.handlePageHide = () => this.clearWriterHintIfOwned();
     this.handlePageShow = (event) => {
-      if (event?.persisted && this.role === "writer" && !this.disposed) this.writeWriterHint();
+      if (!event?.persisted || this.role !== "writer" || this.disposed) return;
+      if (readStoredEpoch(this.storage) === this.epoch) {
+        this.writeWriterHint();
+        this.broadcastStatus();
+        return;
+      }
+      this.releaseWriter?.();
     };
     this.eventTarget.addEventListener?.("pagehide", this.handlePageHide);
     this.eventTarget.addEventListener?.("pageshow", this.handlePageShow);
@@ -396,6 +404,13 @@ class BrowserRuntimeCoordinator {
     if (!this.disposed) {
       this.role = "follower";
       this.writerId = "";
+      // Follow a writer that already took over (for example while this page
+      // sat in the back/forward cache) instead of waiting for its next status.
+      const hint = readWriterHint(this.storage);
+      if (hint && hint.writerId !== this.tabId && hint.epoch > this.epoch) {
+        this.epoch = hint.epoch;
+        this.writerId = hint.writerId;
+      }
       this.notify({ type: "coordination", role: this.role, epoch: this.epoch });
     }
   }
@@ -828,6 +843,10 @@ class BrowserRuntimeCoordinator {
   post(message) {
     this.channel.postMessage({ channel: CHANNEL_NAME, from: this.tabId, ...message });
   }
+}
+
+function readStoredEpoch(storage) {
+  return Number.parseInt(storage.getItem(EPOCH_KEY) ?? "0", 10);
 }
 
 function writerChangedError() {

@@ -696,6 +696,59 @@ describe("browser runtime coordinator", () => {
     expect(listeners.get("pageshow")?.size ?? 0).toBe(0);
   });
 
+  it("yields instead of re-advertising a stale writer restored from the back/forward cache", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const storage = createStorage();
+    const listeners = new Map<string, Set<(event: { persisted?: boolean }) => void>>();
+    const eventTarget = {
+      addEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        const entries = listeners.get(type) ?? new Set();
+        entries.add(listener);
+        listeners.set(type, entries);
+      },
+      removeEventListener(type: string, listener: (event: { persisted?: boolean }) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+      dispatch(type: string, event: { persisted?: boolean }) {
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      },
+    };
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({ request: vi.fn(), handleCommand: vi.fn(), dispose: vi.fn() }),
+      // The first grant is ours; once released, the other tab holds the lock.
+      lockManager: {
+        grants: 0,
+        request(_name: string, callback: (lock: object) => Promise<void>) {
+          this.grants += 1;
+          if (this.grants > 1) return new Promise<void>(() => {});
+          return callback({ name: "writer" });
+        },
+      },
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage,
+      eventTarget,
+    });
+    await coordinator.ready();
+    expect(coordinator.getRole()).toBe("writer");
+    const hintKey = "opencandle.hosted.runtime-writer.v1";
+    const epochKey = "opencandle.hosted.runtime-epoch.v1";
+
+    eventTarget.dispatch("pagehide", { persisted: true });
+    // While this page sat in the cache, another tab became the writer.
+    const nextEpoch = coordinator.getEpoch() + 1;
+    const otherHint = JSON.stringify({ epoch: nextEpoch, writerId: "other-tab" });
+    storage.setItem(epochKey, String(nextEpoch));
+    storage.setItem(hintKey, otherHint);
+
+    eventTarget.dispatch("pageshow", { persisted: true });
+    await settle();
+
+    expect(storage.getItem(hintKey)).toBe(otherHint);
+    expect(coordinator.getRole()).toBe("follower");
+    expect(coordinator.getEpoch()).toBe(nextEpoch);
+    await coordinator.dispose();
+  });
+
   it("retries an in-flight session load with the promoted writer", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
