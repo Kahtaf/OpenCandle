@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.
 - Option chains checked outside regular trading hours or on market holidays now label bid/ask as last-session and not executable, and show each contract's last trade time.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
 - A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.
