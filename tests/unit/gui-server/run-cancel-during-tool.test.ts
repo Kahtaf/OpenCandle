@@ -79,6 +79,66 @@ describe("chat-run Stop while a tool call is executing", () => {
     } as unknown as SessionManager;
   }
 
+  // Stop while a tool runs: the tool finishes, then the follow-up model
+  // request is rejected with an abort-shaped error.
+  const toolRunningScenario = async (text: string) => {
+    push({ role: "user", content: text, timestamp: Date.now() });
+    push({
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call-1", name: "get_stock_quote", arguments: {} }],
+      stopReason: "toolUse",
+    });
+    const toolDone = new Promise<void>((resolve) => {
+      finishTool = resolve;
+    });
+    toolStarted();
+    await toolDone;
+    push({
+      role: "toolResult",
+      toolCallId: "call-1",
+      toolName: "get_stock_quote",
+      content: [{ type: "text", text: "AAPL: $189.42" }],
+      isError: false,
+      timestamp: Date.now(),
+    });
+    // The model request after the tool is rejected by an abort the provider
+    // adapter does not attribute to its own signal.
+    push({
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorMessage: "This operation was aborted",
+    });
+  };
+
+  // Stop during step 2 of a multi-step workflow, while the model is still
+  // streaming that step's tool call: the partial reply keeps the cut-off tool
+  // call and ends in an abort-shaped error. Pi never runs that tool call, so
+  // no tool result will ever follow it.
+  let stepTwoStreaming: () => void = () => {};
+  let abortStream: () => void = () => {};
+  const workflowStepTwoScenario = async (text: string) => {
+    push({ role: "user", content: text, timestamp: Date.now() });
+    push({
+      role: "assistant",
+      content: [{ type: "text", text: "Step 1: market data gathered." }],
+      stopReason: "stop",
+    });
+    push({ role: "user", content: "Step 2: fundamentals analyst", timestamp: Date.now() });
+    const aborted = new Promise<void>((resolve) => {
+      abortStream = resolve;
+    });
+    stepTwoStreaming();
+    await aborted;
+    push({
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call-cut", name: "get_financials", arguments: {} }],
+      stopReason: "error",
+      errorMessage: "This operation was aborted",
+    });
+  };
+  let scenario: (text: string) => Promise<void> = toolRunningScenario;
+
   const agentSession = {
     modelRuntime,
     model,
@@ -93,35 +153,10 @@ describe("chat-run Stop while a tool call is executing", () => {
     // Stop does not interrupt the running tool; it finishes on its own.
     abort: async () => {
       finishTool();
+      abortStream();
     },
     prompt: async (text: string) => {
-      push({ role: "user", content: text, timestamp: Date.now() });
-      push({
-        role: "assistant",
-        content: [{ type: "toolCall", id: "call-1", name: "get_stock_quote", arguments: {} }],
-        stopReason: "toolUse",
-      });
-      const toolDone = new Promise<void>((resolve) => {
-        finishTool = resolve;
-      });
-      toolStarted();
-      await toolDone;
-      push({
-        role: "toolResult",
-        toolCallId: "call-1",
-        toolName: "get_stock_quote",
-        content: [{ type: "text", text: "AAPL: $189.42" }],
-        isError: false,
-        timestamp: Date.now(),
-      });
-      // The model request after the tool is rejected by an abort the provider
-      // adapter does not attribute to its own signal.
-      push({
-        role: "assistant",
-        content: [],
-        stopReason: "error",
-        errorMessage: "This operation was aborted",
-      });
+      await scenario(text);
     },
   } as unknown as AgentSession;
 
@@ -232,6 +267,58 @@ describe("chat-run Stop while a tool call is executing", () => {
     expect(customTypes).not.toContain("opencandle-model-run-failed");
     await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
   });
+
+  it("records the Stop promptly when it cuts off a later workflow step's tool call", async () => {
+    entries.length = 0;
+    snapshotsAtBroadcast.length = 0;
+    scenario = workflowStepTwoScenario;
+    const actionId = "chat-stop-workflow-step-two";
+    const prompt = "Run the multi-step analysis for AAPL";
+    const streaming = new Promise<void>((resolve) => {
+      stepTwoStreaming = resolve;
+    });
+    const runPromise = fetch(`${endpoint}/api/sessions/${sessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId, prompt, sessionId }),
+    });
+    await streaming;
+    const response = await runPromise;
+    expect(response.status).toBe(200);
+
+    const stop = await fetch(`${endpoint}/api/sessions/${sessionId}/run-cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: `stop-${actionId}`, targetActionId: actionId }),
+    });
+    await expect(stop.json()).resolves.toEqual({ ok: true, cancelled: true, duplicate: false });
+
+    // The run must not wait on the cut-off tool call's result, which Pi never
+    // produces; before the fix it stalled until the tool-result timeout and
+    // then failed without ever recording the Stop.
+    const body = await response.text();
+    expect(body).toContain("Run stopped.");
+    expect(body).not.toContain("Timed out waiting for tool results");
+    expect(body).not.toContain("opencandle-model-run-failed");
+
+    const cutReply = entries.find(
+      (entry) =>
+        entry.type === "message" &&
+        (entry.message as { stopReason?: string }).stopReason === "error",
+    );
+    expect(entries.at(-1)).toMatchObject({
+      type: "custom",
+      customType: "opencandle-run-stopped",
+      data: { actionId, prompt, assistantEntryIds: [cutReply?.id] },
+    });
+    const events = sessionEntriesToChatEvents(snapshotsAtBroadcast.at(-1) ?? [], { sessionId });
+    const customTypes = events
+      .filter((event) => event.type === "custom.message")
+      .map((event) => (event as { customType?: string }).customType);
+    expect(customTypes).toContain("opencandle-run-cancelled");
+    expect(customTypes).not.toContain("opencandle-model-run-failed");
+    await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
+  }, 15_000);
 
   function push(message: Record<string, unknown>): void {
     entries.push({
