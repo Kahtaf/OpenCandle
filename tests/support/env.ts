@@ -38,9 +38,36 @@ export const DATA_PROVIDER_ENV_NAMES = [
   "LSE_API_KEY",
 ] as const;
 
+/**
+ * Ambient cloud credentials Pi's model registry accepts without a keyed
+ * variable: `getEnvApiKey` counts Bedrock (AWS profile, IAM keys, bearer token,
+ * container/IRSA roles) and Vertex (ADC plus project and location) as signed in
+ * by checking these by name, so the `findEnvKeys` probe above cannot see them.
+ */
+export const AMBIENT_MODEL_AUTH_ENV_NAMES = [
+  "AWS_PROFILE",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_BEARER_TOKEN_BEDROCK",
+  "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+  "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+  "AWS_WEB_IDENTITY_TOKEN_FILE",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "GOOGLE_CLOUD_PROJECT",
+  "GCLOUD_PROJECT",
+  "GOOGLE_CLOUD_LOCATION",
+] as const;
+
 /** A variable name shaped like a credential, whether or not a registry knows it. */
 export const CREDENTIAL_ENV_NAME =
   /(_API_KEY|_API_TOKEN|_ACCESS_TOKEN|_AUTH_TOKEN|_SECRET|_SECRET_KEY)$/;
 
-/** Ambient flags that register live or browser cases (same set the test inventory strips). */
-export const LIVE_LANE_ENV_FLAG = /^(EVAL_TIER$|OPENCANDLE_.*EVAL|OPENCANDLE_GUI_)/;
+/**
+ * Host settings stripped before an in-process test file runs: `EVAL_TIER` and
+ * every `OPENCANDLE_*` variable. That covers the flags that register live or
+ * browser cases and the runtime settings that change behavior under test (a
+ * stale `OPENCANDLE_ROUTER_MODE` makes `loadConfig` throw; a notification
+ * webhook URL could turn a delivery test into a real POST).
+ */
+export const HOST_SETTING_ENV_NAME = /^(EVAL_TIER|OPENCANDLE_.+)$/;

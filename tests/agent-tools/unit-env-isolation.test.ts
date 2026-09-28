@@ -21,6 +21,7 @@ const HOST_SENSITIVE_FILES = [
   "tests/unit/onboarding/connect.test.ts",
   "tests/unit/onboarding/provider-status.test.ts",
   "tests/unit/tools/stock-quote.test.ts",
+  "tests/unit/infra/config.test.ts",
 ];
 
 // Obviously fake values: this proves the unit project ignores whatever the
@@ -36,6 +37,19 @@ const DUMMY_KEYS = {
   EXA_API_KEY: "dummy",
   BRAVE_API_KEY: "dummy",
   LSE_API_KEY: "dummy",
+  // Ambient cloud auth Pi accepts without a *_API_KEY: bedrock and vertex
+  // count as signed in, which flips first-run setup assertions.
+  AWS_PROFILE: "dummy",
+  AWS_ACCESS_KEY_ID: "dummy",
+  AWS_SECRET_ACCESS_KEY: "dummy",
+  AWS_BEARER_TOKEN_BEDROCK: "dummy",
+  GOOGLE_APPLICATION_CREDENTIALS: "/dev/null",
+  GOOGLE_CLOUD_PROJECT: "dummy",
+  GOOGLE_CLOUD_LOCATION: "dummy",
+  // Host OpenCandle behavior settings: a stale router mode makes loadConfig
+  // throw, and a webhook URL could turn a notification test into a real POST.
+  OPENCANDLE_ROUTER_MODE: "rules",
+  OPENCANDLE_NOTIFICATION_WEBHOOK_URL: "http://127.0.0.1:9/dummy",
 };
 
 describe("unit project env isolation", () => {

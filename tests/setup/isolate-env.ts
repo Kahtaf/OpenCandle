@@ -12,9 +12,10 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll } from "vitest";
 import {
+  AMBIENT_MODEL_AUTH_ENV_NAMES,
   CREDENTIAL_ENV_NAME,
   DATA_PROVIDER_ENV_NAMES,
-  LIVE_LANE_ENV_FLAG,
+  HOST_SETTING_ENV_NAME,
   modelCredentialEnvNames,
 } from "../support/env.js";
 
@@ -52,12 +53,18 @@ const isolatedRoot = mkdtempSync(join(tmpdir(), "opencandle-test-env-"));
 const home = join(isolatedRoot, "home");
 
 for (const name of Object.keys(process.env)) {
-  if (LIVE_LANE_ENV_FLAG.test(name)) delete process.env[name];
+  if (HOST_SETTING_ENV_NAME.test(name)) delete process.env[name];
 }
 // Blank rather than delete: `loadEnv()` only fills keys that are `undefined`,
 // so an empty string also stops the repo `.env` from restoring the value.
 const blanked: Record<string, string> = {};
-for (const name of [...modelCredentialEnvNames(), ...DATA_PROVIDER_ENV_NAMES]) blanked[name] = "";
+for (const name of [
+  ...modelCredentialEnvNames(),
+  ...AMBIENT_MODEL_AUTH_ENV_NAMES,
+  ...DATA_PROVIDER_ENV_NAMES,
+]) {
+  blanked[name] = "";
+}
 for (const name of Object.keys(process.env)) {
   if (CREDENTIAL_ENV_NAME.test(name)) blanked[name] = "";
 }
