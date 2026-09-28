@@ -40,10 +40,14 @@ export type OptionsBidAskState =
   | "mixed_or_unknown";
 
 /**
- * Where marketSession came from: the provider's reported market state, or the
- * local holiday-aware ET market calendar when the provider did not report one.
+ * Where marketSession came from: the provider's reported market state, the
+ * local holiday-aware ET market calendar when the provider did not report one,
+ * or a calendar recheck of a cached chain whose regular session has since ended.
  */
-export type OptionsMarketSessionSource = "provider_market_state" | "local_calendar";
+export type OptionsMarketSessionSource =
+  | "provider_market_state"
+  | "local_calendar"
+  | "local_calendar_recheck";
 
 export interface OptionsQuoteStatus {
   marketSession: OptionsMarketSession;

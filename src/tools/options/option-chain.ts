@@ -141,6 +141,11 @@ function formatSessionSource(status: OptionsQuoteStatus): string {
   if (status.marketSessionSource === "provider_market_state") {
     return `Yahoo marketState ${status.providerMarketState}`;
   }
+  if (status.marketSessionSource === "local_calendar_recheck") {
+    return status.providerMarketState
+      ? `local US market calendar (cached Yahoo marketState ${status.providerMarketState} was reported before the regular session ended)`
+      : "local US market calendar (cached chain was fetched before the regular session ended)";
+  }
   return status.providerMarketState
     ? `local US market calendar (unrecognized Yahoo marketState ${status.providerMarketState})`
     : "local US market calendar (Yahoo did not report marketState)";

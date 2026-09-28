@@ -261,6 +261,22 @@ describe("get_option_chain tool", () => {
     );
   });
 
+  it("relabels a cached regular-session chain as not executable after the close", async () => {
+    vi.setSystemTime(new Date("2026-05-20T19:59:00.000Z"));
+    mockCrumbAndOptions(structuredClone(regularFixture) as typeof optionsFixture);
+    await optionChainTool.execute("call-before-close", { symbol: "AAPL" });
+
+    vi.setSystemTime(new Date("2026-05-20T20:01:00.000Z"));
+    const result = await optionChainTool.execute("call-after-close", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain("Quote status: after_hours / last_session_quotes");
+    expect(text).toContain(
+      "Session source: local US market calendar (cached Yahoo marketState REGULAR was reported before the regular session ended)",
+    );
+    expect(text).toContain("Last-session bid/ask (per share, not executable)");
+  });
+
   it("notes when Yahoo reports no marketState", async () => {
     mockCrumbAndOptions();
 

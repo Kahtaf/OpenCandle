@@ -468,6 +468,44 @@ describe("yahoo-finance options provider", () => {
         expect(chain.quoteStatus.providerMarketState).toBeUndefined();
       });
 
+      it("does not serve a cached REGULAR chain as live after the regular session closes", async () => {
+        // 3:59 PM EDT fetch, cached for the options TTL.
+        const first = await chainAt("2026-05-20T19:59:00.000Z", regularFixture);
+        expect(first.quoteStatus.bidAskState).toBe("live_quotes");
+
+        // 4:00 PM EDT: still within the cache TTL, but the regular session is over.
+        vi.setSystemTime(new Date("2026-05-20T20:00:00.000Z"));
+        const cached = await getOptionsChain("AAPL");
+
+        expect(cached.quoteStatus.marketSession).toBe("after_hours");
+        expect(cached.quoteStatus.marketSessionSource).toBe("local_calendar_recheck");
+        expect(cached.quoteStatus.providerMarketState).toBe("REGULAR");
+        expect(cached.quoteStatus.bidAskState).toBe("last_session_quotes");
+        expect(cached.quoteStatus.warning).toContain("not executable");
+      });
+
+      it("does not serve a stale-cache REGULAR chain as live after the close when refetch fails", async () => {
+        await chainAt("2026-05-20T19:59:00.000Z", regularFixture);
+
+        // 4:20 PM EDT: past the fresh TTL; every fetch path fails, so the stale chain is used.
+        vi.setSystemTime(new Date("2026-05-20T20:20:00.000Z"));
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
+        yahooFinanceMock.options.mockRejectedValue(new Error("fallback down"));
+        const stale = await getOptionsChain("AAPL");
+
+        expect(stale.quoteStatus.marketSession).toBe("after_hours");
+        expect(stale.quoteStatus.bidAskState).toBe("last_session_quotes");
+      });
+
+      it("keeps a cached REGULAR chain live while the regular session is still open", async () => {
+        await chainAt("2026-05-20T15:00:00.000Z", regularFixture);
+        vi.setSystemTime(new Date("2026-05-20T15:01:00.000Z"));
+        const cached = await getOptionsChain("AAPL");
+
+        expect(cached.quoteStatus.marketSessionSource).toBe("provider_market_state");
+        expect(cached.quoteStatus.bidAskState).toBe("live_quotes");
+      });
+
       it("maps each contract's lastTradeDate to an ISO timestamp", async () => {
         const chain = await chainAt("2026-05-21T02:05:00.000Z", afterHoursFixture);
 

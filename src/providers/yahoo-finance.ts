@@ -787,7 +787,7 @@ interface YahooOptionsResponse {
 export async function getOptionsChain(symbol: string, expiration?: number): Promise<OptionsChain> {
   const cacheKey = `yahoo:options:${symbol}:${expiration ?? "nearest"}`;
   const cached = cache.get<OptionsChain>(cacheKey);
-  if (cached) return cached;
+  if (cached) return withCurrentOptionsQuoteStatus(cached);
 
   await rateLimiter.acquire("yahoo");
 
@@ -837,7 +837,7 @@ export async function getOptionsChain(symbol: string, expiration?: number): Prom
     }
     // All fetches failed — try stale cache before giving up
     const stale = cache.getStale<OptionsChain>(cacheKey, STALE_LIMIT.OPTIONS_CHAIN);
-    if (stale) return stale.value;
+    if (stale) return withCurrentOptionsQuoteStatus(stale.value);
     if (res) {
       const message = `Yahoo Finance options: HTTP ${res.status}`;
       if (browserError instanceof Error) {
@@ -915,7 +915,7 @@ const YAHOO_MARKET_STATE_SESSIONS: Record<string, OptionsMarketSession> = {
 function resolveOptionsMarketSession(
   providerMarketState: unknown,
   now: Date = new Date(),
-): Pick<OptionsQuoteStatus, "marketSession" | "marketSessionSource" | "providerMarketState"> {
+): ResolvedOptionsMarketSession {
   const raw = typeof providerMarketState === "string" ? providerMarketState.trim() : "";
   const fromProvider = raw ? YAHOO_MARKET_STATE_SESSIONS[raw.toUpperCase()] : undefined;
   return {
@@ -940,12 +940,35 @@ function latestTradeIso(contracts: OptionContract[]): string | undefined {
   return latest;
 }
 
+type ResolvedOptionsMarketSession = Pick<
+  OptionsQuoteStatus,
+  "marketSession" | "marketSessionSource" | "providerMarketState"
+>;
+
+/**
+ * A cached chain keeps the session it was fetched in. If it was classified as
+ * the regular session and the regular session has since ended, reclassify it
+ * from the local calendar so a cached or stale chain is never served as live.
+ */
+function withCurrentOptionsQuoteStatus(chain: OptionsChain, now: Date = new Date()): OptionsChain {
+  if (chain.quoteStatus.marketSession !== "regular") return chain;
+  const currentSession = getUsOptionsMarketSessionFromCalendar(now);
+  if (currentSession === "regular") return chain;
+  const { providerMarketState } = chain.quoteStatus;
+  return {
+    ...chain,
+    quoteStatus: buildOptionsQuoteStatus([...chain.calls, ...chain.puts], {
+      marketSession: currentSession,
+      marketSessionSource: "local_calendar_recheck",
+      ...(providerMarketState ? { providerMarketState } : {}),
+    }),
+  };
+}
+
 function buildOptionsQuoteStatus(
   contracts: OptionContract[],
-  providerMarketState: unknown,
-  now: Date = new Date(),
+  session: ResolvedOptionsMarketSession,
 ): OptionsQuoteStatus {
-  const session = resolveOptionsMarketSession(providerMarketState, now);
   const { marketSession } = session;
   const totalContracts = contracts.length;
   const zeroBidAskContracts = contracts.filter((c) => c.bid === 0 && c.ask === 0).length;
@@ -1041,7 +1064,10 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
   const puts = (opts.puts ?? []).map((c: any) => mapContract(c, "put"));
   const totalCallVolume = calls.reduce((s, c) => s + c.volume, 0);
   const totalPutVolume = puts.reduce((s, c) => s + c.volume, 0);
-  const quoteStatus = buildOptionsQuoteStatus([...calls, ...puts], quote.marketState);
+  const quoteStatus = buildOptionsQuoteStatus(
+    [...calls, ...puts],
+    resolveOptionsMarketSession(quote.marketState),
+  );
 
   return {
     symbol: result.underlyingSymbol,
