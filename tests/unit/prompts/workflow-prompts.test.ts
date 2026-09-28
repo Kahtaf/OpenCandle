@@ -528,6 +528,29 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("concentration and sector-exposure risk");
     expect(prompt).toContain("rate-futures evidence is unavailable");
   });
+  it("maps the comparison horizon to a supported lookback for the risk tools", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["AAPL", "MSFT"], timeHorizon: "10y" },
+      sources: { symbols: "user", timeHorizon: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+    expect(prompt).toContain(
+      "Use a 5y lookback window for analyze_risk and analyze_correlation (investment horizon: 10y).",
+    );
+    expect(prompt).toContain("Time horizon: 10y");
+  });
+
+  it("omits the lookback instruction when no comparison horizon is resolved", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["AAPL", "MSFT"] },
+      sources: { symbols: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    expect(buildCompareAssetsPrompt(resolution)).not.toContain("lookback window");
+  });
 });
 
 describe("buildDisclosureBlock", () => {

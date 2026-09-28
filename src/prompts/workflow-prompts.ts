@@ -1,6 +1,6 @@
 import { parseDteTarget } from "../routing/defaults.js";
 import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
-import { isLongInvestmentHorizon } from "../routing/horizon.js";
+import { isLongInvestmentHorizon, riskLookbackInstruction } from "../routing/horizon.js";
 import type { RouterOutput } from "../routing/router-types.js";
 import type {
   CompareAssetsSlots,
@@ -462,6 +462,7 @@ macro hedge decision guidance:
 5. Use analyze_risk for each to compare risk metrics.
 6. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
+  const lookbackLine = timeHorizon ? `\n${riskLookbackInstruction(timeHorizon)}` : "";
   const budgetLine = budget !== undefined ? `\nBudget: ${formatBudget(budget)}` : "";
   const horizonSteps = timeHorizon
     ? `
@@ -507,7 +508,7 @@ Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_price_comparison with symbols [${symbolList}] and a range that fits the resolved time horizon; use the default comparison range when no time horizon is resolved so the answer includes an indexed price comparison.
-${technicalRiskSteps}${sentimentStep}${interestRateStep}${horizonSteps}
+${technicalRiskSteps}${lookbackLine}${sentimentStep}${interestRateStep}${horizonSteps}
 ${macroHedgeSteps}
 ${interestRateGuidance}
 ${overlapGuidance}

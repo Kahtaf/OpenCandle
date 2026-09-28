@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Portfolio and comparison workflows now pick a supported risk lookback window for any investment horizon, so 3-year, 10-year, or 18-month plans no longer make rejected risk or correlation calls.
 - Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.
 - Option chains checked outside regular trading hours or on market holidays now label bid/ask as last-session and not executable, and show each contract's last trade time.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.

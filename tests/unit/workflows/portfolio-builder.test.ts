@@ -149,4 +149,48 @@ describe("buildPortfolioWorkflowDefinition", () => {
     expect(synthesize.prompt).not.toMatch(/\bdisclaimer\b/i);
     expect(synthesize.prompt).not.toMatch(/not financial advice/i);
   });
+
+  describe("risk review lookback window", () => {
+    it("maps a long investment horizon to a supported lookback for the risk tools", () => {
+      const prompt = promptAt(1, makeResolution({ timeHorizon: "10y" }));
+      expect(prompt).toContain(
+        "Use a 5y lookback window for analyze_risk and analyze_correlation (investment horizon: 10y).",
+      );
+      expect(prompt).toContain(
+        "The lookback is the historical data period, not the investment horizon.",
+      );
+      expect(prompt).not.toMatch(/period[^.\n]*10y/);
+      expect(prompt).toContain("risk profile for a 10y investment horizon");
+    });
+
+    it("maps a month-based horizon to the nearest supported lookback", () => {
+      const prompt = promptAt(1, makeResolution({ timeHorizon: "18mo" }));
+      expect(prompt).toContain(
+        "Use a 2y lookback window for analyze_risk and analyze_correlation (investment horizon: 18mo).",
+      );
+    });
+
+    it("states the lookback in the stock and crypto risk review too", () => {
+      const prompt = promptAt(
+        1,
+        makeResolution({ assetScope: "stocks_and_crypto", timeHorizon: "3y" }),
+      );
+      expect(prompt).toContain(
+        "Use a 5y lookback window for analyze_risk and analyze_correlation (investment horizon: 3y).",
+      );
+    });
+
+    it("keeps the investment horizon available for synthesis", () => {
+      const prompt = promptAt(2, makeResolution({ timeHorizon: "10y" }));
+      expect(prompt).toContain("time horizon (10y)");
+      expect(prompt).toContain("for the 10y horizon");
+    });
+
+    it("falls back to naming the supported windows when the horizon is unmappable", () => {
+      const prompt = promptAt(1, makeResolution({ timeHorizon: "flexible" }));
+      expect(prompt).toContain(
+        "Use a supported lookback window (6mo, 1y, 2y, or 5y) for analyze_risk and analyze_correlation; do not pass the investment horizon as the period.",
+      );
+    });
+  });
 });
