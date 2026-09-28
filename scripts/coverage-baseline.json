@@ -185,7 +185,7 @@
         "src/tools/options/greeks.ts": [28, 28, 3, 3, 9, 12, 28, 28],
         "src/tools/options/option-chain.ts": [37, 40, 7, 7, 25, 30, 39, 42],
         "src/tools/portfolio/alerts.ts": [134, 159, 19, 20, 124, 171, 141, 170],
-        "src/tools/portfolio/correlation.ts": [97, 101, 16, 16, 36, 45, 108, 115],
+        "src/tools/portfolio/correlation.ts": [99, 101, 16, 16, 40, 45, 111, 115],
         "src/tools/portfolio/daily-report.ts": [29, 30, 3, 3, 19, 22, 30, 31],
         "src/tools/portfolio/holdings-overlap.ts": [44, 48, 16, 17, 14, 20, 51, 57],
         "src/tools/portfolio/notifications.ts": [17, 18, 2, 2, 6, 8, 18, 20],
