@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetConfigCache } from "../../../src/config.js";
 import { cache } from "../../../src/infra/cache.js";
@@ -38,30 +35,17 @@ const obsFixture = {
 
 describe("fredDataTool", () => {
   const originalFetch = globalThis.fetch;
-  const originalHome = process.env.OPENCANDLE_HOME;
-  let openCandleHome: string;
 
   beforeEach(() => {
     cache.clear();
     resetConfigCache();
-    openCandleHome = mkdtempSync(join(tmpdir(), "oc-fred-tool-test-"));
-    process.env.OPENCANDLE_HOME = openCandleHome;
-    writeFileSync(
-      join(openCandleHome, "config.json"),
-      JSON.stringify({ providers: { fred: { apiKey: "fred-test-key" } } }),
-      "utf-8",
-    );
+    // The unit setup blanks every credential; opt in to a fake FRED key.
+    vi.stubEnv("FRED_API_KEY", "fred-test-key");
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     resetConfigCache();
-    rmSync(openCandleHome, { recursive: true, force: true });
-    if (originalHome === undefined) {
-      delete process.env.OPENCANDLE_HOME;
-    } else {
-      process.env.OPENCANDLE_HOME = originalHome;
-    }
     vi.restoreAllMocks();
   });
 
