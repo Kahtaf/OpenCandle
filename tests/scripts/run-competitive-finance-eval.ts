@@ -388,7 +388,7 @@ const report = {
     model: competitor.model,
   })),
   skippedCompetitors: preflight.skipped,
-  promptCount: results.length,
+  promptCount: results.length + openCandleSessionFailures.length,
   openCandleSessionFailures,
   promptMode: frozenPanel ? "frozen" : fixedPrompt ? "fixed" : "generated",
   seededState: seedState,

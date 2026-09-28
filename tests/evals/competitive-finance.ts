@@ -245,6 +245,35 @@ export interface CompetitiveReportAnalysis {
   openCandleWinsWithMandatoryFailure?: number;
   cases: CompetitiveCaseAnalysis[];
   themeSummary: CompetitiveThemeSummary[];
+  /** Prompts whose OpenCandle session threw: no judgment, still a case. */
+  sessionFailures?: CompetitiveSessionFailureAnalysis[];
+}
+
+export interface CompetitiveSessionFailureAnalysis {
+  id: string;
+  prompt: string;
+  reason: string;
+  mandatory: "failed" | "not_evaluated";
+}
+
+function sessionFailuresFromReport(report: unknown): CompetitiveSessionFailureAnalysis[] {
+  if (!isRecord(report) || !Array.isArray(report.openCandleSessionFailures)) return [];
+  return report.openCandleSessionFailures.flatMap(
+    (failure): CompetitiveSessionFailureAnalysis[] => {
+      if (!isRecord(failure)) return [];
+      return [
+        {
+          id: stringValue(failure.id) || "(unknown prompt)",
+          prompt: stringValue(failure.prompt),
+          reason: stringValue(failure.reason) || "session did not complete",
+          mandatory:
+            isRecord(failure.mandatory) && stringValue(failure.mandatory.status) === "failed"
+              ? "failed"
+              : "not_evaluated",
+        },
+      ];
+    },
+  );
 }
 
 export interface CompetitiveModelCandidate {
@@ -788,18 +817,23 @@ export function analyzeCompetitiveReport(
     ];
   });
   const openCandleWinCases = cases.filter((c) => c.winner === "opencandle");
+  const sessionFailures = sessionFailuresFromReport(report);
 
   return {
     generatedAt: isRecord(report) ? stringValue(report.generatedAt) || undefined : undefined,
     reportPath: options.reportPath,
-    promptCount: cases.length,
+    promptCount: cases.length + sessionFailures.length,
     openCandleWins: openCandleWinCases.length,
     losses: cases.filter((c) => c.lostTo).length,
     ties: cases.filter((c) => c.winner === "tie").length,
     mandatory: {
       passed: cases.filter((c) => c.mandatory?.status === "passed").length,
-      failed: cases.filter((c) => c.mandatory?.status === "failed").length,
-      notEvaluated: cases.filter((c) => c.mandatory?.status === "not_evaluated").length,
+      failed:
+        cases.filter((c) => c.mandatory?.status === "failed").length +
+        sessionFailures.filter((f) => f.mandatory === "failed").length,
+      notEvaluated:
+        cases.filter((c) => c.mandatory?.status === "not_evaluated").length +
+        sessionFailures.filter((f) => f.mandatory === "not_evaluated").length,
     },
     openCandleWinsWithMandatoryPass: openCandleWinCases.filter(
       (c) => c.mandatory?.status === "passed",
@@ -809,6 +843,7 @@ export function analyzeCompetitiveReport(
     ).length,
     cases: [...cases].sort((a, b) => b.scoreGap - a.scoreGap),
     themeSummary: summarizeImprovementThemes(cases),
+    sessionFailures,
   };
 }
 
@@ -833,6 +868,17 @@ export function formatCompetitiveReportAnalysisMarkdown(
     lines.push(
       `OC preference wins with all mandatory checks passed: ${analysis.openCandleWinsWithMandatoryPass ?? 0}; preference wins on mandatory-failed cases (ineligible): ${analysis.openCandleWinsWithMandatoryFailure ?? 0}.`,
     );
+  }
+
+  const sessionFailures = analysis.sessionFailures ?? [];
+  if (sessionFailures.length > 0) {
+    lines.push("");
+    lines.push("## OpenCandle Session Failures");
+    lines.push("These prompts never produced an answer, so they have no judgment.");
+    for (const failure of sessionFailures) {
+      const mandatory = failure.mandatory === "failed" ? " (mandatory FAILED)" : "";
+      lines.push(`- ${failure.id}${mandatory}: ${failure.reason}`);
+    }
   }
 
   if (analysis.themeSummary.length > 0) {
