@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { completionCaseForPrompt } from "../../evals/competitive-completion.js";
+import {
+  completionCaseForPrompt,
+  runCompetitivePrompts,
+} from "../../evals/competitive-completion.js";
+import { buildCompletionReport, validateCompletionReport } from "../../evals/completion-report.js";
 import type { FinalAnswerAssertionResult } from "../../evals/prompt-policy-assertions.js";
 
 function result(
@@ -102,5 +106,83 @@ describe("frozen competitive prompt completion case", () => {
 
     expect(testCase.reason?.length).toBeLessThanOrEqual(900);
     expect(testCase.reason).not.toContain("\n");
+  });
+});
+
+describe("runCompetitivePrompts", () => {
+  const prompts = [
+    { id: "p1", prompt: "one" },
+    { id: "p2", prompt: "two" },
+    { id: "p3", prompt: "three" },
+  ];
+
+  it("records a thrown OpenCandle session as a failed mandatory outcome and skips its judge", async () => {
+    const judged: string[] = [];
+    const run = await runCompetitivePrompts(prompts, {
+      frozen: true,
+      runOpenCandle: async (prompt) => {
+        if (prompt.id === "p2") {
+          throw new Error(
+            "OpenCandle session did not complete: workflow_failed. Diagnostic: /tmp/oc/d.json",
+          );
+        }
+        return `trace:${prompt.id}`;
+      },
+      completePrompt: async (prompt, trace) => {
+        judged.push(`${prompt.id}=${trace}`);
+        return { id: prompt.id, mandatory: { id: prompt.id, status: "passed" as const } };
+      },
+    });
+
+    expect(judged).toEqual(["p1=trace:p1", "p3=trace:p3"]);
+    expect(run.results.map((result) => result.id)).toEqual(["p1", "p3"]);
+    const failure = {
+      id: "p2",
+      status: "failed",
+      reason: "session did not complete: workflow_failed; diagnostic /tmp/oc/d.json",
+    };
+    expect(run.failures).toEqual([
+      { id: "p2", prompt: "two", reason: failure.reason, mandatory: failure },
+    ]);
+    expect(run.completionCases).toEqual([
+      { id: "p1", status: "passed" },
+      failure,
+      { id: "p3", status: "passed" },
+    ]);
+
+    const completion = buildCompletionReport({
+      suite: "competitive:frozen",
+      startedAt: "2026-09-28T00:00:00.000Z",
+      finishedAt: "2026-09-28T00:01:00.000Z",
+      cases: run.completionCases,
+    });
+    expect(completion.exitCode).toBe(1);
+    expect(() => validateCompletionReport(completion)).toThrow(/1 failed case/);
+  });
+
+  it("keeps discovery runs out of the completion cases but still reports the failure", async () => {
+    const run = await runCompetitivePrompts(prompts.slice(0, 1), {
+      frozen: false,
+      runOpenCandle: async () => {
+        throw new Error("boom");
+      },
+      completePrompt: async (prompt) => ({ id: prompt.id }),
+    });
+    expect(run.completionCases).toEqual([]);
+    expect(run.failures).toEqual([
+      { id: "p1", prompt: "one", reason: "session errored (Error); see eval log" },
+    ]);
+  });
+
+  it("does not swallow failures outside the OpenCandle session", async () => {
+    await expect(
+      runCompetitivePrompts(prompts.slice(0, 1), {
+        frozen: true,
+        runOpenCandle: async () => "trace",
+        completePrompt: async () => {
+          throw new Error("judge unavailable");
+        },
+      }),
+    ).rejects.toThrow("judge unavailable");
   });
 });

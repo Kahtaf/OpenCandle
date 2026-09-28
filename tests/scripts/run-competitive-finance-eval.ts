@@ -27,6 +27,7 @@ import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
   completionCaseForPrompt,
+  runCompetitivePrompts,
   selectCompetitiveReportCache,
   writeCompetitorSkipMetadata,
 } from "../evals/competitive-completion.js";
@@ -248,110 +249,127 @@ if (
   throw new Error("No cached or live competitive baseline agents are available");
 }
 
-const results: CompetitiveRunResult[] = [];
-const completionCases: CompletionReportCase[] = [];
-for (const prompt of prompts.slice(0, promptCount)) {
-  console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
-  const openCandleTrace = await runOpenCandle(prompt.prompt);
-  const competitorAnswers = [];
-  for (const competitor of allCompetitors) {
-    const cached = findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id);
-    if (cached) {
-      console.log(
-        `--- ${competitor.label} baseline (${competitor.provider}/${competitor.model}) [cached from ${cached.cachedFromReport}]`,
+const {
+  results,
+  failures: openCandleSessionFailures,
+  completionCases,
+} = await runCompetitivePrompts(prompts.slice(0, promptCount), {
+  frozen: Boolean(frozenPanel),
+  runOpenCandle: (prompt) => {
+    console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
+    return runOpenCandle(prompt.prompt);
+  },
+  completePrompt: async (prompt, openCandleTrace) => {
+    const competitorAnswers = [];
+    for (const competitor of allCompetitors) {
+      const cached = findCachedCompetitorAnswer(
+        competitorAnswerCache,
+        prompt.prompt,
+        competitor.id,
       );
-      competitorAnswers.push(cached);
-      continue;
-    }
-    if (!activeLiveCompetitors.has(competitor.id)) continue;
-    console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
-    try {
-      const result = await competitor.run(
-        buildGenericAgentPrompt(prompt.prompt, {
-          agentName: competitor.label,
-          asOfDate,
-          savedStateSummary,
-        }),
-      );
-      competitorAnswers.push({
-        id: competitor.id,
-        label: competitor.label,
-        provider: result.provider,
-        model: result.model,
-        answer: result.answer,
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      if (process.env.OPENCANDLE_COMPETITIVE_REQUIRE_ALL === "1") {
-        throw new Error(`${competitor.label} baseline failed: ${reason}`);
+      if (cached) {
+        console.log(
+          `--- ${competitor.label} baseline (${competitor.provider}/${competitor.model}) [cached from ${cached.cachedFromReport}]`,
+        );
+        competitorAnswers.push(cached);
+        continue;
       }
-      console.warn(`${competitor.label} baseline failed for prompt ${prompt.id}: ${reason}`);
-      const usableAnswer = extractUsableAnswerFromCliFailure(reason);
-      competitorAnswers.push({
-        id: competitor.id,
-        label: competitor.label,
-        provider: competitor.provider,
-        model: competitor.model,
-        answer: usableAnswer ?? `${competitor.label} baseline failed before answering: ${reason}`,
-        error: reason,
-      });
+      if (!activeLiveCompetitors.has(competitor.id)) continue;
+      console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
+      try {
+        const result = await competitor.run(
+          buildGenericAgentPrompt(prompt.prompt, {
+            agentName: competitor.label,
+            asOfDate,
+            savedStateSummary,
+          }),
+        );
+        competitorAnswers.push({
+          id: competitor.id,
+          label: competitor.label,
+          provider: result.provider,
+          model: result.model,
+          answer: result.answer,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        if (process.env.OPENCANDLE_COMPETITIVE_REQUIRE_ALL === "1") {
+          throw new Error(`${competitor.label} baseline failed: ${reason}`);
+        }
+        console.warn(`${competitor.label} baseline failed for prompt ${prompt.id}: ${reason}`);
+        const usableAnswer = extractUsableAnswerFromCliFailure(reason);
+        competitorAnswers.push({
+          id: competitor.id,
+          label: competitor.label,
+          provider: competitor.provider,
+          model: competitor.model,
+          answer: usableAnswer ?? `${competitor.label} baseline failed before answering: ${reason}`,
+          error: reason,
+        });
+      }
     }
-  }
-  if (competitorAnswers.length === 0) {
-    throw new Error(
-      `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
+    if (competitorAnswers.length === 0) {
+      throw new Error(
+        `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
+      );
+    }
+    const manifestId = (prompt as { promptPolicyManifestId?: string }).promptPolicyManifestId;
+    const hardAssertions = manifestId ? (policyManifestAssertions.get(manifestId) ?? []) : [];
+    const hardAssertionResults = hardAssertions.map((assertion) =>
+      evaluateFinalAnswerAssertion(assertion, openCandleTrace),
     );
-  }
-  const manifestId = (prompt as { promptPolicyManifestId?: string }).promptPolicyManifestId;
-  const hardAssertions = manifestId ? (policyManifestAssertions.get(manifestId) ?? []) : [];
-  const hardAssertionResults = hardAssertions.map((assertion) =>
-    evaluateFinalAnswerAssertion(assertion, openCandleTrace),
-  );
-  for (const result of hardAssertionResults) {
-    console.log(
-      `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+    for (const result of hardAssertionResults) {
+      console.log(
+        `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+      );
+    }
+    // Only the frozen release panel has manifest-required hard assertions. A
+    // generated/fixed discovery run is not made to fail just because no frozen
+    // manifest exists; it is excluded from this completion helper entirely.
+    const mandatory = frozenPanel
+      ? completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults)
+      : undefined;
+    const judgment = stampComparisonJudgment(
+      await completeComparisonJudgment(
+        buildComparisonJudgePrompt({
+          prompt,
+          asOfDate,
+          openCandleTrace,
+          competitorAnswers,
+          savedStateSummary,
+          hardAssertionResults,
+        }),
+        ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
+      ),
+      { provider: judgeModel.model.provider, model: judgeModel.model.id },
     );
-  }
-  // Only the frozen release panel has manifest-required hard assertions. A
-  // generated/fixed discovery run is not made to fail just because no frozen
-  // manifest exists; it is excluded from this completion helper entirely.
-  const mandatory = frozenPanel
-    ? completionCaseForPrompt(prompt.id, hardAssertions, hardAssertionResults)
-    : undefined;
-  if (mandatory) completionCases.push(mandatory);
-  const judgment = stampComparisonJudgment(
-    await completeComparisonJudgment(
-      buildComparisonJudgePrompt({
-        prompt,
-        asOfDate,
-        openCandleTrace,
-        competitorAnswers,
-        savedStateSummary,
-        hardAssertionResults,
-      }),
-      ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
-    ),
-    { provider: judgeModel.model.provider, model: judgeModel.model.id },
-  );
-  results.push({
-    prompt,
-    openCandleTrace,
-    competitorAnswers,
-    judgment,
-    hardAssertionResults,
-    ...(mandatory ? { mandatory } : {}),
-  });
-  const competitorScoreText = Object.entries(judgment.competitorScores)
-    .map(([id, score]) => `${id}=${score}`)
-    .join(" ");
-  console.log(`winner=${judgment.winner} oc=${judgment.openCandleScore} ${competitorScoreText}`);
-  console.log(judgment.reason);
-  if (judgment.openCandleImprovementIdeas.length > 0) {
-    console.log(`OC improvements: ${judgment.openCandleImprovementIdeas.join("; ")}`);
-  }
-}
+    const competitorScoreText = Object.entries(judgment.competitorScores)
+      .map(([id, score]) => `${id}=${score}`)
+      .join(" ");
+    console.log(`winner=${judgment.winner} oc=${judgment.openCandleScore} ${competitorScoreText}`);
+    console.log(judgment.reason);
+    if (judgment.openCandleImprovementIdeas.length > 0) {
+      console.log(`OC improvements: ${judgment.openCandleImprovementIdeas.join("; ")}`);
+    }
+    const result: CompetitiveRunResult = {
+      prompt,
+      openCandleTrace,
+      competitorAnswers,
+      judgment,
+      hardAssertionResults,
+      ...(mandatory ? { mandatory } : {}),
+    };
+    return result;
+  },
+});
 
 const summary = summarizeCompetitiveResults(results);
+// A prompt whose OpenCandle session never completed has no judged result, but
+// it is still an outcome: failed when the frozen panel requires it.
+for (const failure of openCandleSessionFailures) {
+  if (failure.mandatory) summary.mandatory.failed += 1;
+  else summary.mandatory.notEvaluated += 1;
+}
 const report = {
   generatedAt: new Date().toISOString(),
   asOfDate,
@@ -371,6 +389,7 @@ const report = {
   })),
   skippedCompetitors: preflight.skipped,
   promptCount: results.length,
+  openCandleSessionFailures,
   promptMode: frozenPanel ? "frozen" : fixedPrompt ? "fixed" : "generated",
   seededState: seedState,
   frozenPanel: Boolean(frozenPanel),
@@ -392,6 +411,12 @@ for (const competitor of allCompetitors) {
   console.log(`${competitor.label} wins: ${summary.competitorWins[competitor.id] ?? 0}`);
 }
 console.log(`Ties: ${summary.ties}`);
+if (openCandleSessionFailures.length > 0) {
+  console.log(`OpenCandle session failures: ${openCandleSessionFailures.length}`);
+  for (const failure of openCandleSessionFailures) {
+    console.log(`- ${failure.id}: ${failure.reason}`);
+  }
+}
 console.log(`Report: ${outputPath}`);
 console.log(`Analysis: ${analysisPath}`);
 // Optional competitor skips stay separate from the required prompt outcomes:
@@ -435,6 +460,11 @@ if (frozenCaseFailures.length > 0) {
   // A generous LLM judge must not be the only gate on a loss-class
   // regression; the frozen run fails on its own manifest contracts, including
   // a required assertion with no deterministic checker.
+  process.exit(1);
+}
+if (openCandleSessionFailures.length > 0) {
+  // Discovery runs have no required cases, but a session that never completed
+  // is still a broken run rather than an advisory preference result.
   process.exit(1);
 }
 process.exit(competitiveBenchmarkExitCode());
