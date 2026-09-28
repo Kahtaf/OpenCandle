@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  applySocketErrorFrame,
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
   buildSessionActionSocketMessage,
@@ -21,8 +22,46 @@ import {
   shouldReconnectOnForeground,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
+import { subscribeSessionActionErrors } from "../../../gui/web/src/lib/session-action-errors.js";
 
 describe("useGuiConnection helpers", () => {
+  it("reports a socket error frame to the request that caused it, then toasts it", () => {
+    const failed: string[] = [];
+    const unsubscribe = subscribeSessionActionErrors((actionId) => failed.push(actionId));
+    const setToast = vi.fn();
+    const setModelSetupError = vi.fn();
+    try {
+      const pending = applySocketErrorFrame(
+        { type: "error", actionId: "ask-user-answer-1", message: "Unknown or resolved question" },
+        { pendingModelKeySaveActionId: "", setModelSetupError, setToast },
+      );
+      expect(failed).toEqual(["ask-user-answer-1"]);
+      expect(setToast).toHaveBeenCalledWith("Unknown or resolved question", { destructive: true });
+      expect(setModelSetupError).not.toHaveBeenCalled();
+      expect(pending).toBe("");
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("renders the in-flight key save's failure inline and clears it", () => {
+    const setToast = vi.fn();
+    const setModelSetupError = vi.fn();
+    const pending = applySocketErrorFrame(
+      { type: "error", actionId: "save-1", message: "Key check failed" },
+      { pendingModelKeySaveActionId: "save-1", setModelSetupError, setToast },
+    );
+    expect(setModelSetupError).toHaveBeenCalledWith("Key check failed");
+    expect(setToast).not.toHaveBeenCalled();
+    expect(pending).toBe("");
+    expect(
+      applySocketErrorFrame(
+        { type: "error", actionId: "other", message: "boom" },
+        { pendingModelKeySaveActionId: "save-1", setModelSetupError, setToast },
+      ),
+    ).toBe("save-1");
+  });
+
   it("allows hosted mutations time for durable browser checkpoints", () => {
     expect(resolveToolInvokeTimeout("hosted")).toBe(120_000);
     expect(resolveToolInvokeTimeout("loopback")).toBe(30_000);
