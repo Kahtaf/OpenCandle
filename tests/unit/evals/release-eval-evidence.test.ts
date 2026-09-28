@@ -454,6 +454,36 @@ describe("release eval evidence orchestration", () => {
     expect(outcome.evidencePath).toBeNull();
   });
 
+  it("rejects a complete product report whose one case failed because its session threw", () => {
+    const { deps } = makeHarness({
+      executeSuite: (request) => {
+        if (request.suite !== "product") return writeDefaultCompletion(request);
+        const [first, ...rest] = EXPECTED_RAW.product;
+        const report = completionReport("product", EXPECTED_RAW.product);
+        report.cases = [
+          {
+            id: first,
+            status: "failed",
+            reason: "session did not complete: empty_answer; diagnostic /tmp/d.json",
+          },
+          ...rest.map((id) => ({ id, status: "passed" })),
+        ];
+        report.exitCode = 1;
+        writeFileSync(request.completionPath, JSON.stringify(report));
+        return { exitCode: 1, signal: null };
+      },
+    });
+    const outcome = runReleaseWithEvidence(deps);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.evidencePath).toBeNull();
+    expect(outcome.problems.some((problem) => problem.includes("1 failed case"))).toBe(true);
+    const incomplete = JSON.parse(readFileSync(outcome.incompletePath as string, "utf-8"));
+    expect(incomplete.attempts.find((a: { suite: string }) => a.suite === "product").verdict).toBe(
+      "failed",
+    );
+  });
+
   it("fails a child crash or signal even when a report is present", () => {
     const { deps } = makeHarness({
       executeSuite: (request) =>

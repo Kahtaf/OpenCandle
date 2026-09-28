@@ -765,6 +765,19 @@ export function writeBaseline(filePath, baseline) {
   writeFileSync(filePath, `${formatBaselineJson(baseline)}\n`, "utf8");
 }
 
+/**
+ * Read the value that follows a value-taking flag. A missing value, an empty
+ * value, or another flag in its place throws, so `--baseline --check` can never
+ * swallow `--check` and silently skip the ratchet.
+ */
+export function takeValue(argv, index, flag) {
+  const value = argv[index + 1];
+  if (value === undefined || value === "" || value.startsWith("--")) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return value;
+}
+
 /** Parse command-line options. Baseline writes require --update-baseline. */
 export function parseArgs(argv) {
   const options = {
@@ -780,8 +793,9 @@ export function parseArgs(argv) {
     tolerancePoints: DEFAULT_TOLERANCE_POINTS,
   };
   const next = () => {
+    const value = takeValue(argv, index, argv[index]);
     index += 1;
-    return argv[index];
+    return value;
   };
   let index = 0;
   while (index < argv.length) {

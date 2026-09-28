@@ -1,6 +1,6 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { CompletionReportCase } from "./completion-report.js";
+import { type CompletionReportCase, sessionFailureReason } from "./completion-report.js";
 import type { FinalAnswerAssertionResult } from "./prompt-policy-assertions.js";
 
 /**
@@ -205,4 +205,66 @@ function fail(id: string, reason: string): CompletionReportCase {
 function truncateReason(reason: string): string {
   const collapsed = reason.replace(/\s+/g, " ").trim();
   return collapsed.length > 900 ? `${collapsed.slice(0, 899)}…` : collapsed;
+}
+
+export interface CompetitivePromptFailure {
+  id: string;
+  prompt: string;
+  reason: string;
+  /** Frozen-panel runs only: the failed required outcome for this prompt. */
+  mandatory?: CompletionReportCase;
+}
+
+export interface CompetitivePromptsRun<R> {
+  results: R[];
+  failures: CompetitivePromptFailure[];
+  completionCases: CompletionReportCase[];
+}
+
+/**
+ * Runs each competitive prompt in order. When the OpenCandle session itself
+ * throws, the prompt becomes a failed mandatory outcome (frozen panel) and its
+ * competitors and judge are skipped; the remaining prompts still run so the
+ * report and completion report are written. Failures after the OpenCandle
+ * session (competitors under REQUIRE_ALL, the judge) still abort the run.
+ */
+export async function runCompetitivePrompts<
+  P extends { id: string; prompt: string },
+  T,
+  R extends { mandatory?: CompletionReportCase },
+>(
+  prompts: readonly P[],
+  options: {
+    frozen: boolean;
+    runOpenCandle: (prompt: P) => Promise<T>;
+    completePrompt: (prompt: P, trace: T) => Promise<R>;
+  },
+): Promise<CompetitivePromptsRun<R>> {
+  const results: R[] = [];
+  const failures: CompetitivePromptFailure[] = [];
+  const completionCases: CompletionReportCase[] = [];
+  for (const prompt of prompts) {
+    let trace: T;
+    try {
+      trace = await options.runOpenCandle(prompt);
+    } catch (error) {
+      console.error(`OpenCandle session failed for prompt ${prompt.id}:`, error);
+      const reason = sessionFailureReason(error);
+      const mandatory: CompletionReportCase | undefined = options.frozen
+        ? { id: prompt.id, status: "failed", reason }
+        : undefined;
+      failures.push({
+        id: prompt.id,
+        prompt: prompt.prompt,
+        reason,
+        ...(mandatory ? { mandatory } : {}),
+      });
+      if (mandatory) completionCases.push(mandatory);
+      continue;
+    }
+    const result = await options.completePrompt(prompt, trace);
+    results.push(result);
+    if (result.mandatory) completionCases.push(result.mandatory);
+  }
+  return { results, failures, completionCases };
 }
