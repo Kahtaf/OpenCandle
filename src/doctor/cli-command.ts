@@ -5,6 +5,7 @@ import {
   loadOnboardingState,
   saveOnboardingState,
 } from "../onboarding/state.js";
+import { findOpenCandleDefaultModel } from "../pi/default-model.js";
 import { renderDoctorReport } from "./render.js";
 import { buildDoctorReport, type DoctorModelSetupState } from "./report.js";
 
@@ -66,8 +67,14 @@ export function buildCliModelSetupState(
   void modelRegistry.refresh();
   const provider = settingsManager.getDefaultProvider();
   const modelId = settingsManager.getDefaultModel();
-  const activeModel = provider && modelId ? modelRegistry.find(provider, modelId) : undefined;
-  if (activeModel && modelRegistry.hasConfiguredAuth(activeModel)) {
+  const authenticated = (candidateProvider: string, candidateId: string) => {
+    const model = modelRegistry.find(candidateProvider, candidateId);
+    return model && modelRegistry.hasConfiguredAuth(model) ? model : undefined;
+  };
+  const savedModel = provider && modelId ? authenticated(provider, modelId) : undefined;
+  // With no usable saved model, sessions start on OpenCandle's provider default.
+  const activeModel = savedModel ?? findOpenCandleDefaultModel(authenticated);
+  if (activeModel) {
     return {
       requirement: "ready",
       currentModel: `${activeModel.provider}/${activeModel.id}`,

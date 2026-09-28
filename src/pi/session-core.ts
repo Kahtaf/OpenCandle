@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
@@ -5,9 +6,9 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
-  type ModelRuntime,
+  ModelRuntime,
   type SessionManager,
-  type SettingsManager,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
 import { assertSupportedNodeVersion } from "../infra/node-version.js";
@@ -16,6 +17,7 @@ import type {
   SessionCoordinatorOptions,
 } from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
+import { chooseOpenCandleInitialModel } from "./default-model.js";
 import { guardModelRuntimeApiKeyLogins } from "./model-key-login-guard.js";
 import openCandleExtensionCore, {
   type OpenCandleExtensionOptions,
@@ -77,11 +79,12 @@ export async function createOpenCandleSessionCore(
   // so input-hook routing can abandon a cancelled turn, then attached to the
   // session object so the owning GUI can reach the current run token.
   const cancellation = createSessionCancellationState();
+  const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
   const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
         cwd,
         agentDir,
-        settingsManager: options.settingsManager,
+        settingsManager,
         extensionFactories: [
           (pi) =>
             openCandleExtensionCore(pi, {
@@ -108,18 +111,37 @@ export async function createOpenCandleSessionCore(
     await resourceLoader.reload();
   }
 
+  // Create the runtime the same way Pi would, so OpenCandle can pick its
+  // provider default before Pi falls back to its own (see default-model.ts).
+  const modelRuntime =
+    options.modelRuntime ??
+    (await ModelRuntime.create({
+      authPath: join(agentDir, "auth.json"),
+      modelsPath: join(agentDir, "models.json"),
+    }));
+  const initialModel = options.model
+    ? undefined
+    : chooseOpenCandleInitialModel({
+        modelRuntime,
+        settingsManager,
+        sessionManager: options.sessionManager,
+      });
+
   const result = await createAgentSession({
     cwd,
     agentDir,
-    modelRuntime: options.modelRuntime,
-    model: options.model,
+    modelRuntime,
+    model: options.model ?? initialModel?.model,
     thinkingLevel: options.thinkingLevel,
     sessionManager: options.sessionManager,
-    settingsManager: options.settingsManager,
+    settingsManager,
     resourceLoader,
     noTools: "builtin",
   });
   guardModelRuntimeApiKeyLogins(result.session.modelRuntime);
+  if (initialModel?.fallbackMessage && !result.modelFallbackMessage) {
+    result.modelFallbackMessage = initialModel.fallbackMessage;
+  }
 
   attachSessionCancellationState(result.session, cancellation);
   if (coordinator) sessionCoordinators.set(result.session, coordinator);
