@@ -27,7 +27,7 @@ import { create, createContext } from "@vitest/istanbul-lib-report";
 import { convert } from "ast-v8-to-istanbul";
 import { parseAstAsync } from "vite";
 
-import { isExcluded, surfaceForPath, toPosix } from "./coverage-report.mjs";
+import { isExcluded, surfaceForPath, takeValue, toPosix } from "./coverage-report.mjs";
 
 export const DEFAULT_RAW_DIR = join("coverage", "browser", "raw");
 export const DEFAULT_DIST_DIR = join("gui", "web", "dist");
@@ -265,8 +265,9 @@ export function parseArgs(argv) {
     origin: null,
   };
   const next = () => {
+    const value = takeValue(argv, index, argv[index]);
     index += 1;
-    return argv[index];
+    return value;
   };
   let index = 0;
   while (index < argv.length) {

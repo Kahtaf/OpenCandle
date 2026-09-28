@@ -405,6 +405,40 @@ describe("coverage report baseline handling", () => {
     }
   });
 
+  it("rejects value-taking flags with no value instead of swallowing the next flag", () => {
+    for (const flag of [
+      "--coverage",
+      "--input",
+      "--output",
+      "--metadata",
+      "--baseline",
+      "--repo-root",
+      "--tolerance",
+    ]) {
+      expect(() => parseArgs([flag]), flag).toThrow(`${flag} requires a value`);
+      expect(() => parseArgs([flag, "--check"]), `${flag} --check`).toThrow(
+        `${flag} requires a value`,
+      );
+    }
+  });
+
+  it("rejects a non-numeric tolerance", () => {
+    for (const value of ["abc", "1.5x", ""]) {
+      expect(() => parseArgs(["--tolerance", value]), value).toThrow(/tolerance/);
+    }
+  });
+
+  it("exits 2 without a stack trace when --baseline swallows --check", () => {
+    const result = spawnSync(
+      process.execPath,
+      [resolve(repoRoot, "scripts/coverage-report.mjs"), "--baseline", "--check"],
+      { encoding: "utf8" },
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--baseline requires a value");
+    expect(result.stderr).not.toMatch(/\n\s+at /);
+  });
+
   it("writes and checks a baseline through the real command line", () => {
     const root = makeTempRoot("opencandle-coverage-");
     mkdirSync(join(root, "src"), { recursive: true });

@@ -211,6 +211,24 @@ export interface BuildCompletionReportInput {
   exitCode?: number;
 }
 
+const SESSION_INCOMPLETE_PATTERN =
+  /^OpenCandle session did not complete: (\S+)\. Diagnostic: (\S+)$/;
+
+/**
+ * Bounded completion reason for an eval case whose live session threw. The
+ * session-completion boundary's own error carries only a closed reason code and
+ * a diagnostic path, so both are kept. Any other error text is left to the eval
+ * log: it may quote a provider response, which never enters this report.
+ */
+export function sessionFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const match = SESSION_INCOMPLETE_PATTERN.exec(message);
+  const reason = match
+    ? `session did not complete: ${match[1]}; diagnostic ${match[2]}`
+    : `session errored (${error instanceof Error ? error.name : typeof error}); see eval log`;
+  return reason.length > MAX_REASON_LENGTH ? `${reason.slice(0, MAX_REASON_LENGTH - 1)}…` : reason;
+}
+
 export function buildCompletionReport(input: BuildCompletionReportInput): CompletionReport {
   const cases = input.cases.map((testCase) => {
     const normalized: CompletionReportCase = { id: testCase.id, status: testCase.status };

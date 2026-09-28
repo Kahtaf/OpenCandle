@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { buildCompletionReport, validateCompletionReport } from "../../evals/completion-report.js";
 import { PRODUCT_EVAL_CASES, PRODUCT_SCENARIO_TEMPLATES } from "../../evals/product/cases.js";
 import { productEvalExitCode } from "../../evals/product/reporting.js";
-import { scoreProductEvalCase, summarizeProductEvalResults } from "../../evals/product/scorer.js";
+import { runProductCases } from "../../evals/product/run-cases.js";
+import {
+  buildProductEvalReport,
+  scoreProductEvalCase,
+  summarizeProductEvalResults,
+} from "../../evals/product/scorer.js";
 import type {
   ProductEvalCase,
   ProductEvalCaseResult,
@@ -1508,5 +1514,70 @@ describe("product eval cases", () => {
         (evalCase) => evalCase.setup?.marketStateFixture === "e5_two_option_positions",
       ),
     ).toHaveLength(2);
+  });
+});
+
+describe("runProductCases", () => {
+  const cases = PRODUCT_EVAL_CASES.slice(0, 3);
+  const passing = (evalCase: ProductEvalCase): ProductEvalCaseResult => ({
+    id: evalCase.id,
+    family: evalCase.family,
+    prompt: evalCase.prompt,
+    score: 1,
+    passed: true,
+    mandatoryFailure: false,
+    dimensions: [],
+  });
+
+  it("records a case whose session throws as failed and still runs the remaining cases", async () => {
+    const seen: string[] = [];
+    const run = await runProductCases(cases, async (evalCase) => {
+      seen.push(evalCase.id);
+      if (evalCase.id === cases[1].id) {
+        throw new Error(
+          "OpenCandle session did not complete: empty_answer. Diagnostic: /tmp/oc/session-completion-1.json",
+        );
+      }
+      return passing(evalCase);
+    });
+
+    expect(seen).toEqual(cases.map((evalCase) => evalCase.id));
+    expect(run.results.map((result) => [result.id, result.passed, result.score])).toEqual([
+      [cases[0].id, true, 1],
+      [cases[1].id, false, 0],
+      [cases[2].id, true, 1],
+    ]);
+    expect(run.results[1].mandatoryFailure).toBe(true);
+    expect(run.completionCases).toEqual([
+      { id: cases[0].id, status: "passed" },
+      {
+        id: cases[1].id,
+        status: "failed",
+        reason:
+          "session did not complete: empty_answer; diagnostic /tmp/oc/session-completion-1.json",
+      },
+      { id: cases[2].id, status: "passed" },
+    ]);
+    expect(productEvalExitCode(buildProductEvalReport(run.results))).toBe(1);
+
+    const completion = buildCompletionReport({
+      suite: "product",
+      startedAt: "2026-09-28T00:00:00.000Z",
+      finishedAt: "2026-09-28T00:01:00.000Z",
+      cases: run.completionCases,
+    });
+    expect(completion.cases).toHaveLength(3);
+    expect(completion.exitCode).toBe(1);
+    expect(() => validateCompletionReport(completion)).toThrow(/1 failed case/);
+  });
+
+  it("does not copy an arbitrary error message into the completion reason", async () => {
+    const run = await runProductCases(cases.slice(0, 1), async () => {
+      throw new TypeError("provider said: sk-secret-value");
+    });
+    expect(run.completionCases).toEqual([
+      { id: cases[0].id, status: "failed", reason: "session errored (TypeError); see eval log" },
+    ]);
+    expect(JSON.stringify(run.results)).not.toContain("sk-secret-value");
   });
 });
