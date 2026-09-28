@@ -36,7 +36,7 @@ const port = process.env.OPENCANDLE_HOSTED_TEST_PORT
   ? Number.parseInt(process.env.OPENCANDLE_HOSTED_TEST_PORT, 10)
   : 30_000 + (process.pid % 20_000);
 const origin = `http://127.0.0.1:${port}`;
-const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-5-mini");
+const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-6-luna");
 
 // Model and data credentials are read only in the live lane, so the default
 // lane can never consume them even when they happen to be present in the
@@ -363,8 +363,8 @@ try {
     );
     if (bootFailure) throw new Error(bootFailure);
     await waitForEnabled(page.getByRole("textbox", { name: "Message OpenCandle" }), 120_000);
-    if (openAiModel !== "gpt-5-mini") {
-      await page.getByRole("button", { name: /gpt-5-mini/ }).click();
+    if (openAiModel !== "gpt-6-luna") {
+      await page.getByRole("button", { name: /gpt-6-luna/ }).click();
       await page
         .getByRole("menuitemradio", { name: new RegExp(openAiModel.replaceAll(".", "\\.")) })
         .click();
