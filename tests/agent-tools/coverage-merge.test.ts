@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   loadCoverageMap,
   mergeLanes,
+  parseArgs,
   RELAY_SOURCE_FILES,
   verifyNodeHitsRetained,
   verifyRelayCoverage,
@@ -496,5 +497,23 @@ describe("informational browser merge output", () => {
     expect(readFileSync(join(canonical, "coverage-summary.json"), "utf8")).toBe(
       '{"canonical":"node-only"}',
     );
+  });
+});
+
+describe("coverage-merge argument parsing", () => {
+  it("parses value-taking flags", () => {
+    expect(parseArgs(["--root", "a.json", "--out", "dir"])).toMatchObject({
+      rootPath: "a.json",
+      outDir: "dir",
+    });
+  });
+
+  it("rejects value-taking flags with no value instead of swallowing the next flag", () => {
+    for (const flag of ["--root", "--relay", "--browser", "--out", "--repo-root"]) {
+      expect(() => parseArgs([flag]), flag).toThrow(`${flag} requires a value`);
+      expect(() => parseArgs([flag, "--browser", "x"]), `${flag} --browser`).toThrow(
+        `${flag} requires a value`,
+      );
+    }
   });
 });

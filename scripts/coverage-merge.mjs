@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 import { createCoverageMap } from "@vitest/istanbul-lib-coverage";
 import { create, createContext } from "@vitest/istanbul-lib-report";
 
+import { takeValue } from "./coverage-report.mjs";
+
 // Relay sources are fixed so a config change that drops one is a loud failure
 // rather than a silently smaller denominator.
 export const RELAY_SOURCE_FILES = [
@@ -313,8 +315,9 @@ export function parseArgs(argv) {
     repoRoot: process.cwd(),
   };
   const next = () => {
+    const value = takeValue(argv, index, argv[index]);
     index += 1;
-    return argv[index];
+    return value;
   };
   let index = 0;
   while (index < argv.length) {
