@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Pressing Stop in the GUI while a tool is running, such as during `/analyze` or while a question is open, now shows the turn as Stopped with Retry instead of "Model connection failed", including after a reload.
 - Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
 - A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.

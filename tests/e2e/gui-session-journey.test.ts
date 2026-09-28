@@ -6,6 +6,7 @@ import {
 } from "../support/gui-journey/journey-harness.js";
 import {
   ASK_USER_PROMPT,
+  ASK_USER_STOP_PROMPT,
   CANCEL_PROMPT,
   createHoldGate,
   createJourneyModelScript,
@@ -300,6 +301,34 @@ describe("GUI session journey", () => {
     );
     await waitForRunIdle(page);
     expect(sessionIdFromUrl(page)).toBe(stoppedSessionId);
+  }, 120_000);
+
+  it("Stop during a tool call whose follow-up model request errors renders Stopped, live and after reload", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const runActionId = await submitPromptAndCaptureRunActionId(page, ASK_USER_STOP_PROMPT);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    // The persisted shape a real provider leaves: the tool settled, then the
+    // next model request failed with an abort-shaped error.
+    const snapshot = await waitForSessionEntries(page, stoppedSessionId, (entries) =>
+      assistantMessages(entries).some((message) => message.stopReason === "error"),
+    );
+    expect(
+      assistantMessages(snapshot.entries).some((message) => message.stopReason === "error"),
+    ).toBe(true);
+
+    await expectStoppedTurn(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await expectStoppedTurn(page);
   }, 120_000);
 
   it("passive reload does not cancel; the held run completes normally", async () => {
@@ -673,6 +702,14 @@ describe("GUI session journey", () => {
     }
   }, 120_000);
 });
+
+/** A stopped turn shows the neutral Stopped marker with Retry, never a model failure. */
+async function expectStoppedTurn(page: Page): Promise<void> {
+  await expectVisible(page.getByText("Stopped", { exact: true }).first(), 30_000);
+  await expectVisible(page.getByRole("button", { name: "Retry" }).first(), 15_000);
+  await expect(page.getByText("Model connection failed").count()).resolves.toBe(0);
+  await expect(page.getByRole("button", { name: "Fix model key" }).count()).resolves.toBe(0);
+}
 
 async function submitPrompt(page: Page, text: string): Promise<void> {
   await page.getByLabel("Message OpenCandle").fill(text);

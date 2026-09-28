@@ -72,6 +72,7 @@ import {
   type GuiRunCancelResult,
   type GuiRunRegistry,
 } from "./run-cancellation.js";
+import { buildRunStoppedMarker, RUN_STOPPED_CUSTOM_TYPE } from "./run-stop-marker.js";
 import {
   promptAndSettle,
   type SessionActionsController,
@@ -1137,6 +1138,18 @@ async function streamAcceptedSseChatRun({
         // callback aborts an already-active model/tool run. Do NOT record the
         // action as accepted, so a retry is not mistaken for a duplicate.
         clearPendingSessionAction(runSessionManager, actionId);
+        // A Stop during a tool call lets the tool finish, and the next model
+        // request then fails with an abort-shaped error persisted as
+        // stopReason "error". Record the user's Stop, naming those replies,
+        // so the transcript renders the turn as Stopped instead of a model
+        // connection failure, live and after reload.
+        runSessionManager.appendCustomEntry(
+          RUN_STOPPED_CUSTOM_TYPE,
+          buildRunStoppedMarker(
+            runSessionManager.getEntries().filter((entry) => !beforeIds.has(entry.id)),
+            { actionId, prompt },
+          ),
+        );
         // A Stop that lands before the first assistant reply leaves Pi's
         // SessionManager unflushed: the cancelled-turn marker is in memory
         // only and would vanish on reload. Persist the canonical header +
