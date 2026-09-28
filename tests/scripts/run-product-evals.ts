@@ -2,20 +2,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  buildCompletionReport,
-  type CompletionReportCase,
-  writeCompletionReport,
-} from "../evals/completion-report.js";
+import { buildCompletionReport, writeCompletionReport } from "../evals/completion-report.js";
 import { PRODUCT_EVAL_CASES } from "../evals/product/cases.js";
 import { productEvalExitCode } from "../evals/product/reporting.js";
+import { runProductCases } from "../evals/product/run-cases.js";
 import { buildProductEvalReport, scoreProductEvalCase } from "../evals/product/scorer.js";
 import { seedProductEvalMarketState } from "../evals/product/state-fixtures.js";
-import type {
-  ProductEvalCase,
-  ProductEvalCaseResult,
-  PromptFamily,
-} from "../evals/product/types.js";
+import type { ProductEvalCase, PromptFamily } from "../evals/product/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
 const selectedCases = selectCases(PRODUCT_EVAL_CASES);
@@ -24,8 +17,7 @@ if (selectedCases.length === 0) {
 }
 
 const startedAt = new Date().toISOString();
-const results: ProductEvalCaseResult[] = [];
-for (const evalCase of selectedCases) {
+const { results, completionCases } = await runProductCases(selectedCases, async (evalCase) => {
   console.log(`\n=== ${evalCase.id}: ${evalCase.prompt}`);
   const openCandleHome = evalCase.setup?.marketStateFixture
     ? mkdtempSync(join(tmpdir(), "oc-product-eval-home-"))
@@ -42,15 +34,15 @@ for (const evalCase of selectedCases) {
       timeoutMs: 900_000,
     });
     const result = scoreProductEvalCase(evalCase, evalTrace);
-    results.push(result);
     console.log(`score=${formatPct(result.score)} ${result.passed ? "PASS" : "FAIL"}`);
     for (const dimension of result.dimensions) {
       console.log(`  ${dimension.passed ? "✓" : "✗"} ${dimension.id}: ${dimension.message}`);
     }
+    return result;
   } finally {
     if (openCandleHome) rmSync(openCandleHome, { recursive: true, force: true });
   }
-}
+});
 
 const report = buildProductEvalReport(results);
 const outputPath = writeReport(report);
@@ -60,11 +52,6 @@ console.log(`Aggregate: ${formatPct(report.aggregate)}`);
 console.log(`Passed: ${report.passed}`);
 console.log(`Failed: ${report.failed}`);
 console.log(`Report: ${outputPath}`);
-const completionCases: CompletionReportCase[] = results.map((result) =>
-  result.passed
-    ? { id: result.id, status: "passed" }
-    : { id: result.id, status: "failed", reason: productEvalFailureReason(result) },
-);
 const completionPath = writeCompletionReport(
   buildCompletionReport({
     suite: "product",
@@ -75,17 +62,6 @@ const completionPath = writeCompletionReport(
 );
 if (completionPath) console.log(`Completion report: ${completionPath}`);
 process.exitCode = productEvalExitCode(report);
-
-function productEvalFailureReason(result: ProductEvalCaseResult): string {
-  const failedDimensions = result.dimensions.filter((dimension) => !dimension.passed);
-  const reason =
-    failedDimensions.length > 0
-      ? failedDimensions.map((dimension) => `${dimension.id}: ${dimension.message}`).join("; ")
-      : result.mandatoryFailure
-        ? "mandatory dimension failed"
-        : "score below pass threshold";
-  return reason.length > 900 ? `${reason.slice(0, 899)}…` : reason;
-}
 
 function selectCases(cases: ProductEvalCase[]): ProductEvalCase[] {
   const id = process.env.PRODUCT_EVAL_CASE?.trim();

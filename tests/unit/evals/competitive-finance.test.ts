@@ -1078,3 +1078,65 @@ describe("competitive finance benchmarking", () => {
     });
   });
 });
+
+describe("competitive analysis of OpenCandle session failures", () => {
+  const judgedResult = {
+    prompt: { id: "p1", prompt: "one" },
+    judgment: {
+      winner: "opencandle",
+      openCandleScore: 8,
+      competitorScores: { claude: 6 },
+      reason: "OC was better.",
+      openCandleDidBetter: [],
+      competitorsDidBetter: {},
+      openCandleImprovementIdeas: [],
+    },
+    mandatory: { id: "p1", status: "passed" },
+  };
+
+  it("counts a prompt whose session threw as a case with a failed mandatory outcome", () => {
+    const analysis = analyzeCompetitiveReport({
+      results: [judgedResult],
+      openCandleSessionFailures: [
+        {
+          id: "p2",
+          prompt: "two",
+          reason: "session did not complete: workflow_failed; diagnostic /tmp/d.json",
+          mandatory: { id: "p2", status: "failed", reason: "session did not complete" },
+        },
+        { id: "p3", prompt: "three", reason: "session errored (Error); see eval log" },
+      ],
+    });
+    expect(analysis.promptCount).toBe(3);
+    expect(analysis.mandatory).toEqual({ passed: 1, failed: 1, notEvaluated: 1 });
+    expect(analysis.sessionFailures).toEqual([
+      {
+        id: "p2",
+        prompt: "two",
+        reason: "session did not complete: workflow_failed; diagnostic /tmp/d.json",
+        mandatory: "failed",
+      },
+      {
+        id: "p3",
+        prompt: "three",
+        reason: "session errored (Error); see eval log",
+        mandatory: "not_evaluated",
+      },
+    ]);
+    const markdown = formatCompetitiveReportAnalysisMarkdown(analysis);
+    expect(markdown).toContain("cases 3.");
+    expect(markdown).toContain("Mandatory: 1 passed, 1 failed, 1 not evaluated.");
+    expect(markdown).toContain("## OpenCandle Session Failures");
+    expect(markdown).toContain(
+      "- p2 (mandatory FAILED): session did not complete: workflow_failed; diagnostic /tmp/d.json",
+    );
+    expect(markdown).toContain("- p3: session errored (Error); see eval log");
+  });
+
+  it("leaves reports without session failures unchanged", () => {
+    const analysis = analyzeCompetitiveReport({ results: [judgedResult] });
+    expect(analysis.promptCount).toBe(1);
+    expect(analysis.sessionFailures).toEqual([]);
+    expect(formatCompetitiveReportAnalysisMarkdown(analysis)).not.toContain("Session Failures");
+  });
+});
