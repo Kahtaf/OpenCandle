@@ -51,15 +51,22 @@ export function riskLookbackForHorizon(
   return "5y";
 }
 
+export type LookbackTool = "analyze_risk" | "analyze_correlation";
+
 /**
  * Prompt instruction that pins analyze_risk / analyze_correlation to a supported
  * lookback window instead of letting the model copy the investment horizon
- * into the tool's period argument.
+ * into the tool's period argument. Pass only the tools the prompt actually
+ * asks for so the instruction never invites an extra call.
  */
-export function riskLookbackInstruction(timeHorizon: string): string {
+export function riskLookbackInstruction(
+  timeHorizon: string,
+  tools: readonly LookbackTool[] = ["analyze_risk", "analyze_correlation"],
+): string {
+  const toolList = tools.join(" and ");
   const lookback = riskLookbackForHorizon(timeHorizon);
   if (!lookback) {
-    return "Use a supported lookback window (6mo, 1y, 2y, or 5y) for analyze_risk and analyze_correlation; do not pass the investment horizon as the period.";
+    return `Use a supported lookback window (6mo, 1y, 2y, or 5y) for ${toolList}; do not pass the investment horizon as the period.`;
   }
-  return `Use a ${lookback} lookback window for analyze_risk and analyze_correlation (investment horizon: ${timeHorizon}). The lookback is the historical data period, not the investment horizon.`;
+  return `Use a ${lookback} lookback window for ${toolList} (investment horizon: ${timeHorizon}). The lookback is the historical data period, not the investment horizon.`;
 }

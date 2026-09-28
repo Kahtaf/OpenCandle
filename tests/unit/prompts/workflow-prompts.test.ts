@@ -542,6 +542,20 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("Time horizon: 10y");
   });
 
+  it("names only the correlation tool in the lookback line for overlap comparisons", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["VOO", "QQQ"], metrics: ["overlap"], timeHorizon: "10y" },
+      sources: { symbols: "user", metrics: "user", timeHorizon: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+    expect(prompt).toContain(
+      "Use a 5y lookback window for analyze_correlation (investment horizon: 10y).",
+    );
+    expect(prompt).not.toContain("lookback window for analyze_risk");
+  });
+
   it("omits the lookback instruction when no comparison horizon is resolved", () => {
     const resolution: SlotResolution<CompareAssetsSlots> = {
       resolved: { symbols: ["AAPL", "MSFT"] },

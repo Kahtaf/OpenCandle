@@ -462,7 +462,12 @@ macro hedge decision guidance:
 5. Use analyze_risk for each to compare risk metrics.
 6. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
-  const lookbackLine = timeHorizon ? `\n${riskLookbackInstruction(timeHorizon)}` : "";
+  const lookbackLine = timeHorizon
+    ? `\n${riskLookbackInstruction(
+        timeHorizon,
+        isOverlapComparison ? ["analyze_correlation"] : ["analyze_risk", "analyze_correlation"],
+      )}`
+    : "";
   const budgetLine = budget !== undefined ? `\nBudget: ${formatBudget(budget)}` : "";
   const horizonSteps = timeHorizon
     ? `
