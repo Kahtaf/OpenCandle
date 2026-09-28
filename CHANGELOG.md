@@ -66,6 +66,7 @@
 ### Changed
 
 - OpenAI setups now default to GPT-6 Luna, a newer and cheaper model, instead of GPT-5 mini.
+- Upgrading the Pi agent framework to 0.87.1 makes GPT-6 Luna, GPT-6 Sol, and Claude Opus 5.5 selectable in model setup.
 
 ## [0.15.0] - 2026-09-21
 
