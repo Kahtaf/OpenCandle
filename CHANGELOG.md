@@ -63,6 +63,11 @@
 - The portfolio builder now requires captured, successful pricing tool evidence before candidate selection and captured risk or correlation evidence before the risk review, so a portfolio draft cannot complete without any successful market-data tool results.
 - Failed eval diagnostics now record the final assistant message's terminal stop reason and a sanitized error category, so an empty response is diagnosable without exposing provider error text.
 
+### Changed
+
+- OpenAI setups now default to GPT-6 Luna, a newer and cheaper model, instead of GPT-5 mini.
+- Upgrading the Pi agent framework to 0.87.1 makes GPT-6 Luna, GPT-6 Sol, and Claude Opus 5.5 selectable in model setup.
+
 ## [0.15.0] - 2026-09-21
 
 ### Changed

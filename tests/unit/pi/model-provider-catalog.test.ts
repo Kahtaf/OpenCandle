@@ -37,4 +37,9 @@ describe("first-class Pi model provider catalog", () => {
     expect(resolveFirstClassModel("openai", "claude-haiku-4-5")).toBeUndefined();
     expect(resolveFirstClassModel("unknown", "gpt-5-mini")).toBeUndefined();
   });
+
+  it("defaults OpenAI setups to GPT-6 Luna", () => {
+    const openai = modelSetupProviders.find(({ id }) => id === "openai");
+    expect(openai).toMatchObject({ defaultProvider: "openai", defaultModel: "gpt-6-luna" });
+  });
 });
