@@ -248,6 +248,62 @@ describe("get_option_chain tool", () => {
     expect(text).not.toContain("⚠");
   });
 
+  it("names the calendar fallback and an unrecognized Yahoo marketState", async () => {
+    const fixture = structuredClone(regularFixture);
+    fixture.optionChain.result[0].quote.marketState = "SOMETHING_NEW";
+    mockCrumbAndOptions(fixture as unknown as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-unknown-state", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain(
+      "Session source: local US market calendar (unrecognized Yahoo marketState SOMETHING_NEW)",
+    );
+  });
+
+  it("notes when Yahoo reports no marketState", async () => {
+    mockCrumbAndOptions();
+
+    const result = await optionChainTool.execute("call-no-state", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain(
+      "Session source: local US market calendar (Yahoo did not report marketState)",
+    );
+  });
+
+  it("shows n/a for contracts without a last trade time and omits the latest-trade line", async () => {
+    const fixture = structuredClone(regularFixture) as Record<string, any>;
+    const option = fixture.optionChain.result[0].options[0];
+    for (const contract of [...option.calls, ...option.puts]) delete contract.lastTradeDate;
+    mockCrumbAndOptions(fixture as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-no-trade-date", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+    const rows = text.split("\n").filter((line) => /^[* ]\$\d/.test(line));
+
+    expect(text).not.toContain("Latest contract trade:");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.includes("| n/a |"))).toBe(true);
+  });
+
+  it("keeps the live bid/ask header for all-zero quotes during the regular session", async () => {
+    const fixture = structuredClone(regularFixture);
+    const option = fixture.optionChain.result[0].options[0];
+    for (const contract of [...option.calls, ...option.puts]) {
+      contract.bid = 0;
+      contract.ask = 0;
+    }
+    mockCrumbAndOptions(fixture as unknown as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-live-zero", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain("Quote status: regular / live_zero_bid_ask");
+    expect(text).toContain("| Bid/Ask (per share) |");
+    expect(text).toContain("unconfirmed without a broker quote");
+  });
+
   it("reports a closed session on a weekday exchange holiday", async () => {
     vi.setSystemTime(new Date("2026-05-25T14:00:00.000Z")); // Monday 10:00 AM EDT
     rateLimiter.configure("yahoo", 5, 5);
