@@ -2,6 +2,7 @@ import YahooFinance from "yahoo-finance2";
 import type { OptionsResult as YahooFinance2OptionsResult } from "yahoo-finance2/modules/options";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
+import { classifyMarketStatusAt } from "../infra/market-calendar.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { computeGreeks } from "../tools/options/greeks.js";
 import type { CompanyOverview, FinancialStatement } from "../types/fundamentals.js";
@@ -882,69 +883,111 @@ export function computeTimeToExpiry(expirationTs: number, nowMs: number = Date.n
   return Math.max(MIN_TIME_YEARS, remainingS / SECONDS_PER_YEAR);
 }
 
-function getUsOptionsMarketSession(now: Date = new Date()): OptionsMarketSession {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? "";
-  const weekday = part("weekday");
-  if (weekday === "Sat" || weekday === "Sun") return "closed";
+/** Holiday-aware ET calendar fallback when Yahoo does not report a market state. */
+function getUsOptionsMarketSessionFromCalendar(now: Date = new Date()): OptionsMarketSession {
+  switch (classifyMarketStatusAt(now)) {
+    case "pre_market":
+      return "pre_market";
+    case "open":
+      return "regular";
+    case "after_close":
+    case "closed_after_hours":
+      return "after_hours";
+    default:
+      return "closed";
+  }
+}
 
-  const hour = Number(part("hour"));
-  const minute = Number(part("minute"));
-  const minutes = hour * 60 + minute;
-  if (minutes < 9 * 60 + 30) return "pre_market";
-  if (minutes < 16 * 60) return "regular";
-  return "after_hours";
+const YAHOO_MARKET_STATE_SESSIONS: Record<string, OptionsMarketSession> = {
+  PREPRE: "pre_market",
+  PRE: "pre_market",
+  REGULAR: "regular",
+  POST: "after_hours",
+  POSTPOST: "after_hours",
+  CLOSED: "closed",
+};
+
+/**
+ * Prefer Yahoo's reported marketState (it reflects exchange holidays and early
+ * closes); fall back to the local ET market calendar only when it is missing or
+ * unrecognized.
+ */
+function resolveOptionsMarketSession(
+  providerMarketState: unknown,
+  now: Date = new Date(),
+): Pick<OptionsQuoteStatus, "marketSession" | "marketSessionSource" | "providerMarketState"> {
+  const raw = typeof providerMarketState === "string" ? providerMarketState.trim() : "";
+  const fromProvider = raw ? YAHOO_MARKET_STATE_SESSIONS[raw.toUpperCase()] : undefined;
+  return {
+    marketSession: fromProvider ?? getUsOptionsMarketSessionFromCalendar(now),
+    marketSessionSource: fromProvider ? "provider_market_state" : "local_calendar",
+    ...(raw ? { providerMarketState: raw } : {}),
+  };
+}
+
+const OPTIONS_SESSION_LABELS: Record<OptionsMarketSession, string> = {
+  pre_market: "in pre-market",
+  regular: "in its regular session",
+  after_hours: "after hours",
+  closed: "closed",
+};
+
+function latestTradeIso(contracts: OptionContract[]): string | undefined {
+  let latest: string | undefined;
+  for (const c of contracts) {
+    if (c.lastTradeDate && (!latest || c.lastTradeDate > latest)) latest = c.lastTradeDate;
+  }
+  return latest;
 }
 
 function buildOptionsQuoteStatus(
   contracts: OptionContract[],
+  providerMarketState: unknown,
   now: Date = new Date(),
 ): OptionsQuoteStatus {
-  const marketSession = getUsOptionsMarketSession(now);
+  const session = resolveOptionsMarketSession(providerMarketState, now);
+  const { marketSession } = session;
   const totalContracts = contracts.length;
   const zeroBidAskContracts = contracts.filter((c) => c.bid === 0 && c.ask === 0).length;
   const allZeroBidAsk = totalContracts > 0 && zeroBidAskContracts === totalContracts;
-  const hasLiveBidAsk = contracts.some((c) => c.bid > 0 || c.ask > 0);
+  const hasNonZeroBidAsk = contracts.some((c) => c.bid > 0 || c.ask > 0);
+  const latestContractTradeAt = latestTradeIso(contracts);
+  const base = {
+    ...session,
+    zeroBidAskContracts,
+    totalContracts,
+    ...(latestContractTradeAt ? { latestContractTradeAt } : {}),
+  };
 
   if (allZeroBidAsk && marketSession !== "regular") {
     return {
-      marketSession,
+      ...base,
       bidAskState: "closed_market_or_stale_quotes",
-      zeroBidAskContracts,
-      totalContracts,
       warning:
-        "All option contracts have $0.00/$0.00 bid/ask before regular options trading or outside market hours; treat bid/ask as closed-market or stale until the market opens.",
+        "All option contracts have $0.00/$0.00 bid/ask before regular options trading or outside market hours. These are closed-market or stale quotes, not evidence of live illiquidity.",
     };
   }
 
   if (allZeroBidAsk) {
     return {
-      marketSession,
+      ...base,
       bidAskState: "live_zero_bid_ask",
-      zeroBidAskContracts,
-      totalContracts,
       warning:
-        "All option contracts have $0.00/$0.00 bid/ask during regular options trading hours; verify with a broker, but this may indicate live illiquidity.",
+        "All option contracts have $0.00/$0.00 bid/ask during regular options trading hours. This may indicate live illiquidity; it is unconfirmed without a broker quote.",
+    };
+  }
+
+  if (hasNonZeroBidAsk && marketSession !== "regular") {
+    return {
+      ...base,
+      bidAskState: "last_session_quotes",
+      warning: `The options market is ${OPTIONS_SESSION_LABELS[marketSession]}. Bid/ask quotes are carried over from the last regular session and are not executable now. No bid/ask midpoint is a live premium.`,
     };
   }
 
   return {
-    marketSession,
-    bidAskState: hasLiveBidAsk ? "live_quotes" : "mixed_or_unknown",
-    zeroBidAskContracts,
-    totalContracts,
-    ...(marketSession !== "regular"
-      ? {
-          warning:
-            "Options bid/ask quotes may be stale outside regular options trading hours; verify live executable prices after the market opens.",
-        }
-      : {}),
+    ...base,
+    bidAskState: hasNonZeroBidAsk ? "live_quotes" : "mixed_or_unknown",
   };
 }
 
@@ -990,6 +1033,7 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
       impliedVolatility: iv,
       inTheMoney: c.inTheMoney ?? false,
       greeks,
+      ...optionalLastTradeDate(c.lastTradeDate),
     };
   };
 
@@ -997,7 +1041,7 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
   const puts = (opts.puts ?? []).map((c: any) => mapContract(c, "put"));
   const totalCallVolume = calls.reduce((s, c) => s + c.volume, 0);
   const totalPutVolume = puts.reduce((s, c) => s + c.volume, 0);
-  const quoteStatus = buildOptionsQuoteStatus([...calls, ...puts]);
+  const quoteStatus = buildOptionsQuoteStatus([...calls, ...puts], quote.marketState);
 
   return {
     symbol: result.underlyingSymbol,
@@ -1067,6 +1111,11 @@ function normalizeYahooFinance2OptionsResponse(
       ],
     },
   };
+}
+
+function optionalLastTradeDate(value: unknown): { lastTradeDate?: string } {
+  const iso = yahooMarketTimeToIso(value);
+  return iso ? { lastTradeDate: iso } : {};
 }
 
 function toYahooUnixSeconds(value: Date | number | string): number {

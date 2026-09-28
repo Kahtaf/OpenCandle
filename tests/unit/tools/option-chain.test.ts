@@ -4,6 +4,9 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
 import { optionChainTool } from "../../../src/tools/options/option-chain.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
+import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
+import holidayClosedFixture from "../../fixtures/yahoo/options-AAPL-holiday-closed.json";
+import regularFixture from "../../fixtures/yahoo/options-AAPL-regular.json";
 
 function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
   globalThis.fetch = vi.fn().mockImplementation((url: string) => {
@@ -175,9 +178,86 @@ describe("get_option_chain tool", () => {
 
     expect(text).toContain("Quote status: pre_market");
     expect(text).toContain("closed_market_or_stale_quotes");
-    expect(text).toContain("do not treat zero bid/ask as confirmed live illiquidity");
-    expect(text).toContain("do not stop at the stale quote caveat");
-    expect(text).toContain("finish the strategy explanation");
+    expect(text).toContain("not evidence of live illiquidity");
+    expect(text).toContain("Bid/Ask (per share, not executable)");
     expect(text).toContain("Last available price as of 2024-03-22");
+  });
+
+  it("states quote facts without answer-writing instructions", async () => {
+    vi.setSystemTime(new Date("2026-05-21T02:05:00.000Z")); // 10:05 PM EDT
+    rateLimiter.configure("yahoo", 5, 5);
+    mockCrumbAndOptions(structuredClone(afterHoursFixture) as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-no-imperatives", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).not.toMatch(/do not stop at/i);
+    expect(text).not.toMatch(/finish the strategy explanation/i);
+    expect(text).not.toMatch(/labeled hypothetical/i);
+    expect(text).not.toMatch(/assignment outcomes/i);
+    expect(text).not.toMatch(/avoid naming/i);
+  });
+
+  it("labels after-hours nonzero bid/ask as last-session and not executable", async () => {
+    vi.setSystemTime(new Date("2026-05-21T02:05:00.000Z")); // 10:05 PM EDT
+    rateLimiter.configure("yahoo", 5, 5);
+    mockCrumbAndOptions(structuredClone(afterHoursFixture) as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-after-hours", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain("Quote status: after_hours / last_session_quotes");
+    expect(text).not.toContain("live_quotes");
+    expect(text).toContain("Last-session bid/ask (per share, not executable)");
+    expect(text).not.toContain("| Bid/Ask (per share) |");
+    expect(text).toContain("No bid/ask midpoint is a live premium");
+    expect(text).toContain("Session source: Yahoo marketState POST");
+    expect(text).toContain("Latest contract trade: 2026-05-20 15:59 ET");
+    expect(result.details?.quoteStatus.bidAskState).toBe("last_session_quotes");
+    expect(result.details?.quoteStatus.latestContractTradeAt).toBe("2026-05-20T19:59:00.000Z");
+  });
+
+  it("shows each contract's last trade time in ET", async () => {
+    vi.setSystemTime(new Date("2026-05-21T02:05:00.000Z"));
+    rateLimiter.configure("yahoo", 5, 5);
+    mockCrumbAndOptions(structuredClone(afterHoursFixture) as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-last-trade", {
+      symbol: "AAPL",
+      type: "call",
+    });
+    const text = (result.content[0] as any).text as string;
+    const header = text.split("\n").find((line) => line.startsWith("Strike |"));
+    const rows = text.split("\n").filter((line) => /^[* ]\$\d/.test(line));
+
+    expect(header).toContain("| Last trade (ET) |");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((row) => row.includes("| 2026-05-20 15:59 |"))).toBe(true);
+    expect(rows.some((row) => row.includes("| 2026-05-20 15:52 |"))).toBe(true);
+  });
+
+  it("keeps the live bid/ask header during a REGULAR session", async () => {
+    mockCrumbAndOptions(structuredClone(regularFixture) as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-regular", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain("Quote status: regular / live_quotes");
+    expect(text).toContain("| Bid/Ask (per share) |");
+    expect(text).not.toContain("not executable");
+    expect(text).not.toContain("⚠");
+  });
+
+  it("reports a closed session on a weekday exchange holiday", async () => {
+    vi.setSystemTime(new Date("2026-05-25T14:00:00.000Z")); // Monday 10:00 AM EDT
+    rateLimiter.configure("yahoo", 5, 5);
+    mockCrumbAndOptions(structuredClone(holidayClosedFixture) as typeof optionsFixture);
+
+    const result = await optionChainTool.execute("call-holiday", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text as string;
+
+    expect(text).toContain("Quote status: closed / last_session_quotes");
+    expect(text).toContain("Last-session bid/ask (per share, not executable)");
+    expect(text).toContain("Latest contract trade: 2026-05-22 15:59 ET");
   });
 });
