@@ -4,7 +4,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import type { RiskMetrics } from "../../types/portfolio.js";
 
-const RISK_PERIODS = ["6mo", "1y", "2y"] as const;
+const RISK_PERIODS = ["6mo", "1y", "2y", "5y"] as const;
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
@@ -12,7 +12,8 @@ const params = Type.Object({
     Type.Union(
       RISK_PERIODS.map((period) => Type.Literal(period)),
       {
-        description: "Historical period for analysis: 6mo, 1y, 2y. Default: 1y",
+        description:
+          "Lookback window for historical returns (not the investment horizon): 6mo, 1y, 2y, or 5y. Default: 1y.",
       },
     ),
   ),
@@ -70,7 +71,7 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics | null> = {
     }
 
     const text = [
-      `**${symbol} Risk Analysis** (${bars[0].date} to ${bars[bars.length - 1].date}, ${closes.length} days)`,
+      `**${symbol} Risk Analysis** (${period} lookback: ${bars[0].date} to ${bars[bars.length - 1].date}, ${closes.length} days)`,
       ``,
       `Annualized Return: ${(metrics.annualizedReturn * 100).toFixed(2)}%`,
       `Annualized Volatility: ${(metrics.annualizedVolatility * 100).toFixed(2)}%`,

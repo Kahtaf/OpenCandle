@@ -22,6 +22,15 @@ describe("tool schema guardrails", () => {
     expect(Value.Check(stockHistoryTool.parameters, { symbol: "AAPL", range: "10y" })).toBe(true);
   });
 
+  it("describes risk and correlation periods as lookback windows, not investment horizons", () => {
+    for (const schema of [riskAnalysisTool.parameters, correlationTool.parameters]) {
+      const description = schema.properties.period.description ?? "";
+      expect(description).toContain("Lookback window for historical returns");
+      expect(description).toContain("not the investment horizon");
+      expect(description).toContain("5y");
+    }
+  });
+
   it("rejects free-form history periods before provider calls", () => {
     expect(
       Value.Check(correlationTool.parameters, { symbols: ["AAPL", "MSFT"], period: "1w" }),
@@ -31,6 +40,17 @@ describe("tool schema guardrails", () => {
     ).toBe(true);
     expect(Value.Check(riskAnalysisTool.parameters, { symbol: "AAPL", period: "max" })).toBe(false);
     expect(Value.Check(riskAnalysisTool.parameters, { symbol: "AAPL", period: "6mo" })).toBe(true);
+    expect(Value.Check(riskAnalysisTool.parameters, { symbol: "AAPL", period: "5y" })).toBe(true);
+    expect(Value.Check(riskAnalysisTool.parameters, { symbol: "AAPL", period: "10y" })).toBe(false);
+    expect(Value.Check(riskAnalysisTool.parameters, { symbol: "AAPL", period: "5 years" })).toBe(
+      false,
+    );
+    expect(
+      Value.Check(correlationTool.parameters, { symbols: ["AAPL", "MSFT"], period: "5y" }),
+    ).toBe(true);
+    expect(
+      Value.Check(correlationTool.parameters, { symbols: ["AAPL", "MSFT"], period: "10y" }),
+    ).toBe(false);
     expect(
       Value.Check(backtestTool.parameters, {
         symbol: "AAPL",

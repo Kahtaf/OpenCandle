@@ -161,6 +161,23 @@ describe("correlationTool", () => {
     expect(result.details.matrix).not.toHaveProperty("BAD");
   });
 
+  it("fetches a 5y lookback and states the window in the header", async () => {
+    mockedGetHistory.mockImplementation(async (symbol: string) =>
+      makeBars(symbol === "AAPL" ? 0 : 10),
+    );
+
+    const result = await correlationTool.execute("test-5y", {
+      symbols: ["AAPL", "MSFT"],
+      period: "5y",
+    });
+
+    expect(mockedGetHistory).toHaveBeenCalledWith("AAPL", "5y", "1d");
+    expect(mockedGetHistory).toHaveBeenCalledWith("MSFT", "5y", "1d");
+    expect(result.content[0].text.split("\n")[0]).toBe(
+      "**Correlation Matrix** (5y lookback, daily returns)",
+    );
+  });
+
   it("returns unavailable when fewer than two symbols have history", async () => {
     mockedGetHistory.mockImplementation(async (symbol: string) => {
       if (symbol === "AAPL") return makeBars(0);

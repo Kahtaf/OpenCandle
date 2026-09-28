@@ -301,6 +301,39 @@ describe("portfolio workflow absent-evidence guard", () => {
     ).toHaveLength(1);
   });
 
+  it("completes risk_review when a rejected risk call is corrected within the same step", async () => {
+    const harness = startHarness((prompt) => {
+      switch (stageOf(prompt)) {
+        case "fetch":
+          return {
+            tools: [{ tool: "get_stock_quote", details: { symbol: "VOO", price: 474.96 } }],
+            text: "Quoted candidates with real prices.",
+          };
+        case "risk":
+          return {
+            tools: [
+              // First call rejected (e.g. schema validation), then retried with a valid lookback.
+              { tool: "analyze_risk", isError: true },
+              { tool: "analyze_risk", details: { symbol: "VOO", annualizedVolatility: 0.16 } },
+            ],
+            text: "Risk reviewed from returned metrics.",
+          };
+        default:
+          return { text: VALID_TABLE };
+      }
+    });
+
+    await harness.advance();
+    await harness.coord.waitForActiveWorkflow();
+
+    const run = harness.coord.getRunner().getActiveRun();
+    expect(run?.status).toBe("completed");
+    expect(run?.steps.find((step) => step.stepType === "risk_review")?.status).toBe("completed");
+    expect(
+      promptsMatching(harness.sentPrompts, "usable risk or correlation evidence"),
+    ).toHaveLength(0);
+  });
+
   it("fails closed when fetch succeeds but risk evidence never arrives", async () => {
     const harness = startHarness((prompt) => {
       switch (stageOf(prompt)) {
