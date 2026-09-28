@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   filterProductionCoverage,
   mapScriptUrl,
+  parseArgs,
   runBrowserCoverage,
 } from "../../scripts/coverage-browser.mjs";
 import { startBrowserCoverage, stopBrowserCoverage } from "../helpers/browser-coverage.js";
@@ -353,4 +354,22 @@ describe.skipIf(!executable)("browser coverage real-Chromium fixture", () => {
       server.close();
     }
   }, 120_000);
+});
+
+describe("browser coverage argument parsing", () => {
+  it("parses value-taking flags", () => {
+    expect(parseArgs(["--raw", "r", "--origin", "http://127.0.0.1:1"])).toMatchObject({
+      rawDir: "r",
+      origin: "http://127.0.0.1:1",
+    });
+  });
+
+  it("rejects value-taking flags with no value instead of swallowing the next flag", () => {
+    for (const flag of ["--raw", "--dist", "--out", "--repo-root", "--origin"]) {
+      expect(() => parseArgs([flag]), flag).toThrow(`${flag} requires a value`);
+      expect(() => parseArgs([flag, "--out", "x"]), `${flag} --out`).toThrow(
+        `${flag} requires a value`,
+      );
+    }
+  });
 });
