@@ -505,6 +505,89 @@ describe("GUI session actions", () => {
     }
   });
 
+  it("answers ask_user locally for a reopened session whose run this process owns", async () => {
+    await withNonCurrentSession(async ({ cwd, sessionDir, currentManager, targetManager }) => {
+      await acquireWriterLock(writerLockScopeForSession(targetManager), "gui", {
+        pid: process.pid,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+      globalThis.fetch = fetchMock as typeof fetch;
+      const answer = vi.fn(() => true);
+      const cancel = vi.fn(() => true);
+      const controller = makeWriterController({
+        cwd,
+        sessionDir,
+        currentManager,
+        askUserBridge: { answer, cancel },
+      });
+      const action = { sessionId: targetManager.getSessionId(), source: "browser" as const };
+
+      await controller.handleAskUserAnswer("ask-1", "Yes", { ...action, actionId: "a-1" });
+      await controller.handleAskUserCancel("ask-2", { ...action, actionId: "a-2" });
+
+      expect(answer).toHaveBeenCalledWith("ask-1", "Yes");
+      expect(cancel).toHaveBeenCalledWith("ask-2");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("answers ask_user locally when the bridge holds the pending prompt for that session", async () => {
+    await withNonCurrentSession(async ({ cwd, sessionDir, currentManager, targetManager }) => {
+      const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+      globalThis.fetch = fetchMock as typeof fetch;
+      const answer = vi.fn(() => true);
+      const cancel = vi.fn(() => true);
+      const has = vi.fn(
+        (id: string, sessionId?: string) =>
+          id === "ask-1" && sessionId === targetManager.getSessionId(),
+      );
+      const controller = makeWriterController({
+        cwd,
+        sessionDir,
+        currentManager,
+        askUserBridge: { answer, cancel, has },
+      });
+
+      await controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "a-1",
+        sessionId: targetManager.getSessionId(),
+        source: "browser",
+      });
+
+      expect(answer).toHaveBeenCalledWith("ask-1", "Yes");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("answers and cancels ask_user locally on the coordinator receiver path", async () => {
+    await withNonCurrentSession(async ({ cwd, sessionDir, currentManager, targetManager }) => {
+      const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+      globalThis.fetch = fetchMock as typeof fetch;
+      const answer = vi.fn(() => true);
+      const cancel = vi.fn(() => true);
+      const controller = makeWriterController({
+        cwd,
+        sessionDir,
+        currentManager,
+        askUserBridge: { answer, cancel },
+      });
+      const action = {
+        sessionId: targetManager.getSessionId(),
+        source: "browser" as const,
+        allowProxy: false,
+      };
+
+      await controller.handleAskUserAnswer("ask-1", "No", { ...action, actionId: "a-1" });
+      await controller.handleAskUserCancel("ask-2", { ...action, actionId: "a-2" });
+
+      expect(answer).toHaveBeenCalledWith("ask-1", "No");
+      expect(cancel).toHaveBeenCalledWith("ask-2");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   it("rejects starting a new session while the current session has an active run token", async () => {
     const session = {} as AgentSession;
     const state = createSessionCancellationState();
@@ -625,6 +708,67 @@ describe("GUI session actions", () => {
     }
   });
 });
+
+async function withNonCurrentSession(
+  run: (context: {
+    cwd: string;
+    sessionDir: string;
+    currentManager: SessionManager;
+    targetManager: SessionManager;
+  }) => Promise<void>,
+): Promise<void> {
+  const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+  const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+  const originalFetch = globalThis.fetch;
+  try {
+    const currentManager = SessionManager.create(cwd, sessionDir);
+    const targetManager = SessionManager.create(cwd, sessionDir);
+    writeFileSync(
+      targetManager.getSessionFile() ?? "",
+      `${JSON.stringify({
+        type: "session",
+        version: 1,
+        id: targetManager.getSessionId(),
+        timestamp: new Date().toISOString(),
+        cwd,
+      })}\n`,
+    );
+    await run({ cwd, sessionDir, currentManager, targetManager });
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(cwd, { recursive: true, force: true });
+    await rm(sessionDir, { recursive: true, force: true });
+  }
+}
+
+function makeWriterController(options: {
+  cwd: string;
+  sessionDir: string;
+  currentManager: SessionManager;
+  askUserBridge: {
+    answer: (id: string, answer: string) => boolean;
+    cancel: (id: string) => boolean;
+    has?: (id: string, sessionId?: string) => boolean;
+  };
+}) {
+  return createSessionActionsController({
+    role: "writer",
+    cwd: options.cwd,
+    sessionDir: options.sessionDir,
+    getSession: () => ({}) as AgentSession,
+    getSessionManager: () => options.currentManager,
+    getModelSetupState: () => ({ requirement: "ready", providers: [], availableModels: [] }),
+    askUserBridge: options.askUserBridge,
+    runtime: {
+      newSession: async () => ({ cancelled: false }),
+      switchSession: async () => ({ cancelled: false }),
+    },
+    sendBoot: vi.fn(),
+    broadcastState: vi.fn(),
+    broadcastSessions: vi.fn(),
+    localSessionCoordinator: createLocalSessionCoordinator(),
+  });
+}
 
 function makeController(
   options: {

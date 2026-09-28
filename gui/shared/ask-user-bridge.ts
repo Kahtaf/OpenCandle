@@ -28,6 +28,12 @@ export function createAskUserBridge({
   answer: (id: string, answer: string) => boolean;
   cancel: (id: string) => boolean;
   /**
+   * Whether this process holds the still-pending question `id` (for
+   * `sessionId`, when given). The owner answers it locally; only a question
+   * held by another process needs to be proxied.
+   */
+  has: (id: string, sessionId?: string) => boolean;
+  /**
    * Cancel every open question for a session (its run was stopped), so the
    * tool waiting on each one settles as cancelled. Returns how many settled.
    */
@@ -93,6 +99,11 @@ export function createAskUserBridge({
     },
     cancel(id) {
       return resolvePrompt(id, { answer: null, cancelled: true });
+    },
+    has(id, sessionId) {
+      const item = pending.get(id);
+      if (!item) return false;
+      return sessionId === undefined || item.prompt.sessionId === sessionId;
     },
     cancelForSession(sessionId) {
       let cancelled = 0;

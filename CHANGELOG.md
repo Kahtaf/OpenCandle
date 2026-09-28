@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
 - A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.
 - An analysis no longer fails when a temporary model error is retried automatically and the retry succeeds.

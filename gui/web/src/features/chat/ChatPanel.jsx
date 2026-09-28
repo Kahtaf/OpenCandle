@@ -684,8 +684,9 @@ function AskUserPromptCard({ prompt, send }) {
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;
+    // Keep the draft: the server may still reject the answer (error toast),
+    // and a resolved question hides the input anyway.
     send("ask_user.answer", { id: prompt.id, sessionId: prompt.sessionId, answer: value });
-    setDraft("");
   };
   const cancel = () => {
     if (!disabled) send("ask_user.cancel", { id: prompt.id, sessionId: prompt.sessionId });

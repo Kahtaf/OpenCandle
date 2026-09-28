@@ -220,6 +220,41 @@ describe("GUI session journey", () => {
     ).toBe(true);
   }, 90_000);
 
+  it("answers an ask_user question in a reopened session that is not the server's current one", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A answers a quote, then New chat makes B the server's current
+    // session. Reopening A from the sidebar leaves the server on B, so the
+    // ask_user run below targets a non-current session owned by this process.
+    await startNewSession(page);
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    const reopenedSessionId = sessionIdFromUrl(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await startNewSession(page);
+    expect(sessionIdFromUrl(page)).not.toBe(reopenedSessionId);
+    await openSession(page, "AAPL quote journey");
+    expect(sessionIdFromUrl(page)).toBe(reopenedSessionId);
+
+    await submitPrompt(page, ASK_USER_PROMPT);
+    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+    await page.getByRole("button", { name: "1 year" }).click();
+    await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
+    await waitForRunIdle(page);
+
+    // The answer reached the model as the ask_user tool result.
+    expect(
+      harness.modelServer.requests.some((request) =>
+        request.messages.some(
+          (message) => message.role === "tool" && JSON.stringify(message).includes("User answered"),
+        ),
+      ),
+    ).toBe(true);
+    expect(sessionIdFromUrl(page)).toBe(reopenedSessionId);
+  }, 120_000);
+
   it("explicit Stop while an ask_user question is open ends the run and frees the session", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
