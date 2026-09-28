@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
+import { notifySessionActionError } from "../lib/session-action-errors.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -426,6 +427,7 @@ export function useGuiConnection() {
                 );
               }
             } else if (message.type === "error") {
+              notifySessionActionError(message.actionId);
               const inlineSetupError = resolveModelSetupErrorFromSocketError(message.message, {
                 actionId: message.actionId,
                 pendingModelKeySaveActionId: pendingModelKeySaveRef.current,

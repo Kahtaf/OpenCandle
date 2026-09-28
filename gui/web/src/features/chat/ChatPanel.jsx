@@ -13,7 +13,9 @@ import { Input } from "../../components/ui/input.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
+import { createSessionActionId } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
+import { subscribeSessionActionErrors } from "../../lib/session-action-errors.js";
 import { cn } from "../../lib/utils.js";
 import { HomeDashboard } from "../home/HomeDashboard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
@@ -679,17 +681,41 @@ function SessionLoadingState() {
 
 function AskUserPromptCard({ prompt, send }) {
   const [draft, setDraft] = useState("");
+  // actionId of the answer or cancel in flight. Until the question resolves
+  // (which hides these controls) or the server rejects that request, a second
+  // submit would only fail as "Unknown or resolved question".
+  const [inFlightActionId, setInFlightActionId] = useState("");
+  useEffect(() => {
+    if (!inFlightActionId) return undefined;
+    return subscribeSessionActionErrors((actionId) => {
+      if (actionId === inFlightActionId) setInFlightActionId("");
+    });
+  }, [inFlightActionId]);
   const pending = prompt.status === "pending";
-  const disabled = !pending;
+  const disabled = !pending || Boolean(inFlightActionId);
+  const sendOnce = (type, payload, prefix) => {
+    const actionId = createSessionActionId(prefix);
+    if (send(type, { ...payload, actionId }) !== false) setInFlightActionId(actionId);
+  };
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;
     // Keep the draft: the server may still reject the answer (error toast),
     // and a resolved question hides the input anyway.
-    send("ask_user.answer", { id: prompt.id, sessionId: prompt.sessionId, answer: value });
+    sendOnce(
+      "ask_user.answer",
+      { id: prompt.id, sessionId: prompt.sessionId, answer: value },
+      "ask-user-answer",
+    );
   };
   const cancel = () => {
-    if (!disabled) send("ask_user.cancel", { id: prompt.id, sessionId: prompt.sessionId });
+    if (!disabled) {
+      sendOnce(
+        "ask_user.cancel",
+        { id: prompt.id, sessionId: prompt.sessionId },
+        "ask-user-cancel",
+      );
+    }
   };
 
   return (
