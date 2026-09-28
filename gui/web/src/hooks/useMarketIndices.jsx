@@ -32,11 +32,14 @@ export class MarketIndicesStore {
 
   async refresh() {
     let quotes = [];
+    let failureReason = "";
     try {
       const snapshot = await this.transport.getMarketIndices();
       quotes = (snapshot.indices ?? []).filter((quote) => quote?.status === "ok");
-    } catch {
-      quotes = [];
+      if (quotes.length === 0) failureReason = "No index quotes available";
+    } catch (error) {
+      failureReason =
+        error instanceof Error && error.message ? error.message : "Quote refresh failed";
     }
     if (quotes.length > 0) {
       this.lastGoodQuotes = quotes;
@@ -45,10 +48,19 @@ export class MarketIndicesStore {
       this.setState({ loading: false, quotes, unavailable: false });
       return;
     }
-    // Keep the last good prices through a transient failure; only report the
-    // strip unavailable when no refresh has ever succeeded.
+    // Keep the last good prices through a transient failure, marked as
+    // retained so the strip shows its last-known-price warning; only report
+    // the strip unavailable when no refresh has ever succeeded.
     if (this.lastGoodQuotes) {
-      this.setState({ loading: false, quotes: this.lastGoodQuotes, unavailable: false });
+      const refreshFailedAt = new Date().toISOString();
+      const retained = this.lastGoodQuotes.map((quote) => ({
+        ...quote,
+        stale: true,
+        refreshStatus: "unavailable",
+        refreshReason: failureReason,
+        refreshFailedAt,
+      }));
+      this.setState({ loading: false, quotes: retained, unavailable: false });
     } else {
       this.setState({ loading: false, quotes: [], unavailable: true });
     }

@@ -125,7 +125,21 @@ describe("MarketIndicesStore", () => {
     await vi.advanceTimersByTimeAsync(QUOTE_REFRESH_INTERVAL_MS);
 
     expect(getMarketIndices).toHaveBeenCalledTimes(2);
-    expect(store.getState()).toEqual({ loading: false, quotes: [good], unavailable: false });
+    // The last good prices stay visible, marked with the shared retained-quote
+    // signal so the strip shows its last-known-price warning.
+    expect(store.getState()).toEqual({
+      loading: false,
+      quotes: [
+        {
+          ...good,
+          stale: true,
+          refreshStatus: "unavailable",
+          refreshReason: expect.any(String),
+          refreshFailedAt: expect.any(String),
+        },
+      ],
+      unavailable: false,
+    });
 
     await vi.advanceTimersByTimeAsync(2_000);
     expect(store.getState().quotes).toEqual([{ ...good, price: 6320 }]);
