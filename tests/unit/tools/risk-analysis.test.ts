@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cache } from "../../../src/infra/cache.js";
 import {
   computeDailyReturns,
   computeMaxDrawdown,
   computeRiskMetrics,
   computeVaR,
+  riskAnalysisTool,
 } from "../../../src/tools/portfolio/risk-analysis.js";
+import aaplHistory5y from "../../fixtures/yahoo/AAPL-history-5y.json";
 
 describe("computeDailyReturns", () => {
   it("computes percentage returns", () => {
@@ -97,5 +100,43 @@ describe("computeRiskMetrics", () => {
     expect(() => computeRiskMetrics("ZERO", [0, 0, 0])).toThrow(
       "insufficient usable price history",
     );
+  });
+});
+
+describe("riskAnalysisTool lookback window", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    cache.clear();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("fetches a 5y lookback and states the window in the header", async () => {
+    const fetchMock = vi.fn(async () => Response.json(aaplHistory5y));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await riskAnalysisTool.execute("risk-5y", { symbol: "AAPL", period: "5y" });
+    const text = (result.content[0] as { text: string }).text;
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("range=5y");
+    expect(text.split("\n")[0]).toBe(
+      "**AAPL Risk Analysis** (5y lookback: 2021-09-27 to 2026-09-25, 1305 days)",
+    );
+    expect(result.details?.symbol).toBe("AAPL");
+  });
+
+  it("states the default 1y lookback when no period is given", async () => {
+    const fetchMock = vi.fn(async () => Response.json(aaplHistory5y));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await riskAnalysisTool.execute("risk-default", { symbol: "AAPL" });
+    const text = (result.content[0] as { text: string }).text;
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("range=1y");
+    expect(text.split("\n")[0]).toContain("(1y lookback:");
   });
 });
