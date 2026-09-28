@@ -5,6 +5,12 @@ import type { ViteUserConfig } from "vitest/config";
 // browser suites) selects one of these with `--project <name>`, so each
 // project's include/exclude, environment, timeouts, and setup files stay
 // exactly as they were before consolidation.
+//
+// The in-process projects (unit, site, agent-tools) load
+// `tests/setup/isolate-env.ts` first: credentials blanked, the repo `.env`
+// blocked, and HOME/OPENCANDLE_HOME/Pi dirs in a throwaway directory. Tests opt
+// in to a value with `vi.stubEnv`, undone per test by `unstubEnvs`. The live
+// lanes (evals, gui-*) intentionally keep the host env.
 
 export const unitProject: ViteUserConfig = {
   test: {
@@ -12,7 +18,8 @@ export const unitProject: ViteUserConfig = {
     globals: true,
     environment: "node",
     include: ["tests/unit/**/*.test.ts"],
-    setupFiles: ["tests/setup/browser-shims.ts"],
+    setupFiles: ["tests/setup/isolate-env.ts", "tests/setup/browser-shims.ts"],
+    unstubEnvs: true,
   },
 };
 
@@ -22,7 +29,8 @@ export const siteProject: ViteUserConfig = {
     globals: true,
     environment: "node",
     include: ["tests/site/**/*.test.ts"],
-    setupFiles: ["tests/setup/browser-shims.ts"],
+    setupFiles: ["tests/setup/isolate-env.ts", "tests/setup/browser-shims.ts"],
+    unstubEnvs: true,
   },
 };
 
@@ -32,6 +40,8 @@ export const agentToolsProject: ViteUserConfig = {
     globals: true,
     environment: "node",
     include: ["tests/agent-tools/**/*.test.ts"],
+    setupFiles: ["tests/setup/isolate-env.ts"],
+    unstubEnvs: true,
   },
 };
 
