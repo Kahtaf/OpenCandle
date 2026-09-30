@@ -20,7 +20,11 @@ import { SettingsPage } from "./features/settings/SettingsPage.jsx";
 import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
-import { resolveVisibleModelSetup } from "./lib/session-model-setup.js";
+import {
+  addressModelCommand,
+  resolveVisibleModelSetup,
+  staleSessionModelToReload,
+} from "./lib/session-model-setup.js";
 import { appPageFromPath, domainFromPath, tickerFromPath } from "./route-resolution.js";
 import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
@@ -32,9 +36,6 @@ const CatalogOverlay = lazy(() =>
 // The catalog is a run surface: workflows and tools. `providers` stays an
 // accepted drawer value so old links resolve, but it now redirects to Settings.
 const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows"]);
-
-// Model commands that apply to one session, addressed to the visible one.
-const SESSION_MODEL_COMMANDS = new Set(["model.setup.select_model", "model.setup.set_thinking"]);
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -168,13 +169,7 @@ export function AppShell() {
   const guiSend = gui.send;
   const visibleSessionId = sessionView.activeSessionId;
   const sendForVisibleSession = useCallback(
-    (type, payload = {}) =>
-      guiSend(
-        type,
-        SESSION_MODEL_COMMANDS.has(type) && visibleSessionId && !payload.sessionId
-          ? { ...payload, sessionId: visibleSessionId }
-          : payload,
-      ),
+    (type, payload) => guiSend(type, addressModelCommand(type, payload, visibleSessionId)),
     [guiSend, visibleSessionId],
   );
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
@@ -283,11 +278,10 @@ export function AppShell() {
 
   // Keys changed since this session's model was loaded: reload it so the
   // picker shows the model the next run will actually use.
-  const visibleSessionModelStale = visibleSessionSnapshot?.sessionModelStale === true;
+  const staleSessionModelId = staleSessionModelToReload(visibleSessionSnapshot, activeSessionId);
   useEffect(() => {
-    if (!activeSessionId || !visibleSessionModelStale) return;
-    void gui.loadSession(activeSessionId);
-  }, [gui.loadSession, activeSessionId, visibleSessionModelStale]);
+    if (staleSessionModelId) void gui.loadSession(staleSessionModelId);
+  }, [gui.loadSession, staleSessionModelId]);
 
   // Data providers left the catalog for Settings. Links written against the old
   // drawer grammar, including the catalog links that named a provider, land on

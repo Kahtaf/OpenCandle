@@ -226,11 +226,16 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/api-key" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSaveModelApiKey(
+        const target = await options.modelSetupController.handleSaveModelApiKey(
           String(body.provider ?? ""),
           String(body.apiKey ?? ""),
+          optionalSessionId(body),
         );
         options.wsHub.broadcastModelSetup();
+        if (target && !target.current && target.sessionManager) {
+          options.wsHub.broadcastSessionSnapshot(target.sessionManager);
+          return target.sessionManager;
+        }
       });
       return;
     }

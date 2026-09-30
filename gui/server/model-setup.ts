@@ -89,7 +89,12 @@ export interface ModelSetupController {
   buildCurrentModelSetupState(): ModelSetupState;
   buildModelSetupStateForSession?(sessionManager: SessionManager): ModelSetupState;
   buildSessionModelState?(sessionManager: SessionManager): SessionModelState;
-  handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void>;
+  /** Saves a key (global) and selects its preferred model in the addressed session. */
+  handleSaveModelApiKey(
+    providerId: string,
+    apiKey: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget | undefined | void>;
   handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void>;
   /**
    * Picks the model for one session. A pick is session-scoped: it never
@@ -120,8 +125,11 @@ export interface ModelSetupControllerOptions {
   settingsManager?: SessionModelSettings;
   /** Opens a stored session by id; required for session-addressed changes. */
   resolveSessionManager?: (sessionId: string) => Promise<SessionManager | null>;
-  /** True while a chat run, here or in another process, owns the stored session. */
-  isSessionBusy?: (sessionId: string, sessionManager: SessionManager) => boolean;
+  /**
+   * True while a chat run owns the session. `sessionManager` is given for a
+   * stored session, whose run may belong to another process.
+   */
+  isSessionBusy?: (sessionId: string, sessionManager?: SessionManager) => boolean;
 }
 
 export function buildModelSetupState(
@@ -168,6 +176,12 @@ export function findPreferredModel(
   provider: ModelSetupProvider,
 ): Model<Api> | undefined {
   return findPreferredModelFromCatalog(registry.getAvailable(), provider);
+}
+
+class SessionBusyForModelChange extends Error {
+  constructor() {
+    super("Wait for this chat's reply to finish before changing its model.");
+  }
 }
 
 export function createModelSetupController({
@@ -253,9 +267,13 @@ export function createModelSetupController({
    * cannot slip in between the check and the write.
    */
   function assertStoredTargetIdle(sessionId: string, target: SessionManager): void {
-    if (isSessionBusy?.(sessionId, target)) {
-      throw new Error("Wait for this chat's reply to finish before changing its model.");
-    }
+    if (isSessionBusy?.(sessionId, target)) throw new SessionBusyForModelChange();
+  }
+
+  /** A model switch mid-reply would split one answer across two models. */
+  function assertCurrentSessionIdle(): void {
+    const currentId = getSessionManager().getSessionId?.();
+    if (currentId && isSessionBusy?.(currentId)) throw new SessionBusyForModelChange();
   }
 
   function buildCurrentModelSetupState(): ModelSetupState {
@@ -272,7 +290,11 @@ export function createModelSetupController({
     );
   }
 
-  async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
+  async function handleSaveModelApiKey(
+    providerId: string,
+    apiKey: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget> {
     ensureWriter();
 
     const provider = modelSetupProviders.find((candidate) => candidate.id === providerId);
@@ -311,15 +333,27 @@ export function createModelSetupController({
       );
     }
 
-    await session.setModel(model);
+    // The key is global; the model it selects belongs to the session on
+    // screen. A session busy with a reply keeps its model; the key is saved.
+    let target: ModelSetupTarget;
+    try {
+      target = await applyModelToSession(model, sessionId);
+    } catch (error) {
+      if (error instanceof SessionBusyForModelChange) {
+        broadcastState();
+        return { current: isCurrentSessionId(sessionId) };
+      }
+      throw error;
+    }
     await session.settingsManager.flush();
-    getSessionManager().appendCustomMessageEntry(
+    (target.sessionManager ?? getSessionManager()).appendCustomMessageEntry(
       "opencandle-model-setup",
       `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );
     broadcastState();
+    return target;
   }
 
   async function handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -374,19 +408,27 @@ export function createModelSetupController({
   ): Promise<ModelSetupTarget> {
     ensureWriter();
     const session = getSession();
-    if (isCurrentSessionId(sessionId)) {
-      await session.modelRuntime.refresh();
-      const model = session.modelRuntime.getModel(provider, modelId);
-      if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
-      // No `persist`: the pick belongs to this session, not the saved default.
-      await session.setModel(model);
-      await session.settingsManager.flush();
-      return { current: true };
-    }
-
     await session.modelRuntime.refresh();
     const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
+    const target = await applyModelToSession(model, sessionId);
+    if (target.current) await session.settingsManager.flush();
+    return target;
+  }
+
+  /** Puts one session on `model`; never changes the saved default. */
+  async function applyModelToSession(
+    model: Model<Api>,
+    sessionId: string | undefined,
+  ): Promise<ModelSetupTarget> {
+    const session = getSession();
+    if (isCurrentSessionId(sessionId)) {
+      assertCurrentSessionIdle();
+      // No `persist`: the pick belongs to this session, not the saved default.
+      await session.setModel(model);
+      return { current: true };
+    }
+
     if (!session.modelRuntime.hasConfiguredAuth(model.provider)) {
       throw new Error(`No API key for ${model.provider}/${model.id}`);
     }
@@ -414,6 +456,7 @@ export function createModelSetupController({
   ): Promise<ModelSetupTarget> {
     ensureWriter();
     if (isCurrentSessionId(sessionId)) {
+      assertCurrentSessionIdle();
       const session = getSession();
       const available = session.getAvailableThinkingLevels?.() ?? [];
       if (!available.includes(level as ThinkingLevel) || !session.setThinkingLevel) {

@@ -24,9 +24,11 @@ import {
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 import { subscribeSessionActionErrors } from "../../../gui/web/src/lib/session-action-errors.js";
 import {
+  addressModelCommand,
   markSessionModelsStale,
   modelAvailabilitySignature,
   resolveVisibleModelSetup,
+  staleSessionModelToReload,
 } from "../../../gui/web/src/lib/session-model-setup.js";
 
 describe("useGuiConnection helpers", () => {
@@ -443,6 +445,35 @@ describe("useGuiConnection helpers", () => {
       expect(refreshed["session-a"]?.sessionModelStale).toBeUndefined();
     });
 
+    it("addresses model commands to the visible session", () => {
+      expect(addressModelCommand("model.setup.select_model", { modelId: "m" }, "b")).toEqual({
+        modelId: "m",
+        sessionId: "b",
+      });
+      expect(addressModelCommand("model.setup.set_thinking", { level: "high" }, "b")).toEqual({
+        level: "high",
+        sessionId: "b",
+      });
+      expect(addressModelCommand("model.setup.save_api_key", undefined, "b")).toEqual({
+        sessionId: "b",
+      });
+      // An explicit session, another command, or no visible session is left alone.
+      expect(addressModelCommand("model.setup.select_model", { sessionId: "a" }, "b")).toEqual({
+        sessionId: "a",
+      });
+      expect(addressModelCommand("session.rename", { name: "x" }, "b")).toEqual({ name: "x" });
+      expect(addressModelCommand("model.setup.select_model", { modelId: "m" }, "")).toEqual({
+        modelId: "m",
+      });
+    });
+
+    it("reloads only a visible session whose model went stale", () => {
+      expect(staleSessionModelToReload({ sessionModelStale: true }, "b")).toBe("b");
+      expect(staleSessionModelToReload({ sessionModelStale: true }, "")).toBe("");
+      expect(staleSessionModelToReload({ sessionModel: {} }, "b")).toBe("");
+      expect(staleSessionModelToReload(null, "b")).toBe("");
+    });
+
     it("addresses HTTP fallback model changes to the visible session", () => {
       expect(
         buildHttpFallbackMessageRequest("model.setup.select_model", {
@@ -462,6 +493,16 @@ describe("useGuiConnection helpers", () => {
       ).toEqual({
         path: "/api/model-setup/thinking",
         body: { level: "high", sessionId: "session-b" },
+      });
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.save_api_key", {
+          provider: "google",
+          apiKey: "gem-key",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/api-key",
+        body: { provider: "google", apiKey: "gem-key", sessionId: "session-b" },
       });
     });
   });

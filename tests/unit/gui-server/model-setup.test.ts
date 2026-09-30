@@ -429,6 +429,60 @@ describe("GUI model setup", () => {
       expect(other.buildSessionContext().model?.modelId).toBe("gemini-2.5-flash");
     });
 
+    it("refuses to change the current session's model while its reply is running", async () => {
+      const { controller, globalSession, currentManager } = await setup({ busy: true });
+
+      await expect(
+        controller.handleSelectModel("openai", "gpt-5.5", currentManager.getSessionId()),
+      ).rejects.toThrow("finish");
+      await expect(
+        controller.handleSetThinkingLevel?.("off", currentManager.getSessionId()),
+      ).rejects.toThrow("finish");
+      expect(globalSession.setModel).not.toHaveBeenCalled();
+      expect(globalSession.setThinkingLevel).not.toHaveBeenCalled();
+    });
+
+    it("selects a newly connected provider's model in the addressed session only", async () => {
+      const preferred = model("google", "gemini-2.5-flash");
+      const setModel = vi.fn(async () => {});
+      const settingsManager = SettingsManager.inMemory();
+      const currentManager = SessionManager.inMemory();
+      const currentEntries = vi.spyOn(currentManager, "appendCustomMessageEntry");
+      const other = SessionManager.inMemory();
+      const modelRuntime = {
+        login: async () => {},
+        getAvailableSnapshot: () => [preferred],
+        hasConfiguredAuth: () => true,
+        getModel: (provider: string, id: string) =>
+          provider === "google" && id === "gemini-2.5-flash" ? preferred : undefined,
+        refresh: async () => {},
+      };
+      const controller = createModelSetupController({
+        role: "writer",
+        getSession: () => ({ modelRuntime, setModel, settingsManager }) as never,
+        getSessionManager: () => currentManager,
+        broadcastState: vi.fn(),
+        settingsManager,
+        resolveSessionManager: async (sessionId) =>
+          sessionId === other.getSessionId() ? other : null,
+      });
+
+      const target = await controller.handleSaveModelApiKey(
+        "google",
+        "gem-key",
+        other.getSessionId(),
+      );
+
+      expect(target).toMatchObject({ current: false });
+      expect(setModel).not.toHaveBeenCalled();
+      expect(currentEntries).not.toHaveBeenCalled();
+      expect(other.buildSessionContext().model).toEqual({
+        provider: "google",
+        modelId: "gemini-2.5-flash",
+      });
+      expect(JSON.stringify(other.getEntries())).toContain("opencandle-model-setup");
+    });
+
     it("rejects a model without a configured key for a non-current session", async () => {
       const { controller, other } = await setup();
 

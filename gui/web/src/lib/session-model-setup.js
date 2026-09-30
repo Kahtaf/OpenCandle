@@ -51,3 +51,23 @@ export function markSessionModelsStale(sessionSnapshots) {
   }
   return changed ? next : sessionSnapshots;
 }
+
+// Model commands that apply to one session. A key save is global, but the
+// model it selects belongs to the session on screen.
+const SESSION_MODEL_COMMANDS = new Set([
+  "model.setup.save_api_key",
+  "model.setup.select_model",
+  "model.setup.set_thinking",
+]);
+
+/** Addresses a model command to the visible session unless it names one. */
+export function addressModelCommand(type, payload, visibleSessionId) {
+  const body = payload || {};
+  if (!SESSION_MODEL_COMMANDS.has(type) || !visibleSessionId || body.sessionId) return body;
+  return { ...body, sessionId: visibleSessionId };
+}
+
+/** The session id to reload when its cached model went stale, else "". */
+export function staleSessionModelToReload(snapshot, sessionId) {
+  return snapshot?.sessionModelStale === true && sessionId ? sessionId : "";
+}

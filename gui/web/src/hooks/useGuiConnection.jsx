@@ -96,6 +96,7 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
           provider: payload.provider,
           apiKey: payload.apiKey,
           ...(payload.storageMode ? { storageMode: payload.storageMode } : {}),
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
         },
       };
     case "model.setup.select_model":

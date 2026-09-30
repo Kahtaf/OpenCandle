@@ -293,6 +293,116 @@ describe("GUI WS hub", () => {
     });
   });
 
+  describe("session-addressed model commands (issue #217)", () => {
+    const stored = {
+      getSessionId: () => "session-2",
+      getSessionName: () => "Historical session",
+      getEntries: () => [],
+    } as unknown as SessionManager;
+
+    async function hubWithController(controller: Partial<ModelSetupController>) {
+      const client = createFakeClient();
+      const hub = createWsHub({
+        ...baseHubOptions(),
+        modelSetupController: {
+          ...baseHubOptions().modelSetupController,
+          buildSessionModelState: (sessionManager: SessionManager) => ({
+            currentModel: `for/${sessionManager.getSessionId()}`,
+          }),
+          ...controller,
+        } as ModelSetupController,
+        acceptWebSocketFn: () => client,
+      });
+      hub.handleUpgrade(
+        { url: "/ws" } as IncomingMessage,
+        { destroy: vi.fn() } as unknown as Duplex,
+      );
+      // Let boot finish (its session list arrives asynchronously) before
+      // asserting on what the command itself broadcasts.
+      await vi.waitFor(() =>
+        expect(client.messages.some((message) => asRecord(message).type === "sessions")).toBe(true),
+      );
+      client.messages.length = 0;
+      return client;
+    }
+
+    it.each([
+      ["model.setup.select_model", { provider: "openai", modelId: "gpt-6-luna" }],
+      ["model.setup.set_thinking", { level: "high" }],
+    ])("sends %s to the addressed session and broadcasts its snapshot", async (type, payload) => {
+      const handleSelectModel = vi.fn(async () => ({
+        current: false,
+        sessionManager: stored,
+      }));
+      const handleSetThinkingLevel = vi.fn(async () => ({
+        current: false,
+        sessionManager: stored,
+      }));
+      const client = await hubWithController({ handleSelectModel, handleSetThinkingLevel });
+
+      client.messageHandlers[0]?.({ type, ...payload, sessionId: " session-2 " });
+
+      await vi.waitFor(() =>
+        expect(client.messages.at(-1)).toMatchObject({
+          type: "session.snapshot",
+          sessionId: "session-2",
+          sessionModel: { currentModel: "for/session-2" },
+        }),
+      );
+      const handler =
+        type === "model.setup.select_model" ? handleSelectModel : handleSetThinkingLevel;
+      expect(handler.mock.calls[0]?.at(-1)).toBe("session-2");
+      expect(client.messages.some((message) => asRecord(message).type === "model.setup")).toBe(
+        false,
+      );
+    });
+
+    it("broadcasts model setup and the current state for a current-session change", async () => {
+      const handleSelectModel = vi.fn(async () => ({ current: true }));
+      const client = await hubWithController({ handleSelectModel });
+
+      client.messageHandlers[0]?.({
+        type: "model.setup.select_model",
+        provider: "openai",
+        modelId: "gpt-6-luna",
+      });
+
+      await vi.waitFor(() =>
+        expect(client.messages.map((message) => asRecord(message).type)).toEqual([
+          "model.setup",
+          "state.snapshot",
+        ]),
+      );
+      expect(handleSelectModel.mock.calls[0]?.at(-1)).toBeUndefined();
+      expect(client.messages.at(-1)).toMatchObject({
+        sessionModel: { currentModel: "for/session-1" },
+      });
+    });
+
+    it("broadcasts availability and the addressed session after a key save", async () => {
+      const handleSaveModelApiKey = vi.fn(async () => ({
+        current: false,
+        sessionManager: stored,
+      }));
+      const client = await hubWithController({ handleSaveModelApiKey });
+
+      client.messageHandlers[0]?.({
+        type: "model.setup.save_api_key",
+        provider: "google",
+        apiKey: "gem-key",
+        sessionId: "session-2",
+      });
+
+      await vi.waitFor(() =>
+        expect(client.messages.map((message) => asRecord(message).type)).toEqual([
+          "model.setup",
+          "session.snapshot",
+        ]),
+      );
+      expect(handleSaveModelApiKey).toHaveBeenCalledWith("google", "gem-key", "session-2");
+    });
+  });
+
   function baseHubOptions() {
     return {
       role: "writer",

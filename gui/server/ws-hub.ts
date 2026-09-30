@@ -151,13 +151,19 @@ export function createWsHub({
           await getSession().modelRuntime.refresh();
           broadcastModelSetup();
           break;
-        case "model.setup.save_api_key":
-          await modelSetupController.handleSaveModelApiKey(
+        case "model.setup.save_api_key": {
+          // The key is global; its model lands on the session on screen.
+          const target = await modelSetupController.handleSaveModelApiKey(
             String(data.provider ?? ""),
             String(data.apiKey ?? ""),
+            optionalSessionId(data),
           );
           broadcastModelSetup();
+          if (target && !target.current && target.sessionManager) {
+            broadcastSessionSnapshot(target.sessionManager);
+          }
           break;
+        }
         case "model.setup.select_model": {
           // Session-addressed (issue #217): the pick applies to the session
           // the browser shows, which need not be the server's current one.

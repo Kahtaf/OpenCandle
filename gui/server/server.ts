@@ -152,7 +152,8 @@ const modelSetupController = createModelSetupController({
       sessionId,
     ),
   isSessionBusy: (sessionId, targetSessionManager) =>
-    activeRunSessionIds.has(sessionId) || shouldBlockFailedCoordinatorAction(targetSessionManager),
+    activeRunSessionIds.has(sessionId) ||
+    (targetSessionManager ? shouldBlockFailedCoordinatorAction(targetSessionManager) : false),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
