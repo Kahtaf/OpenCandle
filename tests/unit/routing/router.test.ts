@@ -3600,6 +3600,39 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("treats a bought-worth amount as a purchase total", async () => {
+    const total = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought $15,000 worth of AAPL representing 100 shares. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+    const derived = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought $15,000 worth of AAPL representing 100 shares. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(total.entities.costBasis).toBeUndefined();
+    expect(derived.entities.costBasis).toBe(150);
+  });
+
+  it("accepts a currency word in a bare basis reply", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "150 dollars",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

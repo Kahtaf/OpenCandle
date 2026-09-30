@@ -1611,10 +1611,10 @@ function skipLeadingCurrency(rest: string): string {
 }
 // What may surround a bare basis answer: approximation, per-share, currency.
 const BARE_ANSWER_FILLER =
-  /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|[A-Z]{3})\b|[~$\s]/gi;
+  /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|dollars?|bucks|euros?|pounds?|yen|[A-Z]{3})\b|[~$\s]/gi;
 const TOTAL_PREFIX =
   /\b(?:paid|spent|invested|total(?:\s+of)?|totall?ing|(?<!\b(?:average|avg|unit|share)\s)costs?(?:\s+me)?|for)\s*$/i;
-const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
+const TOTAL_SUFFIX = /^\s*(?:(?:total\s+|in\s+total\s+)?for|worth)\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
 const NON_BASIS_SUFFIX =
