@@ -1606,7 +1606,8 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
 // directly, unless it carries a per-share marker ("at $150", "$150 per share").
 const STATED_NUMBER =
   /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
-const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b/;
+// Only share counts are quantities; option contracts or lots are not shares.
+const QUANTITY_SUFFIX = /^(?:\s*|-)shares?\b/;
 const TICKER_SUFFIX = /^\s*([A-Za-z]{1,5})\b/;
 const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
 const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|(?:for\s+)?each\b|apiece\b)/i;
@@ -1656,6 +1657,10 @@ function isCurrencyUsage(text: string, symbol: string): boolean {
   );
 }
 
+// Negation in an amount's lead-in ("cost basis is not $100") rejects it, even
+// after an explicit basis label.
+const NEGATION_CONTEXT = /\b(?:not|never|no\s+longer)\b|n't\b/i;
+
 // Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
 const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
@@ -1663,7 +1668,7 @@ const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...Intl.supportedValuesOf("currency"),
 ]);
 const NON_AMOUNT_SUFFIX =
-  /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?)\b)/i;
+  /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?|contracts?|lots?)\b)/i;
 
 // Calendar years ("in 2020") and date components ("3/15", "March 15") are not
 // amounts.
@@ -1792,7 +1797,8 @@ function parseStatedNumbers(
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
     const { leadIn, afterBasisLabel } = localLeadIn(text, start, prevEnd);
     const isNonBasisContext =
-      !afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn));
+      NEGATION_CONTEXT.test(leadIn) ||
+      (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
       value,

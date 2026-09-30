@@ -3697,6 +3697,24 @@ describe("router cost-basis context guard", () => {
     expect(quantity.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a basis in a negated amount", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "My AAPL cost basis is not $100. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("never divides a purchase total by an option contract count", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own AAPL and paid $300 for 2 contracts; covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
