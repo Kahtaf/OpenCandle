@@ -2,6 +2,7 @@ import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
 import { normalizeToolOutput } from "../shared/tool-output.js";
+import { userStoppedAssistantEntries } from "./run-stop-marker.js";
 
 export interface SessionEventOptions {
   sessionId: string;
@@ -21,6 +22,8 @@ export function sessionEntriesToChatEvents(
   const resolvedToolCalls = new Set<string>();
   const pendingToolCalls = new Map<string, { name: string }>();
   const assistantErrorsWithExplicitFailure = pairedAssistantFailureIds(entries);
+  // Abort-shaped error replies from runs the user stopped (durable marker).
+  const userStoppedAssistants = userStoppedAssistantEntries(entries);
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
@@ -169,7 +172,8 @@ export function sessionEntriesToChatEvents(
 
     if (message.role === "assistant") {
       lastEntryWasUserMessage = false;
-      const failure = assistantFailure(message);
+      const userStopped = userStoppedAssistants.has(messageId);
+      const failure = userStopped ? null : assistantFailure(message);
       if (failure) {
         if (!assistantErrorsWithExplicitFailure.has(messageId)) {
           events.push({
@@ -194,10 +198,13 @@ export function sessionEntriesToChatEvents(
       // Keep any partial text, then mark the turn stopped (with Retry) so a
       // reload never shows it as a complete answer. An empty aborted reply
       // renders only the stopped notice.
-      const stopped = message.stopReason === "aborted";
+      // A Stop during a tool call instead ends in an abort-shaped "error"
+      // reply; the run's stop marker (userStopped) says the user caused it.
+      const stopped = message.stopReason === "aborted" || userStopped;
+      const stoppedRetryPrompt = userStoppedAssistants.get(messageId) ?? lastRetryPrompt;
       if (stopped && !assistantHasVisibleContent(message)) {
         events.push(
-          stoppedAssistantEvent(options.sessionId, messageId, false, lastRetryPrompt, seq++),
+          stoppedAssistantEvent(options.sessionId, messageId, false, stoppedRetryPrompt, seq++),
         );
         continue;
       }
@@ -241,7 +248,7 @@ export function sessionEntriesToChatEvents(
       });
       if (stopped) {
         events.push(
-          stoppedAssistantEvent(options.sessionId, messageId, true, lastRetryPrompt, seq++),
+          stoppedAssistantEvent(options.sessionId, messageId, true, stoppedRetryPrompt, seq++),
         );
       }
       continue;
@@ -430,7 +437,6 @@ function workflowStepMetadata(entries: SessionEntry[]): Map<string, WorkflowStep
     ) {
       activeGroup = null;
       pendingOriginalInput = false;
-      continue;
     }
   }
 

@@ -1040,6 +1040,181 @@ describe("sessionEntriesToChatEvents", () => {
     );
   });
 
+  describe("Stop during a tool call", () => {
+    const abortedAfterTool = (id: string) =>
+      messageEntry(id, {
+        ...assistantMessage(""),
+        content: [],
+        stopReason: "error",
+        errorMessage: "This operation was aborted",
+      } as Message);
+    const toolUse = (id: string, toolCallId: string, name: string) =>
+      messageEntry(id, {
+        ...assistantMessage(""),
+        content: [{ type: "toolCall", id: toolCallId, name, arguments: { symbol: "AAPL" } }],
+        stopReason: "toolUse",
+      } as Message);
+    const toolResult = (id: string, toolCallId: string, name: string) =>
+      messageEntry(id, {
+        role: "toolResult",
+        toolCallId,
+        toolName: name,
+        content: [{ type: "text", text: "AAPL: $189.42" }],
+        isError: false,
+        timestamp: Date.now(),
+      } as Message);
+    const modelFailures = (events: ReturnType<typeof sessionEntriesToChatEvents>) =>
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-model-run-failed",
+      );
+    const stoppedNotices = (events: ReturnType<typeof sessionEntriesToChatEvents>) =>
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+      );
+
+    it("renders a user-stopped /analyze run whose next model call errored as Stopped", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          customEntry("in-1", "opencandle-user-input", { original: "/analyze AAPL" }),
+          customEntry("wf-1", "opencandle-workflow", { workflow: "comprehensive_analysis" }),
+          messageEntry("u1", {
+            role: "user",
+            content: "Begin comprehensive analysis of AAPL.",
+            timestamp: Date.now(),
+          } as Message),
+          toolUse("a1", "call-1", "get_stock_quote"),
+          customEntry("wf-ev", "opencandle-workflow-event", {
+            eventType: "workflow_interrupted",
+            reason: "stopped",
+          }),
+          customEntry("wf-done", "opencandle-workflow-complete", {
+            workflow: "comprehensive_analysis",
+            status: "failed",
+            reason: "stopped",
+          }),
+          toolResult("t1", "call-1", "get_stock_quote"),
+          abortedAfterTool("a2"),
+          customEntry("stop-1", "opencandle-run-stopped", {
+            actionId: "chat-1",
+            prompt: "/analyze AAPL",
+            assistantEntryIds: ["a2"],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(modelFailures(events)).toEqual([]);
+      expect(stoppedNotices(events)).toEqual([
+        expect.objectContaining({
+          messageId: "stopped-a2",
+          content: [{ type: "text", text: "Run stopped before it produced an answer." }],
+          details: { reason: "aborted", prompt: "/analyze AAPL" },
+        }),
+      ]);
+    });
+
+    it("renders a user-stopped plain agent run (ask_user tool) as Stopped", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", {
+            role: "user",
+            content: "What is the social media sentiment on AAPL?",
+            timestamp: Date.now(),
+          } as Message),
+          toolUse("a1", "call-1", "get_sentiment_summary"),
+          toolResult("t1", "call-1", "get_sentiment_summary"),
+          abortedAfterTool("a2"),
+          customEntry("stop-1", "opencandle-run-stopped", {
+            actionId: "chat-1",
+            prompt: "What is the social media sentiment on AAPL?",
+            assistantEntryIds: ["a2"],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(modelFailures(events)).toEqual([]);
+      expect(stoppedNotices(events)).toEqual([
+        expect.objectContaining({
+          messageId: "stopped-a2",
+          details: { reason: "aborted", prompt: "What is the social media sentiment on AAPL?" },
+        }),
+      ]);
+    });
+
+    it("keeps an abort-shaped error with no recorded Stop as a model failure", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", {
+            role: "user",
+            content: "What is AAPL trading at?",
+            timestamp: Date.now(),
+          } as Message),
+          toolUse("a1", "call-1", "get_stock_quote"),
+          toolResult("t1", "call-1", "get_stock_quote"),
+          abortedAfterTool("a2"),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(stoppedNotices(events)).toEqual([]);
+      expect(modelFailures(events)).toEqual([
+        expect.objectContaining({
+          content: [{ type: "text", text: "This operation was aborted" }],
+          details: expect.objectContaining({ reason: "model_error" }),
+        }),
+      ]);
+    });
+
+    it("keeps a genuine model error in a stopped run as a model failure", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", {
+            role: "user",
+            content: "What is AAPL trading at?",
+            timestamp: Date.now(),
+          } as Message),
+          messageEntry("a1", {
+            ...assistantMessage(""),
+            content: [],
+            stopReason: "error",
+            errorMessage: "401 Unauthorized: invalid API key",
+          } as Message),
+          customEntry("stop-1", "opencandle-run-stopped", {
+            actionId: "chat-1",
+            prompt: "What is AAPL trading at?",
+            assistantEntryIds: ["a1"],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(stoppedNotices(events)).toEqual([]);
+      expect(modelFailures(events)).toHaveLength(1);
+    });
+
+    it("does not reclassify an earlier turn's abort error when a later run is stopped", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", { role: "user", content: "first", timestamp: Date.now() } as Message),
+          abortedAfterTool("a1"),
+          customEntry("cancel-1", "opencandle-run-cancelled", { text: "second" }),
+          customEntry("stop-2", "opencandle-run-stopped", {
+            actionId: "chat-2",
+            prompt: "second",
+            assistantEntryIds: [],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(modelFailures(events)).toHaveLength(1);
+      expect(stoppedNotices(events).map((event) => event.messageId)).toEqual(["cancel-1"]);
+    });
+  });
+
   it("does not derive a user bubble when the cancelled marker has no text", () => {
     const events = sessionEntriesToChatEvents(
       [customEntry("cancel-2", "opencandle-run-cancelled", {})],

@@ -529,6 +529,41 @@ describe("hosted runtime transport", () => {
     channel?.close();
   });
 
+  it("tags a rejected host command's error with the command's action id", async () => {
+    const host = createHost();
+    host.handleCommand = vi.fn(async () => {
+      throw new Error("Unknown or resolved question");
+    });
+    const transport = createHostedRuntimeTransport({ host });
+    const messages: Array<Record<string, unknown>> = [];
+    const channel = transport.openEventChannel({
+      onMessage: (message: string) => messages.push(JSON.parse(message)),
+      onClose: vi.fn(),
+    });
+    await vi.waitFor(() => expect(messages.length).toBeGreaterThan(0));
+
+    channel?.send(
+      JSON.stringify({
+        type: "ask_user.answer",
+        id: "ask-1",
+        answer: "AAPL",
+        sessionId: "session-1",
+        actionId: "ask-user-answer-1",
+      }),
+    );
+
+    // The browser attributes the failure to the request that caused it, as
+    // it does for the local GUI server's error frames.
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        type: "error",
+        actionId: "ask-user-answer-1",
+        message: "Unknown or resolved question",
+      }),
+    );
+    channel?.close();
+  });
+
   it("restores the GUI command type when an HTTP fallback route carries only its body", async () => {
     const host = createHost();
     const transport = createHostedRuntimeTransport({ host });

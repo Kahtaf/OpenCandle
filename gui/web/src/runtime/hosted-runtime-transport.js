@@ -299,6 +299,9 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
               }
               publish({
                 type: "error",
+                // Echo the request's actionId, as the local GUI server does, so
+                // the browser can attribute the failure to its request.
+                ...(command.actionId ? { actionId: String(command.actionId) } : {}),
                 message,
               });
             });

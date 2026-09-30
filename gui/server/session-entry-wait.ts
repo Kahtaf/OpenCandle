@@ -209,6 +209,10 @@ export function findUnresolvedToolCalls(entries: SessionEntry[]): UnresolvedTool
   if (latestAssistantIndex === -1) return [];
 
   const assistant = asMessage(entries[latestAssistantIndex]);
+  // Pi never executes the tool calls of a reply that ended in an abort or
+  // error (e.g. Stop while the model streamed a tool call), so no result will
+  // ever arrive for them.
+  if (assistant?.stopReason === "aborted" || assistant?.stopReason === "error") return [];
   const calls = toolCallsFromContent(assistant?.content);
   if (calls.length === 0) return [];
 
