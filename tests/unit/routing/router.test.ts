@@ -3579,6 +3579,27 @@ describe("router cost-basis context guard", () => {
     expect(rose.entities.costBasis).toBeUndefined();
   });
 
+  it("attaches a price before a ticker to the following holding", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I paid $150 for AAPL alongside my MSFT position; covered calls on MSFT?",
+      },
+      outputFor({ symbols: ["MSFT", "AAPL"], heldSymbol: "MSFT", costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("lets an explicit basis label override quote wording", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "My AAPL cost basis is now $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
