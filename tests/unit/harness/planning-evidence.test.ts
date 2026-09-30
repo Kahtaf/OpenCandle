@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSkippedTag, buildSoftDegradedTag } from "../../../src/onboarding/tool-tags.js";
+import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
+import regularFixture from "../../fixtures/yahoo/options-AAPL-regular.json";
 import {
   buildMarketStatusEvidence,
   buildPortfolioExposureMapEvidence,
@@ -9,6 +11,7 @@ import {
   normalizeProviderGapFromToolText,
   providerResultToPlanningEvidence,
 } from "../../harness/planning-evidence.js";
+import { optionChainToolResult } from "../../helpers/option-chain-results.js";
 
 describe("planning evidence plans", () => {
   it("implements only market_status and ticker_disambiguation evidence plans", () => {
@@ -234,5 +237,46 @@ describe("planning evidence normalization", () => {
         reason: "missing API key",
       }),
     );
+  });
+});
+
+describe("option-chain evidence capture", () => {
+  it("keeps quote status, a quote-freshness gap, and the tool fetch time for stale chains", async () => {
+    const result = await optionChainToolResult(afterHoursFixture);
+    const details = result.details as { freshness: { fetchedAt: string } };
+    const record = captureEvidenceFromToolCall({
+      name: "get_option_chain",
+      args: { symbol: "AAPL" },
+      result,
+      isError: false,
+    });
+
+    expect(record.observedAt).toBe(details.freshness.fetchedAt);
+    expect(record.observedAt).not.toBe(new Date(0).toISOString());
+    expect(record.normalizedFacts.quoteStatus).toMatchObject({
+      bidAskState: "last_session_quotes",
+      marketSession: "after_hours",
+      providerMarketState: "POST",
+    });
+    expect(record.gaps).toEqual([
+      expect.objectContaining({
+        kind: "quote_freshness",
+        reason: expect.stringContaining("last_session_quotes"),
+      }),
+    ]);
+  });
+
+  it("records live regular-session chains without a quote-freshness gap", async () => {
+    const result = await optionChainToolResult(regularFixture);
+    const record = captureEvidenceFromToolCall({
+      name: "get_option_chain",
+      args: { symbol: "AAPL" },
+      result,
+      isError: false,
+    });
+
+    expect(record.normalizedFacts.quoteStatus).toMatchObject({ bidAskState: "live_quotes" });
+    expect(record.gaps).toEqual([]);
+    expect(record.observedAt).not.toBe(new Date(0).toISOString());
   });
 });

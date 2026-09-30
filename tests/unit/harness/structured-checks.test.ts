@@ -519,3 +519,51 @@ describe("structured checks", () => {
     expect(fallback.mode).toBe("diagnostic_only");
   });
 });
+
+describe("quote freshness data-gap disclosure", () => {
+  const staleChain: PlanningEvidenceRecord = {
+    id: "tool_result:get_option_chain",
+    evidenceType: "tool_result",
+    source: { toolName: "get_option_chain" },
+    entityScope: { symbols: ["TEST"] },
+    observedAt: "2026-05-21T02:05:00.000Z",
+    providerStatus: "available",
+    normalizedFacts: { quoteStatus: { bidAskState: "last_session_quotes" } },
+    gaps: [
+      {
+        kind: "quote_freshness",
+        reason: "Option quotes are last_session_quotes (after_hours), not live.",
+      },
+    ],
+    caveats: [],
+  };
+  const metadata = {
+    commitmentMode: "decision" as const,
+    finalFields: ["data_gap_disclosure" as const],
+    disclosedProviderStatuses: ["unavailable"],
+  };
+
+  function dataGap(answerText: string) {
+    return runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.options_strategy,
+      evidenceRecords: [staleChain],
+      finalAnswerMetadata: metadata,
+      answerText,
+    }).results.find((result) => result.checkId === "data_gap_disclosed");
+  }
+
+  it("fails when the answer does not disclose non-live option quotes", () => {
+    expect(
+      dataGap("Buy the call for $4.80. Some data is unavailable; verify with your broker."),
+    ).toMatchObject({
+      passed: false,
+      failureReason: expect.stringContaining("quote"),
+    });
+  });
+
+  it("passes when the answer discloses last-session quotes", () => {
+    expect(
+      dataGap("The $4.80 premium is a last-session quote and is not executable now.")?.passed,
+    ).toBe(true);
+  });
+});

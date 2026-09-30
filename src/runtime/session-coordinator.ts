@@ -44,6 +44,8 @@ import {
   toStepDefinitions,
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
+import { buildNonLiveQuoteNotice, extractQuoteStatusSummary } from "./quote-freshness.js";
+import { OPTION_QUOTE_NOTICE_TYPE } from "./quote-notice.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
 import type { StateDatabase } from "./state-database.js";
 import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
@@ -909,6 +911,25 @@ export class SessionCoordinator {
         status,
         ...(reason ? { reason } : {}),
       });
+      // Answers built from non-live option chains get a fixed notice derived
+      // from the chain's own quote status, never from the model's wording.
+      // finishWorkflowRun runs once per run, so the notice is never repeated.
+      if (!reason) {
+        const notice = buildNonLiveQuoteNotice(
+          [...completedRun.stepOutputs.values()].flatMap((output) => output.evidence),
+        );
+        if (notice) {
+          pi.sendMessage(
+            {
+              customType: OPTION_QUOTE_NOTICE_TYPE,
+              content: [{ type: "text", text: notice }],
+              display: true,
+              details: { reason: "non_live_option_quotes" },
+            },
+            { triggerTurn: false },
+          );
+        }
+      }
       // A clean terminal output-validation rejection leaves the fabricated
       // draft as the last assistant message. Emit a deterministic, visible
       // notice (no new model turn) so that draft is not presented as a
@@ -1176,6 +1197,7 @@ function toolEvidenceRecord(input: {
 }): EvidenceRecord {
   const serializedResult = serializeToolValue(input.result);
   const freshness = extractFreshness(input.result);
+  const quoteStatus = extractQuoteStatusSummary(input.result);
   return {
     label: `tool:${input.tool}`,
     value: {
@@ -1183,6 +1205,7 @@ function toolEvidenceRecord(input: {
       args: truncateToolValue(serializeToolValue(input.args), 500),
       outcome: classifyToolOutcome(input.result, input.isError, input.tool),
       ...(freshness ? { freshness } : {}),
+      ...(quoteStatus ? { quoteStatus } : {}),
       resultDigest: {
         preview: truncateToolValue(serializedResult, 500),
         totalLength: serializedResult.length,
