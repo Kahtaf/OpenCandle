@@ -370,6 +370,131 @@ describe("GUI session journey", () => {
     expect(hasCompletedNvdaAnswer(harness.readSessionEntries(runSessionId))).toBe(true);
   }, 120_000);
 
+  it("New chat during a held run starts a second session that completes while the first keeps streaming", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A: a run held mid native answer stream.
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+    expect(heldSettlement).toBeDefined();
+
+    // New chat while A is still running lands on a new, idle session.
+    await startNewSession(page);
+    const sessionB = sessionIdFromUrl(page);
+    expect(sessionB).not.toBe(sessionA);
+    await expect(page.getByRole("button", { name: "Stop response" }).count()).resolves.toBe(0);
+
+    // B's run is admitted and completes while A is still held.
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    // A's stream was not disrupted: releasing the hold completes it normally.
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(JSON.stringify(harness.readSessionEntries(sessionB))).not.toContain("NVDA answer");
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 120_000);
+
+  it("home during a held run is a new chat whose send starts its own session", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+
+    // Going home while A runs shows a new-chat draft, not A's running transcript.
+    await page.getByRole("button", { name: "Go to new chat" }).click();
+    await waitForCondition(() => new URL(page.url()).pathname === "/", 10_000);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    await expect(page.getByRole("button", { name: "Stop response" }).count()).resolves.toBe(0);
+
+    await submitPrompt(page, QUOTE_PROMPT);
+    await waitForCondition(() => {
+      const current = sessionIdFromUrl(page);
+      return current !== "" && current !== sessionA;
+    }, 15_000);
+    const sessionB = sessionIdFromUrl(page);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 120_000);
+
+  it("a reloaded home during a held run starts its new chat beside the running session", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+
+    // A fresh page load knows nothing about A's run in this browser; the
+    // server still owns it as its current session. Home must still open a new
+    // chat rather than binding to A.
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await waitForCondition(() => {
+      const current = sessionIdFromUrl(page);
+      return current !== "" && current !== sessionA;
+    }, 15_000);
+    const sessionB = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 120_000);
+
   it("explicit Stop cancels the run while the router is held", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });

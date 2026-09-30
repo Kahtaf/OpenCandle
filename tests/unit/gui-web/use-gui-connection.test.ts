@@ -9,6 +9,7 @@ import {
   buildToolInvokeHttpFallbackRequest,
   buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
+  newSessionBootstrapOptions,
   rejectTimedOutToolInvoke,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
@@ -292,6 +293,19 @@ describe("useGuiConnection helpers", () => {
       "writer-session",
     );
     expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
+  it("keeps the server's running current session when a new chat is created beside it", () => {
+    // A detached new chat is only merged as a routable snapshot: the server's
+    // current session did not change, so the tracked current session, its
+    // visible transcript, and the global role stay as they are.
+    expect(newSessionBootstrapOptions({ sessionId: "new-chat", detached: true })).toEqual({
+      updateRole: false,
+      updateCurrentSessionId: false,
+      updateVisibleState: false,
+    });
+    expect(newSessionBootstrapOptions({ sessionId: "new-current" })).toEqual({});
+    expect(newSessionBootstrapOptions(null)).toEqual({});
   });
 
   it("reconnects on foreground only when the socket is not already active", () => {

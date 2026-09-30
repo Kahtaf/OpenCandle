@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHttpRequestHandler } from "../../../gui/server/http-routes.js";
 import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
@@ -22,6 +23,11 @@ describe("session new HTTP route", () => {
   let endpoint: string;
   let handleNewSession: ReturnType<typeof vi.fn>;
   let broadcastState: ReturnType<typeof vi.fn>;
+  const currentSessionManager = {
+    getSessionId: () => "current-running-session",
+    getSessionFile: () => "/missing-session-dir/current-running-session.jsonl",
+    getSessionDir: () => "/missing-session-dir",
+  } as unknown as SessionManager;
 
   beforeAll(async () => {
     handleNewSession = vi.fn(async () => {});
@@ -42,7 +48,7 @@ describe("session new HTTP route", () => {
       localCoordinatorSecret: "coordinator-secret",
       allowRemotePrivateApi: false,
       getSession: unavailable,
-      getSessionManager: unavailable,
+      getSessionManager: () => currentSessionManager,
       createSessionForManager: async () => unavailable(),
       wsHub: fakeWsHub(broadcastState),
       modelSetupController: fakeModelSetupController(),
@@ -88,6 +94,29 @@ describe("session new HTTP route", () => {
       error: "Session already has an active run",
       code: "session_busy",
     });
+    expect(broadcastState).not.toHaveBeenCalled();
+  });
+
+  it("returns a separate fresh session while the current session keeps running", async () => {
+    const detached = SessionManager.inMemory(process.cwd());
+    handleNewSession.mockResolvedValueOnce({ detachedSessionManager: detached });
+
+    const response = await fetch(`${endpoint}/api/session/new`, {
+      method: "POST",
+      headers: trustedHeaders,
+    });
+
+    expect(response.status).toBe(200);
+    expect(handleNewSession).toHaveBeenCalledWith({ allowDetached: true });
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      detached: true,
+      sessionId: detached.getSessionId(),
+      role: "writer",
+      snapshot: { sessionId: detached.getSessionId(), entries: [] },
+    });
+    // The server's current session did not change, so nothing is re-broadcast
+    // as the current state.
     expect(broadcastState).not.toHaveBeenCalled();
   });
 

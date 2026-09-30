@@ -208,6 +208,17 @@ export function resolveBootstrapRole(currentRole, data, updateRole = true) {
   return updateRole ? data.role || "writer" : currentRole;
 }
 
+/**
+ * A new chat started while the server's current session is still running is
+ * created beside it (`detached`). Merge it as a routable session snapshot only:
+ * the server's current session, its visible transcript, and the role are
+ * unchanged.
+ */
+export function newSessionBootstrapOptions(data) {
+  if (data?.detached !== true) return {};
+  return { updateRole: false, updateCurrentSessionId: false, updateVisibleState: false };
+}
+
 export function resolveBootstrapSessionId(
   currentSessionId,
   responseSessionId,
@@ -259,6 +270,13 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
+  // New chats the server created beside its still-running current session.
+  // They never become the tracked current session, so callers route to them.
+  const detachedSessionIdsRef = useRef(new Set());
+  const isDetachedSession = useCallback(
+    (sessionId) => detachedSessionIdsRef.current.has(String(sessionId ?? "")),
+    [],
+  );
   const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
@@ -661,8 +679,10 @@ export function useGuiConnection() {
     try {
       const data = await transport.createSession();
       setSupportsSessionActions(true);
-      applyBootstrap(data);
-      return String(data?.sessionId ?? "");
+      applyBootstrap(data, "", newSessionBootstrapOptions(data));
+      const sessionId = String(data?.sessionId ?? "");
+      if (data?.detached === true && sessionId) detachedSessionIdsRef.current.add(sessionId);
+      return sessionId;
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error), { destructive: true });
       return "";
@@ -710,6 +730,7 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      isDetachedSession,
       loadSession,
       adoptSessionId: setCurrentSessionId,
     }),
@@ -732,6 +753,7 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      isDetachedSession,
       loadSession,
     ],
   );
