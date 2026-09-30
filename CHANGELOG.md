@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Each chat now keeps its own model and reasoning level: a reopened chat runs on the model its picker shows, and picking a model changes only the open chat, while new chats start on the saved default.
 - Starting a new chat while another chat is still answering now opens a separate session that runs at the same time, instead of being rejected or dropping the message.
 
 - Options answers built on after-hours, closed-market, or stale option quotes now end with a short notice that the prices shown are not live or executable now.

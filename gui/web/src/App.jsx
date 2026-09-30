@@ -20,6 +20,11 @@ import { SettingsPage } from "./features/settings/SettingsPage.jsx";
 import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
+import {
+  addressModelCommand,
+  resolveVisibleModelSetup,
+  staleSessionModelToReload,
+} from "./lib/session-model-setup.js";
 import { appPageFromPath, domainFromPath, tickerFromPath } from "./route-resolution.js";
 import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
@@ -175,6 +180,18 @@ export function AppShell() {
     pendingFreshHomeSession: shouldPrepareFreshHomeSession || homeSessionPreparing,
     currentSessionRunActive,
   });
+  // Model and thinking level are per-session (issue #217): the picker shows,
+  // and changes, the model of the session on screen.
+  const visibleModelSetup = resolveVisibleModelSetup(
+    gui.modelSetup,
+    gui.sessionSnapshots[sessionView.activeSessionId]?.sessionModel,
+  );
+  const guiSend = gui.send;
+  const visibleSessionId = sessionView.activeSessionId;
+  const sendForVisibleSession = useCallback(
+    (type, payload) => guiSend(type, addressModelCommand(type, payload, visibleSessionId)),
+    [guiSend, visibleSessionId],
+  );
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
   const nonChatActionsUnavailable =
@@ -278,6 +295,13 @@ export function AppShell() {
     if (!routeSessionId || visibleSessionSnapshot) return;
     void gui.loadSession(routeSessionId);
   }, [gui.loadSession, routeSessionId, visibleSessionSnapshot]);
+
+  // Keys changed since this session's model was loaded: reload it so the
+  // picker shows the model the next run will actually use.
+  const staleSessionModelId = staleSessionModelToReload(visibleSessionSnapshot, activeSessionId);
+  useEffect(() => {
+    if (staleSessionModelId) void gui.loadSession(staleSessionModelId);
+  }, [gui.loadSession, staleSessionModelId]);
 
   // Data providers left the catalog for Settings. Links written against the old
   // drawer grammar, including the catalog links that named a provider, land on
@@ -617,12 +641,12 @@ export function AppShell() {
             <SettingsPage
               section={appPage.section}
               role={gui.role}
-              modelSetup={gui.modelSetup}
+              modelSetup={visibleModelSetup}
               catalog={gui.catalog}
               focusProvider={search?.provider}
               preferencesSnapshot={gui.preferencesSnapshot}
               dataQuality={visibleDashboard?.dataQuality}
-              send={gui.send}
+              send={sendForVisibleSession}
               onOpenProviders={openProviderSettings}
               onOpenModelSetup={openModelSettings}
               onOpenSidebar={() => openDrawer("history")}
@@ -663,14 +687,14 @@ export function AppShell() {
               events={sessionView.events}
               liveEvents={liveEvents}
               askUserPrompts={visibleAskUserPrompts}
-              modelSetup={gui.modelSetup}
+              modelSetup={visibleModelSetup}
               role={gui.role}
               inputDisabled={inputDisabled}
               sessionLoading={sessionView.pendingSessionSwitch}
               runState={sessionView.homeDraft ? "ready" : chatRun.runState}
               lastPrompt={sessionView.homeDraft ? "" : chatRun.lastPrompt}
               catalog={gui.catalog}
-              send={gui.send}
+              send={sendForVisibleSession}
               startChatRun={startRoutedChatRun}
               stopRun={chatRun.stopRun}
               retryRun={chatRun.retryRun}
