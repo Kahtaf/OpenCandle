@@ -36,10 +36,10 @@ import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import {
   acquireWriterLock,
+  isSessionTranscriptHeld,
   migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
-  shouldBlockFailedCoordinatorAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
@@ -153,7 +153,9 @@ const modelSetupController = createModelSetupController({
     ),
   isSessionBusy: (sessionId, targetSessionManager) =>
     activeRunSessionIds.has(sessionId) ||
-    (targetSessionManager ? shouldBlockFailedCoordinatorAction(targetSessionManager) : false),
+    // A stored session is also busy while a tool invoke in this process or
+    // another live process holds its transcript.
+    (targetSessionManager ? isSessionTranscriptHeld(targetSessionManager) : false),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
