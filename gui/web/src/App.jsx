@@ -20,6 +20,7 @@ import { SettingsPage } from "./features/settings/SettingsPage.jsx";
 import SymbolPage from "./features/symbol/SymbolPage.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
+import { resolveVisibleModelSetup } from "./lib/session-model-setup.js";
 import { appPageFromPath, domainFromPath, tickerFromPath } from "./route-resolution.js";
 import { actionSurfaceRole } from "./runtime/runtime-transport.js";
 
@@ -31,6 +32,9 @@ const CatalogOverlay = lazy(() =>
 // The catalog is a run surface: workflows and tools. `providers` stays an
 // accepted drawer value so old links resolve, but it now redirects to Settings.
 const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows"]);
+
+// Model commands that apply to one session, addressed to the visible one.
+const SESSION_MODEL_COMMANDS = new Set(["model.setup.select_model", "model.setup.set_thinking"]);
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -155,6 +159,24 @@ export function AppShell() {
     canStartFreshHomeSession: canPrepareFreshHomeSession,
     pendingFreshHomeSession: shouldPrepareFreshHomeSession || homeSessionPreparing,
   });
+  // Model and thinking level are per-session (issue #217): the picker shows,
+  // and changes, the model of the session on screen.
+  const visibleModelSetup = resolveVisibleModelSetup(
+    gui.modelSetup,
+    gui.sessionSnapshots[sessionView.activeSessionId]?.sessionModel,
+  );
+  const guiSend = gui.send;
+  const visibleSessionId = sessionView.activeSessionId;
+  const sendForVisibleSession = useCallback(
+    (type, payload = {}) =>
+      guiSend(
+        type,
+        SESSION_MODEL_COMMANDS.has(type) && visibleSessionId && !payload.sessionId
+          ? { ...payload, sessionId: visibleSessionId }
+          : payload,
+      ),
+    [guiSend, visibleSessionId],
+  );
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
   const nonChatActionsUnavailable =
@@ -561,12 +583,12 @@ export function AppShell() {
             <SettingsPage
               section={appPage.section}
               role={gui.role}
-              modelSetup={gui.modelSetup}
+              modelSetup={visibleModelSetup}
               catalog={gui.catalog}
               focusProvider={search?.provider}
               preferencesSnapshot={gui.preferencesSnapshot}
               dataQuality={visibleDashboard?.dataQuality}
-              send={gui.send}
+              send={sendForVisibleSession}
               onOpenProviders={openProviderSettings}
               onOpenModelSetup={openModelSettings}
               onOpenSidebar={() => openDrawer("history")}
@@ -607,14 +629,14 @@ export function AppShell() {
               events={sessionView.events}
               liveEvents={liveEvents}
               askUserPrompts={visibleAskUserPrompts}
-              modelSetup={gui.modelSetup}
+              modelSetup={visibleModelSetup}
               role={gui.role}
               inputDisabled={inputDisabled}
               sessionLoading={sessionView.pendingSessionSwitch}
               runState={chatRun.runState}
               lastPrompt={chatRun.lastPrompt}
               catalog={gui.catalog}
-              send={gui.send}
+              send={sendForVisibleSession}
               startChatRun={startRoutedChatRun}
               stopRun={chatRun.stopRun}
               retryRun={chatRun.retryRun}

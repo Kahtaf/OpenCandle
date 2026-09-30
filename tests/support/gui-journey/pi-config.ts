@@ -14,6 +14,8 @@ import { join } from "node:path";
 export const GUI_JOURNEY_PROVIDER_ID = "oc-gui-journey";
 export const GUI_JOURNEY_MODEL_ID = "oc-gui-journey-model";
 export const GUI_JOURNEY_API_KEY = "test-gui-journey-key";
+/** Optional second fixture model, for journeys that switch models per session. */
+export const GUI_JOURNEY_SECOND_MODEL_ID = "oc-gui-journey-model-b";
 
 export interface GuiJourneyPaths {
   root: string;
@@ -29,6 +31,8 @@ export function writeModelRuntimeConfig(options: {
   providerId?: string;
   modelId?: string;
   apiKey?: string;
+  /** Extra model ids served by the same fixture provider. */
+  extraModelIds?: string[];
 }): void {
   const providerId = options.providerId ?? GUI_JOURNEY_PROVIDER_ID;
   const modelId = options.modelId ?? GUI_JOURNEY_MODEL_ID;
@@ -50,17 +54,15 @@ export function writeModelRuntimeConfig(options: {
           supportsDeveloperRole: false,
           supportsReasoningEffort: false,
         },
-        models: [
-          {
-            id: modelId,
-            name: "OpenCandle GUI Journey Test Model",
-            reasoning: false,
-            input: ["text"],
-            contextWindow: 8192,
-            maxTokens: 1024,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          },
-        ],
+        models: [modelId, ...(options.extraModelIds ?? [])].map((id) => ({
+          id,
+          name: "OpenCandle GUI Journey Test Model",
+          reasoning: false,
+          input: ["text"],
+          contextWindow: 8192,
+          maxTokens: 1024,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        })),
       },
     },
   };

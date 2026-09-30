@@ -113,7 +113,7 @@ describe("createOpenCandleSession", () => {
     expect(available.some((model) => model.provider === "anthropic")).toBe(true);
   });
 
-  it("prefers the saved Pi default model over a resumed session model", async () => {
+  it("keeps a resumed session's own model over the saved Pi default model", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-model-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-model-sessions-"));
     try {
@@ -153,8 +153,10 @@ describe("createOpenCandleSession", () => {
         sessionManager: SessionManager.continueRecent(cwd, sessionDir),
       });
 
+      // Per-session model (issue #217): a reopened session runs on the model it
+      // recorded, not the saved default, matching Pi's own resume precedence.
       expect(result.session.model?.provider).toBe("google");
-      expect(result.session.model?.id).toBe("gemini-3.1-pro-preview");
+      expect(result.session.model?.id).toBe("gemini-2.5-flash");
 
       result.session.dispose();
     } finally {
@@ -162,6 +164,73 @@ describe("createOpenCandleSession", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+  it("keeps a model picked in a session with no messages over the saved default", async () => {
+    const { modelRuntime } = await createTestModelRuntime({
+      google: { type: "api_key", key: "test-key" },
+      openai: { type: "api_key", key: "test-key" },
+    });
+    const sessionManager = SessionManager.inMemory();
+    sessionManager.appendModelChange("openai", "gpt-5.5");
+
+    const result = await createOpenCandleSession({
+      modelRuntime,
+      settingsManager: SettingsManager.inMemory({
+        defaultProvider: "google",
+        defaultModel: "gemini-2.5-flash",
+      }),
+      sessionManager,
+      useInlineExtension: false,
+    });
+
+    expect(result.session.model?.provider).toBe("openai");
+    expect(result.session.model?.id).toBe("gpt-5.5");
+    result.session.dispose();
+  });
+
+  it("uses the saved default for a new session with no model of its own", async () => {
+    const { modelRuntime } = await createTestModelRuntime({
+      google: { type: "api_key", key: "test-key" },
+      openai: { type: "api_key", key: "test-key" },
+    });
+
+    const result = await createOpenCandleSession({
+      modelRuntime,
+      settingsManager: SettingsManager.inMemory({
+        defaultProvider: "openai",
+        defaultModel: "gpt-5.5",
+      }),
+      sessionManager: SessionManager.inMemory(),
+      useInlineExtension: false,
+    });
+
+    expect(result.session.model?.id).toBe("gpt-5.5");
+    result.session.dispose();
+  });
+
+  it("keeps a session's recorded thinking level over the saved default", async () => {
+    const { modelRuntime } = await createTestModelRuntime({
+      openai: { type: "api_key", key: "test-key" },
+    });
+    const sessionManager = SessionManager.inMemory();
+    sessionManager.appendModelChange("openai", "gpt-5.5");
+    sessionManager.appendThinkingLevelChange("high");
+
+    const result = await createOpenCandleSession({
+      modelRuntime,
+      settingsManager: SettingsManager.inMemory({
+        defaultProvider: "openai",
+        defaultModel: "gpt-5.5",
+        defaultThinkingLevel: "low",
+      }),
+      sessionManager,
+      useInlineExtension: false,
+    });
+
+    expect(result.session.model?.id).toBe("gpt-5.5");
+    expect(result.session.thinkingLevel).toBe("high");
+    result.session.dispose();
+  });
+
   describe("initial model when no model is saved", () => {
     const providerEnvVars = [
       "GEMINI_API_KEY",

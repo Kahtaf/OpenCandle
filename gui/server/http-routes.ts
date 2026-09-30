@@ -91,7 +91,7 @@ import {
   shouldBlockFailedCoordinatorAction as shouldBlockFailedCoordinatorLockAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
-import type { WsHub } from "./ws-hub.js";
+import { broadcastModelSetupChange, type WsHub } from "./ws-hub.js";
 
 interface GuiHttpRouteOptions {
   host: string;
@@ -133,10 +133,12 @@ interface GuiHttpRouteOptions {
   cancelAskUserPromptsForSession?: (sessionId: string) => void;
   /** Injectable active-run registry (tests); defaults to a fresh registry. */
   runRegistry?: GuiRunRegistry;
+  /** Session ids a chat run owns; shared with session-addressed model changes. */
+  activeRunSessionIds?: Set<string>;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
-  const activeRunSessionIds = new Set<string>();
+  const activeRunSessionIds = options.activeRunSessionIds ?? new Set<string>();
   const activeGuiRuns = options.runRegistry ?? createGuiRunRegistry();
 
   return async function handleHttpRequest(
@@ -236,11 +238,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/model" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSelectModel(
+        const target = await options.modelSetupController.handleSelectModel(
           String(body.provider ?? ""),
           String(body.modelId ?? ""),
+          optionalSessionId(body),
         );
-        options.wsHub.broadcastModelSetup();
+        return broadcastModelSetupChange(options.wsHub, target);
       });
       return;
     }
@@ -248,8 +251,11 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/thinking" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSetThinkingLevel?.(String(body.level ?? ""));
-        options.wsHub.broadcastModelSetup();
+        const target = await options.modelSetupController.handleSetThinkingLevel?.(
+          String(body.level ?? ""),
+          optionalSessionId(body),
+        );
+        return broadcastModelSetupChange(options.wsHub, target);
       });
       return;
     }
@@ -1395,12 +1401,17 @@ export async function buildSessionBootstrapPayload(
       ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
     },
     catalog: buildCatalog(),
-    modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
+    // The model and thinking level this session runs on, not the server's
+    // current session's (issue #217).
+    modelSetup:
+      options.modelSetupController.buildModelSetupStateForSession?.(sessionManager) ??
+      options.modelSetupController.buildCurrentModelSetupState(),
     askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
     sessions: await listDisplaySessions(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
       state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),
+      sessionModel: options.modelSetupController.buildSessionModelState?.(sessionManager),
       entries,
       events: sessionEntriesToChatEvents(entries, {
         sessionId,
@@ -1554,15 +1565,27 @@ async function handleTrustedPreferencesMutation(
   }
 }
 
+function optionalSessionId(body: Record<string, unknown>): string | undefined {
+  const sessionId = String(body.sessionId ?? "").trim();
+  return sessionId || undefined;
+}
+
 async function handleTrustedGuiMutation(
   req: IncomingMessage,
   res: ServerResponse,
   options: GuiHttpRouteOptions,
-  action: (body: Record<string, unknown>) => Promise<void>,
+  // An action that changed a non-current session returns it, so the response
+  // bootstraps that session instead of the server's current one.
+  action: (body: Record<string, unknown>) => Promise<SessionManager | undefined | void>,
 ): Promise<void> {
   try {
-    await action(asRecord(await readJsonBody(req)));
-    writeJson(res, await options.wsHub.buildBootstrapPayload());
+    const targetSessionManager = await action(asRecord(await readJsonBody(req)));
+    writeJson(
+      res,
+      targetSessionManager
+        ? await buildSessionBootstrapPayload(options, targetSessionManager)
+        : await options.wsHub.buildBootstrapPayload(),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const coordinationError = message === "Read-only follower mode";

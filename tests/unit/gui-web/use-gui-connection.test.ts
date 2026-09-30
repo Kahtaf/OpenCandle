@@ -23,6 +23,7 @@ import {
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 import { subscribeSessionActionErrors } from "../../../gui/web/src/lib/session-action-errors.js";
+import { resolveVisibleModelSetup } from "../../../gui/web/src/lib/session-model-setup.js";
 
 describe("useGuiConnection helpers", () => {
   it("reports a socket error frame to the request that caused it, then toasts it", () => {
@@ -342,6 +343,93 @@ describe("useGuiConnection helpers", () => {
       entries: [{ id: "entry-b" }],
       events: [{ type: "message.completed", seq: 2 }],
       dashboard: { watchlist: [{ symbol: "MSFT" }] },
+    });
+  });
+
+  describe("per-session model (issue #217)", () => {
+    it("keeps each session's model in its snapshot", () => {
+      const afterA = mergeSessionSnapshotMap(
+        {},
+        {
+          type: "state.snapshot",
+          sessionId: "session-a",
+          sessionModel: { currentModel: "google/gemini-2.5-flash" },
+        },
+      );
+      const afterB = mergeSessionSnapshotMap(afterA, {
+        type: "session.snapshot",
+        sessionId: "session-b",
+        sessionModel: { currentModel: "openai/gpt-6-luna", currentThinkingLevel: "high" },
+      });
+      // A payload without a model keeps the one already known for the session.
+      const afterA2 = mergeSessionSnapshotMap(afterB, {
+        type: "session.snapshot",
+        sessionId: "session-a",
+        entries: [{ id: "entry-a" }],
+      });
+
+      expect(afterA2["session-a"]?.sessionModel).toEqual({
+        currentModel: "google/gemini-2.5-flash",
+      });
+      expect(afterA2["session-b"]?.sessionModel).toEqual({
+        currentModel: "openai/gpt-6-luna",
+        currentThinkingLevel: "high",
+      });
+    });
+
+    it("shows the visible session's model over the server's current session", () => {
+      const global = {
+        requirement: "ready",
+        currentModel: "google/gemini-2.5-flash",
+        currentThinkingLevel: "off",
+        availableThinkingLevels: ["off"],
+        availableModels: [
+          { provider: "google", id: "gemini-2.5-flash" },
+          { provider: "openai", id: "gpt-6-luna" },
+        ],
+        providers: [],
+      };
+
+      expect(
+        resolveVisibleModelSetup(global, {
+          currentModel: "openai/gpt-6-luna",
+          currentThinkingLevel: "high",
+          availableThinkingLevels: ["off", "low", "high"],
+        }),
+      ).toMatchObject({
+        requirement: "ready",
+        currentModel: "openai/gpt-6-luna",
+        currentThinkingLevel: "high",
+        availableThinkingLevels: ["off", "low", "high"],
+        availableModels: global.availableModels,
+      });
+      expect(resolveVisibleModelSetup(global, undefined)).toBe(global);
+      expect(resolveVisibleModelSetup(global, {})).toMatchObject({
+        requirement: "select_model",
+        currentModel: undefined,
+      });
+    });
+
+    it("addresses HTTP fallback model changes to the visible session", () => {
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.select_model", {
+          provider: "openai",
+          modelId: "gpt-6-luna",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/model",
+        body: { provider: "openai", modelId: "gpt-6-luna", sessionId: "session-b" },
+      });
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.set_thinking", {
+          level: "high",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/thinking",
+        body: { level: "high", sessionId: "session-b" },
+      });
     });
   });
 

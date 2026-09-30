@@ -16,6 +16,10 @@ import {
   STREAM_HOLD_PROMPT,
   TOOL_HOLD_PROMPT,
 } from "../support/gui-journey/journey-model.js";
+import {
+  GUI_JOURNEY_MODEL_ID,
+  GUI_JOURNEY_SECOND_MODEL_ID,
+} from "../support/gui-journey/pi-config.js";
 
 /**
  * Full-stack deterministic GUI journeys.
@@ -702,6 +706,86 @@ describe("GUI session journey", () => {
     }
   }, 120_000);
 });
+
+describe("GUI session journey: per-session model", () => {
+  beforeEach(async () => {
+    harness = await startGuiJourneyHarness({
+      modelScript: createJourneyModelScript(),
+      extraModelIds: [GUI_JOURNEY_SECOND_MODEL_ID],
+    });
+  });
+
+  afterEach(async () => {
+    await harness?.stop();
+  });
+
+  it("runs a reopened session on its own model, and the picker shows it", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A runs on the second model, picked in its composer.
+    await startNewSession(page);
+    await pickModel(page, GUI_JOURNEY_MODEL_ID, GUI_JOURNEY_SECOND_MODEL_ID);
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    const sessionA = sessionIdFromUrl(page);
+
+    // Session B is new, so it starts on the saved default model and becomes
+    // the server's current session.
+    await page.reload({ waitUntil: "networkidle" });
+    await startNewSession(page);
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    const beforeB = harness.modelServer.requests.length;
+    await submitPrompt(page, SECOND_PROMPT);
+    await expectVisible(page.getByText("$512.34").first(), 30_000);
+    await waitForRunIdle(page);
+    expect(requestModels(beforeB)).toEqual([GUI_JOURNEY_MODEL_ID]);
+
+    // Reopening A (not the server's current session) shows and runs A's model.
+    await page.reload({ waitUntil: "networkidle" });
+    await openSession(page, "AAPL quote journey");
+    expect(sessionIdFromUrl(page)).toBe(sessionA);
+    await expectModelPicker(page, GUI_JOURNEY_SECOND_MODEL_ID);
+    const beforeReopen = harness.modelServer.requests.length;
+    await submitPrompt(page, QUOTE_PROMPT);
+    await waitForCondition(() => userMessageCount(harness, sessionA) === 2, 30_000);
+    await waitForRunIdle(page);
+    expect(requestModels(beforeReopen)).toEqual([GUI_JOURNEY_SECOND_MODEL_ID]);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionA))).toBe(
+      GUI_JOURNEY_SECOND_MODEL_ID,
+    );
+
+    // The pick survives a reload, and B keeps its own model.
+    await page.reload({ waitUntil: "networkidle" });
+    await expectModelPicker(page, GUI_JOURNEY_SECOND_MODEL_ID);
+    await openSession(page, "MSFT quote journey");
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 150_000);
+});
+
+/** Distinct model ids the fixture model server saw since `from`. */
+function requestModels(from: number): string[] {
+  return [...new Set(harness.modelServer.requests.slice(from).map((request) => request.model))];
+}
+
+function lastAssistantModel(entries: readonly unknown[]): unknown {
+  const assistants = entries.filter(
+    (entry) => isRecord(entry) && isRecord(entry.message) && entry.message.role === "assistant",
+  ) as Array<{ message: { model?: unknown } }>;
+  return assistants.at(-1)?.message.model;
+}
+
+async function expectModelPicker(page: Page, modelId: string): Promise<void> {
+  await expectVisible(page.getByRole("button", { name: modelId, exact: true }), 15_000);
+}
+
+async function pickModel(page: Page, fromModelId: string, toModelId: string): Promise<void> {
+  await page.getByRole("button", { name: fromModelId, exact: true }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(`^${toModelId}\\b`) }).click();
+  await expectModelPicker(page, toModelId);
+}
 
 /** A stopped turn shows the neutral Stopped marker with Retry, never a model failure. */
 async function expectStoppedTurn(page: Page): Promise<void> {

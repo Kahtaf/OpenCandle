@@ -1,4 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildModelSetupState,
@@ -7,6 +8,7 @@ import {
   type ModelSetupRegistry,
   modelSetupProviders,
 } from "../../../gui/server/model-setup.js";
+import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 function model(provider: string, id: string): Model<Api> {
   return { provider, id, name: id } as unknown as Model<Api>;
@@ -299,5 +301,109 @@ describe("GUI model setup", () => {
     await expect(controller.handleSelectModel("google", "gemini-2.5-flash")).rejects.toThrow(
       "Read-only follower mode",
     );
+  });
+
+  describe("per-session model and thinking level (issue #217)", () => {
+    async function setup(options: { busy?: boolean } = {}) {
+      const { modelRuntime } = await createTestModelRuntime({
+        google: { type: "api_key", key: "test-key" },
+        openai: { type: "api_key", key: "test-key" },
+      });
+      const settingsManager = SettingsManager.inMemory({
+        defaultProvider: "google",
+        defaultModel: "gemini-2.5-flash",
+      });
+      const currentManager = SessionManager.inMemory();
+      const other = SessionManager.inMemory();
+      other.appendModelChange("google", "gemini-2.5-flash");
+      const globalSession = {
+        modelRuntime,
+        model: modelRuntime.getModel("google", "gemini-2.5-flash"),
+        thinkingLevel: "off" as const,
+        getAvailableThinkingLevels: () => ["off" as const],
+        setModel: vi.fn(async () => {}),
+        setThinkingLevel: vi.fn(),
+        settingsManager,
+      };
+      const controller = createModelSetupController({
+        role: "writer",
+        getSession: () => globalSession as never,
+        getSessionManager: () => currentManager,
+        broadcastState: vi.fn(),
+        settingsManager,
+        resolveSessionManager: async (sessionId) =>
+          sessionId === other.getSessionId() ? other : null,
+        isSessionBusy: () => options.busy === true,
+      });
+      return { controller, globalSession, currentManager, other, settingsManager };
+    }
+
+    it("changes the model of the addressed non-current session only", async () => {
+      const { controller, globalSession, other, settingsManager } = await setup();
+
+      const target = await controller.handleSelectModel("openai", "gpt-5.5", other.getSessionId());
+
+      expect(target).toMatchObject({ current: false });
+      expect(other.buildSessionContext().model).toEqual({ provider: "openai", modelId: "gpt-5.5" });
+      expect(globalSession.setModel).not.toHaveBeenCalled();
+      // A pick is session-scoped; it never rewrites the saved default.
+      expect(settingsManager.getDefaultModel()).toBe("gemini-2.5-flash");
+    });
+
+    it("reports the addressed session's own model, not the current session's", async () => {
+      const { controller, other } = await setup();
+      other.appendModelChange("openai", "gpt-5.5");
+
+      expect(controller.buildSessionModelState?.(other)).toMatchObject({
+        currentModel: "openai/gpt-5.5",
+      });
+      expect(controller.buildModelSetupStateForSession?.(other)).toMatchObject({
+        requirement: "ready",
+        currentModel: "openai/gpt-5.5",
+      });
+    });
+
+    it("sets the thinking level of the addressed non-current session only", async () => {
+      const { controller, globalSession, other } = await setup();
+      other.appendModelChange("openai", "gpt-5.5");
+
+      await controller.handleSetThinkingLevel?.("high", other.getSessionId());
+
+      expect(other.buildSessionContext().thinkingLevel).toBe("high");
+      expect(globalSession.setThinkingLevel).not.toHaveBeenCalled();
+      expect(controller.buildSessionModelState?.(other)).toMatchObject({
+        currentThinkingLevel: "high",
+      });
+    });
+
+    it("routes a change addressed to the current session through the live Pi session", async () => {
+      const { controller, globalSession, currentManager } = await setup();
+
+      const target = await controller.handleSelectModel(
+        "openai",
+        "gpt-5.5",
+        currentManager.getSessionId(),
+      );
+
+      expect(target).toMatchObject({ current: true });
+      expect(globalSession.setModel).toHaveBeenCalledOnce();
+    });
+
+    it("refuses to change a non-current session while its reply is running", async () => {
+      const { controller, other } = await setup({ busy: true });
+
+      await expect(
+        controller.handleSelectModel("openai", "gpt-5.5", other.getSessionId()),
+      ).rejects.toThrow("finish");
+      expect(other.buildSessionContext().model?.modelId).toBe("gemini-2.5-flash");
+    });
+
+    it("rejects a model without a configured key for a non-current session", async () => {
+      const { controller, other } = await setup();
+
+      await expect(
+        controller.handleSelectModel("anthropic", "claude-haiku-4-5", other.getSessionId()),
+      ).rejects.toThrow("No API key");
+    });
   });
 });

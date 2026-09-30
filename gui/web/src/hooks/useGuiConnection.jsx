@@ -100,12 +100,19 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
     case "model.setup.select_model":
       return {
         path: "/api/model-setup/model",
-        body: { provider: payload.provider, modelId: payload.modelId },
+        body: {
+          provider: payload.provider,
+          modelId: payload.modelId,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "model.setup.set_thinking":
       return {
         path: "/api/model-setup/thinking",
-        body: { level: payload.level },
+        body: {
+          level: payload.level,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "provider.save_api_key":
       return {
@@ -141,17 +148,26 @@ export function sessionSnapshotFromPayload(payload) {
   const sessionId = String(record.sessionId ?? snapshot.sessionId ?? "").trim();
   if (!sessionId) return null;
   const dashboard = asRecord(snapshot.state);
+  const sessionModel = snapshot.sessionModel ?? record.sessionModel;
   return {
     sessionId,
     entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
     dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
+    ...(sessionModel && typeof sessionModel === "object" ? { sessionModel } : {}),
   };
 }
 
 export function mergeSessionSnapshotMap(current, payload) {
   const snapshot = sessionSnapshotFromPayload(payload);
-  return snapshot ? { ...current, [snapshot.sessionId]: snapshot } : current;
+  if (!snapshot) return current;
+  // A payload without the session's model keeps the one already known.
+  const previousModel = current[snapshot.sessionId]?.sessionModel;
+  const next =
+    snapshot.sessionModel || !previousModel
+      ? snapshot
+      : { ...snapshot, sessionModel: previousModel };
+  return { ...current, [snapshot.sessionId]: next };
 }
 
 export function buildToolInvokeSocketMessage(payload, currentSessionId = "", targetSessionId = "") {

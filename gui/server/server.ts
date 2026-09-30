@@ -39,6 +39,7 @@ import {
   migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
+  shouldBlockFailedCoordinatorAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
@@ -136,11 +137,22 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
   getSessionId: () => sessionManager.getSessionId(),
   intervalMs: automationHeartbeatMs,
 });
+// Sessions a chat run currently owns in this process; shared by the run routes
+// and session-addressed model changes, which must not race a running reply.
+const activeRunSessionIds = new Set<string>();
 const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  settingsManager,
+  resolveSessionManager: (sessionId) =>
+    resolveSessionManagerById(
+      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      sessionId,
+    ),
+  isSessionBusy: (sessionId, targetSessionManager) =>
+    activeRunSessionIds.has(sessionId) || shouldBlockFailedCoordinatorAction(targetSessionManager),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
@@ -247,6 +259,7 @@ const httpRequestHandler = createHttpRequestHandler({
   indicesSnapshotStore,
   localSessionCoordinator,
   cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
+  activeRunSessionIds,
 });
 
 const server = createServer((req, res) => {
