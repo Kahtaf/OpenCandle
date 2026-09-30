@@ -1729,14 +1729,13 @@ function localLeadIn(
   text: string,
   start: number,
   previousEnd: number,
-): { leadIn: string; fullLeadIn: string; afterBasisLabel: boolean; isNegated: boolean } {
+): { leadIn: string; afterBasisLabel: boolean; isNegated: boolean } {
   const from = Math.max(segmentStart(text, start, CLAUSE_BOUNDARY), previousEnd);
   const fullLeadIn = text.slice(from, start);
   const lastAcquisition = [...fullLeadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
   if (lastAcquisition === undefined) {
     return {
       leadIn: fullLeadIn,
-      fullLeadIn,
       afterBasisLabel: false,
       isNegated: NEGATION_CONTEXT.test(fullLeadIn),
     };
@@ -1748,7 +1747,6 @@ function localLeadIn(
   // bought"), not when it modifies an earlier, separate claim.
   return {
     leadIn,
-    fullLeadIn,
     afterBasisLabel: BASIS_LABEL.test(lastAcquisition[0]),
     isNegated:
       NEGATION_CONTEXT.test(leadIn) || NEGATED_ACQUISITION.test(fullLeadIn.slice(0, acquisitionAt)),
@@ -1841,7 +1839,7 @@ function parseStatedNumbers(
     const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
-    const { leadIn, fullLeadIn, afterBasisLabel, isNegated } = localLeadIn(text, start, prevEnd);
+    const { leadIn, afterBasisLabel, isNegated } = localLeadIn(text, start, prevEnd);
     const isNonBasisContext =
       isNegated ||
       (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
@@ -1856,11 +1854,14 @@ function parseStatedNumbers(
         !isNonBasisContext &&
         (acquisitionInClause ||
           (perShare && HOLDING_CONTEXT.test(sentence)) ||
-          // A same-sentence correction ("cost basis is $100, but actually
-          // $150") carries the basis wording forward.
-          ((CORRECTION_CONTEXT.test(fullLeadIn) ||
+          // A correction ("cost basis is $100, but actually $150", or "...
+          // $100. Actually, it is $150") carries earlier basis wording
+          // forward within the same turn.
+          ((CORRECTION_CONTEXT.test(
+            contextText.slice(segmentStart(contextText, start, SENTENCE_BOUNDARY), start),
+          ) ||
             (/\bbut\s*$/i.test(text.slice(0, clauseStart)) && NEGATION_CONTEXT.test(sentence))) &&
-            [...sentence.matchAll(ACQUISITION_CONTEXT)].length > 0)),
+            [...contextText.slice(0, start).matchAll(ACQUISITION_CONTEXT)].length > 0)),
       isNonBasisContext,
       isPerShare: perShare,
       isBareAnswer: clauseWithoutAmount.replace(BARE_ANSWER_FILLER, "").length === 0,

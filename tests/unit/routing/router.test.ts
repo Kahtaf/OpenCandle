@@ -3889,6 +3889,15 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("carries a sentence-separated correction to the replacement basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "My AAPL cost basis is $100. Actually, it is $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
