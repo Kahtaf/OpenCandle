@@ -734,6 +734,12 @@ try {
       "offline import disabled",
     );
     await context.setOffline(false);
+    await waitFor(
+      async () =>
+        (await page.getByText("Offline: saved research is read-only", { exact: false }).count()) === 0,
+      30_000,
+      "online state after reconnect",
+    );
 
     await follower.close();
     await mobile.close();
@@ -747,10 +753,9 @@ try {
       "clear all stays disabled until the confirmation word is typed",
     );
     await typedConfirm.locator("input").fill("DELETE");
-    await Promise.all([
-      page.waitForEvent("framenavigated", { timeout: 120_000 }),
-      typedConfirm.locator('[data-slot="typed-confirm-action"]').click(),
-    ]);
+    const clearedDocument = await markDocument(page);
+    await typedConfirm.locator('[data-slot="typed-confirm-action"]').click();
+    await waitForReloadedDocument(page, clearedDocument, 120_000);
     await openWatchlists(page);
     await waitForText(page, "No tickers yet", 120_000);
     assert((await page.getByText("AAPL", { exact: true }).count()) === 0, "clear removes watchlist");
@@ -758,9 +763,9 @@ try {
     await openHostedDataSettings(page);
     const restoreChooser = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: "Import", exact: true }).click();
-    const restoredNavigation = page.waitForEvent("framenavigated", { timeout: 120_000 });
+    const importedDocument = await markDocument(page);
     await (await restoreChooser).setFiles(exportPath);
-    await restoredNavigation;
+    await waitForReloadedDocument(page, importedDocument, 120_000);
     await openWatchlists(page);
     await waitForText(page, "AAPL", 120_000);
     assert(await credentialsAreAbsent(page), "archive restore excludes the model key");
@@ -810,7 +815,7 @@ try {
   const followerText = await follower?.locator("body").innerText().catch(() => "");
   process.stderr.write(
     redact(
-      `HOSTED_PWA_SMOKE FAIL stage=${stage}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nFOLLOWER=${String(followerText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nUNEXPECTED=${[...unexpectedRequests].join("\n").slice(-2_000)}\nOBSERVED=${[...observedExternal.keys()].join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
+      `HOSTED_PWA_SMOKE FAIL stage=${stage} url=${page?.url() ?? "none"}: ${error instanceof Error ? error.message : String(error)}\nPAGE=${String(pageText).slice(0, 2_000)}\nFOLLOWER=${String(followerText).slice(0, 2_000)}\nBROWSER=${browserErrors.join("\n").slice(-2_000)}\nBROWSER_MODEL=${browserErrors.filter((message) => /validate_model_key|configure_model|runtime (?:boot|stopped)/i.test(message)).join("\n").slice(-2_000)}\nUNEXPECTED=${[...unexpectedRequests].join("\n").slice(-2_000)}\nOBSERVED=${[...observedExternal.keys()].join("\n").slice(-2_000)}\nREQUESTS=${failedRequests.join("\n").slice(-4_000)}\n${serverOutput.slice(-1_000)}\n`,
     ),
   );
   process.exitCode = 1;
@@ -844,6 +849,37 @@ async function assertInstallable(page) {
   assert(manifest.icons.some((icon) => icon.sizes === "192x192"), "192px icon");
   assert(manifest.icons.some((icon) => icon.sizes === "512x512"), "512px icon");
   await page.evaluate(() => navigator.serviceWorker.ready);
+}
+
+// Clear all and archive import finish with location.reload(). The old document
+// keeps running, and accepting input, until the new one commits, while
+// Playwright's "framenavigated" also fires for same-document route changes and
+// for the WebContainer iframes, so it can resolve before the reload has even
+// been requested (#209). Tag the current document instead, and treat the
+// action as done only once a different document answers with a ready runtime.
+async function markDocument(page) {
+  return page.evaluate(() => {
+    globalThis.__opencandleE2eDocumentId = crypto.randomUUID();
+    return globalThis.__opencandleE2eDocumentId;
+  });
+}
+
+async function waitForReloadedDocument(page, previousDocument, timeoutMs) {
+  await waitFor(
+    async () => {
+      const current = await page
+        .evaluate(() => globalThis.__opencandleE2eDocumentId ?? null)
+        .catch(() => previousDocument);
+      return current !== previousDocument;
+    },
+    timeoutMs,
+    "the reloaded document",
+  );
+  await page.waitForLoadState("load", { timeout: timeoutMs });
+  await page
+    .getByRole("link", { name: "Watchlists" })
+    .waitFor({ state: "visible", timeout: timeoutMs });
+  await waitForRuntimeReady(page, timeoutMs);
 }
 
 async function credentialsAreAbsent(page) {

@@ -1,4 +1,5 @@
 import { buildPortfolioPrompt } from "../prompts/workflow-prompts.js";
+import { riskLookbackInstruction } from "../routing/horizon.js";
 import type { PortfolioSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
@@ -13,24 +14,27 @@ export function buildPortfolioWorkflowDefinition(
 ): WorkflowDefinition {
   const s = resolution.resolved;
   const allocationConstraintsAreCompatible = s.positionCount * s.maxSinglePositionPct >= 100;
+  const lookbackInstruction = riskLookbackInstruction(s.timeHorizon);
   const includesCrypto = s.assetScope.toLowerCase().includes("stocks_and_crypto");
   const riskReviewPrompt = includesCrypto
     ? `Now review the risk and diversification of the selected candidates, then propose a risk-appropriate draft allocation:
+${lookbackInstruction}
 1. For each selected stock candidate, use analyze_risk for volatility and max drawdown. Use analyze_correlation only across the stock positions.
 2. For each cryptocurrency candidate, use get_crypto_history with its canonical CoinGecko id to assess the available dated volatility and drawdown evidence. Do not send cryptocurrencies to stock-only risk or correlation tools.
 3. Assess stock/crypto diversification from the available evidence and disclose that a cross-asset correlation matrix is unavailable instead of inventing one.
 4. If any candidate's risk evidence undermines its intended role, lower its allocation, replace it with an eligible role-equivalent candidate, or explicitly justify why it remains.
 5. Preserve the hard asset scope "${s.assetScope}" for every replacement.
 6. Propose a draft allocation with exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
-7. Confirm the draft allocation fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`
+7. Confirm the draft allocation fits a ${s.riskProfile} risk profile for a ${s.timeHorizon} investment horizon.`
     : `Now review the risk and diversification of the selected candidates, then propose a risk-appropriate draft allocation:
+${lookbackInstruction}
 1. Use analyze_correlation across all ${s.positionCount} selected candidates to check for concentration risk.
 2. Use analyze_risk on each selected candidate for volatility and max drawdown.
 3. If correlation is too high (>0.7 between any pair), suggest a role-equivalent replacement to improve diversification.
 4. If any candidate's risk metrics undermine its intended role, lower its allocation, replace it with a role-equivalent candidate, or explicitly justify why it remains.
 5. Preserve the hard asset scope "${s.assetScope}" for every replacement.
 6. Propose a draft allocation with exactly ${s.positionCount} positions, keep every allocation at or below ${s.maxSinglePositionPct}%, and make the allocations sum to 100%.
-7. Confirm the draft allocation fits a ${s.riskProfile} risk profile with ${s.timeHorizon} horizon.`;
+7. Confirm the draft allocation fits a ${s.riskProfile} risk profile for a ${s.timeHorizon} investment horizon.`;
 
   return {
     workflowType: "portfolio_builder",
