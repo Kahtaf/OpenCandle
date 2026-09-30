@@ -248,7 +248,7 @@ const QUOTE_VOCABULARY =
  * $210 strike" and "Underlying: $200" name no quote; "at $4.80" does.
  */
 function presentsCurrencyQuote(text: string): boolean {
-  for (const match of text.matchAll(/\$\s?\d[\d,]*(?:\.\d+)?/g)) {
+  for (const match of text.matchAll(/\$\s?(?:\d[\d,]*(?:\.\d+)?|\.\d+)/g)) {
     const after = text.slice(match.index + match[0].length, match.index + match[0].length + 12);
     if (/^\s*(?:strikes?|calls?|puts?|[cp])\b/i.test(after)) continue;
     const before = text.slice(Math.max(0, match.index - 25), match.index);
@@ -272,7 +272,7 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   const clauseChar = "(?:[^\\n;!?.]|\\.(?=\\d))";
   // The number must be a quote value, not a count ("for 3 expirations").
   const quoteValue =
-    "\\b\\d[\\d,]*(?:\\.\\d+)?\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|calls?|puts?|delta|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
+    "(?:\\b\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|calls?|puts?|delta|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
   const nearQuote = [
     new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "gi"),
     // A value stated for a named contract: "the 210 call is 4.80", "the 205 put: 3.10".

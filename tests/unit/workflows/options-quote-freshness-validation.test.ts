@@ -252,6 +252,11 @@ describe("options_screener quote freshness gate", () => {
     "The $210 call is 4.80.",
     "The 210 call trades at 4.80.",
     "The 205 put: 3.10.",
+    "Premium: .45 on the 220 call.",
+    "Bid: $.40 on the 220 call.",
+    "The 220 call at $.40.",
+    "The 220 call is .45.",
+    "| Strike | Premium |\n| 220 | .45 |",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | 4.80 |",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
