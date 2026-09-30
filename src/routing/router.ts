@@ -1419,8 +1419,14 @@ function resolveCostBasis(
 ): number | undefined {
   if (modelCostBasis === undefined) return extractedCostBasis;
   const grounding = basisGrounding(text, heldSymbol, symbols, inputContext, underlyingSymbol);
-  if (grounding && isGroundedBasis(modelCostBasis, grounding)) return modelCostBasis;
-  return extractedCostBasis;
+  if (!grounding) return extractedCostBasis;
+  // A basis stated in the current turn supersedes earlier turns and saved
+  // positions, so the model value must then trace to the current turn.
+  const current = grounding.texts.filter((turn) => turn.isCurrent);
+  const scope = current.some((turn) => basisAmounts(turn, grounding).length > 0)
+    ? { ...grounding, texts: current, savedBases: [] }
+    : grounding;
+  return isGroundedBasis(modelCostBasis, scope) ? modelCostBasis : extractedCostBasis;
 }
 
 const COST_BASIS_CONTEXT =
@@ -1429,6 +1435,7 @@ const COST_BASIS_CONTEXT =
 interface BasisGroundingTurn {
   text: string;
   isBasisReply: boolean;
+  isCurrent: boolean;
 }
 
 interface BasisGrounding {
@@ -1457,7 +1464,7 @@ function basisGrounding(
   const turns = inputContext?.priorTurns ?? [];
   const currentIsBasisReply = answersBasisQuestion(scopeSymbols, turns);
   if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text) || currentIsBasisReply) {
-    texts.push({ text, isBasisReply: currentIsBasisReply });
+    texts.push({ text, isBasisReply: currentIsBasisReply, isCurrent: true });
   }
   for (let index = 0; index < turns.length; index += 1) {
     const turn = turns[index];
@@ -1470,7 +1477,7 @@ function basisGrounding(
       answersBasisQuestion(scopeSymbols, turns.slice(0, index)) &&
       suppliesBasisReply(turn.text, turnEntities);
     if (sameSymbolHolding || isBasisReply) {
-      texts.push({ text: turn.text, isBasisReply });
+      texts.push({ text: turn.text, isBasisReply, isCurrent: false });
     }
   }
   // Cost-basis validation runs before the existing-position reorder, so prefer
@@ -1494,25 +1501,30 @@ function basisGrounding(
 
 const DERIVED_BASIS_TOLERANCE = 0.005;
 
+// The amounts in a turn that can state a basis: linked to acquisition or basis
+// wording, or a bare amount replying to a basis question ("$150", "about $150
+// per share").
+function basisAmounts(turn: BasisGroundingTurn, grounding: BasisGrounding) {
+  const scopedText = maskOtherHoldingClauses(turn.text, grounding);
+  const parsed = parseStatedNumbers(
+    scopedText,
+    grounding.symbols,
+    turn.text,
+    grounding.targetSymbol,
+  );
+  return parsed.amounts.filter(
+    (amount) => amount.isBasisLinked || (turn.isBasisReply && amount.isBareAnswer),
+  );
+}
+
 function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   if (!Number.isFinite(basis) || basis <= 0) return false;
   const near = (value: number, tolerance: number) => Math.abs(value - basis) <= tolerance;
   if (grounding.savedBases.some((saved) => near(saved, basis * DERIVED_BASIS_TOLERANCE))) {
     return true;
   }
-  return grounding.texts.some(({ text: turnText, isBasisReply }) => {
-    const scopedText = maskOtherHoldingClauses(turnText, grounding);
-    const parsed = parseStatedNumbers(
-      scopedText,
-      grounding.symbols,
-      turnText,
-      grounding.targetSymbol,
-    );
-    // A basis-question reply may answer with a bare amount ("$150", "about
-    // $150 per share"); other amounts in the reply still need basis linkage.
-    const amounts = parsed.amounts.filter(
-      (amount) => amount.isBasisLinked || (isBasisReply && amount.isBareAnswer),
-    );
+  return grounding.texts.some((turn) => {
+    const amounts = basisAmounts(turn, grounding);
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
     // A total divides only by a share count in its own clause.
     return amounts.some(

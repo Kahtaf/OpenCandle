@@ -3747,6 +3747,57 @@ describe("router cost-basis context guard", () => {
     expect(corrected.entities.costBasis).toBe(150);
   });
 
+  it("prefers a basis stated in the current turn over a superseded earlier basis", async () => {
+    const priorTurns: RouterInputContext["priorTurns"] = [
+      { role: "user", text: "My AAPL cost basis is $100." },
+      { role: "assistant", text: "Got it." },
+    ];
+    const stale = await route(
+      {
+        ...BASE_INPUT,
+        text: "My AAPL cost basis is now $150. Covered calls on AAPL?",
+        priorTurns,
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+    const staleSaved = await route(
+      {
+        ...BASE_INPUT,
+        text: "My AAPL cost basis is now $150. Covered calls on AAPL?",
+        portfolioPositions: [{ symbol: "AAPL", quantity: 100, costBasis: 100 }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+    const carried = await route(
+      { ...BASE_INPUT, text: "Covered calls on my AAPL?", priorTurns },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+    const savedWithQuote = await route(
+      {
+        ...BASE_INPUT,
+        text: "AAPL is trading at $180. Covered calls on my AAPL?",
+        portfolioPositions: [{ symbol: "AAPL", quantity: 100, costBasis: 100 }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    const current = await route(
+      {
+        ...BASE_INPUT,
+        text: "My AAPL cost basis is now $150. Covered calls on AAPL?",
+        priorTurns,
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    // The superseded basis is never used; the current one is kept.
+    expect(stale.entities.costBasis).not.toBe(100);
+    expect(staleSaved.entities.costBasis).not.toBe(100);
+    expect(current.entities.costBasis).toBe(150);
+    expect(carried.entities.costBasis).toBe(100);
+    expect(savedWithQuote.entities.costBasis).toBe(100);
+  });
+
   it("treats 'for a total cost of' as a purchase total", async () => {
     const total = await route(
       {
