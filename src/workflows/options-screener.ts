@@ -82,6 +82,9 @@ ${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuanti
       promptStep("fetch_chain", "Fetch option chain data", buildOptionsScreenerPrompt(resolution), {
         requiredInputs: ["symbol"],
         expectedOutputs: ["option_chain"],
+        // This step's prompt already asks for a ranked premium table, and that
+        // answer is shown to the user, so it gets the same disclosure gate.
+        outputValidation: createOptionsQuoteFreshnessValidation(),
       }),
       promptStep(
         "rank_and_present",

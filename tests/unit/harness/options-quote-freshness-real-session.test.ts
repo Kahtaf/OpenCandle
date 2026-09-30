@@ -30,7 +30,10 @@ interface Scenario {
   name: string;
   fixture: unknown;
   repairReply?: string;
+  /** First-step text after the chain fetch; defaults to a figure-free status line. */
+  fetchReply?: string;
   expectedRepairs: number;
+  expectedValidationFailures: number;
   expectedStatus: "completed" | "failed";
 }
 
@@ -40,6 +43,7 @@ const scenarios: Scenario[] = [
     fixture: afterHoursFixture,
     repairReply: DISCLOSED,
     expectedRepairs: 1,
+    expectedValidationFailures: 1,
     expectedStatus: "completed",
   },
   {
@@ -47,19 +51,31 @@ const scenarios: Scenario[] = [
     fixture: afterHoursFixture,
     repairReply: UNDISCLOSED,
     expectedRepairs: 1,
+    expectedValidationFailures: 2,
     expectedStatus: "failed",
   },
   {
     name: "live regular-session chain",
     fixture: regularFixture,
+    fetchReply: UNDISCLOSED,
     expectedRepairs: 0,
+    expectedValidationFailures: 0,
+    expectedStatus: "completed",
+  },
+  {
+    name: "stale chain, first-step table undisclosed",
+    fixture: afterHoursFixture,
+    fetchReply: UNDISCLOSED,
+    repairReply: DISCLOSED,
+    expectedRepairs: 2,
+    expectedValidationFailures: 2,
     expectedStatus: "completed",
   },
 ];
 
 describe("real options_screener quote-freshness gate", () => {
   it.each(scenarios)(
-    "$name: at most one repair and no repeated chain fetch",
+    "$name: at most one repair per step and no repeated chain fetch",
     { timeout: 20_000 },
     async (scenario) => {
       const home = mkdtempSync(join(tmpdir(), "oc-quote-gate-"));
@@ -72,7 +88,7 @@ describe("real options_screener quote-freshness gate", () => {
       const server = await startDeterministicModelServer((request) => {
         const last = request.messages.at(-1);
         if (last?.role === "tool") {
-          return { kind: "text", text: "Fetched the option chain." };
+          return { kind: "text", text: scenario.fetchReply ?? "Fetched the option chain." };
         }
         const lastUser = [...request.messages].reverse().find((message) => message.role === "user");
         const text =
@@ -157,9 +173,7 @@ describe("real options_screener quote-freshness gate", () => {
         );
         expect(chainCalls).toBe(1);
         expect(repairCalls).toBe(scenario.expectedRepairs);
-        expect(validationEvents).toHaveLength(
-          scenario.expectedRepairs === 0 ? 0 : scenario.expectedStatus === "completed" ? 1 : 2,
-        );
+        expect(validationEvents).toHaveLength(scenario.expectedValidationFailures);
         if (scenario.expectedRepairs > 0) {
           expect(JSON.stringify(validationEvents[0].data)).toContain("last_session_quotes");
         }

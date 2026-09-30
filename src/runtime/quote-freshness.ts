@@ -87,25 +87,63 @@ export function findNonLiveQuoteEvidence(
  * Explicit statements that option quotes are not live. A generic "verify with
  * your broker" line is deliberately not enough: it does not tell the reader
  * that the numbers shown are not tradable right now.
+ *
+ * These phrases state non-liveness affirmatively ("last-session quotes",
+ * "markets are closed"), so a match only counts when the same clause does not
+ * negate it ("these are not last-session quotes").
  */
-const NON_LIVE_DISCLOSURE_PATTERNS: readonly RegExp[] = [
-  /\blast[- ]session\b/i,
-  /\b(?:prior|previous|last)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/i,
-  /\byesterday'?s\s+(?:close|session|quotes?)\b/i,
-  /\bnot\s+(?:currently\s+|yet\s+)?(?:live|executable|tradable|tradeable|firm)\b/i,
+const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
+  /\blast[- ]session\b/gi,
+  /\b(?:prior|previous|last|most\s+recent)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/gi,
+  /\b(?:yesterday|(?:mon|tues|wednes|thurs|fri|satur|sun)day)'?s\s+(?:close|session|quotes?)\b/gi,
+  /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
+  /\bstale\b/gi,
+  /\bdelayed\b/gi,
+  /\b(?:closing|indicative|cached|carried[- ]over|end[- ]of[- ]day|after[- ]hours|pre[- ]?market)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/gi,
+  /\bfrom\s+(?:a|the)\s+(?:stale\s+)?cache\b/gi,
+  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,
+  /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
+  /\bmarkets?(?:'s)?[- ]closed\b/gi,
+  /\b(?:options\s+)?markets?\s+(?:is|are)\s+(?:now\s+|currently\s+)?(?:in\s+)?(?:after[- ]hours|pre[- ]?market)\b/gi,
+  /\b(?:after|when|once|until|before)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?\b/gi,
+  /\b(?:at|after)\s+(?:the|tomorrow'?s|(?:mon|tues|wednes|thurs|fri)day'?s|next\s+session'?s)\s+(?:market\s+)?open\b/gi,
+];
+
+/** Phrases whose negation is the disclosure itself ("not live", "no live quotes"). */
+const NEGATED_NON_LIVE_PATTERNS: readonly RegExp[] = [
+  /\b(?:not|isn'?t|aren'?t|wasn'?t|weren'?t)\s+(?:currently\s+|yet\s+)?(?:live|executable|tradable|tradeable|firm|real[- ]?time)\b/i,
   /\bnon[- ]?(?:live|executable|tradable|tradeable)\b/i,
   /\bno\s+live\s+(?:quotes?|bid|ask|bid\/ask|prices?|premiums?|market)\b/i,
-  /(?<!\bnot\s)\bstale\b/i,
-  /\b(?:closing|indicative|delayed|carried[- ]over|end[- ]of[- ]day)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/i,
-  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/i,
-  /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has been|have been)\s+(?:currently\s+)?closed\b/i,
-  /\bmarket[- ]closed\b/i,
-  /\b(?:after|when|once)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?\b/i,
+  /\bcan(?:not|'t|\s+not)\s+be\s+(?:executed|traded|filled)\b/i,
 ];
+
+/** A negation in the few words before a phrase, e.g. "are not from the". */
+const PRECEDING_NEGATION =
+  /\b(?:not|never|no\s+longer|isn'?t|aren'?t|wasn'?t|weren'?t)\s+(?:[\w/'-]+\s+){0,3}$/i;
 
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
-  return NON_LIVE_DISCLOSURE_PATTERNS.some((pattern) => pattern.test(text));
+  if (NEGATED_NON_LIVE_PATTERNS.some((pattern) => pattern.test(text))) return true;
+  return AFFIRMATIVE_NON_LIVE_PATTERNS.some((pattern) => {
+    for (const match of text.matchAll(pattern)) {
+      if (!PRECEDING_NEGATION.test(clauseBefore(text, match.index))) return true;
+    }
+    return false;
+  });
+}
+
+/** Text of the current clause before `index` (bounded, stops at clause breaks). */
+function clauseBefore(text: string, index: number): string {
+  const window = text.slice(Math.max(0, index - 60), index);
+  const breaks = [...window.matchAll(/[;:!?\n]|\.(?!\d)/g)];
+  const last = breaks.at(-1);
+  return last?.index === undefined ? window : window.slice(last.index + 1);
+}
+
+/** Whether the text shows any price-like figure an options quote could be read from. */
+export function presentsQuoteFigures(text: string | undefined): boolean {
+  if (!text) return false;
+  return /\$\s?\d|\b\d+\.\d{2}\b/.test(text);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

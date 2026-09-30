@@ -116,6 +116,38 @@ describe("options quote freshness disclosure", () => {
   ])("accepts an explicit non-live disclosure: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
+
+  // Compliant wording a model commonly uses; failing these would force a
+  // needless repair or fail a workflow whose answer already disclosed.
+  it.each([
+    "Note: option quotes are delayed.",
+    "Markets closed for the holiday; premiums below are reference only.",
+    "Premiums are as of Friday's close.",
+    "Bid/ask shown are not real-time.",
+    "These quotes aren't live.",
+    "The options market has closed for the day.",
+    "Quotes are from the most recent session.",
+    "Bid/ask figures cannot be executed until the market reopens.",
+    "Recheck premiums at the open.",
+    "Recheck premiums before the market opens.",
+    "These are cached quotes from earlier today.",
+    "After-hours quotes: premiums below may differ tomorrow.",
+    "The options market is in after-hours trading.",
+  ])("accepts common non-live phrasing: %s", (text) => {
+    expect(disclosesNonLiveQuotes(text)).toBe(true);
+  });
+
+  it.each([
+    "These are not last-session quotes; the premiums are live.",
+    "Premiums are not from the prior session.",
+    "Quotes are not stale; premiums are live and executable.",
+    "These quotes aren't delayed.",
+    "Bid/ask are not closing quotes.",
+    "The market is not closed.",
+    "Live premium $3.20. Verify with your broker.",
+  ])("rejects negated or missing non-live wording: %s", (text) => {
+    expect(disclosesNonLiveQuotes(text)).toBe(false);
+  });
 });
 
 describe("options_screener quote freshness gate", () => {
@@ -146,6 +178,42 @@ describe("options_screener quote freshness gate", () => {
         priorEvidence: evidence,
       }),
     ).toEqual([]);
+  });
+
+  it("does not fire on an answer that presents no quote figures", async () => {
+    const evidence = await chainEvidence(afterHoursFixture);
+    expect(
+      rankStepValidation().validate("Fetched the option chain.", {
+        stepType: "rank_and_present",
+        currentEvidence: evidence,
+        priorEvidence: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it("also gates the first user-visible step, which presents a ranked premium table", async () => {
+    const definition = buildOptionsScreenerWorkflowDefinition({
+      resolved: {
+        symbol: "TEST",
+        direction: "bullish",
+        dteTarget: "25_to_45_days",
+        objective: "balanced_leverage_and_probability",
+        moneynessPreference: "atm_to_slightly_otm",
+        liquidityMinimum: "high_open_interest_and_tight_spread",
+      },
+      sources: {},
+      defaultsUsed: [],
+      missingRequired: [],
+    } as SlotResolution<OptionsScreenerSlots>);
+    const validation = definition.steps[0].outputValidation;
+    if (!validation) throw new Error("fetch_chain must carry the quote-freshness gate");
+    const context = {
+      stepType: "fetch_chain",
+      currentEvidence: await chainEvidence(afterHoursFixture),
+      priorEvidence: [],
+    };
+    expect(validation.validate(UNDISCLOSED, context)).toHaveLength(1);
+    expect(validation.validate(DISCLOSED, context)).toEqual([]);
   });
 
   it("never fires on live regular-session evidence or when no chain was captured", async () => {
