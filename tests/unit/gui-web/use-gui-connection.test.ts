@@ -23,7 +23,11 @@ import {
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 import { subscribeSessionActionErrors } from "../../../gui/web/src/lib/session-action-errors.js";
-import { resolveVisibleModelSetup } from "../../../gui/web/src/lib/session-model-setup.js";
+import {
+  markSessionModelsStale,
+  modelAvailabilitySignature,
+  resolveVisibleModelSetup,
+} from "../../../gui/web/src/lib/session-model-setup.js";
 
 describe("useGuiConnection helpers", () => {
   it("reports a socket error frame to the request that caused it, then toasts it", () => {
@@ -408,6 +412,35 @@ describe("useGuiConnection helpers", () => {
         requirement: "select_model",
         currentModel: undefined,
       });
+    });
+
+    it("marks cached session models stale when the available models change", () => {
+      const before = modelAvailabilitySignature({
+        availableModels: [{ provider: "google", id: "gemini-2.5-flash" }],
+      });
+      const after = modelAvailabilitySignature({
+        availableModels: [
+          { provider: "google", id: "gemini-2.5-flash" },
+          { provider: "openai", id: "gpt-6-luna" },
+        ],
+      });
+      expect(before).not.toBe(after);
+
+      const snapshots = {
+        "session-a": { sessionId: "session-a", sessionModel: { currentModel: "google/x" } },
+        "session-h": { sessionId: "session-h" },
+      };
+      const stale = markSessionModelsStale(snapshots);
+      expect(stale["session-a"]).toMatchObject({ sessionModelStale: true });
+      // Snapshots without a per-session model (hosted) are left alone.
+      expect(stale["session-h"]).toBe(snapshots["session-h"]);
+      // A fresh snapshot for the session clears the flag.
+      const refreshed = mergeSessionSnapshotMap(stale, {
+        type: "session.snapshot",
+        sessionId: "session-a",
+        sessionModel: { currentModel: "openai/gpt-6-luna" },
+      });
+      expect(refreshed["session-a"]?.sessionModelStale).toBeUndefined();
     });
 
     it("addresses HTTP fallback model changes to the visible session", () => {

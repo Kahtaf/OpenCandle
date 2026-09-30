@@ -398,6 +398,37 @@ describe("GUI model setup", () => {
       expect(other.buildSessionContext().model?.modelId).toBe("gemini-2.5-flash");
     });
 
+    it("re-checks that the session is idle after awaiting, right before writing", async () => {
+      const state = { busy: false };
+      const { modelRuntime } = await createTestModelRuntime({
+        google: { type: "api_key", key: "test-key" },
+        openai: { type: "api_key", key: "test-key" },
+      });
+      const settingsManager = SettingsManager.inMemory();
+      const other = SessionManager.inMemory();
+      other.appendModelChange("google", "gemini-2.5-flash");
+      const refresh = modelRuntime.refresh.bind(modelRuntime);
+      // A chat run is admitted while the model catalog refreshes.
+      modelRuntime.refresh = async (...args: Parameters<typeof refresh>) => {
+        await refresh(...args);
+        state.busy = true;
+      };
+      const controller = createModelSetupController({
+        role: "writer",
+        getSession: () => ({ modelRuntime, setModel: vi.fn(), settingsManager }) as never,
+        getSessionManager: () => SessionManager.inMemory(),
+        broadcastState: vi.fn(),
+        settingsManager,
+        resolveSessionManager: async () => other,
+        isSessionBusy: () => state.busy,
+      });
+
+      await expect(
+        controller.handleSelectModel("openai", "gpt-5.5", other.getSessionId()),
+      ).rejects.toThrow("finish");
+      expect(other.buildSessionContext().model?.modelId).toBe("gemini-2.5-flash");
+    });
+
     it("rejects a model without a configured key for a non-current session", async () => {
       const { controller, other } = await setup();
 

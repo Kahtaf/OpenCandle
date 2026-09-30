@@ -127,8 +127,9 @@ export interface SessionModelSelection {
 /**
  * The model and thinking level a stored session will run on when it is next
  * opened, without creating an AgentSession. Mirrors the precedence above and
- * Pi's thinking-level restore (recorded level, then per-model setting, then
- * the saved default), clamped to what the model supports.
+ * Pi's thinking-level restore (recorded level; then, for a session without
+ * messages, the per-model setting; then the saved default), clamped to what
+ * the model supports.
  */
 export function resolveSessionModelSelection(options: {
   modelRuntime: Pick<ModelRuntime, "getModel" | "hasConfiguredAuth">;
@@ -141,10 +142,14 @@ export function resolveSessionModelSelection(options: {
     chooseOpenCandleInitialModel(options)?.model ??
     savedDefaultModel(lookup, options.settingsManager);
   if (!model) return { thinkingLevel: "off", availableThinkingLevels: [] };
+  const settings = options.settingsManager;
+  const hasMessages = options.sessionManager.buildSessionContext().messages.length > 0;
+  // Same order as Pi's createAgentSession: a session with messages but no
+  // recorded level restores the saved default, not the per-model setting.
   const requested =
     recordedSessionThinkingLevel(options.sessionManager) ??
-    options.settingsManager.getModelThinkingLevel(model.provider, model.id) ??
-    options.settingsManager.getDefaultThinkingLevel() ??
+    (hasMessages ? undefined : settings.getModelThinkingLevel(model.provider, model.id)) ??
+    settings.getDefaultThinkingLevel() ??
     DEFAULT_THINKING_LEVEL;
   return {
     model,

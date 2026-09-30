@@ -1,6 +1,7 @@
 import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveSessionModelSelection } from "../../../src/pi/default-model.js";
+import { createOpenCandleSession } from "../../../src/pi/session.js";
 import { createTestModelRuntime } from "../../helpers/pi-model-runtime.js";
 
 describe("resolveSessionModelSelection", () => {
@@ -77,5 +78,32 @@ describe("resolveSessionModelSelection", () => {
     });
 
     expect(selection).toEqual({ thinkingLevel: "off", availableThinkingLevels: [] });
+  });
+
+  it("matches Pi's thinking restore for a legacy session with messages but no thinking entry", async () => {
+    const { modelRuntime } = await createTestModelRuntime({
+      openai: { type: "api_key", key: "test-key" },
+    });
+    const sessionManager = SessionManager.inMemory();
+    sessionManager.appendModelChange("openai", "gpt-5.5");
+    sessionManager.appendMessage({ role: "user", content: "old prompt", timestamp: Date.now() });
+    const settingsManager = SettingsManager.inMemory({ defaultThinkingLevel: "high" });
+    settingsManager.setModelThinkingLevel("openai", "gpt-5.5", "low");
+
+    const selection = resolveSessionModelSelection({
+      modelRuntime,
+      settingsManager,
+      sessionManager,
+    });
+    const { session } = await createOpenCandleSession({
+      modelRuntime,
+      settingsManager,
+      sessionManager,
+      useInlineExtension: false,
+    });
+
+    expect(selection.thinkingLevel).toBe(session.thinkingLevel);
+    expect(selection.thinkingLevel).toBe("high");
+    session.dispose();
   });
 });

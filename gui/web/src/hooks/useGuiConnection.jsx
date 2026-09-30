@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
 import { notifySessionActionError } from "../lib/session-action-errors.js";
+import { markSessionModelsStale, modelAvailabilitySignature } from "../lib/session-model-setup.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -278,6 +279,8 @@ export function useGuiConnection() {
   const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
+  // Last seen set of models with keys; a change invalidates per-session models.
+  const modelAvailabilityRef = useRef(null);
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {
@@ -377,6 +380,7 @@ export function useGuiConnection() {
               setCurrentSessionId(message.sessionId);
               setCurrentSessionPersisted(message.sessionPersisted === true);
               setAskUserPrompts(message.askUserPrompts || []);
+              modelAvailabilityRef.current = modelAvailabilitySignature(message.modelSetup);
               startTransition(() => {
                 setCatalog(message.catalog);
                 setModelSetup(
@@ -420,6 +424,14 @@ export function useGuiConnection() {
                 ),
               );
             } else if (message.type === "model.setup") {
+              const availability = modelAvailabilitySignature(message.modelSetup);
+              if (
+                modelAvailabilityRef.current !== null &&
+                modelAvailabilityRef.current !== availability
+              ) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
+              modelAvailabilityRef.current = availability;
               startTransition(() =>
                 setModelSetup(
                   message.modelSetup || {

@@ -237,17 +237,25 @@ export function createModelSetupController({
     );
   }
 
-  /** Opens a stored, idle, non-current session for a model or thinking change. */
+  /** Opens a stored, non-current session for a model or thinking change. */
   async function resolveStoredTarget(sessionId: string): Promise<SessionManager> {
     if (!resolveSessionManager || !settingsManager) {
       throw new Error("Session-addressed model changes are unavailable.");
     }
     const target = await resolveSessionManager(sessionId);
     if (!target) throw new Error("Unknown saved session");
+    return target;
+  }
+
+  /**
+   * Refuses while a chat run owns the session. Callers run this with no await
+   * between it and the transcript write, so a run admitted in this process
+   * cannot slip in between the check and the write.
+   */
+  function assertStoredTargetIdle(sessionId: string, target: SessionManager): void {
     if (isSessionBusy?.(sessionId, target)) {
       throw new Error("Wait for this chat's reply to finish before changing its model.");
     }
-    return target;
   }
 
   function buildCurrentModelSetupState(): ModelSetupState {
@@ -376,13 +384,16 @@ export function createModelSetupController({
       return { current: true };
     }
 
-    const target = await resolveStoredTarget(String(sessionId));
     await session.modelRuntime.refresh();
     const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
     if (!session.modelRuntime.hasConfiguredAuth(model.provider)) {
       throw new Error(`No API key for ${model.provider}/${model.id}`);
     }
+    const storedSessionId = String(sessionId);
+    const target = await resolveStoredTarget(storedSessionId);
+    // No await from here to the write (see assertStoredTargetIdle).
+    assertStoredTargetIdle(storedSessionId, target);
     const before = storedSessionSelection(target);
     target.appendModelChange(model.provider, model.id);
     // Mirror Pi's setModel: the new model's per-model level, then the saved
@@ -414,7 +425,10 @@ export function createModelSetupController({
       return { current: true };
     }
 
-    const target = await resolveStoredTarget(String(sessionId));
+    const storedSessionId = String(sessionId);
+    const target = await resolveStoredTarget(storedSessionId);
+    // No await from here to the write (see assertStoredTargetIdle).
+    assertStoredTargetIdle(storedSessionId, target);
     const selection = storedSessionSelection(target);
     if (!selection.model || !selection.availableThinkingLevels.includes(level as ThinkingLevel)) {
       throw new Error(`Unsupported thinking level: ${level}`);

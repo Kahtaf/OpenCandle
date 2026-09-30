@@ -281,6 +281,14 @@ export function AppShell() {
     void gui.loadSession(routeSessionId);
   }, [gui.loadSession, routeSessionId, visibleSessionSnapshot]);
 
+  // Keys changed since this session's model was loaded: reload it so the
+  // picker shows the model the next run will actually use.
+  const visibleSessionModelStale = visibleSessionSnapshot?.sessionModelStale === true;
+  useEffect(() => {
+    if (!activeSessionId || !visibleSessionModelStale) return;
+    void gui.loadSession(activeSessionId);
+  }, [gui.loadSession, activeSessionId, visibleSessionModelStale]);
+
   // Data providers left the catalog for Settings. Links written against the old
   // drawer grammar, including the catalog links that named a provider, land on
   // the provider row itself instead of a sheet that no longer has that tab.
