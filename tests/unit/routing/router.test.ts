@@ -3747,6 +3747,52 @@ describe("router cost-basis context guard", () => {
     expect(corrected.entities.costBasis).toBe(150);
   });
 
+  it("treats 'for a total cost of' as a purchase total", async () => {
+    const total = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 AAPL shares for a total cost of $15,000. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+    const derived = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 AAPL shares for a total cost of $15,000. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(total.entities.costBasis).toBeUndefined();
+    expect(derived.entities.costBasis).toBe(150);
+  });
+
+  it("scopes negation to the claim it modifies", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I did not pay commission when I bought AAPL at $150. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("carries a plain contrast correction onto the replacement amount", async () => {
+    const replacement = await route(
+      { ...BASE_INPUT, text: "My AAPL cost basis is not $100 but $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const rejected = await route(
+      { ...BASE_INPUT, text: "My AAPL cost basis is not $100 but $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    expect(replacement.entities.costBasis).toBe(150);
+    expect(rejected.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

@@ -1630,7 +1630,7 @@ function skipLeadingCurrency(rest: string): string {
 const BARE_ANSWER_FILLER =
   /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|dollars?|bucks|euros?|pounds?|yen|[A-Z]{3})\b|[~$\s]/gi;
 const TOTAL_PREFIX =
-  /\b(?:paid|spent|invested|total(?:\s+of)?|totall?ing|(?<!\b(?:average|avg|unit|share)\s)costs?(?:\s+me)?|for)\s*$/i;
+  /\b(?:paid|spent|invested|total(?:\s+of)?|totall?ing|(?<!\b(?:average|avg|unit|share)\s)costs?(?:\s+(?:me|of))?|for)\s*$/i;
 const TOTAL_SUFFIX = /^\s*(?:(?:total\s+|in\s+total\s+)?for|worth)\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
@@ -1665,6 +1665,7 @@ const CORRECTION_CONTEXT = /\b(?:actually|rather|i\s+meant?|make\s+that|correcti
 // Negation in an amount's lead-in ("cost basis is not $100") rejects it, even
 // after an explicit basis label.
 const NEGATION_CONTEXT = /\b(?:not|never|no\s+longer)\b|n't\b/i;
+const NEGATED_ACQUISITION = /(?:\b(?:not|never|no\s+longer)|n't)(?:\s+\w+)?\s*$/i;
 
 // Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
 const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
@@ -1716,17 +1717,29 @@ function localLeadIn(
   text: string,
   start: number,
   previousEnd: number,
-): { leadIn: string; fullLeadIn: string; afterBasisLabel: boolean } {
+): { leadIn: string; fullLeadIn: string; afterBasisLabel: boolean; isNegated: boolean } {
   const from = Math.max(segmentStart(text, start, CLAUSE_BOUNDARY), previousEnd);
   const fullLeadIn = text.slice(from, start);
   const lastAcquisition = [...fullLeadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
   if (lastAcquisition === undefined) {
-    return { leadIn: fullLeadIn, fullLeadIn, afterBasisLabel: false };
+    return {
+      leadIn: fullLeadIn,
+      fullLeadIn,
+      afterBasisLabel: false,
+      isNegated: NEGATION_CONTEXT.test(fullLeadIn),
+    };
   }
+  const acquisitionAt = lastAcquisition.index ?? 0;
+  const leadIn = fullLeadIn.slice(acquisitionAt + lastAcquisition[0].length);
+  // Negation counts when it sits between the acquisition word and the amount
+  // ("basis is not $100") or directly before the acquisition word ("never
+  // bought"), not when it modifies an earlier, separate claim.
   return {
-    leadIn: fullLeadIn.slice((lastAcquisition.index ?? 0) + lastAcquisition[0].length),
+    leadIn,
     fullLeadIn,
     afterBasisLabel: BASIS_LABEL.test(lastAcquisition[0]),
+    isNegated:
+      NEGATION_CONTEXT.test(leadIn) || NEGATED_ACQUISITION.test(fullLeadIn.slice(0, acquisitionAt)),
   };
 }
 
@@ -1803,11 +1816,9 @@ function parseStatedNumbers(
     const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
-    const { leadIn, fullLeadIn, afterBasisLabel } = localLeadIn(text, start, prevEnd);
-    // Negation anywhere in the lead-in, including before the acquisition
-    // verb ("never bought AAPL at $150"), rejects the amount.
+    const { leadIn, fullLeadIn, afterBasisLabel, isNegated } = localLeadIn(text, start, prevEnd);
     const isNonBasisContext =
-      NEGATION_CONTEXT.test(fullLeadIn) ||
+      isNegated ||
       (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
@@ -1822,7 +1833,8 @@ function parseStatedNumbers(
           (perShare && HOLDING_CONTEXT.test(sentence)) ||
           // A same-sentence correction ("cost basis is $100, but actually
           // $150") carries the basis wording forward.
-          (CORRECTION_CONTEXT.test(fullLeadIn) &&
+          ((CORRECTION_CONTEXT.test(fullLeadIn) ||
+            (/\bbut\s*$/i.test(text.slice(0, clauseStart)) && NEGATION_CONTEXT.test(sentence))) &&
             [...sentence.matchAll(ACQUISITION_CONTEXT)].length > 0)),
       isNonBasisContext,
       isPerShare: perShare,
