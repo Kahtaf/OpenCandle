@@ -44,6 +44,10 @@ describe("computeCorrelation", () => {
     expect(computeCorrelation(a, b)).toBe(0);
   });
 
+  it("returns 0 for empty return series", () => {
+    expect(computeCorrelation([], [])).toBe(0);
+  });
+
   it("handles arrays of different lengths by using the shorter", () => {
     const a = [0.01, 0.02, -0.01, 0.03, -0.02, 0.01, 0.04];
     const b = [0.01, 0.02, -0.01, 0.03, -0.02];
@@ -116,6 +120,10 @@ describe("alignReturnsByDate", () => {
     expect(returnsA.length).toBe(3);
   });
 
+  it("throws when no histories are provided", () => {
+    expect(() => alignReturnsByDate(new Map())).toThrow(/No histories available/);
+  });
+
   it("throws when overlap is below minimum threshold", () => {
     const barsA = makeBars(["2025-01-01", "2025-01-02", "2025-01-03"]);
     const barsB = makeBars(["2025-01-10", "2025-01-11", "2025-01-12"], 200);
@@ -176,6 +184,13 @@ describe("correlationTool", () => {
     expect(result.content[0].text.split("\n")[0]).toBe(
       "**Correlation Matrix** (5y lookback, daily returns)",
     );
+  });
+
+  it("rejects a request with fewer than two symbols before fetching", async () => {
+    await expect(correlationTool.execute("t", { symbols: ["AAPL"] })).rejects.toThrow(
+      /at least 2 symbols/,
+    );
+    expect(mockedGetHistory).not.toHaveBeenCalled();
   });
 
   it("returns unavailable when fewer than two symbols have history", async () => {
