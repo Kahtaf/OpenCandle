@@ -327,6 +327,47 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Conditional candidate:");
   });
 
+  it("discloses a missing covered-call cost basis instead of implying one", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { symbol: "AAPL", optionStrategy: "covered_call", shareQuantity: 300 },
+        { symbol: "user", optionStrategy: "user", shareQuantity: "user" },
+      ),
+    );
+
+    expect(prompt).toMatch(/Workflow constraints: .*cost basis not provided/);
+    expect(prompt).toContain("- Cost basis: not provided");
+    expect(prompt).toContain("Do not assume or invent a cost basis");
+    expect(prompt).not.toContain("compare it with the user's cost basis");
+    expect(prompt).not.toContain("Cost-basis math:");
+    expect(prompt).not.toContain("include return-if-assigned");
+    expect(prompt).not.toContain("strike above cost basis");
+  });
+
+  it("keeps an in-the-money covered-call preference when the basis is missing", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { symbol: "AAPL", optionStrategy: "covered_call", moneynessPreference: "itm" },
+        { symbol: "user", optionStrategy: "user", moneynessPreference: "user" },
+      ),
+    );
+
+    expect(prompt).not.toContain("strike above the current share price");
+    expect(prompt).toContain("strike that fits the requested moneyness");
+  });
+
+  it("does not disclose a missing basis when the covered-call basis is stated", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { symbol: "DRAM", optionStrategy: "covered_call", costBasis: 51 },
+        { symbol: "user", optionStrategy: "user", costBasis: "user" },
+      ),
+    );
+
+    expect(prompt).not.toContain("cost basis not provided");
+    expect(prompt).not.toContain("Do not assume or invent a cost basis");
+  });
+
   it("frames protective puts as hedges on existing shares", () => {
     const prompt = buildOptionsScreenerPrompt(
       makeOptionsResolution(

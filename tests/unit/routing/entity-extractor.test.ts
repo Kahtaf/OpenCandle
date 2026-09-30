@@ -67,6 +67,11 @@ describe("extractEntities", () => {
       expect(buyResult.symbols).toEqual(["NVDA"]);
     });
 
+    it("does not treat per-share wording as a ticker", () => {
+      expect(extractEntities("about $150 per share").symbols).toEqual([]);
+      expect(extractEntities("I paid $150 for each share of AAPL").symbols).toEqual(["AAPL"]);
+    });
+
     it("does not treat cost basis as an investment budget", () => {
       const result = extractEntities(
         "I own AAPL with a $175 cost basis. What covered call should I sell?",

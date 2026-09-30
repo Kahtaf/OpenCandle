@@ -132,6 +132,21 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
     expect(followUp.toLowerCase()).toContain("return-if-assigned");
   });
 
+  it("follow-up prompt does not imply a covered-call cost basis the user never stated", () => {
+    const followUp = followUpPrompt(
+      makeResolution({ symbol: "AAPL", optionStrategy: "covered_call", shareQuantity: 300 }),
+    );
+
+    expect(followUp).toContain("Do not assume or invent a cost basis");
+    expect(followUp).not.toContain("compare it with the user's cost basis");
+    expect(followUp).not.toContain("using the user's cost basis");
+    expect(followUp).not.toContain("violate the user's cost basis");
+    expect(followUp).not.toContain("calculate static premium yield and return-if-assigned");
+    expect(followUp).not.toContain("strike above the current share price");
+    expect(followUp).toContain("strike that fits the requested moneyness");
+    expect(followUp).not.toContain("strike above cost basis");
+  });
+
   it("follow-up prompt gives a covered-call fallback when quotes are unusable", () => {
     const followUp = followUpPrompt(
       makeResolution({
