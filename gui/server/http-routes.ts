@@ -1131,6 +1131,7 @@ async function streamAcceptedSseChatRun({
         beforeIds,
         observation,
         promptImages.length > 0 ? { images: promptImages } : undefined,
+        () => runHandle.cancelRequested,
       );
       if (runHandle.cancelRequested) {
         // User stopped this run. Keep it terminal: the extension records an

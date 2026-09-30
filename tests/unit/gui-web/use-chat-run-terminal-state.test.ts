@@ -158,4 +158,102 @@ describe("useChatRun terminal state", () => {
     expect(startBodies[1]?.actionId).toBeTruthy();
     expect(startBodies[1]?.actionId).not.toBe(startBodies[0]?.actionId);
   });
+
+  describe("starting right after Stop while the server is still releasing the session", () => {
+    const toasts: string[] = [];
+    function ToastProbe() {
+      latestRun = useChatRun({
+        activeSessionId: "session-1",
+        setToast: (message: string) => {
+          if (message) toasts.push(message);
+        },
+        onRunStart: vi.fn(),
+        onRunError: vi.fn(),
+      });
+      return null;
+    }
+    const busy = () =>
+      new Response(
+        JSON.stringify({ error: "Session already has an active run", code: "session_busy" }),
+        { status: 409, headers: { "content-type": "application/json" } },
+      );
+    const completed = () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"type":"run.completed"}\n\n'));
+            controller.close();
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+
+    async function renderWith(transport: unknown) {
+      toasts.length = 0;
+      await act(async () =>
+        root.render(
+          React.createElement(
+            RuntimeTransportContext.Provider,
+            { value: transport },
+            React.createElement(ToastProbe),
+          ),
+        ),
+      );
+    }
+
+    it("waits for the stopped run to release the session, then starts the retry", async () => {
+      const startBodies: Array<{ actionId: string }> = [];
+      let call = 0;
+      const transport = {
+        startChatRun: vi.fn(
+          async (_sessionId: string, body: { actionId: string }, signal: AbortSignal) => {
+            startBodies.push(body);
+            call += 1;
+            if (call === 1) {
+              return new Promise<Response>((_resolve, reject) => {
+                signal.addEventListener("abort", () =>
+                  reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+                );
+              });
+            }
+            return call === 2 ? busy() : completed();
+          },
+        ),
+        cancelChatRun: vi.fn(async () => ({ ok: true, cancelled: true, duplicate: false })),
+      };
+      await renderWith(transport);
+
+      let firstRun: Promise<unknown> | undefined;
+      await act(async () => {
+        firstRun = latestRun?.startChatRun("Compare AAPL and MSFT");
+      });
+      await act(async () => latestRun?.stopRun());
+      await act(async () => firstRun);
+      toasts.length = 0;
+
+      let retry: Promise<unknown> | undefined;
+      await act(async () => {
+        retry = latestRun?.startChatRun("Compare AAPL and MSFT");
+      });
+      // Busy is not an error while the stopped run winds down.
+      expect(latestRun?.runState).toBe("connecting");
+      await act(async () => retry);
+
+      expect(transport.startChatRun).toHaveBeenCalledTimes(3);
+      expect(startBodies[2]?.actionId).toBe(startBodies[1]?.actionId);
+      expect(latestRun?.runState).toBe("ready");
+      expect(toasts).toEqual([]);
+    });
+
+    it("still reports a busy session that this tab did not just stop", async () => {
+      const transport = { startChatRun: vi.fn(async () => busy()) };
+      await renderWith(transport);
+
+      await act(async () => latestRun?.startChatRun("Research AAPL"));
+
+      expect(transport.startChatRun).toHaveBeenCalledTimes(1);
+      expect(latestRun?.runState).toBe("failed");
+      expect(toasts).toEqual(["Session already has an active run"]);
+    });
+  });
 });

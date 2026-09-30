@@ -1,3 +1,5 @@
+import { currentAbortSignal } from "./abort-context.js";
+
 export interface HttpClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
@@ -53,18 +55,22 @@ interface HttpRequestOptions extends HttpClientOptions {
 
 async function httpRequest<T>(url: string, options: HttpRequestOptions): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  // A stopped run aborts its in-flight request and is never retried.
+  const runSignal = currentAbortSignal();
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
+    runSignal?.throwIfAborted();
     let retryDelayMs: number | undefined;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), opts.timeoutMs);
+    const signal = runSignal ? AbortSignal.any([controller.signal, runSignal]) : controller.signal;
 
     try {
       const response = await fetch(url, {
         method: opts.method,
-        signal: controller.signal,
+        signal,
         headers: opts.headers,
         ...(opts.body !== undefined && { body: opts.body }),
       });
@@ -82,7 +88,7 @@ async function httpRequest<T>(url: string, options: HttpRequestOptions): Promise
       return (await response.json()) as T;
     } catch (error) {
       lastError = error as Error;
-      if (!isRetryableError(error)) {
+      if (runSignal?.aborted || !isRetryableError(error)) {
         throw error; // Don't retry client errors
       }
       if (attempt < opts.maxRetries) {
@@ -96,7 +102,7 @@ async function httpRequest<T>(url: string, options: HttpRequestOptions): Promise
     }
 
     if (retryDelayMs !== undefined) {
-      await sleep(retryDelayMs);
+      await sleep(retryDelayMs, runSignal);
     }
   }
 
@@ -129,6 +135,20 @@ function capRetryAfterMs(retryAfterMs: number, maxRetryAfterMs: number | undefin
   return Math.min(retryAfterMs, Math.max(0, maxRetryAfterMs));
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }

@@ -80,6 +80,32 @@ export function isSessionChangedChatRunError(status, errorBody) {
   return status === 409 && errorBody?.code === "session_changed";
 }
 
+export function isSessionBusyChatRunError(status, errorBody) {
+  return status === 409 && errorBody?.code === "session_busy";
+}
+
+// After this tab stops a run, the server can still be releasing the session
+// for a moment (a tool finishing, the workflow retiring). A run started in
+// that window waits for the release instead of failing with a busy error.
+const STOPPED_RUN_WINDOW_MS = 60_000;
+const STOPPED_RUN_RELEASE_WAIT_MS = 30_000;
+const STOPPED_RUN_RELEASE_POLL_MS = 250;
+
+function delay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export function isDuplicateChatRunAck(body) {
   return body?.ok === true && body?.duplicate === true;
 }
@@ -87,6 +113,8 @@ export function isDuplicateChatRunAck(body) {
 export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
   const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
+  // When this tab last stopped a run, per session key.
+  const stoppedAtRef = useRef(new Map());
   const runStatesRef = useRef({});
   const [runStates, setRunStates] = useState({});
   const [lastRuns, setLastRuns] = useState({});
@@ -135,13 +163,30 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       abortsRef.current.set(key, abort);
 
       try {
-        const response = await transport.startChatRun(
-          targetSessionId,
-          buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
-          abort.signal,
-        );
+        const stoppedAt = stoppedAtRef.current.get(key);
+        const waitForStoppedRun =
+          stoppedAt !== undefined && Date.now() - stoppedAt < STOPPED_RUN_WINDOW_MS;
+        const releaseDeadline = Date.now() + STOPPED_RUN_RELEASE_WAIT_MS;
+        let response;
+        let error;
+        while (true) {
+          response = await transport.startChatRun(
+            targetSessionId,
+            buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
+            abort.signal,
+          );
+          if (response.ok) break;
+          error = await response.json().catch(() => ({ error: response.statusText }));
+          if (
+            !waitForStoppedRun ||
+            !isSessionBusyChatRunError(response.status, error) ||
+            Date.now() >= releaseDeadline
+          ) {
+            break;
+          }
+          await delay(STOPPED_RUN_RELEASE_POLL_MS, abort.signal);
+        }
         if (!response.ok) {
-          const error = await response.json().catch(() => ({ error: response.statusText }));
           if (isSessionChangedChatRunError(response.status, error)) {
             setRunStateFor(key, "ready");
             return { sessionChanged: true };
@@ -229,6 +274,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           })
           .catch(() => setToast(RUN_CANCEL_UNCONFIRMED_MESSAGE));
       }
+      stoppedAtRef.current.set(key, Date.now());
       if (targetActionId) {
         // A stopped run is terminal. Retry must mint a fresh action id: reusing
         // the stopped one gets an idempotent duplicate acknowledgement (or is
