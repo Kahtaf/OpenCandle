@@ -134,6 +134,66 @@ describe("useWaitingServiceWorker", () => {
     expect(latest).toBeNull();
   });
 
+  it("follows the newest announced worker and ignores the one it replaced", async () => {
+    const { registration } = installContainer();
+    await renderProbe();
+    const first = fakeWorker();
+    registration.waiting = first;
+    act(() => announce(registration));
+    const second = fakeWorker();
+    registration.waiting = second;
+    act(() => announce(registration));
+    expect(latest).toBe(second);
+
+    // The replaced worker going redundant must not clear the newer offer.
+    act(() => first.moveTo("redundant"));
+    expect(latest).toBe(second);
+  });
+
+  it("clears the offer when an announcement carries no waiting worker", async () => {
+    const waiting = fakeWorker();
+    installContainer({ waiting });
+    await renderProbe();
+    expect(latest).toBe(waiting);
+    act(() => {
+      dispatchEvent(new CustomEvent("opencandle:update-ready", { detail: {} }));
+    });
+    expect(latest).toBeNull();
+  });
+
+  it("ignores a registration lookup that settles after unmount", async () => {
+    let resolveLookup!: (value: unknown) => void;
+    const serviceWorker = Object.assign(new EventTarget(), {
+      controller: {},
+      getRegistration: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveLookup = resolve;
+          }),
+      ),
+    });
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: serviceWorker });
+    await renderProbe();
+    act(() => root.unmount());
+    resolveLookup({ waiting: fakeWorker() });
+    await Promise.resolve();
+    expect(latest).toBeNull();
+    root = createRoot(container);
+  });
+
+  it("stays null when the registration lookup fails", async () => {
+    const serviceWorker = Object.assign(new EventTarget(), {
+      controller: {},
+      getRegistration: vi.fn(async () => {
+        throw new Error("SecurityError");
+      }),
+    });
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: serviceWorker });
+    await renderProbe();
+    await flush();
+    expect(latest).toBeNull();
+  });
+
   it("re-checks the registration when the controller changes", async () => {
     const waiting = fakeWorker();
     const { registration, serviceWorker } = installContainer({ waiting });
