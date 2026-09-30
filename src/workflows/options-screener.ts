@@ -65,7 +65,7 @@ export function buildOptionsScreenerWorkflowDefinition(
 `
     : "";
   const coveredCallNoDataGuidance = isCoveredCallContext
-    ? "- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk."
+    ? `- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, ${s.costBasis !== undefined ? "avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned" : "calculate static premium yield (compute return-if-assigned only once the user states a cost basis)"}, and flag catalyst/IV-crush risk.`
     : "";
   const protectivePutFallback = isProtectivePutContext
     ? `

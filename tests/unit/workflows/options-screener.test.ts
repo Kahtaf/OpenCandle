@@ -140,6 +140,8 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
     expect(followUp).toContain("Do not assume or invent a cost basis");
     expect(followUp).not.toContain("compare it with the user's cost basis");
     expect(followUp).not.toContain("using the user's cost basis");
+    expect(followUp).not.toContain("violate the user's cost basis");
+    expect(followUp).not.toContain("calculate static premium yield and return-if-assigned");
     expect(followUp).not.toContain("strike above cost basis");
   });
 
