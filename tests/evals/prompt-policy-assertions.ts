@@ -535,7 +535,10 @@ function eventRiskFrameworkConcepts(trace: EvalTrace): string[] {
 const OPTION_CHAIN_TOOL = "get_option_chain";
 
 // The owned underlying: an unnegated text mention, or structured evidence that
-// the option chain was fetched for that symbol.
+// the option chain was fetched for that symbol. Either way, the answer must not
+// affirmatively recommend an option on another ticker from the request ("buy
+// the NVDA put"): a fetched chain shows available evidence, not the underlying
+// the answer settled on.
 function usesOwnedUnderlying(
   symbol: string,
   trace: EvalTrace,
@@ -549,15 +552,61 @@ function usesOwnedUnderlying(
     trace.text,
     new RegExp(`(?<![\\w$.])${escapeRegExp(symbol)}(?![\\w])`, "i"),
   );
+  const committed = withoutConditionalClauses(trace.text);
+  const conflicting = otherRequestSymbols(trace, upper).filter((other) =>
+    affirmsForbidden(committed, optionOnSymbol(other)),
+  );
   return {
-    passed: fetchedChain || mentioned,
-    reason: fetchedChain
-      ? `observed ${OPTION_CHAIN_TOOL} for ${upper}`
-      : mentioned
-        ? `final answer names ${upper} as the underlying`
-        : `expected ${OPTION_CHAIN_TOOL} args or an unnegated final-answer mention of ${upper}`,
+    passed: conflicting.length === 0 && (fetchedChain || mentioned),
+    reason:
+      conflicting.length > 0
+        ? `final answer recommends an option on ${conflicting.join(", ")} instead of ${upper}`
+        : fetchedChain
+          ? `observed ${OPTION_CHAIN_TOOL} for ${upper}`
+          : mentioned
+            ? `final answer names ${upper} as the underlying`
+            : `expected ${OPTION_CHAIN_TOOL} args or an unnegated final-answer mention of ${upper}`,
     deterministic: true,
   };
+}
+
+// Drops conditional clauses ("If you meant a call on NVDA, tell me"), which
+// offer an alternative rather than recommend it.
+const CONDITIONAL_CLAUSE = /^\s*(?:if|unless|suppose|supposing|in case|should you)\b/i;
+
+function withoutConditionalClauses(text: string): string {
+  return splitSentences(text)
+    .map((sentence) =>
+      sentence
+        .split(/(?<=[,;])/)
+        .filter((clause) => !CONDITIONAL_CLAUSE.test(clause))
+        .join(""),
+    )
+    .join("\n");
+}
+
+function otherRequestSymbols(trace: EvalTrace, owned: string): string[] {
+  const symbols = new Set<string>([
+    ...(trace.classification.entities?.symbols ?? []).map((symbol) => symbol.toUpperCase()),
+    ...(trace.prompt.match(/\b[A-Z]{2,5}\b/g) ?? []),
+  ]);
+  symbols.delete(owned);
+  return [...symbols];
+}
+
+// An option bound to a ticker: "NVDA put", "NVDA 150 put", "NVDA Oct 150
+// call", or "puts on NVDA". Only expiry and strike tokens may sit between, so
+// "NVDA earnings could hurt your call" is not an NVDA call.
+const EXPIRY_WORD =
+  "(?:[Jj]an(?:uary)?|[Ff]eb(?:ruary)?|[Mm]ar(?:ch)?|[Aa]pr(?:il)?|[Mm]ay|[Jj]une?|[Jj]uly?|[Aa]ug(?:ust)?|[Ss]ep(?:t(?:ember)?)?|[Oo]ct(?:ober)?|[Nn]ov(?:ember)?|[Dd]ec(?:ember)?|[Ww]eekly|[Mm]onthly)\\.?";
+function optionOnSymbol(symbol: string): RegExp {
+  const ticker = escapeRegExp(symbol);
+  // Case-sensitive, so the ticker never matches an ordinary word ("how many
+  // puts" is not a MANY put).
+  const option = "(?:[Pp]uts?|[Cc]alls?|[Oo]ptions?|[Cc]ontracts?|[Cc]ollars?|[Ss]preads?)";
+  return new RegExp(
+    `(?<![\\w$.])${ticker}(?:\\s+(?:${EXPIRY_WORD}|\\$?\\d+(?:\\.\\d+)?(?:-strike)?|strike))*\\s+${option}\\b|\\b${option}\\s+(?:on|for)\\s+${ticker}(?![\\w])`,
+  );
 }
 
 const SMALL_NUMBER_WORDS = [

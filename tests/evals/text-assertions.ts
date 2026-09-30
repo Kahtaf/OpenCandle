@@ -187,7 +187,8 @@ function stripEchoedRuns(sentence: string, promptGrams: Set<string>): string {
 
 /**
  * Remove prompt restatement: a sentence with an explicit restatement lead-in
- * ("You asked whether...", "Your question is...") is dropped, and any run of at
+ * ("You asked whether...", "Your question is...") is dropped up to its first
+ * semicolon (or entirely when it has none), and any run of at
  * least six consecutive words copied from the prompt is cut out of its
  * sentence while the sentence's own clauses stay. What remains is the answer's
  * own content, so a framework check cannot pass on an echoed prompt.
@@ -197,10 +198,16 @@ export function withoutPromptEcho(text: string, prompt: string): string {
   const sentences = splitSentences(text);
   let changed = false;
   const kept: string[] = [];
-  for (const sentence of sentences) {
+  for (const raw of sentences) {
+    let sentence = raw;
     if (ECHO_LEAD.test(sentence)) {
       changed = true;
-      continue;
+      // Only the restated lead-in goes; the answer's own clauses after a
+      // semicolon ("You asked X; gap risk is high...") stay.
+      const semicolon = sentence.indexOf(";");
+      if (semicolon < 0) continue;
+      sentence = sentence.slice(semicolon + 1).trim();
+      if (!sentence) continue;
     }
     const content = promptGrams.size === 0 ? sentence : stripEchoedRuns(sentence, promptGrams);
     if (content !== sentence) changed = true;

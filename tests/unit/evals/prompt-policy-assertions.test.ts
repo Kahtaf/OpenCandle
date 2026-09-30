@@ -935,6 +935,16 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       ).toBe(false);
     });
 
+    it("keeps the answer's own clauses after an echo lead-in and a semicolon", () => {
+      expect(
+        check(
+          assertion,
+          "You asked whether to trim or hedge; gap risk is high, the position is oversized, so hedge, and verification would change the answer.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
     it("fails an echoed heading followed by filler", () => {
       expect(
         check(
@@ -1154,6 +1164,37 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
           prompt: DRAM_PROMPT,
         }),
       ).toBe(false);
+    });
+
+    it("fails an answer that recommends another ticker's option despite the owned chain", () => {
+      for (const text of [
+        "Buy the NVDA 150 put.",
+        "AMD is your holding, but buy the NVDA put for the event.",
+        "Buy puts on NVDA ahead of the print.",
+      ]) {
+        expect(
+          check("uses AMD as protective-put underlying", text, {
+            prompt: AMD_PROMPT,
+            toolCalls: [chain("AMD")],
+          }),
+        ).toBe(false);
+      }
+    });
+
+    it.each([
+      "Buy the $150 put expiring October 17.",
+      "Buy an AMD put; NVDA earnings could still move AMD.",
+      "Buy an AMD put, not an NVDA put.",
+      "Buy an AMD put; NVDA earnings could hurt your call exposure elsewhere.",
+      "Decide how many puts to buy on AMD.",
+      "Buy the AMD put. If you meant a put on NVDA instead, tell me and I'll redo this.",
+    ])("passes an owned-underlying option that only mentions the catalyst: %s", (text) => {
+      expect(
+        check("uses AMD as protective-put underlying", text, {
+          prompt: `${AMD_PROMPT} HOW MANY contracts?`,
+          toolCalls: [chain("AMD")],
+        }),
+      ).toBe(true);
     });
 
     it("fails when the chain was fetched for the catalyst ticker instead", () => {
