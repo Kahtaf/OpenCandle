@@ -8,6 +8,7 @@ import {
   createDetachedSessionRegistry,
   createInitialGuiSessionManager,
 } from "../../../gui/server/gui-session-manager.js";
+import { writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("createInitialGuiSessionManager", () => {
   it("starts the GUI on a fresh chat instead of continuing the most recent session", async () => {
@@ -41,6 +42,11 @@ describe("createDetachedSessionRegistry", () => {
       expect(registry.get(detached.getSessionId())).toBe(detached);
       expect(registry.get("unknown-session")).toBeUndefined();
       expect(readdirSync(sessionDir)).toEqual([]);
+      // Each unsent session already has its own file path, so it gets its own
+      // writer-lock scope rather than sharing the session directory.
+      const other = registry.create(cwd, sessionDir);
+      expect(writerLockScopeForSession(detached)).not.toBe(sessionDir);
+      expect(writerLockScopeForSession(detached)).not.toBe(writerLockScopeForSession(other));
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

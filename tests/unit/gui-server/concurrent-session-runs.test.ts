@@ -50,6 +50,8 @@ describe("chat runs in different sessions are independent", () => {
   const handlerRejections: unknown[] = [];
   const currentGate = createDeferred<void>();
   const currentEngaged = createDeferred<void>();
+  const firstNewChatGate = createDeferred<void>();
+  const firstNewChatEngaged = createDeferred<void>();
 
   beforeAll(async () => {
     previousHome = process.env.OPENCANDLE_HOME;
@@ -100,7 +102,15 @@ describe("chat runs in different sessions are independent", () => {
       getSessionManager: () => currentManager,
       createSessionForManager: async (sessionManager) => {
         createdFor.push(sessionManager.getSessionId());
-        return { session: fakeAgentSession(sessionManager, "AAPL is trading at $189.42.") };
+        // The first new chat is held too, so two new chats overlap each other
+        // as well as the original session.
+        const hold =
+          createdFor.length === 1
+            ? { gate: firstNewChatGate, engaged: firstNewChatEngaged }
+            : undefined;
+        return {
+          session: fakeAgentSession(sessionManager, "AAPL is trading at $189.42.", hold),
+        };
       },
       wsHub: fakeWsHub(),
       modelSetupController: fakeModelSetupController(),
@@ -130,6 +140,7 @@ describe("chat runs in different sessions are independent", () => {
 
   afterAll(async () => {
     currentGate.resolve();
+    firstNewChatGate.resolve();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
@@ -146,31 +157,48 @@ describe("chat runs in different sessions are independent", () => {
     });
   }
 
-  it("admits and completes a new chat's run while another session's run is still active", async () => {
-    const sessionA = currentManager.getSessionId();
-    const runA = postRun(sessionA, "chat-a", "Build me a balanced portfolio with $50,000");
-    await currentEngaged.promise;
-
-    // New chat while A is still running: a separate session, not a 409.
+  async function createNewChat(): Promise<string> {
     const created = await fetch(`${endpoint}/api/session/new`, {
       method: "POST",
       headers: trustedHeaders,
     });
     expect(created.status).toBe(200);
-    const createdBody = (await created.json()) as { sessionId?: string; detached?: boolean };
-    expect(createdBody.detached).toBe(true);
-    const sessionB = String(createdBody.sessionId ?? "");
+    const body = (await created.json()) as { sessionId?: string; detached?: boolean };
+    expect(body.detached).toBe(true);
+    return String(body.sessionId ?? "");
+  }
+
+  it("admits and completes a new chat's run while another session's run is still active", async () => {
+    const sessionA = currentManager.getSessionId();
+    const runA = postRun(sessionA, "chat-a", "Build me a balanced portfolio with $50,000");
+    await currentEngaged.promise;
+
+    // Two new chats while A is still running: separate sessions, not a 409.
+    const sessionB = await createNewChat();
+    const sessionC = await createNewChat();
     expect(sessionB).toBeTruthy();
-    expect(sessionB).not.toBe(sessionA);
+    expect(new Set([sessionA, sessionB, sessionC]).size).toBe(3);
     expect(runtimeNewSession).not.toHaveBeenCalled();
 
-    // B's run is admitted on its own Pi session and completes while A is held.
-    const runB = await postRun(sessionB, "chat-b", "What is AAPL trading at?");
-    expect(runB.status).toBe(200);
-    const bodyB = await runB.text();
+    // B's run is admitted on its own Pi session and stays in flight.
+    const runB = postRun(sessionB, "chat-b", "What is MSFT trading at?");
+    await firstNewChatEngaged.promise;
+
+    // C runs to completion while both A and B are still in flight: each new
+    // chat has its own writer-lock scope.
+    const runC = await postRun(sessionC, "chat-c", "What is AAPL trading at?");
+    expect(runC.status).toBe(200);
+    const bodyC = await runC.text();
+    expect(bodyC).toContain("run.completed");
+    expect(bodyC).not.toContain("run.failed");
+    expect(createdFor).toEqual([sessionB, sessionC]);
+
+    firstNewChatGate.resolve();
+    const responseB = await runB;
+    expect(responseB.status).toBe(200);
+    const bodyB = await responseB.text();
     expect(bodyB).toContain("run.completed");
     expect(bodyB).not.toContain("run.failed");
-    expect(createdFor).toEqual([sessionB]);
 
     // One run per session still holds for A.
     const secondA = await postRun(sessionA, "chat-a-2", "A second prompt for A");
@@ -188,7 +216,7 @@ describe("chat runs in different sessions are independent", () => {
     // B is now a saved session that resolves by id like any other.
     const saved = await SessionManager.list(join(tempRoot, "cwd"), join(tempRoot, "sessions"));
     expect(saved.map((session) => session.id)).toEqual(
-      expect.arrayContaining([sessionA, sessionB]),
+      expect.arrayContaining([sessionA, sessionB, sessionC]),
     );
     expect(handlerRejections).toEqual([]);
   });

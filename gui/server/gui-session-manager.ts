@@ -33,9 +33,8 @@ export function createDetachedSessionRegistry(
     create(cwd, sessionDir) {
       const manager = SessionManager.create(cwd, sessionDir);
       sessions.set(manager.getSessionId(), manager);
-      while (sessions.size > limit) {
-        const oldest = sessions.keys().next().value;
-        if (oldest === undefined) break;
+      for (const oldest of sessions.keys()) {
+        if (sessions.size <= limit) break;
         sessions.delete(oldest);
       }
       return manager;
