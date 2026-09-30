@@ -1563,14 +1563,15 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
 const STATED_NUMBER =
   /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
 const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b/;
-const TICKER_SUFFIX = /^\s*([A-Z]{1,5})\b(?![a-z])/;
+const TICKER_SUFFIX = /^\s*([A-Za-z]{1,5})\b/;
 const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
 const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|each\b|apiece\b)/i;
 const TOTAL_PREFIX = /\b(?:paid|spent|invested|total(?:\s+of)?|cost\s+me|for)\s*$/i;
 const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_BASIS_PREFIX =
-  /\b(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
-const NON_BASIS_SUFFIX = /^\s*(?:premium|credit|strike|target|stop|limit|budget)\b/i;
+  /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
+const NON_BASIS_SUFFIX =
+  /^\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)\b/i;
 // A direct amount is basis-linked when its clause carries acquisition or basis
 // wording ("bought at $150", "cost basis is $51"), or when its sentence states a
 // holding and the amount is per-share ("I own 100 AAPL at $150"), and its
@@ -1583,7 +1584,7 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|today|market|worth|valued?|spot|last|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|order|limit)\b/i;
+  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|market|worth|valued?|spot|last|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|order|limit)\b/i;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1652,7 +1653,7 @@ function parseStatedNumbers(
     if (
       !dollar &&
       !scale &&
-      (QUANTITY_SUFFIX.test(rest) || (ticker !== undefined && isTicker(ticker)))
+      (QUANTITY_SUFFIX.test(rest) || (ticker !== undefined && isTicker(ticker.toUpperCase())))
     ) {
       quantities.push(base);
       continue;

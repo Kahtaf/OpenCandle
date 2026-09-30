@@ -3241,6 +3241,46 @@ describe("router cost-basis context guard", () => {
     expect(sellAt.entities.costBasis).toBeUndefined();
   });
 
+  it("keeps a same-day purchase price as a stated basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL today at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not ground a basis in a transaction fee", async () => {
+    const commission = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought AAPL at $150 and paid a $2 commission. Covered call ideas?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+    const feeOf = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at $150 with fees of $5. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 5 }),
+    );
+
+    expect(commission.entities.costBasis).toBeUndefined();
+    expect(feeOf.entities.costBasis).toBeUndefined();
+  });
+
+  it("treats a lowercase ticker after a number as a quantity", async () => {
+    const derived = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 aapl shares. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const total = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 aapl shares. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+
+    expect(derived.entities.costBasis).toBe(150);
+    expect(total.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
