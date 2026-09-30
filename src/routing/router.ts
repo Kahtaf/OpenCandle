@@ -1445,9 +1445,15 @@ function basisGrounding(
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   underlyingSymbol?: string,
 ): BasisGrounding | undefined {
+  // The later existing-position rewrite may restore an underlying the model
+  // omitted, so prior turns about it count too.
+  const scopeSymbols =
+    underlyingSymbol !== undefined && !symbols.includes(underlyingSymbol)
+      ? [underlyingSymbol, ...symbols]
+      : symbols;
   const texts: BasisGroundingTurn[] = [];
   const turns = inputContext?.priorTurns ?? [];
-  const currentIsBasisReply = answersBasisQuestion(symbols, turns);
+  const currentIsBasisReply = answersBasisQuestion(scopeSymbols, turns);
   if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text) || currentIsBasisReply) {
     texts.push({ text, isBasisReply: currentIsBasisReply });
   }
@@ -1456,10 +1462,10 @@ function basisGrounding(
     if (turn.role !== "user") continue;
     const turnEntities = extractEntities(turn.text);
     const sameSymbolHolding =
-      turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
+      turnEntities.symbols.some((symbol) => scopeSymbols.includes(symbol)) &&
       (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text));
     const isBasisReply =
-      answersBasisQuestion(symbols, turns.slice(0, index)) &&
+      answersBasisQuestion(scopeSymbols, turns.slice(0, index)) &&
       suppliesBasisReply(turn.text, turnEntities);
     if (sameSymbolHolding || isBasisReply) {
       texts.push({ text: turn.text, isBasisReply });
@@ -1470,7 +1476,7 @@ function basisGrounding(
   const targetSymbol =
     underlyingSymbol ??
     (heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0]);
-  const hasSavedBasis = symbols.some(
+  const hasSavedBasis = scopeSymbols.some(
     (symbol) =>
       readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
   );
@@ -1481,7 +1487,7 @@ function basisGrounding(
       ? undefined
       : readPortfolioPosition(inputContext?.portfolioPositions, targetSymbol)?.costBasis;
   const savedBases = targetSavedBasis === undefined ? [] : [targetSavedBasis];
-  return { texts, savedBases, symbols, targetSymbol };
+  return { texts, savedBases, symbols: scopeSymbols, targetSymbol };
 }
 
 const DERIVED_BASIS_TOLERANCE = 0.005;
@@ -1524,6 +1530,8 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
 // Punctuation inside a number ("1,000", "150.25") is not a boundary.
 const CLAUSE_BOUNDARY = /[;!?]|[.,](?!\d)|\b(?:and|but|while|whereas|then)\b/gi;
 const SENTENCE_BOUNDARY = /[.;!?](?!\d)/g;
+// Clause boundaries without the comma, for comma appositives.
+const PHRASE_BOUNDARY = /[;!?]|[.](?!\d)|\b(?:and|but|while|whereas|then)\b/gi;
 
 function segmentAround(text: string, index: number, boundary: RegExp): string {
   let start = 0;
@@ -1765,7 +1773,12 @@ function parseStatedNumbers(
     before: string;
     rest: string;
   }> = [];
-  const quantities: Array<{ value: number; clauseStart: number; index: number }> = [];
+  const quantities: Array<{
+    value: number;
+    clauseStart: number;
+    phraseStart: number;
+    index: number;
+  }> = [];
   let previousEnd = 0;
   for (const match of text.matchAll(STATED_NUMBER)) {
     const matchPreviousEnd = previousEnd;
@@ -1785,6 +1798,7 @@ function parseStatedNumbers(
       quantities.push({
         value: base * multiplier,
         clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY),
+        phraseStart: segmentStart(text, start, PHRASE_BOUNDARY),
         index: start,
       });
       continue;
@@ -1809,10 +1823,15 @@ function parseStatedNumbers(
       PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(skipLeadingCurrency(rest));
     const clauseStart = segmentStart(text, start, CLAUSE_BOUNDARY);
     const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
-    // A total pairs only with its nearest share count in the same clause.
-    const nearestQuantity = quantities
-      .filter((quantity) => quantity.clauseStart === clauseStart)
-      .sort((a, b) => Math.abs(a.index - start) - Math.abs(b.index - start))[0];
+    // A total pairs only with its nearest share count in the same clause, or
+    // failing that in a comma appositive ("$15,000 for AAPL, representing
+    // 100 shares"), never across and/but/then.
+    const byDistance = (a: { index: number }, b: { index: number }) =>
+      Math.abs(a.index - start) - Math.abs(b.index - start);
+    const phraseStart = segmentStart(text, start, PHRASE_BOUNDARY);
+    const nearestQuantity =
+      quantities.filter((quantity) => quantity.clauseStart === clauseStart).sort(byDistance)[0] ??
+      quantities.filter((quantity) => quantity.phraseStart === phraseStart).sort(byDistance)[0];
     const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);

@@ -3793,6 +3793,48 @@ describe("router cost-basis context guard", () => {
     expect(rejected.entities.costBasis).toBeUndefined();
   });
 
+  it("grounds a prior-turn basis for the extracted underlying", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings next week; I own AMD, covered calls?",
+        priorTurns: [{ role: "user", text: "I bought AMD at $150." }],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("pairs a total with a share count in a comma appositive", async () => {
+    const total = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for AAPL, representing 100 shares. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+    const derived = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for AAPL, representing 100 shares. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const sold = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for AAPL and later sold 50 shares. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+
+    expect(total.entities.costBasis).toBeUndefined();
+    expect(derived.entities.costBasis).toBe(150);
+    expect(sold.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
