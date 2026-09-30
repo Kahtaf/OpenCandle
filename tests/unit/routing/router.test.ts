@@ -3747,6 +3747,26 @@ describe("router cost-basis context guard", () => {
     expect(corrected.entities.costBasis).toBe(150);
   });
 
+  it("rejects the superseded amount of a same-turn correction", async () => {
+    const texts = [
+      "My AAPL cost basis is $100, but actually $150. Covered calls?",
+      "My AAPL cost basis is $100. Actually, it is $150. Covered calls?",
+    ];
+    for (const text of texts) {
+      const superseded = await route(
+        { ...BASE_INPUT, text },
+        outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+      );
+      const corrected = await route(
+        { ...BASE_INPUT, text },
+        outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+      );
+
+      expect(superseded.entities.costBasis).not.toBe(100);
+      expect(corrected.entities.costBasis).toBe(150);
+    }
+  });
+
   it("prefers a basis stated in the current turn over a superseded earlier basis", async () => {
     const priorTurns: RouterInputContext["priorTurns"] = [
       { role: "user", text: "My AAPL cost basis is $100." },

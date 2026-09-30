@@ -1426,7 +1426,12 @@ function resolveCostBasis(
   const scope = current.some((turn) => basisAmounts(turn, grounding).length > 0)
     ? { ...grounding, texts: current, savedBases: [] }
     : grounding;
-  return isGroundedBasis(modelCostBasis, scope) ? modelCostBasis : extractedCostBasis;
+  if (isGroundedBasis(modelCostBasis, scope)) return modelCostBasis;
+  // The extractor fallback is held to the same scope, so it cannot restore a
+  // superseded amount either.
+  return extractedCostBasis !== undefined && isGroundedBasis(extractedCostBasis, scope)
+    ? extractedCostBasis
+    : undefined;
 }
 
 const COST_BASIS_CONTEXT =
@@ -1512,9 +1517,14 @@ function basisAmounts(turn: BasisGroundingTurn, grounding: BasisGrounding) {
     turn.text,
     grounding.targetSymbol,
   );
-  return parsed.amounts.filter(
-    (amount) => amount.isBasisLinked || (turn.isBasisReply && amount.isBareAnswer),
-  );
+  // Amounts stated before a correction are superseded by it.
+  let lastCorrection = -1;
+  parsed.amounts.forEach((amount, index) => {
+    if (amount.isCorrection) lastCorrection = index;
+  });
+  return parsed.amounts
+    .slice(Math.max(lastCorrection, 0))
+    .filter((amount) => amount.isBasisLinked || (turn.isBasisReply && amount.isBareAnswer));
 }
 
 function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
@@ -1717,6 +1727,7 @@ interface StatedAmount {
   isNonBasisContext: boolean;
   isPerShare: boolean;
   isBareAnswer: boolean;
+  isCorrection: boolean;
   clauseQuantities: number[];
 }
 
@@ -1856,6 +1867,16 @@ function parseStatedNumbers(
       isNegated ||
       (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
+    // A correction ("cost basis is $100, but actually $150", or "... $100.
+    // Actually, it is $150") carries earlier basis wording forward within the
+    // same turn and supersedes the amounts stated before it.
+    const isCorrection =
+      !isNonBasisContext &&
+      (CORRECTION_CONTEXT.test(
+        contextText.slice(segmentStart(contextText, start, SENTENCE_BOUNDARY), start),
+      ) ||
+        (/\bbut\s*$/i.test(text.slice(0, clauseStart)) && NEGATION_CONTEXT.test(sentence))) &&
+      [...contextText.slice(0, start).matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
       value,
       isTotal:
@@ -1864,19 +1885,11 @@ function parseStatedNumbers(
         (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
       isBasisLinked:
         !isNonBasisContext &&
-        (acquisitionInClause ||
-          (perShare && HOLDING_CONTEXT.test(sentence)) ||
-          // A correction ("cost basis is $100, but actually $150", or "...
-          // $100. Actually, it is $150") carries earlier basis wording
-          // forward within the same turn.
-          ((CORRECTION_CONTEXT.test(
-            contextText.slice(segmentStart(contextText, start, SENTENCE_BOUNDARY), start),
-          ) ||
-            (/\bbut\s*$/i.test(text.slice(0, clauseStart)) && NEGATION_CONTEXT.test(sentence))) &&
-            [...contextText.slice(0, start).matchAll(ACQUISITION_CONTEXT)].length > 0)),
+        (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence)) || isCorrection),
       isNonBasisContext,
       isPerShare: perShare,
       isBareAnswer: clauseWithoutAmount.replace(BARE_ANSWER_FILLER, "").length === 0,
+      isCorrection,
       clauseQuantities,
     };
   });
