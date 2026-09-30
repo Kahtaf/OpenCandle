@@ -142,6 +142,9 @@ describe("options quote freshness disclosure", () => {
     "Prices as of the last close.",
     "Option prices are from the prior session.",
     "Premium: $4.80 per share as of the last close.",
+    "Underlying prices are live, but option premiums shown are stale.",
+    "Stock quotes are live; the option quotes are last-session quotes.",
+    "The underlying is live but the option premiums are not live.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -168,6 +171,10 @@ describe("options quote freshness disclosure", () => {
     "Underlying: $200 as of market close. Premium: $4.80.",
     "The stock price of $200 is from the prior session. Premium: $4.80.",
     "Earnings were reported after yesterday's close. Premium: $4.80.",
+    "The underlying price is not live. The option premium is $4.80.",
+    "Stock quotes are not real-time. Premium: $4.80.",
+    "Option prices are live. The stock is from the prior session.",
+    "The numbers shown are live. Quotes are from the prior session.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });

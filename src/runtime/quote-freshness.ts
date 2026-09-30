@@ -104,23 +104,32 @@ const SESSION_TIMESTAMP_PATTERNS: readonly RegExp[] = [
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
 ];
 
-const OPTION_QUOTE_SUBJECT =
-  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures)\b/i;
-const GENERIC_PRICE_SUBJECT = /\bprices?\b/i;
-const NON_OPTION_SUBJECT = /\b(?:underlying|stock|shares?|equity|index)\b/i;
+const QUOTE_SUBJECT =
+  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures|numbers|prices?)\b/i;
+const OPTION_SPECIFIC_SUBJECT = /\b(?:options?|premiums?|bid\/ask|chain|contracts?)\b/i;
+const NON_OPTION_SUBJECT = /\b(?:underlying|stock|(?<!per\s)shares?|equity|index)\b/i;
 
-function sentenceDescribesOptionQuotes(text: string, index: number, length: number): boolean {
+/**
+ * Whether a span talks about the option quotes. When it also names the
+ * underlying or stock, it must name the options themselves ("option
+ * premiums", "bid/ask"), so "the underlying price is not live" does not count.
+ */
+function describesOptionQuotes(span: string): boolean {
+  if (!QUOTE_SUBJECT.test(span)) return false;
+  return !NON_OPTION_SUBJECT.test(span) || OPTION_SPECIFIC_SUBJECT.test(span);
+}
+
+/** The sentence around a match (bounded, stops at sentence ends, not decimals). */
+function sentenceAround(text: string, index: number, length: number): string {
   const before = text.slice(Math.max(0, index - 120), index);
-  const breaksBefore = [...before.matchAll(/[!?\n]|\.(?!\d)/g)];
-  const start = breaksBefore.at(-1)?.index;
+  const start = [...before.matchAll(/[!?\n]|\.(?!\d)/g)].at(-1)?.index;
   const after = text.slice(index + length, index + length + 120);
   const end = after.search(/[!?\n]|\.(?!\d)/);
-  const sentence =
+  return (
     (start === undefined ? before : before.slice(start + 1)) +
     text.slice(index, index + length) +
-    (end < 0 ? after : after.slice(0, end));
-  if (OPTION_QUOTE_SUBJECT.test(sentence)) return true;
-  return GENERIC_PRICE_SUBJECT.test(sentence) && !NON_OPTION_SUBJECT.test(sentence);
+    (end < 0 ? after : after.slice(0, end))
+  );
 }
 
 const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
@@ -161,11 +170,16 @@ const PRECEDING_CONDITIONAL = /\b(?:if|whether|unless|in\s+case)\b/i;
  * with your broker" is compliant wording.
  */
 const LIVE_CLAIM =
-  /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)\s+(?:shown\s+|above\s+|below\s+|here\s+)?(?:are|is)\s+(?:currently\s+|now\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/i;
+  /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)\s+(?:shown\s+|above\s+|below\s+|here\s+)?(?:are|is)\s+(?:currently\s+|now\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/gi;
 
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
-  if (LIVE_CLAIM.test(text)) return false;
+  // A live claim about the underlying ("stock quotes are live") is fine; only
+  // a live claim about the option figures contradicts a disclosure.
+  const liveClaim = [...text.matchAll(LIVE_CLAIM)].some((match) =>
+    describesOptionQuotes(clauseBefore(text, match.index).slice(-30) + match[0]),
+  );
+  if (liveClaim) return false;
   // Any phrase in a conditional ("if these quotes are not live") is hypothetical,
   // not a disclosure; affirmative phrases must also not be negated.
   const counts = (index: number, checkNegation: boolean): boolean => {
@@ -178,18 +192,22 @@ export function disclosesNonLiveQuotes(text: string | undefined): boolean {
     patterns.some((pattern) =>
       [...text.matchAll(pattern)].some((match) => counts(match.index, checkNegation)),
     );
+  // "not live" and similar must be about the option quotes, not the underlying.
+  const negatedStatus = NEGATED_NON_LIVE_PATTERNS.some((pattern) =>
+    [...text.matchAll(pattern)].some(
+      (match) =>
+        counts(match.index, false) &&
+        describesOptionQuotes(sentenceAround(text, match.index, match[0].length)),
+    ),
+  );
   const sessionTimestamp = SESSION_TIMESTAMP_PATTERNS.some((pattern) =>
     [...text.matchAll(pattern)].some(
       (match) =>
         counts(match.index, true) &&
-        sentenceDescribesOptionQuotes(text, match.index, match[0].length),
+        describesOptionQuotes(sentenceAround(text, match.index, match[0].length)),
     ),
   );
-  return (
-    sessionTimestamp ||
-    matches(NEGATED_NON_LIVE_PATTERNS, false) ||
-    matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true)
-  );
+  return sessionTimestamp || negatedStatus || matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true);
 }
 
 /** Text of the current clause before `index` (bounded, stops at clause breaks). */
