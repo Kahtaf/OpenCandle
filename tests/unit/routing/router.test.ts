@@ -3536,6 +3536,49 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBeUndefined();
   });
 
+  it("divides only amounts classified as purchase totals", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought 100 AAPL with a unit cost of $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 1.5 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("pairs each purchase total with its nearest share count", async () => {
+    const crossed = await route(
+      {
+        ...BASE_INPUT,
+        text: "I paid $15,000 for 100 AAPL shares plus $10,000 for 50 AAPL shares. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+    const paired = await route(
+      {
+        ...BASE_INPUT,
+        text: "I paid $15,000 for 100 AAPL shares plus $10,000 for 50 AAPL shares. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(crossed.entities.costBasis).toBeUndefined();
+    expect(paired.entities.costBasis).toBe(200);
+  });
+
+  it("treats closing and other price-move wording as a quote", async () => {
+    const closed = await route(
+      { ...BASE_INPUT, text: "I own AAPL and it closed at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+    const rose = await route(
+      { ...BASE_INPUT, text: "I own AAPL and it rose to $210. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 210 }),
+    );
+
+    expect(closed.entities.costBasis).toBeUndefined();
+    expect(rose.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

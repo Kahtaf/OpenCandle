@@ -1496,7 +1496,7 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
     // A total divides only by a share count in its own clause.
     return amounts.some(
       (amount) =>
-        !amount.isPerShare &&
+        amount.isTotal &&
         amount.clauseQuantities.some(
           (quantity) =>
             quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
@@ -1629,7 +1629,7 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:(?:it|it's|its\s+price|price|stock|shares?)\s+(?:is\s+|are\s+)?(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+  /\b(?:(?:it|it's|its\s+price|price|stock|shares?)\s+(?:is\s+|are\s+)?(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
 // Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
 const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
@@ -1700,7 +1700,7 @@ function parseStatedNumbers(
     before: string;
     rest: string;
   }> = [];
-  const quantities: Array<{ value: number; clauseStart: number }> = [];
+  const quantities: Array<{ value: number; clauseStart: number; index: number }> = [];
   let previousEnd = 0;
   for (const match of text.matchAll(STATED_NUMBER)) {
     const matchPreviousEnd = previousEnd;
@@ -1720,6 +1720,7 @@ function parseStatedNumbers(
       quantities.push({
         value: base * multiplier,
         clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY),
+        index: start,
       });
       continue;
     }
@@ -1743,9 +1744,11 @@ function parseStatedNumbers(
       PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(skipLeadingCurrency(rest));
     const clauseStart = segmentStart(text, start, CLAUSE_BOUNDARY);
     const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
-    const clauseQuantities = quantities
+    // A total pairs only with its nearest share count in the same clause.
+    const nearestQuantity = quantities
       .filter((quantity) => quantity.clauseStart === clauseStart)
-      .map((quantity) => quantity.value);
+      .sort((a, b) => Math.abs(a.index - start) - Math.abs(b.index - start))[0];
+    const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
     const leadIn = localLeadIn(text, start, prevEnd);
