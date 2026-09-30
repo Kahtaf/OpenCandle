@@ -2,6 +2,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { FreshnessStamp } from "../infra/freshness.js";
 import type { EvidenceRecord } from "./evidence.js";
 import { classifyToolOutcome } from "./evidence.js";
+import { extractQuoteStatusSummary } from "./quote-freshness.js";
 import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
 import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
@@ -30,6 +31,43 @@ export interface PromptValidationContext {
 export interface PromptOutputValidation {
   validate(rawText: string, context?: PromptValidationContext): string[];
   repairPrompt(errors: string[], context?: PromptValidationContext): string;
+}
+
+/**
+ * Run several output validators as one gate. Errors from every validator are
+ * reported together, and the single repair prompt carries only the repair
+ * instructions of the validators that actually failed, so the coordinator's
+ * one bounded repair attempt covers all of them at once.
+ */
+export function combineOutputValidations(
+  ...validations: (PromptOutputValidation | undefined)[]
+): PromptOutputValidation | undefined {
+  const active = validations.filter(
+    (validation): validation is PromptOutputValidation => validation !== undefined,
+  );
+  if (active.length <= 1) return active[0];
+  const failuresByErrors = new WeakMap<string[], Array<[PromptOutputValidation, string[]]>>();
+  return {
+    validate(rawText, context) {
+      const failures = active
+        .map((validation): [PromptOutputValidation, string[]] => [
+          validation,
+          validation.validate(rawText, context),
+        ])
+        .filter(([, errors]) => errors.length > 0);
+      const errors = failures.flatMap(([, validationErrors]) => validationErrors);
+      failuresByErrors.set(errors, failures);
+      return errors;
+    },
+    repairPrompt(errors, context) {
+      const failures =
+        failuresByErrors.get(errors) ??
+        active.map((v): [PromptOutputValidation, string[]] => [v, errors]);
+      return failures
+        .map(([validation, validationErrors]) => validation.repairPrompt(validationErrors, context))
+        .join("\n\n");
+    },
+  };
 }
 
 /**
@@ -114,6 +152,7 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
     if (!tool) continue;
     const resultValue = message.details ?? message.content ?? "";
     const freshness = extractFreshness(resultValue);
+    const quoteStatus = extractQuoteStatusSummary(resultValue);
     const serializedResult = serializeToolValue(resultValue);
     evidence.push({
       label: `tool:${tool}`,
@@ -126,6 +165,7 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
           tool,
         ),
         ...(freshness ? { freshness } : {}),
+        ...(quoteStatus ? { quoteStatus } : {}),
         resultDigest: {
           preview: truncateToolValue(serializedResult, 500),
           totalLength: serializedResult.length,

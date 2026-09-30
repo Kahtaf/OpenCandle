@@ -1,7 +1,8 @@
 import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
-import { promptStep } from "../runtime/prompt-step.js";
+import { combineOutputValidations, promptStep } from "../runtime/prompt-step.js";
+import { createOptionsQuoteFreshnessValidation } from "./options-quote-freshness-validation.js";
 import {
   buildProtectivePutSizingContract,
   createProtectivePutValidation,
@@ -109,9 +110,12 @@ Length constraints:
         {
           requiredInputs: ["option_chain"],
           expectedOutputs: ["ranked_contracts"],
-          ...(isProtectivePutContext && s.shareQuantity !== undefined
-            ? { outputValidation: createProtectivePutValidation(s.shareQuantity) }
-            : {}),
+          outputValidation: combineOutputValidations(
+            isProtectivePutContext && s.shareQuantity !== undefined
+              ? createProtectivePutValidation(s.shareQuantity)
+              : undefined,
+            createOptionsQuoteFreshnessValidation(),
+          ),
         },
       ),
     ],

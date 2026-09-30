@@ -44,6 +44,7 @@ import {
   toStepDefinitions,
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
+import { extractQuoteStatusSummary } from "./quote-freshness.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
 import type { StateDatabase } from "./state-database.js";
 import { serializeToolValue, truncateToolValue } from "./tool-evidence-utils.js";
@@ -1176,6 +1177,7 @@ function toolEvidenceRecord(input: {
 }): EvidenceRecord {
   const serializedResult = serializeToolValue(input.result);
   const freshness = extractFreshness(input.result);
+  const quoteStatus = extractQuoteStatusSummary(input.result);
   return {
     label: `tool:${input.tool}`,
     value: {
@@ -1183,6 +1185,7 @@ function toolEvidenceRecord(input: {
       args: truncateToolValue(serializeToolValue(input.args), 500),
       outcome: classifyToolOutcome(input.result, input.isError, input.tool),
       ...(freshness ? { freshness } : {}),
+      ...(quoteStatus ? { quoteStatus } : {}),
       resultDigest: {
         preview: truncateToolValue(serializedResult, 500),
         totalLength: serializedResult.length,

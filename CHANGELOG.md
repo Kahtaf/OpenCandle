@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Options screens built on after-hours, closed-market, or stale option quotes now get one automatic revision when the answer presents those premiums without saying they are not live.
+
 - When no model has been saved, OpenCandle now starts on its own default for the first configured provider (Google Gemini, then OpenAI, then Anthropic), including keys that only come from environment variables.
 
 - Public documentation link checks retry temporary server failures, verify HEAD failures with GET, and block release when a link remains unreachable.

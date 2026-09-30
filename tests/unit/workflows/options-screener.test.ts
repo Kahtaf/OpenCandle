@@ -204,7 +204,8 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
       expect(step.prompt).not.toContain("Owned position:");
       expect(step.prompt).not.toContain("| Put contracts | Covered shares |");
     }
-    expect(definition.steps[1].outputValidation).toBeUndefined();
+    // Without an owned quantity only the quote-freshness gate applies.
+    expect(definition.steps[1].outputValidation?.validate("No quotes shown.")).toEqual([]);
   });
 
   it("follow-up prompt does not mix covered-call fallback into catalyst-driven protective puts", () => {
