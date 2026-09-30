@@ -1394,9 +1394,11 @@ function readPortfolioPosition(
 // traces to user-stated numbers: a basis role must be established (the current
 // turn, a same-symbol prior user turn, a reply to a preceding assistant basis
 // question, or a saved position), and the value must equal a money amount stated
-// in a turn that carries that role, equal a stated total divided by a stated
-// quantity (within 0.5%), or match a saved-position basis. Share counts never
-// ground a basis, and spelled-out amounts are not parsed. Otherwise the
+// in a turn that carries that role and linked to acquisition or basis wording
+// (or given as a reply to a basis question), equal such a stated total divided
+// by a stated quantity (within 0.5%), or match a saved-position basis. Quotes,
+// market values, premiums, strikes, and share counts never ground a basis, and
+// spelled-out amounts are not parsed. Otherwise the
 // deterministic extractor is the fallback, and an undefined basis leads to the
 // missing-basis disclosure. An assistant quote alone is never a source.
 function resolveCostBasis(
@@ -1416,8 +1418,13 @@ function resolveCostBasis(
 const COST_BASIS_CONTEXT =
   /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
+interface BasisGroundingTurn {
+  text: string;
+  isBasisReply: boolean;
+}
+
 interface BasisGrounding {
-  texts: string[];
+  texts: BasisGroundingTurn[];
   savedBases: number[];
   symbols: string[];
   targetSymbol: string | undefined;
@@ -1431,14 +1438,11 @@ function basisGrounding(
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
 ): BasisGrounding | undefined {
-  const texts: string[] = [];
+  const texts: BasisGroundingTurn[] = [];
   const turns = inputContext?.priorTurns ?? [];
-  if (
-    heldSymbol !== undefined ||
-    COST_BASIS_CONTEXT.test(text) ||
-    answersBasisQuestion(symbols, turns)
-  ) {
-    texts.push(text);
+  const currentIsBasisReply = answersBasisQuestion(symbols, turns);
+  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text) || currentIsBasisReply) {
+    texts.push({ text, isBasisReply: currentIsBasisReply });
   }
   for (let index = 0; index < turns.length; index += 1) {
     const turn = turns[index];
@@ -1447,19 +1451,22 @@ function basisGrounding(
     const sameSymbolHolding =
       turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
       (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text));
-    if (
-      sameSymbolHolding ||
-      (answersBasisQuestion(symbols, turns.slice(0, index)) &&
-        suppliesBasisReply(turn.text, turnEntities))
-    ) {
-      texts.push(turn.text);
+    const isBasisReply =
+      answersBasisQuestion(symbols, turns.slice(0, index)) &&
+      suppliesBasisReply(turn.text, turnEntities);
+    if (sameSymbolHolding || isBasisReply) {
+      texts.push({ text: turn.text, isBasisReply });
     }
   }
   const savedBases = symbols
     .map((symbol) => readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis)
     .filter((basis): basis is number => basis !== undefined);
   if (texts.length === 0 && savedBases.length === 0) return undefined;
-  return { texts, savedBases, symbols, targetSymbol: symbols[0] };
+  // Cost-basis validation runs before the existing-position reorder, so prefer
+  // the held symbol over textual symbol order when the model resolved it.
+  const targetSymbol =
+    heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0];
+  return { texts, savedBases, symbols, targetSymbol };
 }
 
 const DERIVED_BASIS_TOLERANCE = 0.005;
@@ -1470,9 +1477,11 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   if (grounding.savedBases.some((saved) => near(saved, basis * DERIVED_BASIS_TOLERANCE))) {
     return true;
   }
-  return grounding.texts.some((turnText) => {
+  return grounding.texts.some(({ text: turnText, isBasisReply }) => {
     const scopedText = maskOtherHoldingClauses(turnText, grounding);
-    const { amounts, quantities } = parseStatedNumbers(scopedText, grounding.symbols);
+    const parsed = parseStatedNumbers(scopedText, grounding.symbols, turnText);
+    const amounts = parsed.amounts.filter((amount) => isBasisReply || amount.isBasisLinked);
+    const { quantities } = parsed;
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
     return amounts.some((amount) =>
       quantities.some(
@@ -1486,7 +1495,23 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
 // A clause that names another holding but not the target symbol ("I own MSFT at
 // $300 and also own AAPL") cannot ground the target's basis, so it is blanked
 // (length-preserving) before numbers are parsed.
-const CLAUSE_BOUNDARY = /[.;!?,]|\b(?:and|but|while|whereas)\b/gi;
+// Punctuation inside a number ("1,000", "150.25") is not a boundary.
+const CLAUSE_BOUNDARY = /[;!?]|[.,](?!\d)|\b(?:and|but|while|whereas)\b/gi;
+const SENTENCE_BOUNDARY = /[.;!?](?!\d)/g;
+
+function segmentAround(text: string, index: number, boundary: RegExp): string {
+  let start = 0;
+  let end = text.length;
+  for (const match of text.matchAll(boundary)) {
+    const at = match.index ?? 0;
+    if (at < index) start = at + match[0].length;
+    else {
+      end = at;
+      break;
+    }
+  }
+  return text.slice(start, end);
+}
 
 function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): string {
   const target = grounding.targetSymbol;
@@ -1497,7 +1522,7 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
     ),
   );
   const mentions = (clause: string, symbol: string) =>
-    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`).test(clause);
+    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`, "i").test(clause);
   let masked = "";
   let start = 0;
   const boundaries = [...text.matchAll(CLAUSE_BOUNDARY), { index: text.length, 0: "" }];
@@ -1535,6 +1560,15 @@ const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
 const NON_BASIS_SUFFIX = /^\s*(?:premium|credit|strike|target|stop|limit|budget)\b/i;
+// A direct amount is basis-linked when its clause carries acquisition or basis
+// wording ("bought at $150", "cost basis is $51"), or when its sentence states a
+// holding and the amount is per-share ("I own 100 AAPL at $150") outside quote
+// wording ("it is trading at $200", "worth $30,000").
+const ACQUISITION_CONTEXT =
+  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|buy|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/i;
+const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|position|shares?)\b/i;
+const QUOTE_CONTEXT =
+  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|today|market|worth|valued?|spot|last)\b/i;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1545,17 +1579,21 @@ const NON_AMOUNT_SUFFIX =
 interface StatedAmount {
   value: number;
   isTotal: boolean;
+  isBasisLinked: boolean;
 }
 
+// `contextText` is the unmasked turn (same length as `text`), so holding
+// wording in a blanked clause still frames the sentence.
 function parseStatedNumbers(
   text: string,
   resolvedSymbols: readonly string[],
+  contextText: string = text,
 ): { amounts: StatedAmount[]; quantities: number[] } {
   const extractedSymbols = extractEntities(text).symbols;
   const isTicker = (token: string) =>
     resolvedSymbols.includes(token) ||
     (extractedSymbols.includes(token) && !ISO_CURRENCY_CODES.has(token));
-  const candidates: Array<{ value: number; before: string; rest: string }> = [];
+  const candidates: Array<{ value: number; start: number; before: string; rest: string }> = [];
   const quantities: number[] = [];
   for (const match of text.matchAll(STATED_NUMBER)) {
     const [whole, dollar, integer, fraction, scale] = match;
@@ -1576,16 +1614,23 @@ function parseStatedNumbers(
     const before = text.slice(0, start);
     if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(rest)) continue;
     const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
-    candidates.push({ value: base * multiplier, before, rest });
+    candidates.push({ value: base * multiplier, start, before, rest });
   }
-  const amounts = candidates.map(({ value, before, rest }) => ({
-    value,
-    isTotal:
-      quantities.length > 0 &&
-      !PER_SHARE_PREFIX.test(before) &&
-      !PER_SHARE_SUFFIX.test(rest) &&
-      (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
-  }));
+  const amounts = candidates.map(({ value, start, before, rest }) => {
+    const perShare = PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(rest);
+    const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
+    const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
+    return {
+      value,
+      isTotal:
+        quantities.length > 0 &&
+        !perShare &&
+        (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
+      isBasisLinked:
+        ACQUISITION_CONTEXT.test(clause) ||
+        (perShare && HOLDING_CONTEXT.test(sentence) && !QUOTE_CONTEXT.test(clause)),
+    };
+  });
   return { amounts, quantities };
 }
 

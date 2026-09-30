@@ -3139,6 +3139,63 @@ describe("router cost-basis context guard", () => {
     expect(own.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a basis in a current quote or market value", async () => {
+    const quote = await route(
+      { ...BASE_INPUT, text: "I own AAPL; its current market price is $200. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+    const trading = await route(
+      { ...BASE_INPUT, text: "I own AAPL and it is trading at $200. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+    const marketValue = await route(
+      { ...BASE_INPUT, text: "I own 100 shares of AAPL worth $30,000. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+
+    expect(quote.entities.costBasis).toBeUndefined();
+    expect(trading.entities.costBasis).toBeUndefined();
+    expect(marketValue.entities.costBasis).toBeUndefined();
+  });
+
+  it("scopes basis clauses to the held symbol when a catalyst is named first", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings are next week. I own 100 shares of AMD at $150, covered call ideas?",
+      },
+      outputFor({ symbols: ["NVDA", "AMD"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not split clauses inside comma-grouped or decimal numbers", async () => {
+    const grouped = await route(
+      { ...BASE_INPUT, text: "I bought 1,000 AAPL at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const decimal = await route(
+      { ...BASE_INPUT, text: "I bought 1,000 AAPL at $150.25. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150.25 }),
+    );
+
+    expect(grouped.entities.costBasis).toBe(150);
+    expect(decimal.entities.costBasis).toBe(150.25);
+  });
+
+  it("scopes basis clauses to lowercase tickers", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 100 shares of msft at $300 and also own 100 shares of aapl. Covered calls on aapl?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
