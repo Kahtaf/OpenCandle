@@ -3,35 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findEnvKeys, getProviders } from "@earendil-works/pi-ai/compat";
-import { PROVIDERS } from "../../../src/onboarding/providers.js";
-
-/**
- * Every environment variable that could hand the isolated GUI server a
- * credential, blanked so the lane always starts from a genuinely cold home.
- *
- * The list is derived, never typed out: a hand-written list silently stops
- * covering the run the day a contributor puts a provider key in their `.env`,
- * because Pi's model registry accepts every provider it knows. Pi's
- * `findEnvKeys` reports only variables that are already set, so probe it with a
- * recording proxy that answers every lookup; keyed data providers come from
- * OpenCandle's own provider registry for the same reason.
- */
-export function blankedCredentialEnv(): Record<string, string> {
-  const names = new Set<string>();
-  const probe = new Proxy({} as Record<string, string>, {
-    get: (_target, property) => {
-      if (typeof property !== "string") return undefined;
-      names.add(property);
-      return "probe";
-    },
-  });
-  for (const provider of getProviders()) findEnvKeys(provider, probe);
-  for (const descriptor of PROVIDERS) {
-    if (descriptor.kind === "api-key") names.add(descriptor.envVar);
-  }
-  return Object.fromEntries([...names].map((name) => [name, ""]));
-}
+import { blankedCredentialEnv } from "../credential-env.js";
 
 /**
  * Child environment for the isolated GUI server. Every home-derived state

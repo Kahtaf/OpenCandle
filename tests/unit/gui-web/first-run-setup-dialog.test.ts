@@ -43,7 +43,7 @@ const NEEDS_SETUP = {
       id: "openai",
       label: "OpenAI",
       envVar: "OPENAI_API_KEY",
-      defaultModel: "gpt-5-mini",
+      defaultModel: "gpt-6-luna",
       signupUrl: "https://platform.openai.com/api-keys",
     },
   ],

@@ -1,9 +1,10 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
+import { localDateTimeParts } from "../../infra/market-calendar.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getOptionsChain } from "../../providers/yahoo-finance.js";
-import type { OptionContract, OptionsChain } from "../../types/options.js";
+import type { OptionContract, OptionsChain, OptionsQuoteStatus } from "../../types/options.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, TSLA, SPY, MSFT)" }),
@@ -54,16 +55,18 @@ export const optionChainTool: AgentTool<
       cachedAt: result.cached || result.stale ? result.timestamp : undefined,
     });
 
+    const status = chain.quoteStatus;
+    const columns = contractColumns(status);
     const lines: string[] = [
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,
       `Underlying: $${chain.underlyingPrice.toFixed(2)}`,
-      `Quote status: ${chain.quoteStatus.marketSession} / ${chain.quoteStatus.bidAskState}`,
-      "Option bid/ask and last prices are quoted per share; multiply by 100 for one standard contract premium.",
-      ...(chain.quoteStatus.warning
-        ? [
-            `⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification; do not stop at the stale quote caveat. Disclose the gap, avoid naming tradable live premiums, and finish the strategy explanation with mechanics, assignment outcomes, labeled hypotheticals, and what live broker quotes would change.`,
-          ]
+      `Quote status: ${status.marketSession} / ${status.bidAskState}`,
+      `Session source: ${formatSessionSource(status)}`,
+      ...(status.latestContractTradeAt
+        ? [`Latest contract trade: ${formatEasternTime(status.latestContractTradeAt)} ET`]
         : []),
+      "Option bid/ask and last prices are quoted per share; multiply by 100 for one standard contract premium.",
+      ...(status.warning ? [`⚠ ${status.warning}`] : []),
       `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",
     ];
@@ -75,9 +78,7 @@ export const optionChainTool: AgentTool<
       lines.push(
         `**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`,
       );
-      lines.push(
-        "Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho",
-      );
+      lines.push(columns);
       const topCalls = sortByVolume(chain.calls).slice(0, 10);
       for (const c of topCalls) {
         lines.push(formatContract(c));
@@ -89,9 +90,7 @@ export const optionChainTool: AgentTool<
       lines.push(
         `**PUTS** (${chain.puts.length} contracts, volume: ${chain.totalPutVolume.toLocaleString()})`,
       );
-      lines.push(
-        "Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho",
-      );
+      lines.push(columns);
       const topPuts = sortByVolume(chain.puts).slice(0, 10);
       for (const c of topPuts) {
         lines.push(formatContract(c));
@@ -128,7 +127,37 @@ function formatAvailableExpirations(expirationDates: string[]): string {
   return expirationDates.join(", ");
 }
 
+function contractColumns(status: OptionsQuoteStatus): string {
+  const bidAsk =
+    status.bidAskState === "live_quotes" || status.bidAskState === "live_zero_bid_ask"
+      ? "Bid/Ask (per share)"
+      : status.bidAskState === "last_session_quotes"
+        ? "Last-session bid/ask (per share, not executable)"
+        : "Bid/Ask (per share, not executable)";
+  return `Strike | ${bidAsk} | Last (per share) | Last trade (ET) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho`;
+}
+
+function formatSessionSource(status: OptionsQuoteStatus): string {
+  if (status.marketSessionSource === "provider_market_state") {
+    return `Yahoo marketState ${status.providerMarketState}`;
+  }
+  if (status.marketSessionSource === "local_calendar_recheck") {
+    return status.providerMarketState
+      ? `local US market calendar (cached Yahoo marketState ${status.providerMarketState} was reported before the regular session ended)`
+      : "local US market calendar (cached chain was fetched before the regular session ended)";
+  }
+  return status.providerMarketState
+    ? `local US market calendar (unrecognized Yahoo marketState ${status.providerMarketState})`
+    : "local US market calendar (Yahoo did not report marketState)";
+}
+
+function formatEasternTime(iso: string): string {
+  const parts = localDateTimeParts(new Date(iso), "America/New_York");
+  return `${parts.date} ${parts.time}`;
+}
+
 function formatContract(c: OptionContract): string {
   const itm = c.inTheMoney ? "*" : " ";
-  return `${itm}$${c.strike.toFixed(2)} | $${c.bid.toFixed(2)}/$${c.ask.toFixed(2)} | $${c.lastPrice.toFixed(2)} | ${c.volume} | ${c.openInterest} | ${(c.impliedVolatility * 100).toFixed(1)}% | ${c.greeks.delta.toFixed(3)} | ${c.greeks.gamma.toFixed(3)} | ${c.greeks.theta.toFixed(3)} | ${c.greeks.vega.toFixed(3)} | ${c.greeks.rho.toFixed(3)}`;
+  const lastTrade = c.lastTradeDate ? formatEasternTime(c.lastTradeDate) : "n/a";
+  return `${itm}$${c.strike.toFixed(2)} | $${c.bid.toFixed(2)}/$${c.ask.toFixed(2)} | $${c.lastPrice.toFixed(2)} | ${lastTrade} | ${c.volume} | ${c.openInterest} | ${(c.impliedVolatility * 100).toFixed(1)}% | ${c.greeks.delta.toFixed(3)} | ${c.greeks.gamma.toFixed(3)} | ${c.greeks.theta.toFixed(3)} | ${c.greeks.vega.toFixed(3)} | ${c.greeks.rho.toFixed(3)}`;
 }

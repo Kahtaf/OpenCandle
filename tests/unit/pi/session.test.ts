@@ -162,4 +162,202 @@ describe("createOpenCandleSession", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+  describe("initial model when no model is saved", () => {
+    const providerEnvVars = [
+      "GEMINI_API_KEY",
+      "GOOGLE_CLOUD_API_KEY",
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "ANTHROPIC_AUTH_TOKEN",
+      "ANTHROPIC_OAUTH_TOKEN",
+    ];
+
+    beforeEach(() => {
+      for (const name of providerEnvVars) delete process.env[name];
+    });
+
+    it("uses the OpenCandle OpenAI default when only OPENAI_API_KEY is set", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      const { modelRuntime } = await createTestModelRuntime();
+
+      const result = await createOpenCandleSession({
+        modelRuntime,
+        settingsManager: SettingsManager.inMemory(),
+        sessionManager: SessionManager.inMemory(),
+        useInlineExtension: false,
+      });
+
+      expect(result.session.model?.provider).toBe("openai");
+      expect(result.session.model?.id).toBe("gpt-6-luna");
+      result.session.dispose();
+    });
+
+    it.each([
+      ["anthropic", "claude-haiku-4-5"],
+      ["google", "gemini-2.5-flash"],
+    ])(
+      "uses the OpenCandle %s default for a stored key without a saved model",
+      async (provider, modelId) => {
+        const { modelRuntime } = await createTestModelRuntime({
+          [provider]: { type: "api_key", key: "stored-key" },
+        });
+
+        const result = await createOpenCandleSession({
+          modelRuntime,
+          settingsManager: SettingsManager.inMemory(),
+          sessionManager: SessionManager.inMemory(),
+          useInlineExtension: false,
+        });
+
+        expect(result.session.model?.provider).toBe(provider);
+        expect(result.session.model?.id).toBe(modelId);
+        result.session.dispose();
+      },
+    );
+
+    it("picks providers in setup order (Google, OpenAI, Anthropic) when several keys are set", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      process.env.ANTHROPIC_API_KEY = "env-anthropic-key";
+      process.env.GEMINI_API_KEY = "env-gemini-key";
+      const { modelRuntime } = await createTestModelRuntime();
+
+      const result = await createOpenCandleSession({
+        modelRuntime,
+        settingsManager: SettingsManager.inMemory(),
+        sessionManager: SessionManager.inMemory(),
+        useInlineExtension: false,
+      });
+
+      expect(result.session.model?.provider).toBe("google");
+      expect(result.session.model?.id).toBe("gemini-2.5-flash");
+      result.session.dispose();
+    });
+
+    it("keeps an explicitly saved model over the OpenCandle default", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      const { modelRuntime } = await createTestModelRuntime();
+
+      const result = await createOpenCandleSession({
+        modelRuntime,
+        settingsManager: SettingsManager.inMemory({
+          defaultProvider: "openai",
+          defaultModel: "gpt-5.5",
+        }),
+        sessionManager: SessionManager.inMemory(),
+        useInlineExtension: false,
+      });
+
+      expect(result.session.model?.provider).toBe("openai");
+      expect(result.session.model?.id).toBe("gpt-5.5");
+      result.session.dispose();
+    });
+
+    it("keeps a model passed by the caller over the OpenCandle default", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      const { modelRuntime } = await createTestModelRuntime();
+      const explicit = modelRuntime.getModel("openai", "gpt-5.5");
+      expect(explicit).toBeDefined();
+
+      const result = await createOpenCandleSession({
+        modelRuntime,
+        model: explicit,
+        settingsManager: SettingsManager.inMemory(),
+        sessionManager: SessionManager.inMemory(),
+        useInlineExtension: false,
+      });
+
+      expect(result.session.model?.id).toBe("gpt-5.5");
+      result.session.dispose();
+    });
+
+    it("keeps the model recorded in a resumed session", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      const cwd = mkdtempSync(join(tmpdir(), "opencandle-default-model-cwd-"));
+      const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-default-model-sessions-"));
+      try {
+        const previous = SessionManager.create(cwd, sessionDir);
+        previous.appendModelChange("openai", "gpt-5.5");
+        previous.appendMessage({ role: "user", content: "old prompt", timestamp: Date.now() });
+        previous.appendMessage({
+          role: "assistant",
+          content: [{ type: "text", text: "old response" }],
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.5",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        });
+        const { modelRuntime } = await createTestModelRuntime();
+
+        const result = await createOpenCandleSession({
+          cwd,
+          modelRuntime,
+          settingsManager: SettingsManager.inMemory(),
+          sessionManager: SessionManager.continueRecent(cwd, sessionDir),
+          useInlineExtension: false,
+        });
+
+        expect(result.session.model?.id).toBe("gpt-5.5");
+        result.session.dispose();
+      } finally {
+        await rm(cwd, { recursive: true, force: true });
+        await rm(sessionDir, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to the OpenCandle default when a resumed session model has no auth", async () => {
+      process.env.OPENAI_API_KEY = "env-openai-key";
+      const cwd = mkdtempSync(join(tmpdir(), "opencandle-default-model-cwd-"));
+      const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-default-model-sessions-"));
+      try {
+        const previous = SessionManager.create(cwd, sessionDir);
+        previous.appendModelChange("google", "gemini-2.5-flash");
+        previous.appendMessage({ role: "user", content: "old prompt", timestamp: Date.now() });
+        previous.appendMessage({
+          role: "assistant",
+          content: [{ type: "text", text: "old response" }],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "gemini-2.5-flash",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        });
+        const { modelRuntime } = await createTestModelRuntime();
+
+        const result = await createOpenCandleSession({
+          cwd,
+          modelRuntime,
+          settingsManager: SettingsManager.inMemory(),
+          sessionManager: SessionManager.continueRecent(cwd, sessionDir),
+          useInlineExtension: false,
+        });
+
+        expect(result.session.model?.provider).toBe("openai");
+        expect(result.session.model?.id).toBe("gpt-6-luna");
+        expect(result.modelFallbackMessage).toBe(
+          "Could not restore model google/gemini-2.5-flash. Using openai/gpt-6-luna",
+        );
+        result.session.dispose();
+      } finally {
+        await rm(cwd, { recursive: true, force: true });
+        await rm(sessionDir, { recursive: true, force: true });
+      }
+    });
+  });
 });

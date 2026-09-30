@@ -131,25 +131,25 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
     await installMockSocket(mocked, {
       modelSetup: {
         requirement: "ready",
-        currentModel: "openai/gpt-5-mini",
+        currentModel: "openai/gpt-6-luna",
         providers: [
           {
             id: "openai",
             label: "OpenAI",
             envVar: "OPENAI_API_KEY",
-            defaultModel: "gpt-5-mini",
+            defaultModel: "gpt-6-luna",
             signupUrl: "https://platform.openai.com/api-keys",
           },
         ],
         availableModels: [
-          { provider: "openai", id: "gpt-5-mini", label: "openai/gpt-5-mini" },
+          { provider: "openai", id: "gpt-6-luna", label: "openai/gpt-6-luna" },
           { provider: "openai", id: "gpt-4.1-mini", label: "openai/gpt-4.1-mini" },
         ],
       },
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    const modelSelector = mocked.getByRole("button", { name: "gpt-5-mini" });
+    const modelSelector = mocked.getByRole("button", { name: "gpt-6-luna" });
     const manageModelKeys = mocked.getByRole("menuitem", { name: "Manage model keys…" });
     await modelSelector.click();
     const modelMenuId = await modelSelector.getAttribute("aria-controls");

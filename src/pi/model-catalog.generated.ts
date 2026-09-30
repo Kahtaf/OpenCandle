@@ -274,6 +274,16 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
+    id: "gpt-6-luna",
+    label: "openai/gpt-6-luna",
+  },
+  {
+    provider: "openai",
+    id: "gpt-6-sol",
+    label: "openai/gpt-6-sol",
+  },
+  {
+    provider: "openai",
     id: "gpt-realtime-2.1",
     label: "openai/gpt-realtime-2.1",
   },
@@ -356,6 +366,11 @@ export const firstClassModelCatalog = [
     provider: "anthropic",
     id: "claude-opus-5",
     label: "anthropic/claude-opus-5",
+  },
+  {
+    provider: "anthropic",
+    id: "claude-opus-5-5",
+    label: "anthropic/claude-opus-5-5",
   },
   {
     provider: "anthropic",

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- When no model has been saved, OpenCandle now starts on its own default for the first configured provider (Google Gemini, then OpenAI, then Anthropic), including keys that only come from environment variables.
+
 - Public documentation link checks retry temporary server failures, verify HEAD failures with GET, and block release when a link remains unreachable.
 
 - Release evaluations now reject workflows that failed validation even when their final draft contains a complete-looking answer.
@@ -22,6 +24,8 @@
 
 - Pressing Stop in the GUI while a tool is running, such as during `/analyze` or while a question is open, now shows the turn as Stopped with Retry instead of "Model connection failed", including after a reload.
 - Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
+- Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.
+- Option chains checked outside regular trading hours or on market holidays now label bid/ask as last-session and not executable, and show each contract's last trade time.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
 - A stopped turn in the GUI now has a Retry button that starts a new run of that prompt instead of being ignored as a repeat of the stopped one.
 - An analysis no longer fails when a temporary model error is retried automatically and the retry succeeds.
@@ -62,6 +66,11 @@
 - Data-faithfulness scoring now scales signed bare compact and spelled-out magnitudes, including comma-grouped forms, in tool text and financial metrics (for example `3.68T`, `-3.68T`, or `3,680B`), so a market cap quoted from a tool result is grounded instead of flagged as ungrounded.
 - The portfolio builder now requires captured, successful pricing tool evidence before candidate selection and captured risk or correlation evidence before the risk review, so a portfolio draft cannot complete without any successful market-data tool results.
 - Failed eval diagnostics now record the final assistant message's terminal stop reason and a sanitized error category, so an empty response is diagnosable without exposing provider error text.
+
+### Changed
+
+- OpenAI setups now default to GPT-6 Luna, a newer and cheaper model, instead of GPT-5 mini.
+- Upgrading the Pi agent framework to 0.87.1 makes GPT-6 Luna, GPT-6 Sol, and Claude Opus 5.5 selectable in model setup.
 
 ## [0.15.0] - 2026-09-21
 

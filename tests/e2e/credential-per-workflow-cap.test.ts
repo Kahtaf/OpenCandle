@@ -54,7 +54,7 @@ type LlmChoice = { provider: string; model: string; envVars: string[] };
 const LLM_CANDIDATES: readonly LlmChoice[] = [
   { provider: "google", model: "gemini-2.5-flash", envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
   { provider: "anthropic", model: "claude-haiku-4-5", envVars: ["ANTHROPIC_API_KEY"] },
-  { provider: "openai", model: "gpt-5-mini", envVars: ["OPENAI_API_KEY"] },
+  { provider: "openai", model: "gpt-6-luna", envVars: ["OPENAI_API_KEY"] },
 ];
 const llmChoice = LLM_CANDIDATES.find((c) => c.envVars.some((envVar) => !!process.env[envVar]));
 if (!llmChoice) {

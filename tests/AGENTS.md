@@ -64,6 +64,11 @@ globalThis.fetch = vi.fn().mockResolvedValue({
 - Keep repo-maintainer helper tests under `tests/agent-tools/`; they should run explicitly instead of bloating public `npm test`.
 - Mock fetch at `globalThis.fetch` level. Never stub provider internals.
 - Use `:memory:` SQLite for memory/storage tests.
+- **Env isolation.** `unit`, `site`, and `agent-tools` load `tests/setup/isolate-env.ts` first: every
+  credential is blanked (so the repo `.env` cannot load), live-lane flags are stripped, and
+  `HOME`/`OPENCANDLE_HOME`/Pi dirs point at a per-file temp dir. Opt in per test with
+  `vi.stubEnv("FRED_API_KEY", "fred-456")`; `unstubEnvs` undoes it after the test. A test that needs
+  host credentials belongs in a live lane (evals, `gui-browser`, `gui-release`, provider smokes).
 
 ## TEST TRUST POLICY
 The authoritative policy is `docs/internal/test-trust-policy.md`. In short:

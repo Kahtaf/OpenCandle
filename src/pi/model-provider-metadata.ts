@@ -30,7 +30,7 @@ export const modelSetupProviders: readonly ModelSetupProvider[] = [
     label: "OpenAI",
     envVar: "OPENAI_API_KEY",
     defaultProvider: "openai",
-    defaultModel: "gpt-5-mini",
+    defaultModel: "gpt-6-luna",
     signupUrl: "https://platform.openai.com/api-keys",
   },
   {

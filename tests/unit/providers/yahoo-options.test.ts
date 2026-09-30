@@ -8,6 +8,9 @@ import {
   getYahooCrumb,
 } from "../../../src/providers/yahoo-finance.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
+import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
+import holidayClosedFixture from "../../fixtures/yahoo/options-AAPL-holiday-closed.json";
+import regularFixture from "../../fixtures/yahoo/options-AAPL-regular.json";
 
 const yahooFinanceMock = vi.hoisted(() => ({
   options: vi.fn(),
@@ -293,6 +296,7 @@ describe("yahoo-finance options provider", () => {
       marketSession: "pre_market" | "regular" | "after_hours" | "closed";
       bidAskState:
         | "live_quotes"
+        | "last_session_quotes"
         | "closed_market_or_stale_quotes"
         | "live_zero_bid_ask"
         | "mixed_or_unknown";
@@ -337,12 +341,12 @@ describe("yahoo-finance options provider", () => {
         expectWarning: false,
       },
       {
-        name: "after-hours live quotes warn executable prices may be stale",
+        name: "after-hours nonzero quotes are last-session, not live",
         utc: "2026-05-20T20:26:00.000Z", // 4:26 PM EDT
         allZeroBidAsk: false,
         marketSession: "after_hours",
-        bidAskState: "live_quotes",
-        warningContains: "stale outside regular options trading hours",
+        bidAskState: "last_session_quotes",
+        warningContains: "not executable",
         expectWarning: true,
       },
       {
@@ -387,6 +391,156 @@ describe("yahoo-finance options provider", () => {
       const chain = await getOptionsChain("AAPL");
 
       expect(chain.quoteStatus.marketSession).toBe(expected);
+    });
+
+    describe("session from Yahoo marketState", () => {
+      async function chainAt(utc: string, fixture: unknown) {
+        vi.setSystemTime(new Date(utc));
+        rateLimiter.configure("yahoo", 5, 5);
+        mockCrumbAndOptions(structuredClone(fixture) as typeof optionsFixture);
+        return getOptionsChain("AAPL");
+      }
+
+      it("reserves live_quotes for a REGULAR marketState with nonzero bid/ask", async () => {
+        const chain = await chainAt("2026-05-20T15:00:00.000Z", regularFixture);
+
+        expect(chain.quoteStatus.marketSession).toBe("regular");
+        expect(chain.quoteStatus.marketSessionSource).toBe("provider_market_state");
+        expect(chain.quoteStatus.providerMarketState).toBe("REGULAR");
+        expect(chain.quoteStatus.bidAskState).toBe("live_quotes");
+        expect(chain.quoteStatus.warning).toBeUndefined();
+      });
+
+      it("labels nonzero after-hours bid/ask as last-session quotes, not live", async () => {
+        // 10:05 PM EDT, same trading day as the fixture's last contract trades.
+        const chain = await chainAt("2026-05-21T02:05:00.000Z", afterHoursFixture);
+
+        expect(chain.quoteStatus.marketSession).toBe("after_hours");
+        expect(chain.quoteStatus.providerMarketState).toBe("POST");
+        expect(chain.quoteStatus.bidAskState).toBe("last_session_quotes");
+        expect(chain.quoteStatus.warning).toContain("not executable");
+        expect(chain.quoteStatus.warning).toContain("No bid/ask midpoint is a live premium");
+        expect(chain.quoteStatus.latestContractTradeAt).toBe("2026-05-20T19:59:00.000Z");
+      });
+
+      it("trusts a CLOSED marketState on a weekday holiday over the wall clock", async () => {
+        // Monday 10:00 AM EDT: the wall clock alone would call this regular.
+        const chain = await chainAt("2026-05-25T14:00:00.000Z", holidayClosedFixture);
+
+        expect(chain.quoteStatus.marketSession).toBe("closed");
+        expect(chain.quoteStatus.marketSessionSource).toBe("provider_market_state");
+        expect(chain.quoteStatus.bidAskState).toBe("last_session_quotes");
+        expect(chain.quoteStatus.latestContractTradeAt).toBe("2026-05-22T19:59:00.000Z");
+      });
+
+      it.each([
+        { state: "PRE", expected: "pre_market" },
+        { state: "PREPRE", expected: "pre_market" },
+        { state: "POSTPOST", expected: "after_hours" },
+      ])("maps marketState $state to $expected", async ({ state, expected }) => {
+        const fixture = structuredClone(regularFixture);
+        fixture.optionChain.result[0].quote.marketState = state;
+        const chain = await chainAt("2026-05-20T15:00:00.000Z", fixture);
+
+        expect(chain.quoteStatus.marketSession).toBe(expected);
+        expect(chain.quoteStatus.bidAskState).toBe("last_session_quotes");
+      });
+
+      it("falls back to the local calendar when marketState is unrecognized", async () => {
+        const fixture = structuredClone(regularFixture);
+        fixture.optionChain.result[0].quote.marketState = "SOMETHING_NEW";
+        const chain = await chainAt("2026-05-21T02:05:00.000Z", fixture);
+
+        expect(chain.quoteStatus.marketSession).toBe("after_hours");
+        expect(chain.quoteStatus.marketSessionSource).toBe("local_calendar");
+        expect(chain.quoteStatus.providerMarketState).toBe("SOMETHING_NEW");
+        expect(chain.quoteStatus.bidAskState).toBe("last_session_quotes");
+      });
+
+      it("uses the holiday-aware calendar when marketState is missing", async () => {
+        const fixture = structuredClone(holidayClosedFixture) as Record<string, any>;
+        delete fixture.optionChain.result[0].quote.marketState;
+        // Memorial Day, Monday 10:00 AM EDT.
+        const chain = await chainAt("2026-05-25T14:00:00.000Z", fixture);
+
+        expect(chain.quoteStatus.marketSession).toBe("closed");
+        expect(chain.quoteStatus.marketSessionSource).toBe("local_calendar");
+        expect(chain.quoteStatus.providerMarketState).toBeUndefined();
+      });
+
+      it("does not serve a cached REGULAR chain as live after the regular session closes", async () => {
+        // 3:59 PM EDT fetch, cached for the options TTL.
+        const first = await chainAt("2026-05-20T19:59:00.000Z", regularFixture);
+        expect(first.quoteStatus.bidAskState).toBe("live_quotes");
+
+        // 4:00 PM EDT: still within the cache TTL, but the regular session is over.
+        vi.setSystemTime(new Date("2026-05-20T20:00:00.000Z"));
+        const cached = await getOptionsChain("AAPL");
+
+        expect(cached.quoteStatus.marketSession).toBe("after_hours");
+        expect(cached.quoteStatus.marketSessionSource).toBe("local_calendar_recheck");
+        expect(cached.quoteStatus.providerMarketState).toBe("REGULAR");
+        expect(cached.quoteStatus.bidAskState).toBe("last_session_quotes");
+        expect(cached.quoteStatus.warning).toContain("not executable");
+      });
+
+      it("does not serve a stale-cache REGULAR chain as live after the close when refetch fails", async () => {
+        await chainAt("2026-05-20T19:59:00.000Z", regularFixture);
+
+        // 4:20 PM EDT: past the fresh TTL; every fetch path fails, so the stale chain is used.
+        vi.setSystemTime(new Date("2026-05-20T20:20:00.000Z"));
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
+        yahooFinanceMock.options.mockRejectedValue(new Error("fallback down"));
+        const stale = await getOptionsChain("AAPL");
+
+        expect(stale.quoteStatus.marketSession).toBe("after_hours");
+        expect(stale.quoteStatus.bidAskState).toBe("last_session_quotes");
+      });
+
+      it("keeps a cached REGULAR chain live while the regular session is still open", async () => {
+        await chainAt("2026-05-20T15:00:00.000Z", regularFixture);
+        vi.setSystemTime(new Date("2026-05-20T15:01:00.000Z"));
+        const cached = await getOptionsChain("AAPL");
+
+        expect(cached.quoteStatus.marketSessionSource).toBe("provider_market_state");
+        expect(cached.quoteStatus.bidAskState).toBe("live_quotes");
+      });
+
+      it("maps each contract's lastTradeDate to an ISO timestamp", async () => {
+        const chain = await chainAt("2026-05-21T02:05:00.000Z", afterHoursFixture);
+
+        expect(chain.calls[0].lastTradeDate).toBe("2026-05-20T19:59:00.000Z");
+        expect(chain.calls[1].lastTradeDate).toBe("2026-05-20T19:52:00.000Z");
+        expect(chain.puts[0].lastTradeDate).toBe("2026-05-20T19:59:00.000Z");
+      });
+
+      it("maps Date lastTradeDate values from the yahoo-finance2 fallback", async () => {
+        vi.setSystemTime(new Date("2026-05-21T02:05:00.000Z"));
+        rateLimiter.configure("yahoo", 5, 5);
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error("blocked"));
+        const raw = afterHoursFixture.optionChain.result[0];
+        const toDate = (c: { lastTradeDate: number }) => ({
+          ...c,
+          lastTradeDate: new Date(c.lastTradeDate * 1000),
+        });
+        yahooFinanceMock.options.mockResolvedValue({
+          underlyingSymbol: raw.underlyingSymbol,
+          expirationDates: raw.expirationDates.map((t) => new Date(t * 1000)),
+          quote: raw.quote,
+          options: [
+            {
+              expirationDate: new Date(raw.options[0].expirationDate * 1000),
+              calls: raw.options[0].calls.map(toDate),
+              puts: raw.options[0].puts.map(toDate),
+            },
+          ],
+        });
+
+        const chain = await getOptionsChain("AAPL");
+
+        expect(chain.calls[0].lastTradeDate).toBe("2026-05-20T19:59:00.000Z");
+        expect(chain.quoteStatus.bidAskState).toBe("last_session_quotes");
+      });
     });
 
     it("caches options chain", async () => {
@@ -460,6 +614,7 @@ describe("yahoo-finance options provider", () => {
         putCallRatio: 0,
         quoteStatus: {
           marketSession: "closed",
+          marketSessionSource: "local_calendar",
           bidAskState: "mixed_or_unknown",
           zeroBidAskContracts: 0,
           totalContracts: 0,

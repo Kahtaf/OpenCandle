@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  modelSetupProviders,
+  resolveFirstClassModel,
+} from "../../../src/pi/model-provider-catalog.js";
 import { createPiAiRouterClient } from "../../../src/routing/router-llm-client.js";
 
 const { mockCompleteSimple } = vi.hoisted(() => ({
@@ -104,5 +108,42 @@ describe("createPiAiRouterClient", () => {
       expect.objectContaining({ tools: [] }),
       expect.not.objectContaining({ temperature: expect.anything() }),
     );
+  });
+
+  it("sends the default OpenAI model no temperature and a supported reasoning effort", async () => {
+    const openai = modelSetupProviders.find(({ id }) => id === "openai");
+    const defaultModel = resolveFirstClassModel(openai?.defaultProvider, openai?.defaultModel);
+    expect(defaultModel).toBeDefined();
+    if (!defaultModel) return;
+    const actual = await vi.importActual<typeof import("@earendil-works/pi-ai/compat")>(
+      "@earendil-works/pi-ai/compat",
+    );
+    const payloads: unknown[] = [];
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("network disabled in unit tests"));
+    try {
+      const client = createPiAiRouterClient(defaultModel, (model, request, options) =>
+        actual.completeSimple(model, request, {
+          ...options,
+          apiKey: "test-key",
+          maxRetries: 0,
+          onPayload: (payload) => {
+            payloads.push(payload);
+            return undefined;
+          },
+        }),
+      );
+
+      await expect(client.complete("route this")).rejects.toThrow(/router LLM call failed/);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+
+    expect(payloads).toHaveLength(1);
+    const payload = payloads[0] as Record<string, unknown>;
+    expect(payload).toMatchObject({ model: defaultModel.id });
+    expect(payload).not.toHaveProperty("temperature");
+    expect(payload).toMatchObject({ reasoning: { effort: "low" } });
   });
 });
