@@ -3835,6 +3835,38 @@ describe("router cost-basis context guard", () => {
     expect(sold.entities.costBasis).toBeUndefined();
   });
 
+  it("does not ground a basis in an unrealized gain or loss", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own AAPL and am down $50 per share. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 50 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not ground a basis in a split ratio", async () => {
+    const four = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at $150 after a 4-for-1 split. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 4 }),
+    );
+    const one = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at $150 after a 4-for-1 split. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 1 }),
+    );
+
+    expect(four.entities.costBasis).toBeUndefined();
+    expect(one.entities.costBasis).toBeUndefined();
+  });
+
+  it("recognizes completed entry wording in the basis role gate", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I got in AAPL at $150; covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

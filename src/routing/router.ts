@@ -1422,7 +1422,7 @@ function resolveCostBasis(
 }
 
 const COST_BASIS_CONTEXT =
-  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
+  /\b(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|got\s+in|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
 interface BasisGroundingTurn {
   text: string;
@@ -1656,7 +1656,7 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
+  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|(?:am|are|is|i'm|we're|it's|i\s+am)\s+(?:up|down)|gain(?:ed|s)?|loss(?:es)?|lost|profit(?:s)?|underwater|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
 // An ISO code reads as a currency, not a holding, when every mention follows a
 // number ("150 INR"); a ticker that is also a code ("own AMD at $120") stays a
 // holding.
@@ -1688,6 +1688,8 @@ const NON_AMOUNT_SUFFIX =
 // amounts.
 const DATE_PREFIX =
   /(?:\b(?:in|since|from|during|until|by|year|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|\d[/-])\s*$/i;
+const RATIO_SUFFIX = /^-for-\d|^:\d/i;
+const RATIO_PREFIX = /\d-for-$|\d:$/i;
 const DATE_SUFFIX = /^(?:[/-]\d|(?:st|nd|rd|th)\b)/i;
 
 function isDateComponent(fraction: string | undefined, before: string, rest: string): boolean {
@@ -1806,6 +1808,8 @@ function parseStatedNumbers(
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
     const before = text.slice(0, start);
     if (!dollar && !scale && isDateComponent(fraction, before, rest)) continue;
+    // Ratio components ("4-for-1", "2:1") are neither amounts nor counts.
+    if (!dollar && (RATIO_SUFFIX.test(rest) || RATIO_PREFIX.test(before))) continue;
     if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(skipLeadingCurrency(rest))) {
       continue;
     }
