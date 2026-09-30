@@ -187,13 +187,22 @@ const PRECEDING_CONDITIONAL = /\b(?:if|whether|unless|in\s+case)\b/i;
 const LIVE_CLAIM =
   /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)(?:\s+(?!(?:are|is|not)\b)[\w/-]+){0,4}\s+(?:are|is)\s+(?:currently\s+|now\s+|still\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/gi;
 
+/**
+ * The copular form of a live claim: "these are live option quotes", "they are
+ * executable premiums". The copula is required, so an instruction such as
+ * "verify live bid/ask with your broker" is not a claim.
+ */
+const COPULAR_LIVE_CLAIM =
+  /\b(?:these|those|they|it|this|all)\s+(?:are|is|were|was)\s+(?:currently\s+|now\s+|still\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)\b/gi;
+
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
   // A live claim about the underlying ("stock quotes are live") is fine; only
   // a live claim about the option figures contradicts a disclosure.
-  const liveClaim = [...text.matchAll(LIVE_CLAIM)].some((match) =>
-    describesOptionQuotes(clauseBefore(text, match.index).slice(-30) + match[0]),
-  );
+  const liveClaim =
+    [...text.matchAll(LIVE_CLAIM)].some((match) =>
+      describesOptionQuotes(clauseBefore(text, match.index).slice(-30) + match[0]),
+    ) || [...text.matchAll(COPULAR_LIVE_CLAIM)].some((match) => describesOptionQuotes(match[0]));
   if (liveClaim) return false;
   // Any phrase in a conditional ("if these quotes are not live") is hypothetical,
   // not a disclosure; affirmative phrases must also not be negated.
@@ -275,6 +284,8 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
     "(?:\\b\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|calls?|puts?|delta|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
   const nearQuote = [
     new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "gi"),
+    // Contract shorthand linked to a value: "210C @ 4.80", "205P = 3.10".
+    new RegExp(`\\b\\d+(?:\\.\\d+)?[cp]\\b\\s*(?:@|=|:|\\bat\\b)\\s*\\$?${quoteValue}`, "gi"),
     // A value stated for a named contract: "the 210 call is 4.80", "the 205 put: 3.10".
     new RegExp(
       `\\b(?:calls?|puts?)\\b${clauseChar}{0,15}?(?:\\b(?:is|at|for|costs?|of)\\b|[:=])\\s*${quoteValue}`,

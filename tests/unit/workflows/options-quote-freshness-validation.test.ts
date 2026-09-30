@@ -148,6 +148,7 @@ describe("options quote freshness disclosure", () => {
     "The chain was fetched outside regular trading hours.",
     "The data may be delayed.",
     "These prices are from the prior session.",
+    "Verify live bid/ask with your broker; these are last-session quotes.",
     "The underlying is live, but option quotes come from a stale cache.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
@@ -190,6 +191,8 @@ describe("options quote freshness disclosure", () => {
     "Premiums in the table are currently live; they are last-session quotes.",
     "Economic data may be delayed. Option premium: $4.80.",
     "Commodity prices are delayed. Option premium: $4.80.",
+    "These are live option quotes; however, these are last-session quotes. Premium: $4.80.",
+    "They are executable premiums, from the prior session.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
@@ -257,6 +260,8 @@ describe("options_screener quote freshness gate", () => {
     "The 220 call at $.40.",
     "The 220 call is .45.",
     "| Strike | Premium |\n| 220 | .45 |",
+    "AAPL 210C @ 4.80",
+    "AAPL 205P = 3.10",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | 4.80 |",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
