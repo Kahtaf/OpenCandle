@@ -487,12 +487,12 @@
         "gui/web/src/features/symbol/symbol-sections.jsx": [99, 99, 40, 40, 140, 162, 114, 120],
         "gui/web/src/features/symbol/symbol-view-model.js": [141, 142, 35, 35, 156, 168, 174, 180],
         "gui/web/src/features/symbol/use-symbol-data.js": [68, 68, 20, 20, 49, 66, 71, 71],
-        "gui/web/src/hooks/use-waiting-service-worker.js": [11, 11, 5, 6, 5, 6, 13, 13],
+        "gui/web/src/hooks/use-waiting-service-worker.js": [27, 27, 10, 10, 16, 17, 30, 30],
         "gui/web/src/hooks/useChatRun.jsx": [98, 128, 23, 29, 70, 114, 107, 146],
         "gui/web/src/hooks/useGuiConnection.jsx": [64, 333, 20, 68, 113, 330, 73, 376],
         "gui/web/src/hooks/useInstrumentHistory.jsx": [19, 19, 4, 4, 6, 8, 19, 19],
         "gui/web/src/hooks/useMarketIndices.jsx": [36, 36, 15, 15, 11, 14, 41, 43],
-        "gui/web/src/hooks/useMarketState.jsx": [107, 108, 41, 41, 84, 102, 126, 130],
+        "gui/web/src/hooks/useMarketState.jsx": [154, 155, 55, 55, 116, 133, 184, 188],
         "gui/web/src/lib/financial-format.js": [39, 39, 15, 15, 48, 56, 43, 48],
         "gui/web/src/lib/instrument-display.js": [2, 2, 1, 1, 2, 5, 2, 2],
         "gui/web/src/lib/series-colors.js": [1, 1, 0, 0, 0, 0, 1, 1],
@@ -511,7 +511,7 @@
     },
     "gui-hosted": {
       "measured": true,
-      "expectedFileCount": 25,
+      "expectedFileCount": 26,
       "missingFiles": [],
       "totals": {
         "lines": [1971, 2843],
@@ -541,12 +541,13 @@
         "gui/hosted/src/hosted-data-actions.js": [26, 26, 6, 8, 15, 19, 30, 32],
         "gui/hosted/src/hosted-runtime-status.js": [15, 15, 2, 2, 31, 34, 20, 21],
         "gui/hosted/src/hosted-status-pill.jsx": [32, 33, 9, 10, 22, 32, 35, 38],
-        "gui/hosted/src/main.jsx": [0, 21, 0, 5, 0, 10, 0, 24],
+        "gui/hosted/src/main.jsx": [0, 8, 0, 1, 0, 6, 0, 9],
         "gui/hosted/src/runtime/browser-data-store.js": [271, 315, 61, 67, 293, 347, 287, 347],
         "gui/hosted/src/runtime/browser-runtime-coordinator.js": [
           362, 480, 70, 87, 260, 392, 386, 534
         ],
-        "gui/hosted/src/runtime/browser-runtime-host.js": [546, 755, 99, 125, 366, 645, 572, 828]
+        "gui/hosted/src/runtime/browser-runtime-host.js": [546, 755, 99, 125, 366, 645, 572, 828],
+        "gui/hosted/src/service-worker-registration.js": [15, 17, 4, 6, 11, 14, 17, 20]
       }
     },
     "ui-package": {
