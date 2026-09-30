@@ -1478,12 +1478,13 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   });
 }
 
-// A number is a quantity when it counts shares/contracts or directly precedes a
-// ticker ("300 AAPL"); a dollar-prefixed number is always an amount. Durations
-// and percentages are neither. k/m suffixes scale amounts.
+// A number is a quantity when it counts shares/contracts ("100 shares",
+// "100-share") or directly precedes a ticker ("300 AAPL"); a dollar-prefixed
+// number is always an amount. Durations and percentages are neither. k/m
+// suffixes scale amounts.
 const STATED_NUMBER =
   /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
-const QUANTITY_SUFFIX = /^\s*(?:shares?|contracts?|lots?|[A-Z]{1,5}\b(?![a-z]))/;
+const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b|^\s*[A-Z]{1,5}\b(?![a-z])/;
 const NON_AMOUNT_SUFFIX =
   /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?)\b)/i;
 

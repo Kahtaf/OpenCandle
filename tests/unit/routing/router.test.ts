@@ -3061,6 +3061,20 @@ describe("router cost-basis context guard", () => {
     expect(scaled.entities.costBasis).toBe(150);
   });
 
+  it("treats a hyphenated share count as a quantity when deriving a basis", async () => {
+    const derived = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for my 100-share AAPL position. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const shareCount = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for my 100-share AAPL position. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+
+    expect(derived.entities.costBasis).toBe(150);
+    expect(shareCount.entities.costBasis).toBeUndefined();
+  });
+
   it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
