@@ -82,6 +82,8 @@ describe("local session coordinator", () => {
       ok: false,
       code: "session_busy",
       message: "OpenCandle is still working in this session. Try again when it finishes.",
+      // Names the run that owns the session, for a client waiting on its own Stop.
+      activeActionId: "action-1",
     });
     // Even after the first run settles, the rejected action is never replayed.
     expect(secondHandler).not.toHaveBeenCalled();
@@ -107,6 +109,8 @@ describe("local session coordinator", () => {
       ok: false,
       code: "session_busy",
       message: "OpenCandle is still working in this session. Try again when it finishes.",
+      // Names the run that owns the session, for a client waiting on its own Stop.
+      activeActionId: "action-1",
     });
     finishFirst();
     await firstRun;
@@ -133,6 +137,8 @@ describe("local session coordinator", () => {
       ok: false,
       code: "session_busy",
       message: "OpenCandle is still working in this session. Try again when it finishes.",
+      // Names the run that owns the session, for a client waiting on its own Stop.
+      activeActionId: "tool-1",
     });
     expect(chatHandler).not.toHaveBeenCalled();
     finishTool();

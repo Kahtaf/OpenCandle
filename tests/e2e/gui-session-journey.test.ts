@@ -8,14 +8,21 @@ import {
   ASK_USER_PROMPT,
   ASK_USER_STOP_PROMPT,
   CANCEL_PROMPT,
+  COMPARE_HOLD_PROMPT,
+  COMPARE_VERDICT_TEXT,
   createHoldGate,
   createJourneyModelScript,
   PREFERENCE_PROMPT,
   QUOTE_PROMPT,
   SECOND_PROMPT,
+  SETUP_STOP_PROMPT,
   STREAM_HOLD_PROMPT,
   TOOL_HOLD_PROMPT,
 } from "../support/gui-journey/journey-model.js";
+import {
+  GUI_JOURNEY_MODEL_ID,
+  GUI_JOURNEY_SECOND_MODEL_ID,
+} from "../support/gui-journey/pi-config.js";
 
 /**
  * Full-stack deterministic GUI journeys.
@@ -56,6 +63,8 @@ const DISTINCT_CHAT_PROMPT = "A distinct second chat that must never run.";
 let routerHold = createHoldGate();
 let answerHold = createHoldGate();
 let toolHold = createHoldGate();
+let compareHold = createHoldGate();
+const compareHoldActive = { value: false };
 // The fixture quotes are always served unless the held-tool case arms the hold.
 const quoteHoldActive = { value: false };
 
@@ -64,10 +73,17 @@ describe("GUI session journey", () => {
     routerHold = createHoldGate();
     answerHold = createHoldGate();
     toolHold = createHoldGate();
+    compareHold = createHoldGate();
     quoteHoldActive.value = false;
+    compareHoldActive.value = false;
 
     harness = await startGuiJourneyHarness({
-      modelScript: createJourneyModelScript({ routerHold, answerHold }),
+      modelScript: createJourneyModelScript({
+        routerHold,
+        answerHold,
+        compareHold,
+        compareHoldActive: () => compareHoldActive.value,
+      }),
       fixture: {
         holdQuote: {
           symbol: "NVDA",
@@ -83,6 +99,7 @@ describe("GUI session journey", () => {
     routerHold.release();
     answerHold.release();
     toolHold.release();
+    compareHold.release();
     await harness?.stop();
   });
 
@@ -368,6 +385,131 @@ describe("GUI session journey", () => {
     );
     expect(completed).toBe(true);
     expect(hasCompletedNvdaAnswer(harness.readSessionEntries(runSessionId))).toBe(true);
+  }, 120_000);
+
+  it("New chat during a held run starts a second session that completes while the first keeps streaming", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A: a run held mid native answer stream.
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+    expect(heldSettlement).toBeDefined();
+
+    // New chat while A is still running lands on a new, idle session.
+    await startNewSession(page);
+    const sessionB = sessionIdFromUrl(page);
+    expect(sessionB).not.toBe(sessionA);
+    await expect(page.getByRole("button", { name: "Stop response" }).count()).resolves.toBe(0);
+
+    // B's run is admitted and completes while A is still held.
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    // A's stream was not disrupted: releasing the hold completes it normally.
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(JSON.stringify(harness.readSessionEntries(sessionB))).not.toContain("NVDA answer");
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 120_000);
+
+  it("home during a held run is a new chat whose send starts its own session", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+
+    // Going home while A runs shows a new-chat draft, not A's running transcript.
+    await page.getByRole("button", { name: "Go to new chat" }).click();
+    await waitForCondition(() => new URL(page.url()).pathname === "/", 10_000);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    await expect(page.getByRole("button", { name: "Stop response" }).count()).resolves.toBe(0);
+
+    await submitPrompt(page, QUOTE_PROMPT);
+    await waitForCondition(() => {
+      const current = sessionIdFromUrl(page);
+      return current !== "" && current !== sessionA;
+    }, 15_000);
+    const sessionB = sessionIdFromUrl(page);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 120_000);
+
+  it("a reloaded home during a held run starts its new chat beside the running session", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+
+    // A fresh page load knows nothing about A's run in this browser; the
+    // server still owns it as its current session. Home must still open a new
+    // chat rather than binding to A.
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await waitForCondition(() => {
+      const current = sessionIdFromUrl(page);
+      return current !== "" && current !== sessionA;
+    }, 15_000);
+    const sessionB = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+
+    answerHold.release();
+    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(userMessageCount(harness, sessionA)).toBe(1);
+    expect(userMessageCount(harness, sessionB)).toBe(1);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
   }, 120_000);
 
   it("explicit Stop cancels the run while the router is held", async () => {
@@ -701,7 +843,304 @@ describe("GUI session journey", () => {
       toolHold.release();
     }
   }, 120_000);
+
+  it("Stop between workflow steps shows Stopped, and an immediate Retry starts the workflow again", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    compareHoldActive.value = true;
+    await startNewSession(page);
+    const waitCountBefore = compareHold.waitCount;
+    const runActionId = await submitPromptAndCaptureRunActionId(page, COMPARE_HOLD_PROMPT);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    // The workflow's AAPL tool already returned; the next model request is held.
+    await waitForCondition(() => compareHold.waitCount > waitCountBefore, 30_000);
+    compareHoldActive.value = false;
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+    const stoppedAt = Date.now();
+
+    // The steps card reads Stopped, never Completed or Answer.
+    const stoppedCard = page.locator('[data-run-status="stopped"]').first();
+    await expectVisible(stoppedCard, 10_000);
+    await expect(stoppedCard.innerText()).resolves.toContain("Stopped");
+    await expect(page.locator('[data-run-status="completed"]').count()).resolves.toBe(0);
+    await stoppedCard.getByRole("button").first().click();
+    const drawerStatus = page.locator('[data-drawer-run-status="stopped"]');
+    await expectVisible(drawerStatus, 10_000);
+    await expect(drawerStatus.innerText()).resolves.toBe("Stopped");
+    await page.keyboard.press("Escape");
+
+    // Retry right after Stop is admitted: the stopped workflow frees the
+    // session promptly instead of holding it for the workflow settle grace.
+    // While the server finishes releasing it (a few hundred milliseconds at
+    // most) the GUI waits and then starts the Retry itself, never surfacing
+    // the busy rejection.
+    const retry = page.getByRole("button", { name: "Retry" }).first();
+    await expectVisible(retry, 5_000);
+    const runsPath = `/api/sessions/${encodeURIComponent(stoppedSessionId)}/runs`;
+    const retryStatuses: number[] = [];
+    page.on("response", (response) => {
+      if (response.request().method() === "POST" && new URL(response.url()).pathname === runsPath) {
+        retryStatuses.push(response.status());
+      }
+    });
+    const admitted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === runsPath &&
+        response.status() === 200,
+      { timeout: 15_000 },
+    );
+    const clickedAt = Date.now();
+    await retry.click();
+    const response = await admitted;
+    expect(Date.now() - clickedAt).toBeLessThan(2_000);
+    expect(Date.now() - stoppedAt).toBeLessThan(10_000);
+    expect(retryStatuses.every((status) => status === 200 || status === 409)).toBe(true);
+    expect((response.request().postDataJSON() as { prompt?: string }).prompt).toBe(
+      COMPARE_HOLD_PROMPT,
+    );
+    await expectNoBusyError(page);
+
+    // The retried workflow runs both steps to its verdict.
+    await expectVisible(page.getByText(COMPARE_VERDICT_TEXT).first(), 30_000);
+    await waitForRunIdle(page);
+
+    // After reload the stopped run still reads Stopped.
+    await page.reload({ waitUntil: "networkidle" });
+    await expectVisible(page.locator('[data-run-status="stopped"]').first(), 30_000);
+    await expectVisible(page.getByText(COMPARE_VERDICT_TEXT).first(), 30_000);
+  }, 120_000);
+
+  it("Stop during a held tool fetch frees the session so an immediate Retry completes", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    quoteHoldActive.value = true;
+    await startNewSession(page);
+    const waitCountBefore = toolHold.waitCount;
+    const runActionId = await submitPromptAndCaptureRunActionId(page, TOOL_HOLD_PROMPT);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    await waitForCondition(() => toolHold.waitCount > waitCountBefore, 30_000);
+    // Later fetches are served; the held one stays held (never released here).
+    quoteHoldActive.value = false;
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+
+    // The held tool does not keep the session busy.
+    expect(
+      await waitForRunCancelReason(page, stoppedSessionId, runActionId, "no_active_run", 5_000),
+    ).toBe(true);
+    await expectStoppedTurn(page);
+
+    const retryResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/api/sessions/${encodeURIComponent(stoppedSessionId)}/runs`,
+      { timeout: 15_000 },
+    );
+    await page.getByRole("button", { name: "Retry" }).first().click();
+    expect((await retryResponse).status()).toBe(200);
+    await expectVisible(
+      page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    await expectNoBusyError(page);
+  }, 120_000);
+
+  it("Stop during run start keeps the prompt and a Stopped marker on the session across reload", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const sessionId = sessionIdFromUrl(page);
+    const runsPath = `/api/sessions/${encodeURIComponent(sessionId)}/runs`;
+    // Hold the run request in the browser so the Stop reaches the server
+    // while the run is still starting. route.fetch() still delivers the run
+    // once released, even though the page aborted its own stream on Stop.
+    let releaseRun!: () => void;
+    const runReleased = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    let runDelivered!: () => void;
+    const delivered = new Promise<void>((resolve) => {
+      runDelivered = resolve;
+    });
+    await page.route(
+      (url) => url.pathname === runsPath,
+      async (route) => {
+        await runReleased;
+        try {
+          const upstream = await route.fetch();
+          await upstream.body();
+          await route.fulfill({ response: upstream }).catch(() => {});
+        } finally {
+          runDelivered();
+        }
+      },
+    );
+
+    const cancelResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === runCancelPath(sessionId),
+      { timeout: 15_000 },
+    );
+    await submitPrompt(page, SETUP_STOP_PROMPT);
+    await page.getByRole("button", { name: "Stop response" }).click();
+    expect((await cancelResponse).ok()).toBe(true);
+    releaseRun();
+    await delivered;
+    await page.unroute((url) => url.pathname === runsPath);
+
+    // The prompt and the Stopped marker are durable on this session.
+    await waitForCondition(
+      () =>
+        Boolean(findRunCancelledMarker(harness.readSessionEntries(sessionId), SETUP_STOP_PROMPT)),
+      10_000,
+    );
+    await page.reload({ waitUntil: "networkidle" });
+    expect(sessionIdFromUrl(page)).toBe(sessionId);
+    await expectVisible(page.getByText(SETUP_STOP_PROMPT).first(), 30_000);
+    await expectStoppedTurn(page);
+  }, 120_000);
 });
+
+describe("GUI session journey: per-session model", () => {
+  beforeEach(async () => {
+    answerHold = createHoldGate();
+    harness = await startGuiJourneyHarness({
+      modelScript: createJourneyModelScript({ answerHold }),
+      extraModelIds: [GUI_JOURNEY_SECOND_MODEL_ID],
+    });
+  });
+
+  afterEach(async () => {
+    answerHold.release();
+    await harness?.stop();
+  });
+
+  it("a model picked in a new chat started during a held run is the one its first run uses", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A: a run held mid native answer stream.
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+
+    // New chat while A runs is a detached, unsaved session. It starts on the
+    // saved default, and a pick in it lands on it.
+    await startNewSession(page);
+    const sessionB = sessionIdFromUrl(page);
+    expect(sessionB).not.toBe(sessionA);
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    await pickModel(page, GUI_JOURNEY_MODEL_ID, GUI_JOURNEY_SECOND_MODEL_ID);
+
+    const beforeB = harness.modelServer.requests.length;
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(requestModels(beforeB)).toEqual([GUI_JOURNEY_SECOND_MODEL_ID]);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionB))).toBe(
+      GUI_JOURNEY_SECOND_MODEL_ID,
+    );
+
+    // A keeps the model it started on.
+    answerHold.release();
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionA))).toBe(GUI_JOURNEY_MODEL_ID);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 150_000);
+
+  it("runs a reopened session on its own model, and the picker shows it", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A runs on the second model, picked in its composer.
+    await startNewSession(page);
+    await pickModel(page, GUI_JOURNEY_MODEL_ID, GUI_JOURNEY_SECOND_MODEL_ID);
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    const sessionA = sessionIdFromUrl(page);
+
+    // Session B is new, so it starts on the saved default model and becomes
+    // the server's current session.
+    await page.reload({ waitUntil: "networkidle" });
+    await startNewSession(page);
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    const beforeB = harness.modelServer.requests.length;
+    await submitPrompt(page, SECOND_PROMPT);
+    await expectVisible(page.getByText("$512.34").first(), 30_000);
+    await waitForRunIdle(page);
+    expect(requestModels(beforeB)).toEqual([GUI_JOURNEY_MODEL_ID]);
+
+    // Reopening A (not the server's current session) shows and runs A's model.
+    await page.reload({ waitUntil: "networkidle" });
+    await openSession(page, "AAPL quote journey");
+    expect(sessionIdFromUrl(page)).toBe(sessionA);
+    await expectModelPicker(page, GUI_JOURNEY_SECOND_MODEL_ID);
+    const beforeReopen = harness.modelServer.requests.length;
+    await submitPrompt(page, QUOTE_PROMPT);
+    await waitForCondition(() => userMessageCount(harness, sessionA) === 2, 30_000);
+    await waitForRunIdle(page);
+    expect(requestModels(beforeReopen)).toEqual([GUI_JOURNEY_SECOND_MODEL_ID]);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionA))).toBe(
+      GUI_JOURNEY_SECOND_MODEL_ID,
+    );
+
+    // The pick survives a reload, and B keeps its own model.
+    await page.reload({ waitUntil: "networkidle" });
+    await expectModelPicker(page, GUI_JOURNEY_SECOND_MODEL_ID);
+    await openSession(page, "MSFT quote journey");
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 150_000);
+});
+
+/** Distinct model ids the fixture model server saw since `from`. */
+function requestModels(from: number): string[] {
+  return [...new Set(harness.modelServer.requests.slice(from).map((request) => request.model))];
+}
+
+function lastAssistantModel(entries: readonly unknown[]): unknown {
+  const assistants = entries.filter(
+    (entry) => isRecord(entry) && isRecord(entry.message) && entry.message.role === "assistant",
+  ) as Array<{ message: { model?: unknown } }>;
+  return assistants.at(-1)?.message.model;
+}
+
+async function expectModelPicker(page: Page, modelId: string): Promise<void> {
+  await expectVisible(page.getByRole("button", { name: modelId, exact: true }), 15_000);
+}
+
+async function pickModel(page: Page, fromModelId: string, toModelId: string): Promise<void> {
+  await page.getByRole("button", { name: fromModelId, exact: true }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(`^${toModelId}\\b`) }).click();
+  await expectModelPicker(page, toModelId);
+}
+
+/** The session-busy rejection never reaches the user as an error. */
+async function expectNoBusyError(page: Page): Promise<void> {
+  await expect(page.getByText("OpenCandle is still working").count()).resolves.toBe(0);
+  await expect(page.getByText("Session already has an active run").count()).resolves.toBe(0);
+}
 
 /** A stopped turn shows the neutral Stopped marker with Retry, never a model failure. */
 async function expectStoppedTurn(page: Page): Promise<void> {

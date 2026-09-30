@@ -4,6 +4,12 @@
 
 - Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.
 
+- Stopping a run while a DCF valuation is still fetching no longer crashes the local GUI server and ends every other running chat.
+
+- Each chat now keeps its own model and reasoning level: a reopened chat runs on the model its picker shows, and picking a model changes only the open chat, while new chats start on the saved default.
+
+- Starting a new chat while another chat is still answering now opens a separate session that runs at the same time, instead of being rejected or dropping the message.
+
 - Options answers built on after-hours, closed-market, or stale option quotes now end with a short notice that the prices shown are not live or executable now.
 
 - When no model has been saved, OpenCandle now starts on its own default for the first configured provider (Google Gemini, then OpenAI, then Anthropic), including keys that only come from environment variables.
@@ -26,10 +32,15 @@
 
 ### Fixed
 
+- The hosted web app no longer shows "Install update?" on a first visit, and clicking it for a real update now installs the new version and reloads onto it.
+- The GUI now checks for watchlist, portfolio, and alert changes with one shared request at a time, pauses while the tab is hidden, and refreshes as soon as you return.
 - The headless harness `run` command now waits for multi-step workflows to finish before reporting done, and reports `incomplete` with a distinct exit code when the timeout expires first.
 - Portfolio and comparison workflows now pick a supported risk lookback window for any investment horizon, so 3-year, 10-year, or 18-month plans no longer make rejected risk or correlation calls.
 - Covered-call answers no longer assume a cost basis you never gave; a basis is used only when it matches a price you stated, a total you paid divided by your share count, or a saved position, and is otherwise reported as not provided.
 - Pressing Stop in the GUI while a tool is running, such as during `/analyze` or while a question is open, now shows the turn as Stopped with Retry instead of "Model connection failed", including after a reload.
+- Retry right after Stop in the GUI now starts the run again within a moment instead of failing with a busy error for about 30 seconds, even when a workflow tool was still fetching data.
+- A GUI run stopped partway through its steps now reads Stopped on the steps card and drawer instead of Completed.
+- Pressing Stop while a GUI chat is still starting now keeps the prompt and a Stopped marker in that chat, so a reload no longer drops you into an empty chat.
 - Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
 - Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.
 - Option chains checked outside regular trading hours or on market holidays now label bid/ask as last-session and not executable, and show each contract's last trade time.

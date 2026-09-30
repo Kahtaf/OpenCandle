@@ -40,6 +40,7 @@ export {
 import { createLiveChatEventAdapter } from "../shared/live-chat-event-adapter.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { persistUnflushedSession } from "./durable-session-persist.js";
+import type { DetachedSessionRegistry } from "./gui-session-manager.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import type {
   LocalSessionCoordinator,
@@ -91,7 +92,7 @@ import {
   shouldBlockFailedCoordinatorAction as shouldBlockFailedCoordinatorLockAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
-import type { WsHub } from "./ws-hub.js";
+import { broadcastModelSetupChange, type WsHub } from "./ws-hub.js";
 
 interface GuiHttpRouteOptions {
   host: string;
@@ -133,10 +134,14 @@ interface GuiHttpRouteOptions {
   cancelAskUserPromptsForSession?: (sessionId: string) => void;
   /** Injectable active-run registry (tests); defaults to a fresh registry. */
   runRegistry?: GuiRunRegistry;
+  /** Session ids a chat run owns; shared with session-addressed model changes. */
+  activeRunSessionIds?: Set<string>;
+  /** Fresh sessions started while the current session was running. */
+  detachedSessions?: Pick<DetachedSessionRegistry, "get">;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
-  const activeRunSessionIds = new Set<string>();
+  const activeRunSessionIds = options.activeRunSessionIds ?? new Set<string>();
   const activeGuiRuns = options.runRegistry ?? createGuiRunRegistry();
 
   return async function handleHttpRequest(
@@ -165,14 +170,30 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         );
         return;
       }
+      let created: Awaited<ReturnType<SessionActionsController["handleNewSession"]>>;
       try {
-        await options.sessionActionsController.handleNewSession();
+        const currentSessionId = options.getSessionManager().getSessionId();
+        created = await options.sessionActionsController.handleNewSession({
+          allowDetached: true,
+          currentRunAdmitted:
+            activeGuiRuns.has(currentSessionId) || activeRunSessionIds.has(currentSessionId),
+        });
       } catch (error) {
         if (error instanceof SessionBusyError) {
           writeJson(res, { error: error.message, code: error.code }, 409);
           return;
         }
         throw error;
+      }
+      const detachedSessionManager = created?.detachedSessionManager;
+      if (detachedSessionManager) {
+        // The current session is still running and stays the server's current
+        // one; the browser routes to this separate session by id.
+        writeJson(res, {
+          ...(await buildSessionBootstrapPayload(options, detachedSessionManager)),
+          detached: true,
+        });
+        return;
       }
       options.wsHub.broadcastState();
       options.wsHub.broadcastSessions();
@@ -224,11 +245,16 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/api-key" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSaveModelApiKey(
+        const target = await options.modelSetupController.handleSaveModelApiKey(
           String(body.provider ?? ""),
           String(body.apiKey ?? ""),
+          optionalSessionId(body),
         );
         options.wsHub.broadcastModelSetup();
+        if (target && !target.current && target.sessionManager) {
+          options.wsHub.broadcastSessionSnapshot(target.sessionManager);
+          return target.sessionManager;
+        }
       });
       return;
     }
@@ -236,11 +262,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/model" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSelectModel(
+        const target = await options.modelSetupController.handleSelectModel(
           String(body.provider ?? ""),
           String(body.modelId ?? ""),
+          optionalSessionId(body),
         );
-        options.wsHub.broadcastModelSetup();
+        return broadcastModelSetupChange(options.wsHub, target);
       });
       return;
     }
@@ -248,8 +275,11 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/model-setup/thinking" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Model setup API", options)) return;
       await handleTrustedGuiMutation(req, res, options, async (body) => {
-        await options.modelSetupController.handleSetThinkingLevel?.(String(body.level ?? ""));
-        options.wsHub.broadcastModelSetup();
+        const target = await options.modelSetupController.handleSetThinkingLevel?.(
+          String(body.level ?? ""),
+          optionalSessionId(body),
+        );
+        return broadcastModelSetupChange(options.wsHub, target);
       });
       return;
     }
@@ -698,7 +728,15 @@ async function handleSseChatRun(
       throw error;
     }
     if (!result.ok) {
-      writeJson(res, { error: result.message, code: result.code }, 409);
+      writeJson(
+        res,
+        {
+          error: result.message,
+          code: result.code,
+          ...(result.activeActionId ? { activeActionId: result.activeActionId } : {}),
+        },
+        409,
+      );
       return;
     }
     if (result.duplicate && !res.headersSent) {
@@ -908,8 +946,22 @@ async function streamAcceptedSseChatRun({
   actionId: string;
 }): Promise<boolean> {
   const prompt = parsedRun.prompt;
+  // Name the run that owns the session so a client that just stopped that
+  // run can wait for its release without queueing behind any other run.
+  const writeSessionBusy = () => {
+    const activeActionId = activeGuiRuns.activeActionId(sessionId);
+    writeJson(
+      res,
+      {
+        error: "Session already has an active run",
+        code: "session_busy",
+        ...(activeActionId ? { activeActionId } : {}),
+      },
+      409,
+    );
+  };
   if (activeRunSessionIds.has(sessionId)) {
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   // Register ownership before any await or session creation so a Stop that
@@ -917,7 +969,7 @@ async function streamAcceptedSseChatRun({
   const runHandle = activeGuiRuns.start({ sessionId, actionId });
   if (!runHandle) {
     // A concurrent start won admission before activeRunSessionIds was set.
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   let runCancellationState: SessionCancellationState | null = null;
@@ -1036,7 +1088,7 @@ async function streamAcceptedSseChatRun({
   // token cancel above only reaches the extension input hook, which slash
   // commands such as `/analyze` never pass through.
   const cancelledDuringSetup = runHandle.cancelRequested;
-  if (!cancelledDuringSetup && !prompt.startsWith("/") && !runSessionManager.getSessionName()) {
+  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
   const beforeEntries = runSessionManager.getEntries();
@@ -1092,9 +1144,20 @@ async function streamAcceptedSseChatRun({
 
   try {
     if (cancelledDuringSetup) {
-      // Nothing was dispatched: no pending action, no input marker, no turn.
-      // Settle as a stopped run, never as a completed one; finally releases
-      // ownership and ends the stream.
+      // Nothing was dispatched: no pending action and no turn. Record the
+      // prompt as a stopped turn, the same trace the extension input hook
+      // writes for a turn stopped while routing, and persist it: a new chat
+      // has no session file until Pi flushes its first assistant reply, so
+      // without this a reload of the session URL opened an empty chat. The
+      // action stays unaccepted so Retry mints a fresh run. Settle as a
+      // stopped run, never as a completed one; finally releases ownership and
+      // ends the stream.
+      appendOriginalInputMarker();
+      runSessionManager.appendCustomEntry("opencandle-run-cancelled", {
+        text: dispatchedPrompt || prompt,
+      });
+      persistUnflushedSession(runSessionManager);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
       writeSse(res, {
         type: "run.failed",
         runId,
@@ -1131,6 +1194,7 @@ async function streamAcceptedSseChatRun({
         beforeIds,
         observation,
         promptImages.length > 0 ? { images: promptImages } : undefined,
+        () => runHandle.cancelRequested,
       );
       if (runHandle.cancelRequested) {
         // User stopped this run. Keep it terminal: the extension records an
@@ -1395,12 +1459,17 @@ export async function buildSessionBootstrapPayload(
       ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
     },
     catalog: buildCatalog(),
-    modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
+    // The model and thinking level this session runs on, not the server's
+    // current session's (issue #217).
+    modelSetup:
+      options.modelSetupController.buildModelSetupStateForSession?.(sessionManager) ??
+      options.modelSetupController.buildCurrentModelSetupState(),
     askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
     sessions: await listDisplaySessions(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
       state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),
+      sessionModel: options.modelSetupController.buildSessionModelState?.(sessionManager),
       entries,
       events: sessionEntriesToChatEvents(entries, {
         sessionId,
@@ -1435,11 +1504,16 @@ function roleForSessionBootstrap(
 }
 
 export async function resolveSessionManagerById(
-  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "getSessionManager">,
+  options: Pick<
+    GuiHttpRouteOptions,
+    "cwd" | "sessionDir" | "getSessionManager" | "detachedSessions"
+  >,
   sessionId: string,
 ): Promise<SessionManager | null> {
   const currentSessionManager = options.getSessionManager();
   if (currentSessionManager.getSessionId() === sessionId) return currentSessionManager;
+  const detached = options.detachedSessions?.get(sessionId);
+  if (detached) return detached;
   const sessions = await SessionManager.list(options.cwd, options.sessionDir);
   const match = sessions.find((candidate) => candidate.id === sessionId);
   return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
@@ -1554,15 +1628,27 @@ async function handleTrustedPreferencesMutation(
   }
 }
 
+function optionalSessionId(body: Record<string, unknown>): string | undefined {
+  const sessionId = String(body.sessionId ?? "").trim();
+  return sessionId || undefined;
+}
+
 async function handleTrustedGuiMutation(
   req: IncomingMessage,
   res: ServerResponse,
   options: GuiHttpRouteOptions,
-  action: (body: Record<string, unknown>) => Promise<void>,
+  // An action that changed a non-current session returns it, so the response
+  // bootstraps that session instead of the server's current one.
+  action: (body: Record<string, unknown>) => Promise<SessionManager | undefined | void>,
 ): Promise<void> {
   try {
-    await action(asRecord(await readJsonBody(req)));
-    writeJson(res, await options.wsHub.buildBootstrapPayload());
+    const targetSessionManager = await action(asRecord(await readJsonBody(req)));
+    writeJson(
+      res,
+      targetSessionManager
+        ? await buildSessionBootstrapPayload(options, targetSessionManager)
+        : await options.wsHub.buildBootstrapPayload(),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const coordinationError = message === "Read-only follower mode";

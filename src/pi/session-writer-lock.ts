@@ -408,6 +408,18 @@ export function shouldBlockFailedCoordinatorAction(
   return isCoordinatorOwnerAlive(lock.pid);
 }
 
+/**
+ * True while any live process, this one included, holds the session's
+ * transcript. A writer that opens its own SessionManager for the session (such
+ * as a model change to a non-current chat) must not append while another
+ * writer is mid-turn, or one of the two writes lands on an abandoned branch.
+ */
+export function isSessionTranscriptHeld(sessionManager: SessionLockScopeSource): boolean {
+  const lock = readWriterLock(writerLockScopeForSession(sessionManager));
+  if (!lock) return false;
+  return lock.pid === process.pid || isCoordinatorOwnerAlive(lock.pid);
+}
+
 function classifyLock(
   lock: WriterLock,
   staleGraceMs: number,

@@ -1,6 +1,7 @@
 import { unlink } from "node:fs/promises";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { getSessionCancellationState } from "../../src/pi/session-cancellation.js";
+import type { DetachedSessionRegistry } from "./gui-session-manager.js";
 import type {
   LocalSessionCoordinator,
   SessionActionEnvelope,
@@ -34,7 +35,7 @@ interface SessionActionClient {
 export interface SessionActionsController {
   handleAskUserAnswer(id: string, value: unknown, action?: SessionActionMeta): Promise<void>;
   handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void>;
-  handleNewSession(): Promise<void>;
+  handleNewSession(options?: NewSessionOptions): Promise<NewSessionResult | undefined>;
   handleOpenSession(path: string): Promise<void>;
   handleRenameSession(path: string, name: string): Promise<void>;
   handleDeleteSession(client: SessionActionClient, path: string): Promise<void>;
@@ -53,7 +54,27 @@ export interface SessionActionsControllerOptions {
   broadcastState: () => void;
   broadcastSessions: () => void;
   localSessionCoordinator?: LocalSessionCoordinator;
+  detachedSessions?: DetachedSessionRegistry;
   now?: () => number;
+}
+
+export interface NewSessionOptions {
+  /**
+   * When the current session is still running, create a separate fresh
+   * session instead of rejecting. Only callers that can hand the new session
+   * id back to the browser (the HTTP route) opt in.
+   */
+  allowDetached?: boolean;
+  /**
+   * A run for the current session is already admitted but may still be in
+   * setup (prompt dispatch, writer lock) before the session itself looks busy.
+   */
+  currentRunAdmitted?: boolean;
+}
+
+export interface NewSessionResult {
+  /** Set when the runtime kept its running current session. */
+  detachedSessionManager?: SessionManager;
 }
 
 export interface SessionActionMeta {
@@ -89,17 +110,20 @@ export function createSessionActionsController({
   broadcastState,
   broadcastSessions,
   localSessionCoordinator,
+  detachedSessions,
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");
   }
 
-  function assertCurrentSessionIdle(): void {
+  function isCurrentSessionBusy(): boolean {
     const session = getSession();
     const activeRun = getSessionCancellationState(session)?.current;
-    if (activeRun || session.isStreaming || session.pendingMessageCount > 0) {
-      throw new SessionBusyError();
-    }
+    return Boolean(activeRun || session.isStreaming || session.pendingMessageCount > 0);
+  }
+
+  function assertCurrentSessionIdle(): void {
+    if (isCurrentSessionBusy()) throw new SessionBusyError();
   }
 
   async function handleAskUserAnswer(
@@ -142,11 +166,17 @@ export function createSessionActionsController({
     });
   }
 
-  async function handleNewSession(): Promise<void> {
+  async function handleNewSession(options: NewSessionOptions = {}): Promise<NewSessionResult> {
     ensureWriter();
-    assertCurrentSessionIdle();
+    if (options.currentRunAdmitted || isCurrentSessionBusy()) {
+      // Replacing the runtime session would tear down the run in flight.
+      // Leave it running and give the new chat its own session.
+      if (!options.allowDetached || !detachedSessions) throw new SessionBusyError();
+      return { detachedSessionManager: detachedSessions.create(cwd, sessionDir) };
+    }
     const result = await runtime.newSession();
     if (result.cancelled) throw new Error("Session switch cancelled");
+    return {};
   }
 
   async function handleOpenSession(path: string): Promise<void> {
@@ -287,17 +317,21 @@ export async function promptAndSettle(
   beforeIds: Set<string>,
   observation?: PromptObservation,
   options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> },
+  isCancelled?: () => boolean,
 ): Promise<void> {
   await runSession.prompt(prompt, options);
   await settleWithEventProgress(
     runSession,
     settleIdleGraceMsForPrompt(prompt, runSession.sessionManager.getEntries(), beforeIds),
+    isCancelled,
   );
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
   );
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
+  // A stopped run must not re-send its workflow prompt.
+  if (isCancelled?.()) return;
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
 }
 
@@ -315,6 +349,7 @@ export async function promptAndSettle(
 async function settleWithEventProgress(
   runSession: AgentSession,
   idleGraceMs?: number,
+  isCancelled?: () => boolean,
 ): Promise<void> {
   let progressToken = 0;
   const unsubscribe = runSession.subscribe(() => {
@@ -327,7 +362,10 @@ async function settleWithEventProgress(
         pendingMessageCount: runSession.pendingMessageCount,
         progressToken,
       }),
-      idleGraceMs !== undefined ? { idleGraceMs } : undefined,
+      {
+        ...(idleGraceMs !== undefined ? { idleGraceMs } : {}),
+        ...(isCancelled ? { isCancelled } : {}),
+      },
     );
   } finally {
     unsubscribe();

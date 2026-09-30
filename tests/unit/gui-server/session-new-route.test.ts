@@ -1,11 +1,13 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHttpRequestHandler } from "../../../gui/server/http-routes.js";
 import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
 import type { ModelSetupController } from "../../../gui/server/model-setup.js";
 import { privateApiCookieHeader } from "../../../gui/server/private-api-access.js";
 import type { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
+import { createGuiRunRegistry } from "../../../gui/server/run-cancellation.js";
 import {
   type SessionActionsController,
   SessionBusyError,
@@ -22,6 +24,12 @@ describe("session new HTTP route", () => {
   let endpoint: string;
   let handleNewSession: ReturnType<typeof vi.fn>;
   let broadcastState: ReturnType<typeof vi.fn>;
+  const runRegistry = createGuiRunRegistry();
+  const currentSessionManager = {
+    getSessionId: () => "current-running-session",
+    getSessionFile: () => "/missing-session-dir/current-running-session.jsonl",
+    getSessionDir: () => "/missing-session-dir",
+  } as unknown as SessionManager;
 
   beforeAll(async () => {
     handleNewSession = vi.fn(async () => {});
@@ -42,13 +50,14 @@ describe("session new HTTP route", () => {
       localCoordinatorSecret: "coordinator-secret",
       allowRemotePrivateApi: false,
       getSession: unavailable,
-      getSessionManager: unavailable,
+      getSessionManager: () => currentSessionManager,
       createSessionForManager: async () => unavailable(),
       wsHub: fakeWsHub(broadcastState),
       modelSetupController: fakeModelSetupController(),
       sessionActionsController: fakeSessionActionsController(handleNewSession),
       toolInvokeController: fakeToolInvokeController(),
       quoteSnapshotStore: fakeQuoteSnapshotStore(),
+      runRegistry,
     });
     server = createServer((req, res) => {
       void handler(req, res);
@@ -89,6 +98,57 @@ describe("session new HTTP route", () => {
       code: "session_busy",
     });
     expect(broadcastState).not.toHaveBeenCalled();
+  });
+
+  it("returns a separate fresh session while the current session keeps running", async () => {
+    const detached = SessionManager.inMemory(process.cwd());
+    handleNewSession.mockResolvedValueOnce({ detachedSessionManager: detached });
+
+    const response = await fetch(`${endpoint}/api/session/new`, {
+      method: "POST",
+      headers: trustedHeaders,
+    });
+
+    expect(response.status).toBe(200);
+    expect(handleNewSession).toHaveBeenCalledWith({
+      allowDetached: true,
+      currentRunAdmitted: false,
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      detached: true,
+      sessionId: detached.getSessionId(),
+      role: "writer",
+      snapshot: { sessionId: detached.getSessionId(), entries: [] },
+    });
+    // The server's current session did not change, so nothing is re-broadcast
+    // as the current state.
+    expect(broadcastState).not.toHaveBeenCalled();
+  });
+
+  it("tells the controller about a current-session run that is still in setup", async () => {
+    const handle = runRegistry.start({
+      sessionId: "current-running-session",
+      actionId: "chat-in-setup",
+    });
+    try {
+      handleNewSession.mockResolvedValueOnce({
+        detachedSessionManager: SessionManager.inMemory(process.cwd()),
+      });
+
+      const response = await fetch(`${endpoint}/api/session/new`, {
+        method: "POST",
+        headers: trustedHeaders,
+      });
+
+      expect(response.status).toBe(200);
+      expect(handleNewSession).toHaveBeenCalledWith({
+        allowDetached: true,
+        currentRunAdmitted: true,
+      });
+    } finally {
+      if (handle) runRegistry.finish(handle);
+    }
   });
 
   it("broadcasts state and returns bootstrap when the current session is idle", async () => {

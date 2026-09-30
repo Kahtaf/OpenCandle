@@ -1144,6 +1144,61 @@ describe("sessionEntriesToChatEvents", () => {
       ]);
     });
 
+    it("renders a Stop that landed while a workflow was idle between steps as Stopped", () => {
+      // Every tool returned and the step's reply finished; the Stop retired
+      // the workflow before its next prompt, so no aborted reply exists.
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", {
+            role: "user",
+            content: "Compare these assets side by side: AAPL, MSFT",
+            timestamp: Date.now(),
+          } as Message),
+          toolUse("a1", "call-1", "get_stock_quote"),
+          toolResult("t1", "call-1", "get_stock_quote"),
+          messageEntry("a2", assistantMessage("Fetched the comparison data.")),
+          customEntry("stop-1", "opencandle-run-stopped", {
+            actionId: "chat-1",
+            prompt: "Compare AAPL and MSFT",
+            assistantEntryIds: [],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(stoppedNotices(events)).toEqual([
+        expect.objectContaining({
+          messageId: "stopped-stop-1",
+          details: { reason: "stopped", prompt: "Compare AAPL and MSFT" },
+        }),
+      ]);
+    });
+
+    it("does not add a second Stopped notice when the turn already shows one", () => {
+      const events = sessionEntriesToChatEvents(
+        [
+          messageEntry("u1", {
+            role: "user",
+            content: "What is AAPL trading at?",
+            timestamp: Date.now(),
+          } as Message),
+          messageEntry("a1", {
+            ...assistantMessage(""),
+            content: [],
+            stopReason: "aborted",
+          } as Message),
+          customEntry("stop-1", "opencandle-run-stopped", {
+            actionId: "chat-1",
+            prompt: "What is AAPL trading at?",
+            assistantEntryIds: [],
+          }),
+        ],
+        { sessionId: "s1", startSeq: 1 },
+      );
+
+      expect(stoppedNotices(events)).toHaveLength(1);
+    });
+
     it("keeps an abort-shaped error with no recorded Stop as a model failure", () => {
       const events = sessionEntriesToChatEvents(
         [

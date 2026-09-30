@@ -9,6 +9,11 @@ export interface WaitForEntryCountOptions {
 
 export interface WaitForSessionTurnSettlementOptions extends WaitForEntryCountOptions {
   idleGraceMs?: number;
+  /**
+   * True once the user stopped the run. A widened grace waits for a workflow's
+   * next step; a stopped workflow sends none, so the default grace applies.
+   */
+  isCancelled?: () => boolean;
 }
 
 export interface StallBoundedPromiseOptions {
@@ -126,7 +131,8 @@ export async function waitForSessionTurnSettlement(
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 25;
-  const idleGraceMs = options.idleGraceMs ?? 250;
+  const defaultIdleGraceMs = 250;
+  const widenedIdleGraceMs = options.idleGraceMs ?? defaultIdleGraceMs;
   // timeoutMs bounds STALL, not total runtime: a live workflow run (e.g.
   // /analyze) stays active for minutes while its status keeps changing, and
   // capping total runtime failed those runs mid-workflow with
@@ -155,6 +161,9 @@ export async function waitForSessionTurnSettlement(
     }
 
     idleSince ??= Date.now();
+    const idleGraceMs = options.isCancelled?.()
+      ? Math.min(widenedIdleGraceMs, defaultIdleGraceMs)
+      : widenedIdleGraceMs;
     if (Date.now() - idleSince >= idleGraceMs) {
       return;
     }

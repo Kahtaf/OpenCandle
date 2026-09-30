@@ -25,17 +25,23 @@ function narrativeText(content) {
 //     id: "run-<first-tool-call-id>",
 //     sessionId: "session-id",
 //     steps: [{ id, name, args, status, result?, narration?, messageId, sessionId }],
-//     status: "pending" | "completed" | "error",
+//     status: "pending" | "completed" | "error" | "stopped",
 //     narrationBefore: string  (assistant text immediately preceding the first
 //                               tool call, e.g. "Let me look up the quote.")
 //     entryRange: [startIndex, endIndex]
 //   }
 //
 // `status` is "pending" while any step lacks a result; "error" if any step
-// errored; otherwise "completed".
+// errored; otherwise "completed". A run the user stopped (a Stopped marker
+// follows it within the same turn) is "stopped": steps that never returned,
+// or that the Stop aborted, are "cancelled", and finished steps keep their
+// own status.
 export function groupToolRuns(rows) {
   const out = [];
   let run = null;
+  // The latest flushed run of the current user turn, so a Stopped marker that
+  // follows a partial answer still marks the run it interrupted.
+  let turnRun = null;
   let pendingNarration = "";
   let lastUserPrompt = "";
 
@@ -44,6 +50,7 @@ export function groupToolRuns(rows) {
     run.status = aggregateStatus(run.steps);
     run.failureReason = failureReasonForRun(run);
     out.push(run);
+    turnRun = run;
     run = null;
   };
 
@@ -54,12 +61,14 @@ export function groupToolRuns(rows) {
       row.type !== "user_message"
     ) {
       flushRun();
+      if (isStoppedMarker(row) && turnRun) markRunStopped(turnRun);
       out.push(row);
       continue;
     }
 
     if (row.type === "user_message") {
       flushRun();
+      turnRun = null;
       pendingNarration = "";
       lastUserPrompt = textContent(row.content).trim();
       out.push(row);
@@ -174,6 +183,24 @@ function startRun(firstCall, fallbackSessionId = "", retryPrompt = "") {
     retryPrompt,
     entryRange: [],
   };
+}
+
+function isStoppedMarker(row) {
+  return row?.type === "custom_message" && row.customType === "opencandle-run-cancelled";
+}
+
+// A tool call the Stop cut short: Pi's own result, or the fetch AbortError.
+const ABORTED_TOOL_RESULT =
+  /^\s*(?:(?:the|this)\s+)?(?:operation|request)\s+(?:was\s+)?aborted\.?\s*$/i;
+
+function markRunStopped(run) {
+  for (const step of run.steps) {
+    const abortedByStop =
+      step.status === "error" && ABORTED_TOOL_RESULT.test(textContent(step.result?.content ?? ""));
+    if (step.status === "pending" || abortedByStop) step.status = "cancelled";
+  }
+  run.status = "stopped";
+  run.failureReason = failureReasonForRun(run);
 }
 
 function aggregateStatus(steps) {

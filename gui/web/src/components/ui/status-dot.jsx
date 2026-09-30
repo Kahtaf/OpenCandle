@@ -1,8 +1,9 @@
 import { cn } from "../../lib/utils.js";
 
 // Status indicator dot: a tiny static dot for completed, a ping aura for
-// pending, rose for errored. Sized within a 12px frame so it lines up with
-// surrounding text. Used in the step timeline and the in-thread StepsCard.
+// pending, rose for errored, a hollow neutral ring for a step a Stop cancelled.
+// Sized within a 12px frame so it lines up with surrounding text. Used in the
+// step timeline and the in-thread StepsCard.
 export function StatusDot({ status = "pending", className }) {
   if (status === "completed") {
     return (
@@ -21,6 +22,16 @@ export function StatusDot({ status = "pending", className }) {
         aria-hidden="true"
       >
         <span className="size-1.5 rounded-full bg-destructive" />
+      </span>
+    );
+  }
+  if (status === "cancelled") {
+    return (
+      <span
+        className={cn("relative inline-flex size-3 items-center justify-center", className)}
+        aria-hidden="true"
+      >
+        <span className="size-1.5 rounded-full border border-muted-foreground" />
       </span>
     );
   }

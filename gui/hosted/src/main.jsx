@@ -11,6 +11,7 @@ import { createBrowserRuntimeHost } from "./runtime/browser-runtime-host.js";
 import { createBrowserRuntimeCoordinator } from "./runtime/browser-runtime-coordinator.js";
 import { createHostedDataActions } from "./hosted-data-actions.js";
 import { HostedStatusPill } from "./hosted-status-pill.jsx";
+import { registerHostedServiceWorker } from "./service-worker-registration.js";
 
 const host = createBrowserRuntimeCoordinator({ createHost: createBrowserRuntimeHost });
 const hostedData = createHostedDataActions(host);
@@ -31,27 +32,6 @@ createRoot(document.getElementById("root")).render(
   </React.StrictMode>,
 );
 
-void registerHostedServiceWorker(host);
-
-async function registerHostedServiceWorker(runtimeHost) {
-  if (!("serviceWorker" in navigator) || import.meta.env.DEV) return;
-  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-  const announce = () => {
-    if (!registration.waiting) return;
-    dispatchEvent(
-      new CustomEvent("opencandle:update-ready", { detail: { registration, runtimeHost } }),
-    );
-  };
-  announce();
-  registration.addEventListener("updatefound", () => {
-    registration.installing?.addEventListener("statechange", announce);
-  });
-  let reloadForUpdate = Boolean(navigator.serviceWorker.controller);
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!reloadForUpdate) {
-      reloadForUpdate = true;
-      return;
-    }
-    location.reload();
-  });
+if ("serviceWorker" in navigator && !import.meta.env.DEV) {
+  void registerHostedServiceWorker({ runtimeHost: host });
 }

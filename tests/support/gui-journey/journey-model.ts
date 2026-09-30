@@ -27,6 +27,19 @@ export const CANCEL_PROMPT = "Hold the NVDA router while I think about it.";
 export const STREAM_HOLD_PROMPT = "Stream the NVDA answer slowly while I watch.";
 /** The router and model respond quickly; the real quote tool fetch is held. */
 export const TOOL_HOLD_PROMPT = "Hold the NVDA tool while I think about it.";
+/**
+ * Dispatches the multi-step compare workflow. Its first step fetches the AAPL
+ * quote; the model request that follows the tool result can be held so Stop
+ * lands between workflow steps, after every executed tool has a result.
+ */
+export const COMPARE_HOLD_PROMPT = "Compare AAPL and MSFT side by side for me.";
+/** Stopped during run setup, before the prompt reached the agent. */
+export const SETUP_STOP_PROMPT = "What is MSFT trading at before I change my mind?";
+/** The compare workflow's final (second) step answer. */
+export const COMPARE_VERDICT_TEXT =
+  "Comparison verdict: AAPL at $189.42 versus MSFT in this fixture comparison.";
+const COMPARE_FETCH_STEP_MARKER = "Compare these assets side by side";
+const COMPARE_PRESENT_STEP_MARKER = "Now present the side-by-side comparison";
 
 const AS_OF = "2026-07-15T20:00:00.000Z";
 
@@ -59,9 +72,15 @@ export function createHoldGate(): HoldGate {
 }
 
 export function createJourneyModelScript(
-  gates: { routerHold?: HoldGate; answerHold?: HoldGate } = {},
+  gates: {
+    routerHold?: HoldGate;
+    answerHold?: HoldGate;
+    /** Holds the compare workflow's model request that follows its tool result. */
+    compareHold?: HoldGate;
+    compareHoldActive?: () => boolean;
+  } = {},
 ) {
-  const { routerHold, answerHold } = gates;
+  const { routerHold, answerHold, compareHold, compareHoldActive } = gates;
   const script = async (request: ModelChatRequest): Promise<ModelScriptedReply> => {
     const flat = JSON.stringify(request.messages);
 
@@ -81,6 +100,9 @@ export function createJourneyModelScript(
     }
 
     const lastUserText = latestUserText(request) ?? "";
+    if (lastUserText.includes(COMPARE_PRESENT_STEP_MARKER)) {
+      return { kind: "text", text: COMPARE_VERDICT_TEXT };
+    }
     // Only this turn's tool results count: an earlier stopped turn in the same
     // session can leave a tool result in history.
     const hasToolResult = currentTurnMessages(request).some((message) => message.role === "tool");
@@ -108,6 +130,11 @@ export function createJourneyModelScript(
     }
 
     const toolText = toolResultText(request);
+    if (lastUserText.includes(COMPARE_FETCH_STEP_MARKER)) {
+      // Between workflow steps: every executed tool already has its result.
+      if (compareHold && compareHoldActive?.()) await compareHold.wait();
+      return { kind: "text", text: "Fetched the comparison data for AAPL and MSFT." };
+    }
     if (lastUserText.includes("unless I press Stop") && toolText.includes("User cancelled")) {
       return { kind: "error", message: "This operation was aborted" };
     }
@@ -140,6 +167,19 @@ export function createJourneyModelScript(
 }
 
 function routerOutputFor(turn: string): Record<string, unknown> {
+  if (turn.includes("Compare AAPL and MSFT")) {
+    return {
+      routeKind: "workflow_dispatch",
+      workflow: "compare_assets",
+      entities: { symbols: ["AAPL", "MSFT"] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      tool_bundles: [],
+      diagnostics: [],
+      reasoning: "Compare the requested assets.",
+    };
+  }
   if (turn.includes("aggressive investor")) {
     return {
       routeKind: "agent_task",
@@ -177,6 +217,7 @@ function symbolForPrompt(text: string): string | undefined {
 }
 
 function titleForPrompt(text: string): string {
+  if (text.includes("Compare AAPL and MSFT")) return "AAPL MSFT compare probe";
   if (text.includes("AAPL")) return "AAPL quote journey";
   if (text.includes("MSFT")) return "MSFT quote journey";
   if (text.includes("aggressive")) return "Aggressive investor profile";

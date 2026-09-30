@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
+import {
+  createDetachedSessionRegistry,
+  type DetachedSessionRegistry,
+} from "../../../gui/server/gui-session-manager.js";
 import { createLocalSessionCoordinator } from "../../../gui/server/local-session-coordinator.js";
 import {
   createSessionActionsController,
@@ -666,6 +670,74 @@ describe("GUI session actions", () => {
     }
   });
 
+  it("starts a separate fresh session while the current session has an active run", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    try {
+      const current = SessionManager.create(cwd, sessionDir);
+      const session = {} as AgentSession;
+      const state = createSessionCancellationState();
+      startSessionRun(state);
+      attachSessionCancellationState(session, state);
+      const detachedSessions = createDetachedSessionRegistry();
+      const { controller, newSession } = makeController({
+        session,
+        sessionManager: current,
+        cwd,
+        sessionDir,
+        detachedSessions,
+      });
+
+      const result = await controller.handleNewSession({ allowDetached: true });
+
+      // The running session is never torn down: the Pi runtime keeps it.
+      expect(newSession).not.toHaveBeenCalled();
+      const detached = result?.detachedSessionManager;
+      expect(detached).toBeDefined();
+      expect(detached?.getSessionId()).not.toBe(current.getSessionId());
+      expect(detached?.getSessionDir()).toBe(current.getSessionDir());
+      expect(detachedSessions.get(detached?.getSessionId() ?? "")).toBe(detached);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the runtime session when a run was admitted but has not reached the model yet", async () => {
+    const detachedSessions = createDetachedSessionRegistry();
+    // Setup phase: the run is registered for admission, but the session has
+    // no cancellation token, stream, or pending message yet.
+    const { controller, newSession } = makeController({
+      session: { isStreaming: false, pendingMessageCount: 0 } as unknown as AgentSession,
+      detachedSessions,
+    });
+
+    const result = await controller.handleNewSession({
+      allowDetached: true,
+      currentRunAdmitted: true,
+    });
+
+    expect(newSession).not.toHaveBeenCalled();
+    expect(result?.detachedSessionManager).toBeDefined();
+    await expect(controller.handleNewSession({ currentRunAdmitted: true })).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(newSession).not.toHaveBeenCalled();
+  });
+
+  it("still switches the runtime to a fresh session when the idle path allows detaching", async () => {
+    const detachedSessions = createDetachedSessionRegistry();
+    const { controller, newSession } = makeController({
+      session: { isStreaming: false, pendingMessageCount: 0 } as unknown as AgentSession,
+      detachedSessions,
+    });
+
+    const result = await controller.handleNewSession({ allowDetached: true });
+
+    expect(newSession).toHaveBeenCalledOnce();
+    expect(result?.detachedSessionManager).toBeUndefined();
+  });
+
   it("still starts a fresh session when the current session is idle", async () => {
     const { controller, newSession } = makeController({
       session: { isStreaming: false, pendingMessageCount: 0 } as unknown as AgentSession,
@@ -778,6 +850,7 @@ function makeController(
     switchSession?: (path: string) => Promise<{ cancelled: boolean }>;
     cwd?: string;
     sessionDir?: string;
+    detachedSessions?: DetachedSessionRegistry;
   } = {},
 ) {
   const newSession = vi.fn(options.newSession ?? (async () => ({ cancelled: false })));
@@ -796,6 +869,7 @@ function makeController(
     sendBoot: vi.fn(),
     broadcastState: vi.fn(),
     broadcastSessions: vi.fn(),
+    detachedSessions: options.detachedSessions,
   });
   return { controller, newSession, switchSession };
 }
