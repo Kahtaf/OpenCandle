@@ -1,6 +1,11 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { ModelRegistry, type ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { type Api, clampThinkingLevel, type Model } from "@earendil-works/pi-ai";
+import {
+  ModelRegistry,
+  type ModelRuntime,
+  type SessionManager,
+  type SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
 import {
   getCredentialSource,
@@ -12,6 +17,7 @@ import {
   validateModelKey,
 } from "../../src/onboarding/validate-model-key.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
+import { resolveSessionModelSelection } from "../../src/pi/default-model.js";
 import { previouslyValidatedModelKeyInteraction } from "../../src/pi/model-key-login-guard.js";
 import {
   findPreferredModel as findPreferredModelFromCatalog,
@@ -53,6 +59,7 @@ interface ModelSetupSession {
 }
 
 interface ModelSetupSessionManager {
+  getSessionId?(): string;
   appendCustomMessageEntry(
     customType: string,
     content: string,
@@ -61,19 +68,68 @@ interface ModelSetupSessionManager {
   ): void;
 }
 
+/**
+ * The per-session part of the model setup state: the model and thinking level
+ * one session runs on. Snapshots carry it so the picker shows the visible
+ * session's model, not the server's current session's (issue #217).
+ */
+export interface SessionModelState {
+  currentModel?: string;
+  currentThinkingLevel?: ThinkingLevel;
+  availableThinkingLevels?: ThinkingLevel[];
+}
+
+/** Which session a model or thinking change landed on. */
+export interface ModelSetupTarget {
+  current: boolean;
+  sessionManager?: SessionManager;
+}
+
 export interface ModelSetupController {
   buildCurrentModelSetupState(): ModelSetupState;
-  handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void>;
+  buildModelSetupStateForSession?(sessionManager: SessionManager): ModelSetupState;
+  buildSessionModelState?(sessionManager: SessionManager): SessionModelState;
+  /** Saves a key (global) and selects its preferred model in the addressed session. */
+  handleSaveModelApiKey(
+    providerId: string,
+    apiKey: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget | undefined | void>;
   handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void>;
-  handleSelectModel(provider: string, modelId: string): Promise<void>;
-  handleSetThinkingLevel?(level: string): Promise<void>;
+  /**
+   * Picks the model for one session. A pick is session-scoped: it never
+   * changes the saved default, which new sessions start on.
+   */
+  handleSelectModel(
+    provider: string,
+    modelId: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget | undefined | void>;
+  handleSetThinkingLevel?(
+    level: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget | undefined | void>;
 }
+
+type SessionModelSettings = Pick<
+  SettingsManager,
+  "getDefaultProvider" | "getDefaultModel" | "getDefaultThinkingLevel" | "getModelThinkingLevel"
+>;
 
 export interface ModelSetupControllerOptions {
   role: string;
   getSession: () => ModelSetupSession;
   getSessionManager: () => ModelSetupSessionManager;
   broadcastState: () => void;
+  /** Settings used to resolve a stored session's model; required for session-addressed changes. */
+  settingsManager?: SessionModelSettings;
+  /** Opens a stored session by id; required for session-addressed changes. */
+  resolveSessionManager?: (sessionId: string) => Promise<SessionManager | null>;
+  /**
+   * True while a chat run owns the session. `sessionManager` is given for a
+   * stored session, whose run may belong to another process.
+   */
+  isSessionBusy?: (sessionId: string, sessionManager?: SessionManager) => boolean;
 }
 
 export function buildModelSetupState(
@@ -122,14 +178,106 @@ export function findPreferredModel(
   return findPreferredModelFromCatalog(registry.getAvailable(), provider);
 }
 
+class SessionBusyForModelChange extends Error {
+  /** The stored session that was busy; absent for the current session. */
+  readonly sessionManager?: SessionManager;
+
+  constructor(sessionManager?: SessionManager) {
+    super("Wait for this chat's reply to finish before changing its model.");
+    this.sessionManager = sessionManager;
+  }
+}
+
 export function createModelSetupController({
   role,
   getSession,
   getSessionManager,
   broadcastState,
+  settingsManager,
+  resolveSessionManager,
+  isSessionBusy,
 }: ModelSetupControllerOptions): ModelSetupController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");
+  }
+
+  function isCurrentSessionId(sessionId: string | undefined): boolean {
+    if (!sessionId) return true;
+    return getSessionManager().getSessionId?.() === sessionId;
+  }
+
+  function storedSessionSelection(sessionManager: SessionManager) {
+    if (!settingsManager) throw new Error("Session-addressed model changes are unavailable.");
+    return resolveSessionModelSelection({
+      modelRuntime: getSession().modelRuntime,
+      settingsManager,
+      sessionManager,
+    });
+  }
+
+  function buildSessionModelState(sessionManager: SessionManager): SessionModelState {
+    if (isCurrentSessionId(sessionManager.getSessionId())) {
+      const session = getSession();
+      const model = session.model;
+      return {
+        currentModel:
+          model && session.modelRuntime.hasConfiguredAuth(model.provider)
+            ? `${model.provider}/${model.id}`
+            : undefined,
+        currentThinkingLevel: session.thinkingLevel,
+        availableThinkingLevels: session.getAvailableThinkingLevels?.(),
+      };
+    }
+    // Without settings a stored session's model cannot be resolved; report
+    // nothing rather than another session's model.
+    if (!settingsManager) return {};
+    const selection = storedSessionSelection(sessionManager);
+    return {
+      currentModel: selection.model
+        ? `${selection.model.provider}/${selection.model.id}`
+        : undefined,
+      currentThinkingLevel: selection.thinkingLevel,
+      availableThinkingLevels: selection.availableThinkingLevels,
+    };
+  }
+
+  function buildModelSetupStateForSession(sessionManager: SessionManager): ModelSetupState {
+    if (!settingsManager || isCurrentSessionId(sessionManager.getSessionId())) {
+      return buildCurrentModelSetupState();
+    }
+    const selection = storedSessionSelection(sessionManager);
+    return buildModelSetupState(
+      new ModelRegistry(getSession().modelRuntime),
+      selection.model,
+      selection.model
+        ? { current: selection.thinkingLevel, available: selection.availableThinkingLevels }
+        : undefined,
+    );
+  }
+
+  /** Opens a stored, non-current session for a model or thinking change. */
+  async function resolveStoredTarget(sessionId: string): Promise<SessionManager> {
+    if (!resolveSessionManager || !settingsManager) {
+      throw new Error("Session-addressed model changes are unavailable.");
+    }
+    const target = await resolveSessionManager(sessionId);
+    if (!target) throw new Error("Unknown saved session");
+    return target;
+  }
+
+  /**
+   * Refuses while a chat run owns the session. Callers run this with no await
+   * between it and the transcript write, so a run admitted in this process
+   * cannot slip in between the check and the write.
+   */
+  function assertStoredTargetIdle(sessionId: string, target: SessionManager): void {
+    if (isSessionBusy?.(sessionId, target)) throw new SessionBusyForModelChange(target);
+  }
+
+  /** A model switch mid-reply would split one answer across two models. */
+  function assertCurrentSessionIdle(): void {
+    const currentId = getSessionManager().getSessionId?.();
+    if (currentId && isSessionBusy?.(currentId)) throw new SessionBusyForModelChange();
   }
 
   function buildCurrentModelSetupState(): ModelSetupState {
@@ -146,7 +294,11 @@ export function createModelSetupController({
     );
   }
 
-  async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
+  async function handleSaveModelApiKey(
+    providerId: string,
+    apiKey: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget> {
     ensureWriter();
 
     const provider = modelSetupProviders.find((candidate) => candidate.id === providerId);
@@ -185,15 +337,33 @@ export function createModelSetupController({
       );
     }
 
-    await session.setModel(model);
+    // The key is global; the model it selects belongs to the session on
+    // screen. A session busy with a reply keeps its model; the key is saved.
+    let target: ModelSetupTarget;
+    try {
+      target = await applyModelToSession(model, sessionId);
+    } catch (error) {
+      if (error instanceof SessionBusyForModelChange) {
+        // Still name the addressed chat so responses bootstrap it, not the
+        // server's current session.
+        if (error.sessionManager) return { current: false, sessionManager: error.sessionManager };
+        broadcastState();
+        return { current: true };
+      }
+      throw error;
+    }
     await session.settingsManager.flush();
-    getSessionManager().appendCustomMessageEntry(
+    (target.sessionManager ?? getSessionManager()).appendCustomMessageEntry(
       "opencandle-model-setup",
       `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );
-    broadcastState();
+    // A stored session reaches browsers as its own snapshot (see the hub);
+    // rebroadcasting the current session here would move a browser's
+    // Settings context onto it.
+    if (target.current) broadcastState();
+    return target;
   }
 
   async function handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -241,30 +411,91 @@ export function createModelSetupController({
     broadcastState();
   }
 
-  async function handleSelectModel(provider: string, modelId: string): Promise<void> {
+  async function handleSelectModel(
+    provider: string,
+    modelId: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget> {
     ensureWriter();
     const session = getSession();
     await session.modelRuntime.refresh();
     const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
-    await session.setModel(model);
-    await session.settingsManager.flush();
+    const target = await applyModelToSession(model, sessionId);
+    if (target.current) await session.settingsManager.flush();
+    return target;
   }
 
-  async function handleSetThinkingLevel(level: string): Promise<void> {
-    ensureWriter();
+  /** Puts one session on `model`; never changes the saved default. */
+  async function applyModelToSession(
+    model: Model<Api>,
+    sessionId: string | undefined,
+  ): Promise<ModelSetupTarget> {
     const session = getSession();
-    const available = session.getAvailableThinkingLevels?.() ?? [];
-    if (!available.includes(level as ThinkingLevel) || !session.setThinkingLevel) {
+    if (isCurrentSessionId(sessionId)) {
+      assertCurrentSessionIdle();
+      // No `persist`: the pick belongs to this session, not the saved default.
+      await session.setModel(model);
+      return { current: true };
+    }
+
+    if (!session.modelRuntime.hasConfiguredAuth(model.provider)) {
+      throw new Error(`No API key for ${model.provider}/${model.id}`);
+    }
+    const storedSessionId = String(sessionId);
+    const target = await resolveStoredTarget(storedSessionId);
+    // No await from here to the write (see assertStoredTargetIdle).
+    assertStoredTargetIdle(storedSessionId, target);
+    const before = storedSessionSelection(target);
+    target.appendModelChange(model.provider, model.id);
+    // Mirror Pi's setModel: the new model's per-model level, then the saved
+    // default, then the session's level, clamped to what the model supports.
+    const nextLevel = clampThinkingLevel(
+      model,
+      settingsManager?.getModelThinkingLevel(model.provider, model.id) ??
+        settingsManager?.getDefaultThinkingLevel() ??
+        before.thinkingLevel,
+    );
+    if (nextLevel !== before.thinkingLevel) target.appendThinkingLevelChange(nextLevel);
+    return { current: false, sessionManager: target };
+  }
+
+  async function handleSetThinkingLevel(
+    level: string,
+    sessionId?: string,
+  ): Promise<ModelSetupTarget> {
+    ensureWriter();
+    if (isCurrentSessionId(sessionId)) {
+      assertCurrentSessionIdle();
+      const session = getSession();
+      const available = session.getAvailableThinkingLevels?.() ?? [];
+      if (!available.includes(level as ThinkingLevel) || !session.setThinkingLevel) {
+        throw new Error(`Unsupported thinking level: ${level}`);
+      }
+      session.setThinkingLevel(level as ThinkingLevel);
+      await session.settingsManager.flush();
+      broadcastState();
+      return { current: true };
+    }
+
+    const storedSessionId = String(sessionId);
+    const target = await resolveStoredTarget(storedSessionId);
+    // No await from here to the write (see assertStoredTargetIdle).
+    assertStoredTargetIdle(storedSessionId, target);
+    const selection = storedSessionSelection(target);
+    if (!selection.model || !selection.availableThinkingLevels.includes(level as ThinkingLevel)) {
       throw new Error(`Unsupported thinking level: ${level}`);
     }
-    session.setThinkingLevel(level as ThinkingLevel);
-    await session.settingsManager.flush();
-    broadcastState();
+    if (level !== selection.thinkingLevel) {
+      target.appendThinkingLevelChange(level as ThinkingLevel);
+    }
+    return { current: false, sessionManager: target };
   }
 
   return {
     buildCurrentModelSetupState,
+    buildModelSetupStateForSession,
+    buildSessionModelState,
     handleSaveModelApiKey,
     handleSaveProviderApiKey,
     handleSelectModel,

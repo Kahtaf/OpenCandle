@@ -40,6 +40,7 @@ import { createGracefulShutdown } from "./shutdown.js";
 import { installUnhandledRejectionGuard } from "./unhandled-rejection-guard.js";
 import {
   acquireWriterLock,
+  isSessionTranscriptHeld,
   migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
@@ -143,11 +144,27 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
   getSessionId: () => sessionManager.getSessionId(),
   intervalMs: automationHeartbeatMs,
 });
+// Sessions a chat run currently owns in this process; shared by the run routes
+// and session-addressed model changes, which must not race a running reply.
+const activeRunSessionIds = new Set<string>();
 const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  settingsManager,
+  // Includes detached, still-unsaved new chats, so a pick made before their
+  // first message lands on the in-memory session their run will use.
+  resolveSessionManager: (sessionId) =>
+    resolveSessionManagerById(
+      { cwd, sessionDir, getSessionManager: () => sessionManager, detachedSessions },
+      sessionId,
+    ),
+  isSessionBusy: (sessionId, targetSessionManager) =>
+    activeRunSessionIds.has(sessionId) ||
+    // A stored session is also busy while a tool invoke in this process or
+    // another live process holds its transcript.
+    (targetSessionManager ? isSessionTranscriptHeld(targetSessionManager) : false),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
@@ -256,6 +273,7 @@ const httpRequestHandler = createHttpRequestHandler({
   localSessionCoordinator,
   detachedSessions,
   cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
+  activeRunSessionIds,
 });
 
 const server = createServer((req, res) => {

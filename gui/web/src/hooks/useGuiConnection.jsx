@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
 import { notifySessionActionError } from "../lib/session-action-errors.js";
+import { markSessionModelsStale, trackModelAvailability } from "../lib/session-model-setup.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -95,17 +96,25 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
           provider: payload.provider,
           apiKey: payload.apiKey,
           ...(payload.storageMode ? { storageMode: payload.storageMode } : {}),
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
         },
       };
     case "model.setup.select_model":
       return {
         path: "/api/model-setup/model",
-        body: { provider: payload.provider, modelId: payload.modelId },
+        body: {
+          provider: payload.provider,
+          modelId: payload.modelId,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "model.setup.set_thinking":
       return {
         path: "/api/model-setup/thinking",
-        body: { level: payload.level },
+        body: {
+          level: payload.level,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "provider.save_api_key":
       return {
@@ -141,17 +150,26 @@ export function sessionSnapshotFromPayload(payload) {
   const sessionId = String(record.sessionId ?? snapshot.sessionId ?? "").trim();
   if (!sessionId) return null;
   const dashboard = asRecord(snapshot.state);
+  const sessionModel = snapshot.sessionModel ?? record.sessionModel;
   return {
     sessionId,
     entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
     dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
+    ...(sessionModel && typeof sessionModel === "object" ? { sessionModel } : {}),
   };
 }
 
 export function mergeSessionSnapshotMap(current, payload) {
   const snapshot = sessionSnapshotFromPayload(payload);
-  return snapshot ? { ...current, [snapshot.sessionId]: snapshot } : current;
+  if (!snapshot) return current;
+  // A payload without the session's model keeps the one already known.
+  const previousModel = current[snapshot.sessionId]?.sessionModel;
+  const next =
+    snapshot.sessionModel || !previousModel
+      ? snapshot
+      : { ...snapshot, sessionModel: previousModel };
+  return { ...current, [snapshot.sessionId]: next };
 }
 
 export function buildToolInvokeSocketMessage(payload, currentSessionId = "", targetSessionId = "") {
@@ -295,6 +313,8 @@ export function useGuiConnection() {
   const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
+  // Last seen set of models with keys; a change invalidates per-session models.
+  const modelAvailabilityRef = useRef(null);
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {
@@ -331,7 +351,15 @@ export function useGuiConnection() {
     }
     setAskUserPrompts(data.askUserPrompts || []);
     if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
-    if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
+    // Bootstraps (session loads, HTTP fallback commands) also report which
+    // models have keys; a change invalidates other sessions' cached models.
+    const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
+    if (nextSnapshot || availabilityChanged) {
+      setSessionSnapshots((current) => {
+        const marked = availabilityChanged ? markSessionModelsStale(current) : current;
+        return nextSnapshot ? mergeSessionSnapshotMap(marked, data) : marked;
+      });
+    }
     startTransition(() => {
       setSessions(data.sessions || []);
       if (updateVisibleState) {
@@ -394,6 +422,9 @@ export function useGuiConnection() {
               setCurrentSessionId(message.sessionId);
               setCurrentSessionPersisted(message.sessionPersisted === true);
               setAskUserPrompts(message.askUserPrompts || []);
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
               startTransition(() => {
                 setCatalog(message.catalog);
                 setModelSetup(
@@ -437,6 +468,9 @@ export function useGuiConnection() {
                 ),
               );
             } else if (message.type === "model.setup") {
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
               startTransition(() =>
                 setModelSetup(
                   message.modelSetup || {

@@ -76,7 +76,7 @@
         "src/pi/opencandle-extension.ts": [2, 2, 2, 2, 12, 12, 2, 2],
         "src/pi/session-action-dedupe.ts": [96, 101, 27, 28, 75, 93, 109, 127],
         "src/pi/session-cancellation.ts": [13, 13, 8, 8, 6, 6, 15, 15],
-        "src/pi/session-core.ts": [32, 35, 5, 6, 27, 33, 36, 40],
+        "src/pi/session-core.ts": [30, 30, 5, 5, 32, 35, 32, 33],
         "src/pi/session-storage.ts": [1, 1, 1, 1, 0, 0, 1, 1],
         "src/pi/session-writer-lock.ts": [154, 161, 31, 31, 123, 158, 171, 187],
         "src/pi/session.ts": [4, 4, 2, 2, 14, 15, 4, 4],

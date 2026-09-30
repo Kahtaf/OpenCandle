@@ -25,6 +25,14 @@ import {
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 import { subscribeSessionActionErrors } from "../../../gui/web/src/lib/session-action-errors.js";
+import {
+  addressModelCommand,
+  markSessionModelsStale,
+  modelAvailabilitySignature,
+  resolveVisibleModelSetup,
+  staleSessionModelToReload,
+  trackModelAvailability,
+} from "../../../gui/web/src/lib/session-model-setup.js";
 
 describe("useGuiConnection helpers", () => {
   it("reports a socket error frame to the request that caused it, then toasts it", () => {
@@ -365,6 +373,180 @@ describe("useGuiConnection helpers", () => {
       entries: [{ id: "entry-b" }],
       events: [{ type: "message.completed", seq: 2 }],
       dashboard: { watchlist: [{ symbol: "MSFT" }] },
+    });
+  });
+
+  describe("per-session model (issue #217)", () => {
+    it("keeps each session's model in its snapshot", () => {
+      const afterA = mergeSessionSnapshotMap(
+        {},
+        {
+          type: "state.snapshot",
+          sessionId: "session-a",
+          sessionModel: { currentModel: "google/gemini-2.5-flash" },
+        },
+      );
+      const afterB = mergeSessionSnapshotMap(afterA, {
+        type: "session.snapshot",
+        sessionId: "session-b",
+        sessionModel: { currentModel: "openai/gpt-6-luna", currentThinkingLevel: "high" },
+      });
+      // A payload without a model keeps the one already known for the session.
+      const afterA2 = mergeSessionSnapshotMap(afterB, {
+        type: "session.snapshot",
+        sessionId: "session-a",
+        entries: [{ id: "entry-a" }],
+      });
+
+      expect(afterA2["session-a"]?.sessionModel).toEqual({
+        currentModel: "google/gemini-2.5-flash",
+      });
+      expect(afterA2["session-b"]?.sessionModel).toEqual({
+        currentModel: "openai/gpt-6-luna",
+        currentThinkingLevel: "high",
+      });
+    });
+
+    it("shows the visible session's model over the server's current session", () => {
+      const global = {
+        requirement: "ready",
+        currentModel: "google/gemini-2.5-flash",
+        currentThinkingLevel: "off",
+        availableThinkingLevels: ["off"],
+        availableModels: [
+          { provider: "google", id: "gemini-2.5-flash" },
+          { provider: "openai", id: "gpt-6-luna" },
+        ],
+        providers: [],
+      };
+
+      expect(
+        resolveVisibleModelSetup(global, {
+          currentModel: "openai/gpt-6-luna",
+          currentThinkingLevel: "high",
+          availableThinkingLevels: ["off", "low", "high"],
+        }),
+      ).toMatchObject({
+        requirement: "ready",
+        currentModel: "openai/gpt-6-luna",
+        currentThinkingLevel: "high",
+        availableThinkingLevels: ["off", "low", "high"],
+        availableModels: global.availableModels,
+      });
+      expect(resolveVisibleModelSetup(global, undefined)).toBe(global);
+      expect(resolveVisibleModelSetup(global, {})).toMatchObject({
+        requirement: "select_model",
+        currentModel: undefined,
+      });
+    });
+
+    it("marks cached session models stale when the available models change", () => {
+      const before = modelAvailabilitySignature({
+        availableModels: [{ provider: "google", id: "gemini-2.5-flash" }],
+      });
+      const after = modelAvailabilitySignature({
+        availableModels: [
+          { provider: "google", id: "gemini-2.5-flash" },
+          { provider: "openai", id: "gpt-6-luna" },
+        ],
+      });
+      expect(before).not.toBe(after);
+
+      const snapshots = {
+        "session-a": { sessionId: "session-a", sessionModel: { currentModel: "google/x" } },
+        "session-h": { sessionId: "session-h" },
+      };
+      const stale = markSessionModelsStale(snapshots);
+      expect(stale["session-a"]).toMatchObject({ sessionModelStale: true });
+      // Snapshots without a per-session model (hosted) are left alone.
+      expect(stale["session-h"]).toBe(snapshots["session-h"]);
+      // A fresh snapshot for the session clears the flag.
+      const refreshed = mergeSessionSnapshotMap(stale, {
+        type: "session.snapshot",
+        sessionId: "session-a",
+        sessionModel: { currentModel: "openai/gpt-6-luna" },
+      });
+      expect(refreshed["session-a"]?.sessionModelStale).toBeUndefined();
+    });
+
+    it("addresses model commands to the visible session", () => {
+      expect(addressModelCommand("model.setup.select_model", { modelId: "m" }, "b")).toEqual({
+        modelId: "m",
+        sessionId: "b",
+      });
+      expect(addressModelCommand("model.setup.set_thinking", { level: "high" }, "b")).toEqual({
+        level: "high",
+        sessionId: "b",
+      });
+      expect(addressModelCommand("model.setup.save_api_key", undefined, "b")).toEqual({
+        sessionId: "b",
+      });
+      // An explicit session, another command, or no visible session is left alone.
+      expect(addressModelCommand("model.setup.select_model", { sessionId: "a" }, "b")).toEqual({
+        sessionId: "a",
+      });
+      expect(addressModelCommand("session.rename", { name: "x" }, "b")).toEqual({ name: "x" });
+      expect(addressModelCommand("model.setup.select_model", { modelId: "m" }, "")).toEqual({
+        modelId: "m",
+      });
+    });
+
+    it("reports a change in the models with keys once a baseline exists", () => {
+      const ref = { current: null };
+      const one = { availableModels: [{ provider: "google", id: "a" }] };
+      const two = {
+        availableModels: [
+          { provider: "google", id: "a" },
+          { provider: "x", id: "b" },
+        ],
+      };
+
+      expect(trackModelAvailability(ref, one)).toBe(false);
+      expect(trackModelAvailability(ref, one)).toBe(false);
+      expect(trackModelAvailability(ref, two)).toBe(true);
+      expect(trackModelAvailability(ref, two)).toBe(false);
+      // A payload without model setup (e.g. an error body) is ignored.
+      expect(trackModelAvailability(ref, undefined)).toBe(false);
+      expect(trackModelAvailability(ref, two)).toBe(false);
+    });
+
+    it("reloads only a visible session whose model went stale", () => {
+      expect(staleSessionModelToReload({ sessionModelStale: true }, "b")).toBe("b");
+      expect(staleSessionModelToReload({ sessionModelStale: true }, "")).toBe("");
+      expect(staleSessionModelToReload({ sessionModel: {} }, "b")).toBe("");
+      expect(staleSessionModelToReload(null, "b")).toBe("");
+    });
+
+    it("addresses HTTP fallback model changes to the visible session", () => {
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.select_model", {
+          provider: "openai",
+          modelId: "gpt-6-luna",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/model",
+        body: { provider: "openai", modelId: "gpt-6-luna", sessionId: "session-b" },
+      });
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.set_thinking", {
+          level: "high",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/thinking",
+        body: { level: "high", sessionId: "session-b" },
+      });
+      expect(
+        buildHttpFallbackMessageRequest("model.setup.save_api_key", {
+          provider: "google",
+          apiKey: "gem-key",
+          sessionId: "session-b",
+        }),
+      ).toEqual({
+        path: "/api/model-setup/api-key",
+        body: { provider: "google", apiKey: "gem-key", sessionId: "session-b" },
+      });
     });
   });
 
