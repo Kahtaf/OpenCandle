@@ -249,6 +249,9 @@ describe("options_screener quote freshness gate", () => {
     "Last: 4.80 on the 210 call.",
     "Last price 4.80 for the 210 call.",
     "The 210 call trades at $4.80.",
+    "The $210 call is 4.80.",
+    "The 210 call trades at 4.80.",
+    "The 205 put: 3.10.",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | 4.80 |",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
@@ -275,6 +278,9 @@ describe("options_screener quote freshness gate", () => {
     "The stock price is 200; no usable premium is available.",
     "Underlying price 200.15, no usable premium is available.",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | N/A |",
+    "No premium for the 210 call.",
+    "No usable bid/ask on the 210 put or the 205 puts.",
+    "Prefer calls at 30 delta once quotes are usable.",
   ])("does not treat a status line as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(

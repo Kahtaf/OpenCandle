@@ -272,9 +272,14 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   const clauseChar = "(?:[^\\n;!?.]|\\.(?=\\d))";
   // The number must be a quote value, not a count ("for 3 expirations").
   const quoteValue =
-    "\\b\\d[\\d,]*(?:\\.\\d+)?\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
+    "\\b\\d[\\d,]*(?:\\.\\d+)?\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|calls?|puts?|delta|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
   const nearQuote = [
     new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "gi"),
+    // A value stated for a named contract: "the 210 call is 4.80", "the 205 put: 3.10".
+    new RegExp(
+      `\\b(?:calls?|puts?)\\b${clauseChar}{0,15}?(?:\\b(?:is|at|for|costs?|of)\\b|[:=])\\s*${quoteValue}`,
+      "gi",
+    ),
     // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask",
     // "480 per contract". A comma ends that phrase ("200.15, no premium").
     new RegExp(
