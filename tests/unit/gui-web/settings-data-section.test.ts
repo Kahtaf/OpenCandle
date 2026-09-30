@@ -73,6 +73,7 @@ describe("DataSection", () => {
     act(() => root.unmount());
     container.remove();
     vi.restoreAllMocks();
+    Reflect.deleteProperty(navigator, "serviceWorker");
   });
 
   async function render(transport: Record<string, unknown>, props: Record<string, unknown> = {}) {
@@ -105,6 +106,13 @@ describe("DataSection", () => {
 
   it("offers the install update row only while an update is waiting", async () => {
     const { actions } = hostedActions();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: Object.assign(new EventTarget(), {
+        controller: {},
+        getRegistration: vi.fn(async () => undefined),
+      }),
+    });
     await render({ kind: "hosted", hostedData: actions });
 
     expect(buttonByText(container, "Install update")).toBeUndefined();
@@ -112,7 +120,7 @@ describe("DataSection", () => {
     await act(async () => {
       dispatchEvent(
         new CustomEvent("opencandle:update-ready", {
-          detail: { registration: { waiting: { postMessage: () => {} } } },
+          detail: { registration: { waiting: { state: "installed", postMessage: () => {} } } },
         }),
       );
     });
@@ -123,10 +131,13 @@ describe("DataSection", () => {
   });
 
   it("shows the install row for an update discovered before the section mounted", async () => {
-    const waiting = { postMessage: vi.fn() };
+    const waiting = { state: "installed", postMessage: vi.fn() };
     Object.defineProperty(navigator, "serviceWorker", {
       configurable: true,
-      value: { getRegistration: vi.fn(async () => ({ waiting })) },
+      value: Object.assign(new EventTarget(), {
+        controller: {},
+        getRegistration: vi.fn(async () => ({ waiting })),
+      }),
     });
     try {
       const actions = hostedActions();

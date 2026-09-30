@@ -94,12 +94,21 @@ describe("HostedStatusPill", () => {
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
+    // An installed update waits behind the worker that controls the page.
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: Object.assign(new EventTarget(), {
+        controller: {},
+        getRegistration: vi.fn(async () => undefined),
+      }),
+    });
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
     vi.restoreAllMocks();
+    Reflect.deleteProperty(navigator, "serviceWorker");
   });
 
   function createHost(progress: { phase: string; message: string }, ready?: Promise<unknown>) {
@@ -143,7 +152,7 @@ describe("HostedStatusPill", () => {
 
   it("installs a waiting update from the pill and returns to nothing", async () => {
     const installUpdate = vi.fn(async () => true);
-    const waiting = { postMessage: vi.fn() };
+    const waiting = { state: "installed", postMessage: vi.fn() };
     await render(
       createHost(
         { phase: "ready", message: "Running on this device" },
@@ -172,7 +181,7 @@ describe("HostedStatusPill", () => {
     const installUpdate = vi.fn(async () => {
       throw new Error("Update failed");
     });
-    const waiting = { postMessage: vi.fn() };
+    const waiting = { state: "installed", postMessage: vi.fn() };
     await render(
       createHost(
         { phase: "ready", message: "Running on this device" },
