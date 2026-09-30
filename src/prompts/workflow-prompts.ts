@@ -370,7 +370,7 @@ Steps:
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
 ${
   s.optionStrategy === "covered_call"
-    ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
+    ? `6. Covered call framing: treat option premium as premium received, not paid. ${s.costBasis !== undefined ? "Use the user's cost basis when provided, and include return-if-assigned and" : "No cost basis was provided, so skip return-if-assigned and include"} assignment/downside risk instead of long-call max-loss framing.
 `
     : ""
 }${

@@ -340,6 +340,7 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Do not assume or invent a cost basis");
     expect(prompt).not.toContain("compare it with the user's cost basis");
     expect(prompt).not.toContain("Cost-basis math:");
+    expect(prompt).not.toContain("include return-if-assigned");
     expect(prompt).not.toContain("strike above cost basis");
   });
 
