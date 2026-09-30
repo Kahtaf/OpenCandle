@@ -36,6 +36,8 @@ export interface GuiRunRegistry {
   start(input: { sessionId: string; actionId: string }): GuiRunHandle | null;
   finish(handle: GuiRunHandle): void;
   has(sessionId: string): boolean;
+  /** Action id of the run that currently owns the session, if any. */
+  activeActionId(sessionId: string): string | undefined;
   cancel(sessionId: string, targetActionId: string): GuiRunCancelResult;
 }
 
@@ -121,6 +123,10 @@ export function createGuiRunRegistry(options: GuiRunRegistryOptions = {}): GuiRu
 
     has(sessionId) {
       return runs.has(sessionId);
+    },
+
+    activeActionId(sessionId) {
+      return runs.get(sessionId)?.handle.actionId;
     },
 
     cancel(sessionId, targetActionId) {

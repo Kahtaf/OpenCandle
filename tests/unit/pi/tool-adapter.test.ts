@@ -123,6 +123,26 @@ describe("tool adapter", () => {
       expect(outcome).toMatch(/aborted/i);
     });
 
+    it("runs a read-only tool normally when no abort signal is supplied", async () => {
+      const adapted = toolWith(async () => ({
+        content: [{ type: "text", text: "ok" }],
+        details: {},
+      }));
+      await expect(
+        adapted.execute("tool-1", {}, undefined, undefined, {} as never),
+      ).resolves.toMatchObject({ content: [{ type: "text", text: "ok" }] });
+    });
+
+    it("surfaces a read-only tool's own failure", async () => {
+      const controller = new AbortController();
+      const adapted = toolWith(async () => {
+        throw new Error("Quote unavailable.");
+      });
+      await expect(
+        adapted.execute("tool-1", {}, controller.signal, undefined, {} as never),
+      ).rejects.toThrow("Quote unavailable.");
+    });
+
     it("does not start a tool whose run was already stopped", async () => {
       const execute = vi.fn(async () => ({ content: [], details: {} }));
       const controller = new AbortController();

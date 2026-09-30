@@ -113,9 +113,10 @@ export function isDuplicateChatRunAck(body) {
 export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
   const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
-  // When this tab last stopped a run, per session key. Taken by the next start.
-  const stoppedAtRef = useRef(null);
-  stoppedAtRef.current ??= new Map();
+  // The run this tab last stopped, per session key: { actionId, at,
+  // confirmed }. Taken by the next start.
+  const stoppedRunsRef = useRef(null);
+  stoppedRunsRef.current ??= new Map();
   const runStatesRef = useRef({});
   const [runStates, setRunStates] = useState({});
   const [lastRuns, setLastRuns] = useState({});
@@ -164,10 +165,15 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       abortsRef.current.set(key, abort);
 
       try {
-        const stoppedAt = stoppedAtRef.current.get(key);
-        stoppedAtRef.current.delete(key);
-        const waitForStoppedRun =
-          stoppedAt !== undefined && Date.now() - stoppedAt < STOPPED_RUN_WINDOW_MS;
+        const stoppedRun = stoppedRunsRef.current.get(key);
+        stoppedRunsRef.current.delete(key);
+        // Wait only while the busy owner is the very run this tab stopped and
+        // the server confirmed that Stop; any other owner is reported.
+        const isStoppedRunReleasing = (status, body) =>
+          Boolean(stoppedRun?.confirmed) &&
+          Date.now() - stoppedRun.at < STOPPED_RUN_WINDOW_MS &&
+          isSessionBusyChatRunError(status, body) &&
+          body?.activeActionId === stoppedRun.actionId;
         const releaseDeadline = Date.now() + STOPPED_RUN_RELEASE_WAIT_MS;
         let response;
         let error;
@@ -179,11 +185,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           );
           if (response.ok) break;
           error = await response.json().catch(() => ({ error: response.statusText }));
-          if (
-            !waitForStoppedRun ||
-            !isSessionBusyChatRunError(response.status, error) ||
-            Date.now() >= releaseDeadline
-          ) {
+          if (!isStoppedRunReleasing(response.status, error) || Date.now() >= releaseDeadline) {
             break;
           }
           await delay(STOPPED_RUN_RELEASE_POLL_MS, abort.signal);
@@ -251,6 +253,10 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       const key = runStateKey(targetSessionId);
       const targetActionId = normalizeSessionId(lastRuns[key]?.actionId);
       const cancel = transport.cancelChatRun;
+      const stoppedRun = targetActionId
+        ? { actionId: targetActionId, at: Date.now(), confirmed: false }
+        : null;
+      if (stoppedRun) stoppedRunsRef.current.set(key, stoppedRun);
       if (targetSessionId && targetActionId && typeof cancel === "function") {
         // Explicit, original-action-targeted cancellation to the owning server.
         // The server matches targetActionId against the run it currently has
@@ -269,6 +275,9 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           ),
         )
           .then((result) => {
+            if (stoppedRun && result?.ok !== false && result?.cancelled === true) {
+              stoppedRun.confirmed = true;
+            }
             // Never leave the user believing the server stopped when the
             // cancellation was refused (e.g. hosted has no server stop).
             const message = runCancelUnconfirmedMessage(result);
@@ -276,7 +285,6 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           })
           .catch(() => setToast(RUN_CANCEL_UNCONFIRMED_MESSAGE));
       }
-      stoppedAtRef.current.set(key, Date.now());
       if (targetActionId) {
         // A stopped run is terminal. Retry must mint a fresh action id: reusing
         // the stopped one gets an idempotent duplicate acknowledgement (or is

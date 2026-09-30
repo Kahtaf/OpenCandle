@@ -136,11 +136,9 @@ function capRetryAfterMs(retryAfterMs: number, maxRetryAfterMs: number | undefin
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  // Never called with an already-aborted signal: the retry loop checks the
+  // run signal synchronously right before choosing a delay.
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason);
-      return;
-    }
     const onAbort = () => {
       clearTimeout(timer);
       reject(signal?.reason);

@@ -172,9 +172,13 @@ describe("useChatRun terminal state", () => {
       });
       return null;
     }
-    const busy = () =>
+    const busy = (activeActionId?: string) =>
       new Response(
-        JSON.stringify({ error: "Session already has an active run", code: "session_busy" }),
+        JSON.stringify({
+          error: "Session already has an active run",
+          code: "session_busy",
+          ...(activeActionId ? { activeActionId } : {}),
+        }),
         { status: 409, headers: { "content-type": "application/json" } },
       );
     const completed = () =>
@@ -216,7 +220,8 @@ describe("useChatRun terminal state", () => {
                 );
               });
             }
-            return call === 2 ? busy() : completed();
+            // The stopped run still owns the session for a moment.
+            return call === 2 ? busy(startBodies[0]?.actionId) : completed();
           },
         ),
         cancelChatRun: vi.fn(async () => ({ ok: true, cancelled: true, duplicate: false })),
@@ -243,6 +248,77 @@ describe("useChatRun terminal state", () => {
       expect(startBodies[2]?.actionId).toBe(startBodies[1]?.actionId);
       expect(latestRun?.runState).toBe("ready");
       expect(toasts).toEqual([]);
+    });
+
+    it("does not wait behind a different run that owns the session after a Stop", async () => {
+      const startBodies: Array<{ actionId: string }> = [];
+      let call = 0;
+      const transport = {
+        startChatRun: vi.fn(
+          async (_sessionId: string, body: { actionId: string }, signal: AbortSignal) => {
+            startBodies.push(body);
+            call += 1;
+            if (call === 1) {
+              return new Promise<Response>((_resolve, reject) => {
+                signal.addEventListener("abort", () =>
+                  reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+                );
+              });
+            }
+            return busy("chat-from-another-tab");
+          },
+        ),
+        cancelChatRun: vi.fn(async () => ({ ok: true, cancelled: true, duplicate: false })),
+      };
+      await renderWith(transport);
+
+      let firstRun: Promise<unknown> | undefined;
+      await act(async () => {
+        firstRun = latestRun?.startChatRun("Compare AAPL and MSFT");
+      });
+      await act(async () => latestRun?.stopRun());
+      await act(async () => firstRun);
+      toasts.length = 0;
+      await act(async () => latestRun?.startChatRun("Compare AAPL and MSFT"));
+
+      expect(transport.startChatRun).toHaveBeenCalledTimes(2);
+      expect(latestRun?.runState).toBe("failed");
+      expect(toasts).toEqual(["Session already has an active run"]);
+    });
+
+    it("does not wait when the server did not confirm the Stop", async () => {
+      let call = 0;
+      const transport = {
+        startChatRun: vi.fn(
+          async (_sessionId: string, body: { actionId: string }, signal: AbortSignal) => {
+            call += 1;
+            if (call === 1) {
+              firstActionId = body.actionId;
+              return new Promise<Response>((_resolve, reject) => {
+                signal.addEventListener("abort", () =>
+                  reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+                );
+              });
+            }
+            return busy(firstActionId);
+          },
+        ),
+        cancelChatRun: vi.fn(async () => ({ ok: false })),
+      };
+      let firstActionId = "";
+      await renderWith(transport);
+
+      let firstRun: Promise<unknown> | undefined;
+      await act(async () => {
+        firstRun = latestRun?.startChatRun("Compare AAPL and MSFT");
+      });
+      await act(async () => latestRun?.stopRun());
+      await act(async () => firstRun);
+      toasts.length = 0;
+      await act(async () => latestRun?.startChatRun("Compare AAPL and MSFT"));
+
+      expect(transport.startChatRun).toHaveBeenCalledTimes(2);
+      expect(latestRun?.runState).toBe("failed");
     });
 
     it("waits only for the first start after a Stop, not for later unrelated busy runs", async () => {

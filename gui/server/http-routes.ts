@@ -698,7 +698,15 @@ async function handleSseChatRun(
       throw error;
     }
     if (!result.ok) {
-      writeJson(res, { error: result.message, code: result.code }, 409);
+      writeJson(
+        res,
+        {
+          error: result.message,
+          code: result.code,
+          ...(result.activeActionId ? { activeActionId: result.activeActionId } : {}),
+        },
+        409,
+      );
       return;
     }
     if (result.duplicate && !res.headersSent) {
@@ -908,8 +916,22 @@ async function streamAcceptedSseChatRun({
   actionId: string;
 }): Promise<boolean> {
   const prompt = parsedRun.prompt;
+  // Name the run that owns the session so a client that just stopped that
+  // run can wait for its release without queueing behind any other run.
+  const writeSessionBusy = () => {
+    const activeActionId = activeGuiRuns.activeActionId(sessionId);
+    writeJson(
+      res,
+      {
+        error: "Session already has an active run",
+        code: "session_busy",
+        ...(activeActionId ? { activeActionId } : {}),
+      },
+      409,
+    );
+  };
   if (activeRunSessionIds.has(sessionId)) {
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   // Register ownership before any await or session creation so a Stop that
@@ -917,7 +939,7 @@ async function streamAcceptedSseChatRun({
   const runHandle = activeGuiRuns.start({ sessionId, actionId });
   if (!runHandle) {
     // A concurrent start won admission before activeRunSessionIds was set.
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   let runCancellationState: SessionCancellationState | null = null;
