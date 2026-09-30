@@ -57,6 +57,9 @@ const DISPLAY_NAMES: Record<string, string> = {
   metrics: "metrics",
 };
 
+export const MISSING_COST_BASIS_INSTRUCTION =
+  "Do not assume or invent a cost basis. Say the cost basis was not provided, skip return-if-assigned, and ask for the per-share cost basis if the user wants assignment gain/loss.";
+
 const ASSUMPTIONS_RESPONSE_INSTRUCTION =
   "- Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.";
 
@@ -243,9 +246,18 @@ export function buildOptionsScreenerPrompt(
   }
 
   const isBalanced = s.objective.includes("balanced");
-  const workflowConstraints = isBalanced
-    ? ["delta >= 0.20 (balanced objective)", "prefer ATM to slightly OTM"]
-    : [];
+  const isProtectivePutContext = s.optionStrategy === "protective_put";
+  const isCoveredCallContext =
+    !isProtectivePutContext &&
+    (s.optionStrategy === "covered_call" ||
+      s.costBasis !== undefined ||
+      (s.catalystSymbols?.length ?? 0) > 0);
+  const isMissingCoveredCallBasis = isCoveredCallContext && s.costBasis === undefined;
+  const strikeFloor = s.costBasis !== undefined ? "cost basis" : "the current share price";
+  const workflowConstraints = [
+    ...(isBalanced ? ["delta >= 0.20 (balanced objective)", "prefer ATM to slightly OTM"] : []),
+    ...(isMissingCoveredCallBasis ? ["cost basis not provided"] : []),
+  ];
 
   const rankingConstraints = isBalanced
     ? `
@@ -289,7 +301,9 @@ For LEAPS / long-dated options:
       : "",
     s.costBasis !== undefined
       ? `\n- Cost basis: ${formatBudget(s.costBasis)} (Position cost basis: ${formatBudget(s.costBasis)})${tag(sources.costBasis)}`
-      : "",
+      : isMissingCoveredCallBasis
+        ? `\n- Cost basis: not provided. ${MISSING_COST_BASIS_INSTRUCTION}`
+        : "",
     s.shareQuantity !== undefined
       ? `\n- Share quantity: ${s.shareQuantity} shares${tag(sources.shareQuantity)}`
       : "",
@@ -298,12 +312,6 @@ For LEAPS / long-dated options:
       : "",
   ].join("");
 
-  const isProtectivePutContext = s.optionStrategy === "protective_put";
-  const isCoveredCallContext =
-    !isProtectivePutContext &&
-    (s.optionStrategy === "covered_call" ||
-      s.costBasis !== undefined ||
-      (s.catalystSymbols?.length ?? 0) > 0);
   const coveredCallInstructions = isCoveredCallContext
     ? `
 Covered-call sale guidance:
@@ -312,11 +320,11 @@ Covered-call sale guidance:
 - Because the user phrased ${s.symbol} as an existing holding, briefly state that you are treating ${s.symbol} as the held ticker. If they meant memory exposure or a different ticker, tell them to clarify and do not silently switch to another underlying.
 - Do not substitute catalyst/context tickers as the option-chain underlying.
 - Use catalyst/context tickers only to frame event risk, sympathy moves, and whether a nearer expiration is appropriate.
-- Rank by premium collected, strike above cost basis, assignment risk, event risk, and live liquidity.
+- Rank by premium collected, strike above ${strikeFloor}, assignment risk, event risk, and live liquidity.
 - Do not describe max loss as the option premium paid. Covered-call sale risks are assignment/capped upside, share-price downside in the owned stock, IV/event risk, and poor exit liquidity.
 - If the option-chain tool reports closed_market_or_stale_quotes, do not treat zero bid/ask as confirmed live illiquidity; say the chain was checked outside regular options trading and recheck after regular options trading opens.
 - If retrieved contracts have zero bid/ask, zero open interest, or otherwise unusable live quotes, the final answer MUST still include "Best action:" and "Conditional candidate:".
-- In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a strike above cost basis labeled conditional on live bid/ask.
+- In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a strike above ${strikeFloor} labeled conditional on live bid/ask.
 `
     : "";
   const protectivePutInstructions = isProtectivePutContext
@@ -333,7 +341,9 @@ ${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuanti
 `
     : "";
   const topPickExplanation = isCoveredCallContext
-    ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.`
+    ? s.costBasis !== undefined
+      ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${formatBudget(s.costBasis)} cost basis.`
+      : `Explain why the top pick is ranked #1. Include the effective assignment sale price (strike + premium collected). ${MISSING_COST_BASIS_INSTRUCTION}`
     : "Explain why the top pick is ranked #1.";
   const catalystResponseInstruction = s.catalystSymbols?.length
     ? `\n- Explicitly name ${s.catalystSymbols.join(", ")} in the final answer and explain how its event can affect ${s.symbol} through sympathy moves, implied volatility, and event risk.`
