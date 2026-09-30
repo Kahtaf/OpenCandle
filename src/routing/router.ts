@@ -632,7 +632,9 @@ export function postProcessRouterOutput(
           reorderedSymbols.length > 1
             ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
             : undefined,
-        costBasis: extracted.costBasis ?? savedPosition?.costBasis ?? next.entities.costBasis,
+        // The basis was already validated against this holding (falling back to
+        // the extractor), so keep it and use the saved position only when absent.
+        costBasis: next.entities.costBasis ?? savedPosition?.costBasis,
         shareQuantity:
           extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,

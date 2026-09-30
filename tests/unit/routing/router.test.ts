@@ -3867,6 +3867,28 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("keeps a corrected basis through the existing-position rewrite", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own AAPL; my cost basis is $100, but actually $150; covered calls?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["AAPL"], heldSymbol: "AAPL", costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
