@@ -245,6 +245,42 @@ describe("useChatRun terminal state", () => {
       expect(toasts).toEqual([]);
     });
 
+    it("waits only for the first start after a Stop, not for later unrelated busy runs", async () => {
+      let call = 0;
+      const transport = {
+        startChatRun: vi.fn(async (_sessionId: string, _body: unknown, signal: AbortSignal) => {
+          call += 1;
+          if (call === 1) {
+            return new Promise<Response>((_resolve, reject) => {
+              signal.addEventListener("abort", () =>
+                reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+              );
+            });
+          }
+          return call === 2 ? completed() : busy();
+        }),
+        cancelChatRun: vi.fn(async () => ({ ok: true, cancelled: true, duplicate: false })),
+      };
+      await renderWith(transport);
+
+      let firstRun: Promise<unknown> | undefined;
+      await act(async () => {
+        firstRun = latestRun?.startChatRun("Compare AAPL and MSFT");
+      });
+      await act(async () => latestRun?.stopRun());
+      await act(async () => firstRun);
+      await act(async () => latestRun?.startChatRun("Compare AAPL and MSFT"));
+      expect(latestRun?.runState).toBe("ready");
+      toasts.length = 0;
+
+      // Another tab's run now owns the session: this tab's next prompt is
+      // rejected as busy rather than silently queued behind it.
+      await act(async () => latestRun?.startChatRun("Something else"));
+      expect(transport.startChatRun).toHaveBeenCalledTimes(3);
+      expect(latestRun?.runState).toBe("failed");
+      expect(toasts).toEqual(["Session already has an active run"]);
+    });
+
     it("still reports a busy session that this tab did not just stop", async () => {
       const transport = { startChatRun: vi.fn(async () => busy()) };
       await renderWith(transport);

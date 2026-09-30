@@ -113,8 +113,9 @@ export function isDuplicateChatRunAck(body) {
 export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
   const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
-  // When this tab last stopped a run, per session key.
-  const stoppedAtRef = useRef(new Map());
+  // When this tab last stopped a run, per session key. Taken by the next start.
+  const stoppedAtRef = useRef(null);
+  stoppedAtRef.current ??= new Map();
   const runStatesRef = useRef({});
   const [runStates, setRunStates] = useState({});
   const [lastRuns, setLastRuns] = useState({});
@@ -164,6 +165,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
 
       try {
         const stoppedAt = stoppedAtRef.current.get(key);
+        stoppedAtRef.current.delete(key);
         const waitForStoppedRun =
           stoppedAt !== undefined && Date.now() - stoppedAt < STOPPED_RUN_WINDOW_MS;
         const releaseDeadline = Date.now() + STOPPED_RUN_RELEASE_WAIT_MS;

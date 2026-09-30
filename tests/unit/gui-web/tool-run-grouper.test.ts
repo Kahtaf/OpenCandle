@@ -151,6 +151,19 @@ describe("groupToolRuns", () => {
       expect(run.failureReason).toBe("");
     });
 
+    it.each(["This operation was aborted", "The operation was aborted.", "Request was aborted."])(
+      "treats the abort error %j as a cancelled step under a Stop",
+      (text) => {
+        const run = runOf([
+          user("Hold the NVDA tool"),
+          toolCall("quote-1", "NVDA"),
+          toolResult("quote-1", text, true),
+          stoppedMarker(),
+        ]);
+        expect(run.steps[0].status).toBe("cancelled");
+      },
+    );
+
     it("reads stopped when Stop cut off the answer that followed the tools", () => {
       const run = runOf([
         user("What is AAPL trading at?"),

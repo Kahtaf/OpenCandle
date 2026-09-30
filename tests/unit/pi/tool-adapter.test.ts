@@ -1,7 +1,11 @@
 import { Type } from "@sinclair/typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { httpGet } from "../../../src/infra/http-client.js";
-import { agentToolToPiTool, getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
+import {
+  agentToolToPiTool,
+  getOpenCandleToolDefinitions,
+  READ_ONLY_TOOL_NAMES,
+} from "../../../src/pi/tool-adapter.js";
 import { getAllTools } from "../../../src/tools/index.js";
 
 describe("tool adapter", () => {
@@ -87,14 +91,20 @@ describe("tool adapter", () => {
       globalThis.fetch = originalFetch;
     });
 
-    function toolWith(execute: (...args: unknown[]) => Promise<unknown>) {
-      return agentToolToPiTool({
-        name: "slow_tool",
-        label: "Slow Tool",
-        description: "A tool that may ignore its abort signal",
-        parameters: Type.Object({}),
-        execute,
-      } as never);
+    function toolWith(
+      execute: (...args: unknown[]) => Promise<unknown>,
+      options: { abandonOnAbort?: boolean } = { abandonOnAbort: true },
+    ) {
+      return agentToolToPiTool(
+        {
+          name: "slow_tool",
+          label: "Slow Tool",
+          description: "A tool that may ignore its abort signal",
+          parameters: Type.Object({}),
+          execute,
+        } as never,
+        options,
+      );
     }
 
     it("settles promptly as aborted when the tool ignores the run's abort signal", async () => {
@@ -161,6 +171,49 @@ describe("tool adapter", () => {
       expect(fetchSignal?.aborted).toBe(true);
       // An aborted run is never retried.
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("waits for a stateful tool to finish instead of abandoning it mid-write", async () => {
+      let finish!: () => void;
+      const adapted = toolWith(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ content: [{ type: "text", text: "saved" }], details: {} });
+          }),
+        {},
+      );
+      const controller = new AbortController();
+      const run = adapted.execute("tool-1", {}, controller.signal, undefined, {} as never);
+      controller.abort();
+      const early = await Promise.race([
+        run.then(
+          () => "settled",
+          () => "settled",
+        ),
+        new Promise((resolve) => setTimeout(() => resolve("still running"), 500)),
+      ]);
+      expect(early).toBe("still running");
+      finish();
+      await expect(run).resolves.toMatchObject({ content: [{ type: "text", text: "saved" }] });
+    });
+
+    it("abandons only read-only data tools on Stop, never tools that change saved state", () => {
+      for (const name of ["get_stock_quote", "get_option_chain", "compute_dcf", "search_web"]) {
+        expect(READ_ONLY_TOOL_NAMES.has(name)).toBe(true);
+      }
+      for (const name of [
+        "manage_watchlist",
+        "track_portfolio",
+        "manage_alerts",
+        "daily_watchlist_report",
+        "manage_notifications",
+        "ask_user",
+        "get_web_sentiment",
+      ]) {
+        expect(READ_ONLY_TOOL_NAMES.has(name)).toBe(false);
+      }
+      const registered = new Set(getAllTools().map((tool) => tool.name));
+      for (const name of READ_ONLY_TOOL_NAMES) expect(registered.has(name)).toBe(true);
     });
   });
 });

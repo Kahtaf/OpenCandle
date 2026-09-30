@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runWithAbortSignal } from "../../../src/infra/abort-context.js";
 import { HttpError, httpGet, httpPost } from "../../../src/infra/http-client.js";
 
 describe("httpGet", () => {
@@ -269,5 +270,48 @@ describe("httpPost", () => {
       body: "invalid field",
     } satisfies Partial<HttpError>);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  describe("inside a stopped run", () => {
+    it("does not start a request once the run was stopped", async () => {
+      globalThis.fetch = vi.fn();
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        runWithAbortSignal(controller.signal, () => httpGet("https://api.example.com/quote")),
+      ).rejects.toBeDefined();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("stops waiting to retry when the run is stopped during the retry delay", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: () => Promise.resolve(""),
+      });
+      const controller = new AbortController();
+      const request = runWithAbortSignal(controller.signal, () =>
+        httpGet("https://api.example.com/quote", { retryDelayMs: 60_000 }),
+      );
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      controller.abort();
+      await expect(request).rejects.toBeDefined();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not retry a request the stopped run aborted", async () => {
+      const controller = new AbortController();
+      globalThis.fetch = vi.fn(() => {
+        controller.abort();
+        return Promise.reject(new DOMException("This operation was aborted", "AbortError"));
+      }) as typeof fetch;
+      await expect(
+        runWithAbortSignal(controller.signal, () =>
+          httpGet("https://api.example.com/quote", { retryDelayMs: 1 }),
+        ),
+      ).rejects.toThrow(/aborted/i);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 });

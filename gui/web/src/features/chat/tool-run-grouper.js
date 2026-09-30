@@ -189,8 +189,9 @@ function isStoppedMarker(row) {
   return row?.type === "custom_message" && row.customType === "opencandle-run-cancelled";
 }
 
-// Pi's own result for a tool call the Stop cut short.
-const ABORTED_TOOL_RESULT = /^\s*(?:operation|request) (?:was )?aborted\.?\s*$/i;
+// A tool call the Stop cut short: Pi's own result, or the fetch AbortError.
+const ABORTED_TOOL_RESULT =
+  /^\s*(?:(?:the|this)\s+)?(?:operation|request)\s+(?:was\s+)?aborted\.?\s*$/i;
 
 function markRunStopped(run) {
   for (const step of run.steps) {
