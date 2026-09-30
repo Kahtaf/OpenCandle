@@ -9,7 +9,9 @@ import {
   buildToolInvokeHttpFallbackRequest,
   buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
+  newSessionBootstrapOptions,
   rejectTimedOutToolInvoke,
+  resolveAdoptedSessionId,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
   resolveEventChannelBootTimeout,
@@ -292,6 +294,27 @@ describe("useGuiConnection helpers", () => {
       "writer-session",
     );
     expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
+  it("keeps the server's running current session when a new chat is created beside it", () => {
+    // A detached new chat is only merged as a routable snapshot: the server's
+    // current session did not change, so the tracked current session, its
+    // visible transcript, and the global role stay as they are.
+    expect(newSessionBootstrapOptions({ sessionId: "new-chat", detached: true })).toEqual({
+      updateRole: false,
+      updateCurrentSessionId: false,
+      updateVisibleState: false,
+    });
+    expect(newSessionBootstrapOptions({ sessionId: "new-current" })).toEqual({});
+    expect(newSessionBootstrapOptions(null)).toEqual({});
+  });
+
+  it("does not adopt a detached new chat's run as the server's current session", () => {
+    const detached = new Set(["new-chat"]);
+    expect(resolveAdoptedSessionId("running-current", "new-chat", detached)).toBe(
+      "running-current",
+    );
+    expect(resolveAdoptedSessionId("previous", "home-fresh", detached)).toBe("home-fresh");
   });
 
   it("reconnects on foreground only when the socket is not already active", () => {

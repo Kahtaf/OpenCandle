@@ -11,8 +11,23 @@ export function routeSessionView({
   liveBaseEventCount,
   canStartFreshHomeSession = true,
   pendingFreshHomeSession = false,
+  currentSessionRunActive = false,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
+  // Home while the current session is still running (started on its own
+  // session route): home is a new chat, so it must not show that transcript
+  // or its Stop control. It is an empty draft bound to no session; sending
+  // from it starts a fresh session.
+  if (pathname === "/" && currentSessionRunActive) {
+    return {
+      routeSessionId: "",
+      pendingSessionSwitch: false,
+      pendingFreshHomeSession: false,
+      homeDraft: true,
+      activeSessionId: "",
+      events: [],
+    };
+  }
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
   const shouldHideHomeSession =
     canStartFreshHomeSession && pathname === "/" && pendingFreshHomeSession;
@@ -22,6 +37,7 @@ export function routeSessionView({
     routeSessionId,
     pendingSessionSwitch,
     pendingFreshHomeSession: shouldHideHomeSession,
+    homeDraft: false,
     activeSessionId: routeSessionId || currentSessionId || "",
     events:
       pendingSessionSwitch || shouldHideHomeSession
@@ -37,10 +53,15 @@ export function chatRunSessionTarget({
   supportsSessionActions,
   hasCurrentSessionContent = false,
   canStartFreshHomeSession = true,
+  currentSessionRunActive = false,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
-  if (supportsSessionActions && canStartFreshHomeSession && hasCurrentSessionContent) {
+  if (
+    supportsSessionActions &&
+    canStartFreshHomeSession &&
+    (hasCurrentSessionContent || currentSessionRunActive)
+  ) {
     return { mode: "fresh" };
   }
   return { mode: "current" };

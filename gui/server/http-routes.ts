@@ -40,6 +40,7 @@ export {
 import { createLiveChatEventAdapter } from "../shared/live-chat-event-adapter.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { persistUnflushedSession } from "./durable-session-persist.js";
+import type { DetachedSessionRegistry } from "./gui-session-manager.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import type {
   LocalSessionCoordinator,
@@ -133,6 +134,8 @@ interface GuiHttpRouteOptions {
   cancelAskUserPromptsForSession?: (sessionId: string) => void;
   /** Injectable active-run registry (tests); defaults to a fresh registry. */
   runRegistry?: GuiRunRegistry;
+  /** Fresh sessions started while the current session was running. */
+  detachedSessions?: Pick<DetachedSessionRegistry, "get">;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
@@ -165,14 +168,30 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         );
         return;
       }
+      let created: Awaited<ReturnType<SessionActionsController["handleNewSession"]>>;
       try {
-        await options.sessionActionsController.handleNewSession();
+        const currentSessionId = options.getSessionManager().getSessionId();
+        created = await options.sessionActionsController.handleNewSession({
+          allowDetached: true,
+          currentRunAdmitted:
+            activeGuiRuns.has(currentSessionId) || activeRunSessionIds.has(currentSessionId),
+        });
       } catch (error) {
         if (error instanceof SessionBusyError) {
           writeJson(res, { error: error.message, code: error.code }, 409);
           return;
         }
         throw error;
+      }
+      const detachedSessionManager = created?.detachedSessionManager;
+      if (detachedSessionManager) {
+        // The current session is still running and stays the server's current
+        // one; the browser routes to this separate session by id.
+        writeJson(res, {
+          ...(await buildSessionBootstrapPayload(options, detachedSessionManager)),
+          detached: true,
+        });
+        return;
       }
       options.wsHub.broadcastState();
       options.wsHub.broadcastSessions();
@@ -1469,11 +1488,16 @@ function roleForSessionBootstrap(
 }
 
 export async function resolveSessionManagerById(
-  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "getSessionManager">,
+  options: Pick<
+    GuiHttpRouteOptions,
+    "cwd" | "sessionDir" | "getSessionManager" | "detachedSessions"
+  >,
   sessionId: string,
 ): Promise<SessionManager | null> {
   const currentSessionManager = options.getSessionManager();
   if (currentSessionManager.getSessionId() === sessionId) return currentSessionManager;
+  const detached = options.detachedSessions?.get(sessionId);
+  if (detached) return detached;
   const sessions = await SessionManager.list(options.cwd, options.sessionDir);
   const match = sessions.find((candidate) => candidate.id === sessionId);
   return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
