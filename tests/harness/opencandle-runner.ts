@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
   type ModelRuntime,
   SessionManager as PiSessionManager,
@@ -33,6 +32,7 @@ import {
 } from "./planning-evidence.js";
 import { disclosesNonLiveQuotes } from "./quote-disclosure.js";
 import { assertSessionCompleted, failSessionCompletion } from "./session-completion.js";
+import { promptAndWaitForCompletion } from "./session-settle.js";
 import {
   ANSWER_CONTRACT_REGISTRY,
   type FinalAnswerField,
@@ -127,11 +127,18 @@ export async function runOpenCandleSession(
       collector.setPromptIndex(promptIndex);
       const sessionManager = session.sessionManager;
       try {
-        await promptAndWaitForSettle(session, prompt, {
-          resolveSettleGraceMs: () =>
+        const outcome = await promptAndWaitForCompletion(created, prompt, {
+          resolveSettleMs: () =>
             options.settleGraceMs ?? settleGraceMsForTurn(prompt, sessionManager),
           timeoutMs: options.timeoutMs ?? 900_000,
         });
+        if (outcome.status === "incomplete") {
+          throw new Error(
+            `OpenCandle harness timed out after ${outcome.timeoutMs}ms${
+              outcome.workflow ? ` while workflow ${outcome.workflow} was still running` : ""
+            }`,
+          );
+        }
       } catch (error) {
         failSessionCompletion(
           collector.getTrace(),
@@ -289,79 +296,6 @@ function createScriptedAskHandler(
       cancelled: answer === null,
     };
   };
-}
-
-async function promptAndWaitForSettle(
-  session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"],
-  prompt: string,
-  options: { resolveSettleGraceMs: () => number; timeoutMs: number },
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    let promptFinished = false;
-    let closed = false;
-    let unsub = () => {};
-    const timeoutTimer = setTimeout(() => {
-      cleanup();
-      reject(new Error(`OpenCandle harness timed out after ${options.timeoutMs}ms`));
-    }, options.timeoutMs);
-
-    const cleanup = () => {
-      closed = true;
-      clearTimeout(timeoutTimer);
-      if (settleTimer) {
-        clearTimeout(settleTimer);
-        settleTimer = null;
-      }
-      unsub();
-    };
-
-    const cancelSettle = () => {
-      if (settleTimer) {
-        clearTimeout(settleTimer);
-        settleTimer = null;
-      }
-    };
-
-    const finishAfterGrace = () => {
-      if (closed) return;
-      cancelSettle();
-      settleTimer = setTimeout(() => {
-        // agent_end precedes Pi retry backoff and compaction. Only a fully
-        // settled session can be captured or disposed by the harness.
-        if (!promptFinished || session.isIdle === false) return;
-        cleanup();
-        resolve();
-      }, options.resolveSettleGraceMs());
-    };
-
-    unsub = session.subscribe((event: AgentSessionEvent) => {
-      if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-        cancelSettle();
-      }
-      if (
-        event.type === "tool_execution_start" ||
-        event.type === "auto_retry_start" ||
-        event.type === "agent_start"
-      ) {
-        cancelSettle();
-      }
-      if ((event.type === "agent_end" && !event.willRetry) || event.type === "agent_settled") {
-        finishAfterGrace();
-      }
-    });
-
-    void session
-      .prompt(prompt)
-      .then(() => {
-        promptFinished = true;
-        finishAfterGrace();
-      })
-      .catch((error: unknown) => {
-        cleanup();
-        reject(error);
-      });
-  });
 }
 
 /**
