@@ -1494,11 +1494,13 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
     );
     const { quantities } = parsed;
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
-    return amounts.some((amount) =>
-      quantities.some(
-        (quantity) =>
-          quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
-      ),
+    return amounts.some(
+      (amount) =>
+        !amount.isPerShare &&
+        quantities.some(
+          (quantity) =>
+            quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
+        ),
     );
   });
 }
@@ -1592,11 +1594,22 @@ const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
 const NON_AMOUNT_SUFFIX =
   /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?)\b)/i;
 
+// Calendar years ("in 2020") and date components ("3/15", "March 15") are not
+// amounts.
+const DATE_PREFIX =
+  /(?:\b(?:in|since|from|during|until|by|year|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|\d[/-])\s*$/i;
+const DATE_SUFFIX = /^(?:[/-]\d|(?:st|nd|rd|th)\b)/i;
+
+function isDateComponent(fraction: string | undefined, before: string, rest: string): boolean {
+  return fraction === undefined && (DATE_SUFFIX.test(rest) || DATE_PREFIX.test(before));
+}
+
 interface StatedAmount {
   value: number;
   isTotal: boolean;
   isBasisLinked: boolean;
   isNonBasisContext: boolean;
+  isPerShare: boolean;
 }
 
 function segmentStart(text: string, index: number, boundary: RegExp): number {
@@ -1660,6 +1673,7 @@ function parseStatedNumbers(
     }
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
     const before = text.slice(0, start);
+    if (!dollar && !scale && isDateComponent(fraction, before, rest)) continue;
     if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(rest)) continue;
     const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
     candidates.push({
@@ -1685,6 +1699,7 @@ function parseStatedNumbers(
       isBasisLinked:
         !isNonBasisContext && (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence))),
       isNonBasisContext,
+      isPerShare: perShare,
     };
   });
   return { amounts, quantities };

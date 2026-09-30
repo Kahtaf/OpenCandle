@@ -3281,6 +3281,39 @@ describe("router cost-basis context guard", () => {
     expect(total.entities.costBasis).toBeUndefined();
   });
 
+  it("divides only purchase totals, never per-share prices, by a quantity", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought 100 AAPL at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 1.5 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not ground a basis in a purchase year or date", async () => {
+    const year = await route(
+      { ...BASE_INPUT, text: "I bought AAPL in 2020. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 2020 }),
+    );
+    const dateDay = await route(
+      { ...BASE_INPUT, text: "I bought AAPL on 3/15 at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15 }),
+    );
+    const monthDay = await route(
+      { ...BASE_INPUT, text: "I bought AAPL on March 15 at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15 }),
+    );
+    const stated = await route(
+      { ...BASE_INPUT, text: "I bought AAPL on 3/15 at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(year.entities.costBasis).toBeUndefined();
+    expect(dateDay.entities.costBasis).toBeUndefined();
+    expect(monthDay.entities.costBasis).toBeUndefined();
+    expect(stated.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
