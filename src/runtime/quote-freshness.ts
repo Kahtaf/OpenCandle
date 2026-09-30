@@ -119,7 +119,14 @@ const QUOTE_SCOPED_PATTERNS: readonly RegExp[] = [
 ];
 
 const QUOTE_SUBJECT =
-  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures|numbers|prices?|data)\b/i;
+  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?)\b/i;
+/**
+ * Generic nouns ("prices", "data") only refer to the quotes when unqualified:
+ * at the start of the sentence or after a determiner ("these prices", "the
+ * data"). "Economic data" or "commodity prices" are other subjects.
+ */
+const GENERIC_QUOTE_SUBJECT =
+  /(?:^\s*|\b(?:these|those|the|all|quoted|shown|listed)\s+)(?:prices?|data|numbers|figures)\b/i;
 const OPTION_SPECIFIC_SUBJECT = /\b(?:options?|premiums?|bid\/ask|chain|contracts?)\b/i;
 const NON_OPTION_SUBJECT = /\b(?:underlying|stock|(?<!per\s)shares?|equity|index)\b/i;
 
@@ -129,7 +136,7 @@ const NON_OPTION_SUBJECT = /\b(?:underlying|stock|(?<!per\s)shares?|equity|index
  * premiums", "bid/ask"), so "the underlying price is not live" does not count.
  */
 function describesOptionQuotes(span: string): boolean {
-  if (!QUOTE_SUBJECT.test(span)) return false;
+  if (!QUOTE_SUBJECT.test(span) && !GENERIC_QUOTE_SUBJECT.test(span)) return false;
   return !NON_OPTION_SUBJECT.test(span) || OPTION_SPECIFIC_SUBJECT.test(span);
 }
 
@@ -247,8 +254,8 @@ function presentsCurrencyQuote(text: string): boolean {
     const before = text.slice(Math.max(0, match.index - 25), match.index);
     const lead = before.slice(before.search(/[^.;:!?\n]*$/));
     if (
-      /\b(?:strike|underlying|stock|shares?|spot|trad(?:es|ing)\s+at)\b/i.test(lead) &&
-      !/\b(?:premium|bid|ask|mid|cost|debit|credit)\b/i.test(lead)
+      /\b(?:strike|underlying|stock|shares?|spot)\b/i.test(lead) &&
+      !/\b(?:premium|bid|ask|mid|cost|debit|credit|calls?|puts?|options?|contracts?)\b/i.test(lead)
     )
       continue;
     if (/\b(?:underlying|stock|spot)\s*:\s*$/i.test(before)) continue;
@@ -286,11 +293,35 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
       if (aboutOptions(match.index, match[0].length)) return true;
     }
   }
+  return tablePresentsQuoteCell(text);
+}
+
+/**
+ * A markdown table with a quote column (premium, bid/ask, last, ...) whose
+ * cell holds a number in some row. Other numeric cells (strike, expiry) do not
+ * count, so a table whose quote cells are all "N/A" presents no quote.
+ */
+function tablePresentsQuoteCell(text: string): boolean {
+  const cells = (line: string): string[] =>
+    line
+      .trim()
+      .replace(/^\||\|$/g, "")
+      .split("|")
+      .map((cell) => cell.trim());
   const lines = text.split("\n");
-  const header = lines.findIndex((line) => line.includes("|") && QUOTE_VOCABULARY.test(line));
-  return (
-    header >= 0 && lines.slice(header + 1).some((line) => line.includes("|") && /\d/.test(line))
-  );
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes("|")) continue;
+    const quoteColumns = cells(lines[i])
+      .map((cell, index) => (QUOTE_VOCABULARY.test(cell) ? index : -1))
+      .filter((index) => index >= 0);
+    if (quoteColumns.length === 0) continue;
+    for (const row of lines.slice(i + 1)) {
+      if (!row.includes("|")) break;
+      const rowCells = cells(row);
+      if (quoteColumns.some((index) => /\d/.test(rowCells[index] ?? ""))) return true;
+    }
+  }
+  return false;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
