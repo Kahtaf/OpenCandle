@@ -1624,14 +1624,14 @@ const NON_BASIS_SUFFIX =
 // holding and the amount is per-share ("I own 100 AAPL at $150"), and its
 // lead-in has no quote or prospective wording ("it is trading at $200").
 const ACQUISITION_CONTEXT =
-  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/gi;
+  /\b(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/gi;
 const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|position|shares?)\b/i;
 // Quote or prospective wording between an amount and the nearest preceding
 // acquisition word (or clause start, or previous number) marks that amount as
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:(?:it|it's|its\s+price|price|stock|shares?)\s+(?:is\s+|are\s+)?(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
 // Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
 const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
@@ -1676,7 +1676,7 @@ function segmentStart(text: string, index: number, boundary: RegExp): number {
 // judges only " at ".
 // An explicit basis label ("cost basis is now $150") outranks quote wording.
 const BASIS_LABEL =
-  /^(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price))$/i;
+  /^(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price))$/i;
 
 function localLeadIn(
   text: string,

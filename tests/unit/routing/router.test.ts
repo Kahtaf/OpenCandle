@@ -3633,6 +3633,24 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("recognizes average price as explicit basis wording", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own AAPL; my average price is $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps an approximate price in a completed purchase", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL shares at about $150 per share. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
