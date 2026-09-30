@@ -11,6 +11,7 @@ import {
   mergeSessionSnapshotMap,
   newSessionBootstrapOptions,
   rejectTimedOutToolInvoke,
+  resolveAdoptedSessionId,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
   resolveEventChannelBootTimeout,
@@ -306,6 +307,14 @@ describe("useGuiConnection helpers", () => {
     });
     expect(newSessionBootstrapOptions({ sessionId: "new-current" })).toEqual({});
     expect(newSessionBootstrapOptions(null)).toEqual({});
+  });
+
+  it("does not adopt a detached new chat's run as the server's current session", () => {
+    const detached = new Set(["new-chat"]);
+    expect(resolveAdoptedSessionId("running-current", "new-chat", detached)).toBe(
+      "running-current",
+    );
+    expect(resolveAdoptedSessionId("previous", "home-fresh", detached)).toBe("home-fresh");
   });
 
   it("reconnects on foreground only when the socket is not already active", () => {

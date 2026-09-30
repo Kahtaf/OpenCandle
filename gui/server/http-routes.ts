@@ -170,8 +170,11 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       }
       let created: Awaited<ReturnType<SessionActionsController["handleNewSession"]>>;
       try {
+        const currentSessionId = options.getSessionManager().getSessionId();
         created = await options.sessionActionsController.handleNewSession({
           allowDetached: true,
+          currentRunAdmitted:
+            activeGuiRuns.has(currentSessionId) || activeRunSessionIds.has(currentSessionId),
         });
       } catch (error) {
         if (error instanceof SessionBusyError) {

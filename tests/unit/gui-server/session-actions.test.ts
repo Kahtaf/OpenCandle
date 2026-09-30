@@ -703,6 +703,28 @@ describe("GUI session actions", () => {
     }
   });
 
+  it("keeps the runtime session when a run was admitted but has not reached the model yet", async () => {
+    const detachedSessions = createDetachedSessionRegistry();
+    // Setup phase: the run is registered for admission, but the session has
+    // no cancellation token, stream, or pending message yet.
+    const { controller, newSession } = makeController({
+      session: { isStreaming: false, pendingMessageCount: 0 } as unknown as AgentSession,
+      detachedSessions,
+    });
+
+    const result = await controller.handleNewSession({
+      allowDetached: true,
+      currentRunAdmitted: true,
+    });
+
+    expect(newSession).not.toHaveBeenCalled();
+    expect(result?.detachedSessionManager).toBeDefined();
+    await expect(controller.handleNewSession({ currentRunAdmitted: true })).rejects.toThrow(
+      "Session already has an active run",
+    );
+    expect(newSession).not.toHaveBeenCalled();
+  });
+
   it("still switches the runtime to a fresh session when the idle path allows detaching", async () => {
     const detachedSessions = createDetachedSessionRegistry();
     const { controller, newSession } = makeController({

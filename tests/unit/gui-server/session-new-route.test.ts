@@ -7,6 +7,7 @@ import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
 import type { ModelSetupController } from "../../../gui/server/model-setup.js";
 import { privateApiCookieHeader } from "../../../gui/server/private-api-access.js";
 import type { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
+import { createGuiRunRegistry } from "../../../gui/server/run-cancellation.js";
 import {
   type SessionActionsController,
   SessionBusyError,
@@ -23,6 +24,7 @@ describe("session new HTTP route", () => {
   let endpoint: string;
   let handleNewSession: ReturnType<typeof vi.fn>;
   let broadcastState: ReturnType<typeof vi.fn>;
+  const runRegistry = createGuiRunRegistry();
   const currentSessionManager = {
     getSessionId: () => "current-running-session",
     getSessionFile: () => "/missing-session-dir/current-running-session.jsonl",
@@ -55,6 +57,7 @@ describe("session new HTTP route", () => {
       sessionActionsController: fakeSessionActionsController(handleNewSession),
       toolInvokeController: fakeToolInvokeController(),
       quoteSnapshotStore: fakeQuoteSnapshotStore(),
+      runRegistry,
     });
     server = createServer((req, res) => {
       void handler(req, res);
@@ -107,7 +110,10 @@ describe("session new HTTP route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(handleNewSession).toHaveBeenCalledWith({ allowDetached: true });
+    expect(handleNewSession).toHaveBeenCalledWith({
+      allowDetached: true,
+      currentRunAdmitted: false,
+    });
     const body = (await response.json()) as Record<string, unknown>;
     expect(body).toMatchObject({
       detached: true,
@@ -118,6 +124,31 @@ describe("session new HTTP route", () => {
     // The server's current session did not change, so nothing is re-broadcast
     // as the current state.
     expect(broadcastState).not.toHaveBeenCalled();
+  });
+
+  it("tells the controller about a current-session run that is still in setup", async () => {
+    const handle = runRegistry.start({
+      sessionId: "current-running-session",
+      actionId: "chat-in-setup",
+    });
+    try {
+      handleNewSession.mockResolvedValueOnce({
+        detachedSessionManager: SessionManager.inMemory(process.cwd()),
+      });
+
+      const response = await fetch(`${endpoint}/api/session/new`, {
+        method: "POST",
+        headers: trustedHeaders,
+      });
+
+      expect(response.status).toBe(200);
+      expect(handleNewSession).toHaveBeenCalledWith({
+        allowDetached: true,
+        currentRunAdmitted: true,
+      });
+    } finally {
+      if (handle) runRegistry.finish(handle);
+    }
   });
 
   it("broadcasts state and returns bootstrap when the current session is idle", async () => {

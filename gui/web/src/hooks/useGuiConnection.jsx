@@ -219,6 +219,14 @@ export function newSessionBootstrapOptions(data) {
   return { updateRole: false, updateCurrentSessionId: false, updateVisibleState: false };
 }
 
+/**
+ * A run's session becomes the tracked current session, except a detached new
+ * chat: the server kept its running session current while that chat ran.
+ */
+export function resolveAdoptedSessionId(currentSessionId, sessionId, detachedSessionIds) {
+  return detachedSessionIds.has(sessionId) ? currentSessionId : sessionId;
+}
+
 export function resolveBootstrapSessionId(
   currentSessionId,
   responseSessionId,
@@ -272,10 +280,17 @@ export function useGuiConnection() {
   const [currentSessionId, setCurrentSessionId] = useState("");
   // New chats the server created beside its still-running current session.
   // They never become the tracked current session, so callers route to them.
-  const detachedSessionIdsRef = useRef(new Set());
+  const [detachedSessionIds] = useState(() => new Set());
   const isDetachedSession = useCallback(
-    (sessionId) => detachedSessionIdsRef.current.has(String(sessionId ?? "")),
-    [],
+    (sessionId) => detachedSessionIds.has(String(sessionId ?? "")),
+    [detachedSessionIds],
+  );
+  const adoptSessionId = useCallback(
+    (sessionId) =>
+      setCurrentSessionId((currentSessionId) =>
+        resolveAdoptedSessionId(currentSessionId, String(sessionId ?? ""), detachedSessionIds),
+      ),
+    [detachedSessionIds],
   );
   const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
@@ -681,13 +696,13 @@ export function useGuiConnection() {
       setSupportsSessionActions(true);
       applyBootstrap(data, "", newSessionBootstrapOptions(data));
       const sessionId = String(data?.sessionId ?? "");
-      if (data?.detached === true && sessionId) detachedSessionIdsRef.current.add(sessionId);
+      if (data?.detached === true && sessionId) detachedSessionIds.add(sessionId);
       return sessionId;
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error), { destructive: true });
       return "";
     }
-  }, [applyBootstrap, setToast, transport]);
+  }, [applyBootstrap, detachedSessionIds, setToast, transport]);
 
   const loadSession = useCallback(
     async (sessionId) => {
@@ -732,7 +747,7 @@ export function useGuiConnection() {
       newSession,
       isDetachedSession,
       loadSession,
-      adoptSessionId: setCurrentSessionId,
+      adoptSessionId,
     }),
     [
       role,
@@ -755,6 +770,7 @@ export function useGuiConnection() {
       newSession,
       isDetachedSession,
       loadSession,
+      adoptSessionId,
     ],
   );
 }

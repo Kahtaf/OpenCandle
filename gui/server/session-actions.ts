@@ -65,6 +65,11 @@ export interface NewSessionOptions {
    * id back to the browser (the HTTP route) opt in.
    */
   allowDetached?: boolean;
+  /**
+   * A run for the current session is already admitted but may still be in
+   * setup (prompt dispatch, writer lock) before the session itself looks busy.
+   */
+  currentRunAdmitted?: boolean;
 }
 
 export interface NewSessionResult {
@@ -163,14 +168,11 @@ export function createSessionActionsController({
 
   async function handleNewSession(options: NewSessionOptions = {}): Promise<NewSessionResult> {
     ensureWriter();
-    if (isCurrentSessionBusy()) {
+    if (options.currentRunAdmitted || isCurrentSessionBusy()) {
       // Replacing the runtime session would tear down the run in flight.
       // Leave it running and give the new chat its own session.
       if (!options.allowDetached || !detachedSessions) throw new SessionBusyError();
-      const current = getSessionManager();
-      return {
-        detachedSessionManager: detachedSessions.create(cwd, current.getSessionDir() || sessionDir),
-      };
+      return { detachedSessionManager: detachedSessions.create(cwd, sessionDir) };
     }
     const result = await runtime.newSession();
     if (result.cancelled) throw new Error("Session switch cancelled");
