@@ -79,3 +79,68 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+  flake-lane:
+    # Advisory repeated-run lane (#209). It repeats selected gate steps with no
+    # retry so intermittent failures show up as a nightly pass count instead of
+    # one-off reruns on unrelated PRs. It is not a gate, it never feeds release
+    # evidence, and it carries no provider or model credentials.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for GUI browser steps
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Start flake summary
+        run: |
+          {
+            echo "## Advisory flake lane"
+            echo
+            echo "Sequential repeats, no retry. Not a gate and not release evidence."
+            echo
+            echo "| Step | Result | Detail |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Hosted PWA smoke x10
+        if: always()
+        continue-on-error: true
+        run: node scripts/flake-lane.mjs --suite test:gui:hosted --runs 10
+
+      - name: GUI integration x5
+        if: always()
+        continue-on-error: true
+        run: node scripts/flake-lane.mjs --suite test:gui:integration --runs 5
+
+      - name: GUI journey x5
+        if: always()
+        continue-on-error: true
+        run: node scripts/flake-lane.mjs --suite test:gui:journey --runs 5
+
+      - name: Unit tests shuffled x3
+        if: always()
+        continue-on-error: true
+        run: node scripts/flake-lane.mjs --suite test --runs 3 -- --sequence.shuffle
+
+      - name: Upload flake lane reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-lane
+          path: validation-output/flake/
+          if-no-files-found: ignore
+          retention-days: 14

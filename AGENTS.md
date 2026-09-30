@@ -49,6 +49,7 @@ Core abstractions (most-connected in the codebase; start here when tracing behav
 ## GIT & REVIEW
 - Conventional commits (`feat:`, `fix:`, `docs:`, `style:`, `chore:`); atomic commits — one logical change per commit.
 - Run `npm run gates:full`, then `npm run review:pr` (autoreview), after every sizable piece of work and before opening or updating a PR.
+- Codex review comments on a PR are part of that PR: fix every real issue in the same PR regardless of severity (test first), or reply with concrete evidence why it is not an issue, then resolve the thread. Do not defer them to follow-up issues. Re-request `@codex review` after the final push and handle anything new before merging.
 - For new atomic features or bug fixes, add an entry under `[Unreleased]` in CHANGELOG.md. Entries are one sentence, user-visible behaviour only, no internal hardening lists.
 
 ## DELEGATION

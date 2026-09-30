@@ -29,5 +29,5 @@
 - Always ensure you never print secret values.
 - Touch only your Owned tasks and do not rewrite parallel work.
 - Add one `CHANGELOG` `[Unreleased]` entry per atomic feature or fix.
-- If the run opens or updates a PR, check for any advisory Codex review that ran automatically when the PR was created; request another with `@codex review` when useful. Do not wait for or require a Codex status check, but address or rebut any review comments before reporting the PR review-clean.
+- If the run opens or updates a PR, check for any advisory Codex review that ran automatically when the PR was created; request another with `@codex review` when useful. Do not wait for or require a Codex status check, but every Codex review comment must be resolved in that same PR: fix real issues regardless of severity (test first), or rebut with concrete evidence; never defer them to follow-up issues.
 - Final report: files changed, proof outputs, and deviations.
