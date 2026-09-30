@@ -97,8 +97,10 @@ const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
   /\b(?:prior|previous|last|most\s+recent)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/gi,
   /\b(?:yesterday|(?:mon|tues|wednes|thurs|fri|satur|sun)day)'?s\s+(?:close|session|quotes?)\b/gi,
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
-  /\bstale\b/gi,
-  /\bdelayed\b/gi,
+  // "stale" and "delayed" must describe the quotes, not another subject
+  // ("the earnings release was delayed"), and must not be negated in between.
+  /\b(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures|numbers)\b(?:(?!\bnot\b|n't\b|\bnever\b)(?:[^.;:!?\n]|\.(?=\d))){0,30}?\b(?:stale|delayed)\b/gi,
+  /\b(?:stale|delayed)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures)\b/gi,
   /\b(?:closing|indicative|cached|carried[- ]over|end[- ]of[- ]day|after[- ]hours|pre[- ]?market)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/gi,
   /\bfrom\s+(?:a|the)\s+(?:stale\s+)?cache\b/gi,
   /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,

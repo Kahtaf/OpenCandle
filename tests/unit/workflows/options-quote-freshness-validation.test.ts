@@ -136,6 +136,9 @@ describe("options quote freshness disclosure", () => {
     "If you trade, note these are last-session quotes.",
     "Quotes are not live, so treat the premiums shown as a guide.",
     "If you trade, note these quotes are not live.",
+    "Option data may be delayed.",
+    "Stale quotes: recheck before trading.",
+    "Premiums at 4.80 are stale.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -156,6 +159,9 @@ describe("options quote freshness disclosure", () => {
     "Enter the order when the market opens.",
     "If these quotes are not live, recheck them tomorrow; the premium is 4.80.",
     "In case bid/ask are non-executable, use limit orders.",
+    "The earnings release was delayed. The option premium is 4.80.",
+    "Your thesis may be stale after earnings. The option premium is 4.80.",
+    "Premiums are never delayed here.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
