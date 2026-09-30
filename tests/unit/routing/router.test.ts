@@ -3401,6 +3401,44 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBeUndefined();
   });
 
+  it("treats scaled share counts as quantities", async () => {
+    const derived = await route(
+      { ...BASE_INPUT, text: "I paid $150k for 1k AAPL shares. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const count = await route(
+      { ...BASE_INPUT, text: "I paid $150k for 1k AAPL shares. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 1000 }),
+    );
+
+    expect(derived.entities.costBasis).toBe(150);
+    expect(count.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps completed purchases with time or holding modifiers", async () => {
+    const lastYear = await route(
+      { ...BASE_INPUT, text: "I bought AAPL last year at $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const currentPosition = await route(
+      { ...BASE_INPUT, text: "I bought my current AAPL position at $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const currentlyHold = await route(
+      { ...BASE_INPUT, text: "I currently hold 100 AAPL at $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const lastPrice = await route(
+      { ...BASE_INPUT, text: "I own AAPL, last price $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(lastYear.entities.costBasis).toBe(150);
+    expect(currentPosition.entities.costBasis).toBe(150);
+    expect(currentlyHold.entities.costBasis).toBe(150);
+    expect(lastPrice.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

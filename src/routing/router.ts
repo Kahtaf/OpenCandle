@@ -1601,7 +1601,7 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|market|worth|valued?|spot|last|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1681,12 +1681,16 @@ function parseStatedNumbers(
     const start = match.index ?? 0;
     const rest = text.slice(start + whole.length);
     const ticker = rest.match(TICKER_SUFFIX)?.[1];
+    const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
+    // Scaled counts ("1k AAPL shares") are quantities too.
     if (
       !dollar &&
-      !scale &&
       (QUANTITY_SUFFIX.test(rest) || (ticker !== undefined && isTicker(ticker.toUpperCase())))
     ) {
-      quantities.push({ value: base, clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY) });
+      quantities.push({
+        value: base * multiplier,
+        clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY),
+      });
       continue;
     }
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
@@ -1695,7 +1699,6 @@ function parseStatedNumbers(
     if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(skipLeadingCurrency(rest))) {
       continue;
     }
-    const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
     candidates.push({
       value: base * multiplier,
       start,
