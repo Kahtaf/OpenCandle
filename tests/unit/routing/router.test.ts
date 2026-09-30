@@ -3184,6 +3184,63 @@ describe("router cost-basis context guard", () => {
     expect(decimal.entities.costBasis).toBe(150.25);
   });
 
+  it("grounds a saved basis only for the held symbol", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings are next week; I own AMD, covered call ideas?",
+        portfolioPositions: [
+          { symbol: "NVDA", quantity: 100, costBasis: 50, currency: "USD" },
+          { symbol: "AMD", quantity: 100, currency: "USD" },
+        ],
+      },
+      outputFor({ symbols: ["AMD", "NVDA"], heldSymbol: "AMD", costBasis: 50 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not ground a basis in a quote given in a basis-question reply", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I don't know; it is trading at $200",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("scopes quote wording to its own amount within a clause", async () => {
+    const stated = await route(
+      { ...BASE_INPUT, text: "I own AAPL at $150 currently trading at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const quoted = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at $150 currently trading at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(stated.entities.costBasis).toBe(150);
+    expect(quoted.entities.costBasis).toBeUndefined();
+  });
+
+  it("does not ground a basis in a prospective purchase or sale price", async () => {
+    const buyMore = await route(
+      { ...BASE_INPUT, text: "I own AAPL and plan to buy more at $150. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const sellAt = await route(
+      { ...BASE_INPUT, text: "I own AAPL and would sell at $350. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 350 }),
+    );
+
+    expect(buyMore.entities.costBasis).toBeUndefined();
+    expect(sellAt.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

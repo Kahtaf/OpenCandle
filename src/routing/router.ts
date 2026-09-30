@@ -1458,14 +1458,21 @@ function basisGrounding(
       texts.push({ text: turn.text, isBasisReply });
     }
   }
-  const savedBases = symbols
-    .map((symbol) => readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis)
-    .filter((basis): basis is number => basis !== undefined);
-  if (texts.length === 0 && savedBases.length === 0) return undefined;
   // Cost-basis validation runs before the existing-position reorder, so prefer
   // the held symbol over textual symbol order when the model resolved it.
   const targetSymbol =
     heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0];
+  const hasSavedBasis = symbols.some(
+    (symbol) =>
+      readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
+  );
+  if (texts.length === 0 && !hasSavedBasis) return undefined;
+  // Only the target holding's saved basis can ground the target's basis.
+  const targetSavedBasis =
+    targetSymbol === undefined
+      ? undefined
+      : readPortfolioPosition(inputContext?.portfolioPositions, targetSymbol)?.costBasis;
+  const savedBases = targetSavedBasis === undefined ? [] : [targetSavedBasis];
   return { texts, savedBases, symbols, targetSymbol };
 }
 
@@ -1480,7 +1487,11 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   return grounding.texts.some(({ text: turnText, isBasisReply }) => {
     const scopedText = maskOtherHoldingClauses(turnText, grounding);
     const parsed = parseStatedNumbers(scopedText, grounding.symbols, turnText);
-    const amounts = parsed.amounts.filter((amount) => isBasisReply || amount.isBasisLinked);
+    // A basis-question reply may state a bare amount, but a quote or
+    // prospective price in the reply still does not answer the question.
+    const amounts = parsed.amounts.filter(
+      (amount) => amount.isBasisLinked || (isBasisReply && !amount.isNonBasisContext),
+    );
     const { quantities } = parsed;
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
     return amounts.some((amount) =>
@@ -1562,13 +1573,17 @@ const NON_BASIS_PREFIX =
 const NON_BASIS_SUFFIX = /^\s*(?:premium|credit|strike|target|stop|limit|budget)\b/i;
 // A direct amount is basis-linked when its clause carries acquisition or basis
 // wording ("bought at $150", "cost basis is $51"), or when its sentence states a
-// holding and the amount is per-share ("I own 100 AAPL at $150") outside quote
-// wording ("it is trading at $200", "worth $30,000").
+// holding and the amount is per-share ("I own 100 AAPL at $150"), and its
+// lead-in has no quote or prospective wording ("it is trading at $200").
 const ACQUISITION_CONTEXT =
-  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|buy|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/i;
+  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/gi;
 const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|position|shares?)\b/i;
-const QUOTE_CONTEXT =
-  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|today|market|worth|valued?|spot|last)\b/i;
+// Quote or prospective wording between an amount and the nearest preceding
+// acquisition word (or clause start, or previous number) marks that amount as
+// a quote or planned order, not a basis ("trading at $200", "plan to buy more
+// at $150", "would sell at $350").
+const NON_BASIS_CONTEXT =
+  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|today|market|worth|valued?|spot|last|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|order|limit)\b/i;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1580,6 +1595,29 @@ interface StatedAmount {
   value: number;
   isTotal: boolean;
   isBasisLinked: boolean;
+  isNonBasisContext: boolean;
+}
+
+function segmentStart(text: string, index: number, boundary: RegExp): number {
+  let start = 0;
+  for (const match of text.matchAll(boundary)) {
+    const at = match.index ?? 0;
+    if (at >= index) break;
+    start = at + match[0].length;
+  }
+  return start;
+}
+
+// The local lead-in to an amount: from the clause start or previous number,
+// and after the last acquisition word, so "Sell calls on AAPL I bought at $150"
+// judges only " at ".
+function localLeadIn(text: string, start: number, previousEnd: number): string {
+  const from = Math.max(segmentStart(text, start, CLAUSE_BOUNDARY), previousEnd);
+  const leadIn = text.slice(from, start);
+  const lastAcquisition = [...leadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
+  return lastAcquisition === undefined
+    ? leadIn
+    : leadIn.slice((lastAcquisition.index ?? 0) + lastAcquisition[0].length);
 }
 
 // `contextText` is the unmasked turn (same length as `text`), so holding
@@ -1593,9 +1631,18 @@ function parseStatedNumbers(
   const isTicker = (token: string) =>
     resolvedSymbols.includes(token) ||
     (extractedSymbols.includes(token) && !ISO_CURRENCY_CODES.has(token));
-  const candidates: Array<{ value: number; start: number; before: string; rest: string }> = [];
+  const candidates: Array<{
+    value: number;
+    start: number;
+    previousEnd: number;
+    before: string;
+    rest: string;
+  }> = [];
   const quantities: number[] = [];
+  let previousEnd = 0;
   for (const match of text.matchAll(STATED_NUMBER)) {
+    const matchPreviousEnd = previousEnd;
+    previousEnd = (match.index ?? 0) + match[0].length;
     const [whole, dollar, integer, fraction, scale] = match;
     const base = Number.parseFloat(`${integer.replace(/,/g, "")}${fraction ?? ""}`);
     if (!Number.isFinite(base)) continue;
@@ -1614,12 +1661,20 @@ function parseStatedNumbers(
     const before = text.slice(0, start);
     if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(rest)) continue;
     const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
-    candidates.push({ value: base * multiplier, start, before, rest });
+    candidates.push({
+      value: base * multiplier,
+      start,
+      previousEnd: matchPreviousEnd,
+      before,
+      rest,
+    });
   }
-  const amounts = candidates.map(({ value, start, before, rest }) => {
+  const amounts = candidates.map(({ value, start, previousEnd: prevEnd, before, rest }) => {
     const perShare = PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(rest);
     const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
+    const isNonBasisContext = NON_BASIS_CONTEXT.test(localLeadIn(text, start, prevEnd));
+    const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
       value,
       isTotal:
@@ -1627,8 +1682,8 @@ function parseStatedNumbers(
         !perShare &&
         (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
       isBasisLinked:
-        ACQUISITION_CONTEXT.test(clause) ||
-        (perShare && HOLDING_CONTEXT.test(sentence) && !QUOTE_CONTEXT.test(clause)),
+        !isNonBasisContext && (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence))),
+      isNonBasisContext,
     };
   });
   return { amounts, quantities };
