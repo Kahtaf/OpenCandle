@@ -18,7 +18,10 @@ import {
 } from "../../../src/pi/session-cancellation.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
+import { OPTION_QUOTE_NOTICE_TYPE } from "../../../src/runtime/quote-notice.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
+import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
+import { optionChainToolResult } from "../../helpers/option-chain-results.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -430,6 +433,83 @@ describe("opencandle extension", () => {
       (c) => c[0]?.customType === "opencandle-disclaimer",
     );
     expect(sent).toBeUndefined();
+  });
+
+  describe("non-live option quote notice at the settle boundary", () => {
+    async function afterHoursBranch() {
+      const result = (await optionChainToolResult(afterHoursFixture)) as {
+        content: unknown;
+        details: unknown;
+      };
+      return [
+        {
+          type: "message",
+          id: "u1",
+          parentId: null,
+          timestamp: "2026-05-21T02:04:00.000Z",
+          message: { role: "user", content: "Quote the AAPL 210 call" },
+        },
+        {
+          type: "message",
+          id: "a1",
+          parentId: "u1",
+          timestamp: "2026-05-21T02:05:00.000Z",
+          message: {
+            role: "assistant",
+            content: [{ type: "toolCall", id: "c1", name: "get_option_chain", arguments: {} }],
+          },
+        },
+        {
+          type: "message",
+          id: "t1",
+          parentId: "a1",
+          timestamp: "2026-05-21T02:05:01.000Z",
+          message: {
+            role: "toolResult",
+            toolCallId: "c1",
+            toolName: "get_option_chain",
+            content: result.content,
+            details: result.details,
+            isError: false,
+          },
+        },
+      ];
+    }
+
+    async function settle(outcome: string, entries: unknown[] = []) {
+      const fake = createFakeApi();
+      openCandleExtension(fake.api);
+      const handler = fake.handlers.get("agent_before_settle")?.[0];
+      expect(handler).toBeDefined();
+      const branch = await afterHoursBranch();
+      return handler!(
+        { type: "agent_before_settle", outcome, entries, continue: false },
+        { sessionManager: { getBranch: () => branch } },
+      ) as Promise<{ entries?: { customType?: string; content?: unknown }[] } | undefined>;
+    }
+
+    it("appends the fixed notice after a completed single-turn answer", async () => {
+      const result = await settle("completed");
+      expect(result?.entries).toHaveLength(1);
+      expect(result?.entries?.[0]).toMatchObject({
+        type: "custom_message",
+        customType: OPTION_QUOTE_NOTICE_TYPE,
+        display: true,
+      });
+      expect(JSON.stringify(result?.entries?.[0].content)).toContain("not executable now");
+    });
+
+    it("keeps drafts from earlier handlers and never adds a second notice", async () => {
+      const earlier = { type: "custom", customType: "other-extension" };
+      const first = await settle("completed", [earlier]);
+      expect(first?.entries?.[0]).toBe(earlier);
+      expect(first?.entries).toHaveLength(2);
+      expect(await settle("completed", first?.entries ?? [])).toBeUndefined();
+    });
+
+    it("adds nothing when the run did not complete", async () => {
+      expect(await settle("aborted")).toBeUndefined();
+    });
   });
 
   it("does not record a disclaimer entry on intermediate tool-use turns", async () => {
