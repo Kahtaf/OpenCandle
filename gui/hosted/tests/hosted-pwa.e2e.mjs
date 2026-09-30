@@ -649,20 +649,6 @@ try {
       assert(stateCounts.workflowRuns >= 1, "SQLite archive includes workflow history");
     }
 
-    stage = "real service worker update";
-    assert((await updateOffer(page).count()) === 0, "no update offer before a new worker exists");
-    await publishUpdatedServiceWorker();
-    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
-    await updateOffer(page).waitFor({ state: "visible", timeout: 60_000 });
-    const beforeUpdate = await markDocument(page);
-    await updateOffer(page).click();
-    await waitForReloadedDocument(page, beforeUpdate, 120_000);
-    assert(
-      (await page.evaluate(() => caches.keys())).some((key) => key.endsWith("-e2e-update")),
-      "the reloaded page runs under the updated worker",
-    );
-    assert((await updateOffer(page).count()) === 0, "the update offer clears once installed");
-
     stage = "update handoff";
     await page.evaluate(() => {
       globalThis.__opencandleUpdateMessages = [];
@@ -765,6 +751,24 @@ try {
 
     await follower.close();
     await mobile.close();
+    // Activating an update reloads every tab it controls, so this runs once
+    // the follower and mobile tabs are closed and cannot take the writer role
+    // mid-stage. The synthetic handoff's fake worker was dropped by the reload
+    // in "clear model key".
+    stage = "real service worker update";
+    assert((await updateOffer(page).count()) === 0, "no update offer before a new worker exists");
+    await publishUpdatedServiceWorker();
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+    await updateOffer(page).waitFor({ state: "visible", timeout: 60_000 });
+    const beforeUpdate = await markDocument(page);
+    await updateOffer(page).click();
+    await waitForReloadedDocument(page, beforeUpdate, 120_000);
+    assert(
+      (await page.evaluate(() => caches.keys())).some((key) => key.endsWith("-e2e-update")),
+      "the reloaded page runs under the updated worker",
+    );
+    assert((await updateOffer(page).count()) === 0, "the update offer clears once installed");
+
     stage = "clear and restore";
     await openHostedDataSettings(page);
     await page.getByRole("button", { name: "Clear all", exact: true }).click();
