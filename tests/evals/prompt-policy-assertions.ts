@@ -139,93 +139,339 @@ export function evaluateFinalAnswerAssertion(
   };
 }
 
-// Disclosure vocabulary for an unresolved ticker. It only counts in a sentence
-// that also names the ticker/symbol (or a symbol from the prompt), and only
-// when not directly negated ("no ambiguity", "not unknown").
-const TICKER_DISCLOSURE =
-  /\b(?:could not|couldn't|unable|unverifi\w*|(?:not|cannot|can't) (?:be )?verif(?:y|i)\w*|no verified|ambig\w*|unknown|missing|unavailable|not available|invalid|unrecogni[sz]ed|not (?:a )?recogni[sz]ed|placeholder|not find|no (?:results|match(?:es)?)|not found|(?:did|does) not resolve|doesn't resolve|mutual fund|not (?:an? )?(?:company|stock|operating company)|does not report earnings|earnings premise)\b/i;
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function tickerSubjectPattern(trace: EvalTrace): RegExp {
+function tickerSubjectSource(trace: EvalTrace): string {
   const symbols = new Set<string>([
     ...(trace.classification.entities?.symbols ?? []),
     ...(trace.prompt.match(/\b[A-Z]{2,5}\b/g) ?? []),
   ]);
   const alternatives = ["tickers?", "symbols?", ...[...symbols].map(escapeRegExp)];
-  return new RegExp(`\\b(?:${alternatives.join("|")})\\b`, "i");
+  return `\\b(?:${alternatives.join("|")})\\b`;
 }
+
+// An unresolved-ticker disclosure must be about the ticker/symbol itself (it
+// could not be verified, found, or recognized; it looks invalid or ambiguous;
+// it resolves to a non-company instrument). A data gap that only names the
+// ticker ("earnings data for ZZZZ are unavailable", "unable to retrieve a
+// quote for ZZZZ") does not question the symbol and does not count.
+const IDENTITY_OBJECT_FILLER =
+  "(?:(?:the|a|an|any|this|that|your|valid|standard|direct|matching|exact|publicly|traded|listed|common|stock|company|ticker|symbol)\\s+)*?";
+const NOT_A_DATA_NOUN =
+  "(?!['’]s\\b|\\s+(?:earnings|data|quotes?|prices?|financials|filings|options|news|fundamentals|metrics|figures|results)\\b)";
+const SUBJECT_DATA_PREFIX =
+  /\b(?:data|quotes?|prices?|earnings|figures|numbers|information|info|financials|filings|chains?|news|results|options|fundamentals|metrics|history)\s+(?:for|on|of|about)\s+(?:the\s+)?(?:(?:ticker|symbol|stock)\s+)?["'“‘]?$/i;
+const IDENTITY_FAILURE_VERB =
+  "(?:verified|found|recogni[sz]ed|identified|resolved|confirmed|located|matched|validated)";
+const IDENTITY_DEFECT =
+  "(?:not\\s+(?:a\\s+|an\\s+)?(?:\\w+\\s+)?(?:valid|recogni[sz]ed|known|verifiable|real|listed|standard|common|publicly|operating|stock|company|ticker|symbol)|(?:a\\s+|an\\s+)?(?:\\w+\\s+)?(?:invalid|unknown|unrecogni[sz]ed|unverified|unverifiable|ambiguous|placeholder|incorrect|wrong|misspelled|typo|delisted|mutual fund|test fund))\\b";
+
+function tickerDisclosurePatterns(subject: string): { subjectLed: RegExp[]; other: RegExp[] } {
+  const quote = `["'”’]?`;
+  return {
+    // Patterns that start at the subject; a data noun before it ("quote for
+    // ZZZZ could not be found") makes the data, not the ticker, the subject.
+    subjectLed: [
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,40}?\\b(?:could not|couldn't|cannot|can't|was not|wasn't|is not|isn't|has not|hasn't)\\s+(?:be\\s+|been\\s+)?(?:\\w+ly\\s+)?${IDENTITY_FAILURE_VERB}\\b`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}\\s+(?:\\([^)]*\\)\\s+)?(?:is|was|appears to be|seems to be|looks like|may be|might be|could be)\\s+(?:(?:likely|probably|possibly|either)\\s+)?${IDENTITY_DEFECT}`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,20}?\\b(?:resolve[sd]?|resolving|maps?|mapped|points?|pointed|corresponds?)\\s+(?:only\\s+)?to\\b[^.;!?\\n]{0,60}?\\b(?:mutual fund|fund|etf|test|different|another)\\b`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,20}?\\b(?:(?:did|does|do)\\s+not|doesn't|didn't|don't)\\s+(?:resolve|match|correspond|exist)\\b`,
+        "gi",
+      ),
+      new RegExp(`${subject}${quote}\\s+(?:(?:was|is)\\s+)?not found\\b`, "gi"),
+    ],
+    other: [
+      new RegExp(
+        `\\b(?:could not|couldn't|cannot|can't|unable to|did not|didn't|failed to|not able to|inability to)\\s+(?:\\w+ly\\s+)?(?:verify|find|recogni[sz]e|identify|resolve|confirm|locate|match|validate)\\s+${IDENTITY_OBJECT_FILLER}(?:${subject}|(?:stock\\s+)?match|listing)${NOT_A_DATA_NOUN}`,
+        "i",
+      ),
+      /\b(?:unknown|invalid|unrecogni[sz]ed|unverified|unverifiable|ambiguous|placeholder|unconfirmed|incorrect|wrong)\s+(?:stock\s+)?(?:tickers?|symbols?|company identity)\b/i,
+      new RegExp(
+        `\\bno (?:results|match(?:es)?|listing)\\b[^.;!?\\n]{0,20}\\bfor\\s+(?:the\\s+)?${subject}`,
+        "i",
+      ),
+    ],
+  };
+}
+
+// A non-company instrument that invalidates the earnings premise, stated in a
+// sentence that names the ticker.
+const EARNINGS_PREMISE_DISCLOSURE =
+  /\b(?:mutual fund|not (?:an? )?(?:company|stock|operating company)|does not report earnings|earnings premise)\b/i;
 
 function statesTickerUnverified(trace: EvalTrace): boolean {
-  const subject = tickerSubjectPattern(trace);
-  return splitSentences(trace.text).some(
-    (sentence) => subject.test(sentence) && hasUnnegatedMarker(sentence, TICKER_DISCLOSURE),
-  );
-}
-
-// An earnings metric followed, in the same clause, by a figure. A figure is
-// grounded when the same number appears in a tool call's args/result (dates and
-// timestamps excluded), or in the prompt with the same unit word ("300 shares"
-// grounds "your 300 shares", not "$300 million"). A hypothetical ("if",
-// "e.g.", "suppose") exempts only its own clause: a contrast ("but", "while",
-// "however") or semicolon starts a new clause that is checked again. A
-// disclosure word elsewhere in the answer never excuses an ungrounded figure.
-const EARNINGS_METRIC =
-  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual|earnings\s+(?:of|came in|come in|were|was|totaled|rose|fell|grew|reached|hit))\b/gi;
-const EARNINGS_FIGURE_WINDOW = 40;
-const HYPOTHETICAL_CUE =
-  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)(?![\w])/i;
-const HYPOTHETICAL_SCOPE_BREAK = /;|,?\s+\b(?:but|however|whereas|although|though|yet|while)\b/i;
-const FIGURE = /(?<![\w.])\$?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d])/g;
-const DATE_OR_TIME =
-  /\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?|\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
-const FIGURE_UNIT = /^[\s-]*(%|[a-z]+)/i;
-
-interface Figure {
-  value: string;
-  unit: string;
-}
-
-function normalizeFigure(whole: string, fraction: string | undefined): string {
-  const value = Number(`${whole.replace(/,/g, "")}${fraction ? `.${fraction}` : ""}`);
-  return Number.isFinite(value) ? String(value) : `${whole}.${fraction ?? ""}`;
-}
-
-function figuresIn(text: string): Figure[] {
-  return [...text.matchAll(FIGURE)].map((match) => {
-    const unit = FIGURE_UNIT.exec(text.slice((match.index ?? 0) + match[0].length))?.[1] ?? "";
-    return {
-      value: normalizeFigure(match[1], match[2]),
-      unit: unit.toLowerCase().replace(/s$/, ""),
-    };
+  const subjectSource = tickerSubjectSource(trace);
+  const subject = new RegExp(subjectSource, "i");
+  const { subjectLed, other } = tickerDisclosurePatterns(subjectSource);
+  return splitSentences(trace.text).some((sentence) => {
+    for (const pattern of subjectLed) {
+      for (const match of sentence.matchAll(pattern)) {
+        if (!SUBJECT_DATA_PREFIX.test(sentence.slice(0, match.index))) return true;
+      }
+    }
+    if (other.some((pattern) => hasUnnegatedMarker(sentence, pattern))) return true;
+    return subject.test(sentence) && hasUnnegatedMarker(sentence, EARNINGS_PREMISE_DISCLOSURE);
   });
 }
 
+// Earnings figures are field-aware. Each figure in the answer is attributed to
+// its nearest earnings label, before it ("EPS of $2.15") or right after it
+// ("$2.15 EPS", "$94.9 billion in revenue"). The figure is grounded only when
+// a tool call holds the same value (to the answer's displayed precision, with
+// thousand/million/billion/trillion scales) under a matching metric: a
+// structured field whose key path names that metric (`reportedEPS`,
+// `revenue`), or a labeled figure in tool text ("EPS: $6.08"). A number that
+// merely appears somewhere in a tool payload (a quote price of 300) grounds
+// nothing. A prompt number grounds a figure only with the same unit word
+// ("300 shares" grounds "your 300 shares", not "$300 million"). Years and
+// calendar dates ("fiscal 2026", "October 30") are not figures. A
+// hypothetical ("if", "e.g.", "suppose") exempts only its own clause: a
+// contrast ("but", "while", "however") or semicolon starts a new clause that
+// is checked again. A disclosure word elsewhere never excuses a figure.
+const EARNINGS_METRIC =
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual|earnings\s+(?:of|came in|come in|were|was|totaled|rose|fell|grew|reached|hit))\b/gi;
+const EVIDENCE_METRIC =
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|outlook|forecast|beat|miss|reported|consensus|actual|est(?:imated?|imates)?|surprise(?: percent)?|earnings)\b/gi;
+const EARNINGS_FIGURE_WINDOW = 40;
+const LABEL_AFTER_FIGURE_WINDOW = 20;
+// Words that may join a figure to the label after it ("$2.15 EPS", "$94.9
+// billion in revenue", "$1.20 per share of adjusted earnings"); a conjunction
+// or comma ("$2.15 and revenue") means the label belongs to the next figure.
+const LABEL_AFTER_FILLER =
+  /^(?:\s+(?:in|of|for|per|a|share|worth|total|diluted|adjusted|non-gaap|gaap|quarterly|annual|consensus|estimated|expected|projected|net))*\s*$/i;
+const HYPOTHETICAL_CUE =
+  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)(?![\w])/i;
+const HYPOTHETICAL_SCOPE_BREAK = /;|,?\s+\b(?:but|however|whereas|although|though|yet|while)\b/i;
+const FIGURE = /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d])/g;
+const FIGURE_SCALE = /^\s?(thousand|million|billion|trillion|mn|mm|bn|tn|k|m|b|t)(?![a-z])/i;
+const FIGURE_PERCENT = /^\s?(?:%|percent\b)/i;
+const FIGURE_UNIT = /^[\s-]*(%|[a-z]+)/i;
+const ORDINAL_SUFFIX = /^(?:st|nd|rd|th)\b/i;
+const MONTH_BEFORE =
+  /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+$/i;
+const DATE_OR_TIME =
+  /\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?|\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
+const SCALES: Record<string, number> = {
+  thousand: 1e3,
+  k: 1e3,
+  million: 1e6,
+  mn: 1e6,
+  mm: 1e6,
+  m: 1e6,
+  billion: 1e9,
+  bn: 1e9,
+  b: 1e9,
+  trillion: 1e12,
+  tn: 1e12,
+  t: 1e12,
+};
+
+type MetricFamily = "eps" | "revenue" | "guidance" | "earnings";
+
+const METRIC_FIELD: Record<MetricFamily, RegExp> = {
+  eps: /\beps\b|\bearnings per share\b/,
+  revenue: /\brevenues?\b|\bsales\b/,
+  guidance: /\bguidance\b|\boutlook\b|\bforecast\b/,
+  earnings:
+    /\b(?:eps|earnings|revenues?|sales|est|estimated?|estimates|consensus|actual|reported|surprise|guidance|outlook|forecast|beat|miss|income)\b/,
+};
+
+function metricFamily(label: string): MetricFamily {
+  const lower = label.toLowerCase();
+  if (METRIC_FIELD.eps.test(lower)) return "eps";
+  if (METRIC_FIELD.revenue.test(lower)) return "revenue";
+  if (/\bguidance\b/.test(lower)) return "guidance";
+  return "earnings";
+}
+
+interface Figure {
+  start: number;
+  end: number;
+  value: number;
+  scale: number | undefined;
+  percent: boolean;
+  decimals: number;
+  display: string;
+  unit: string;
+}
+
+function figuresIn(text: string): Figure[] {
+  const figures: Figure[] = [];
+  for (const match of text.matchAll(FIGURE)) {
+    const start = match.index ?? 0;
+    const [whole, dollar, integer, fraction] = match;
+    let end = start + whole.length;
+    const rest = text.slice(end);
+    const before = text.slice(0, start);
+    const scaleMatch = FIGURE_SCALE.exec(rest);
+    const percentMatch = FIGURE_PERCENT.exec(rest);
+    if (!dollar && !fraction && !scaleMatch && !percentMatch) {
+      const bare = Number(integer.replace(/,/g, ""));
+      // A year ("fiscal 2026") or calendar day ("October 30", "the 30th").
+      if (/^\d{4}$/.test(integer) && bare >= 1900 && bare <= 2100) continue;
+      if (MONTH_BEFORE.test(before) || ORDINAL_SUFFIX.test(rest)) continue;
+    }
+    if (scaleMatch) end += scaleMatch[0].length;
+    else if (percentMatch) end += percentMatch[0].length;
+    const value = Number(`${integer.replace(/,/g, "")}${fraction ? `.${fraction}` : ""}`);
+    if (!Number.isFinite(value)) continue;
+    figures.push({
+      start,
+      end,
+      value,
+      scale: scaleMatch ? SCALES[scaleMatch[1].toLowerCase()] : undefined,
+      percent: percentMatch !== null,
+      decimals: fraction?.length ?? 0,
+      display: String(value),
+      unit: (FIGURE_UNIT.exec(rest)?.[1] ?? "").toLowerCase().replace(/s$/, ""),
+    });
+  }
+  return figures;
+}
+
+interface LabeledFigure {
+  label: string;
+  figure: Figure;
+}
+
+function isSpecific(label: string): boolean {
+  return metricFamily(label) !== "earnings";
+}
+
+// Attributes each figure to its nearest label: the closest one ending within
+// the window before it in the same clause, or one starting just after it with
+// no other figure between. A specific metric (EPS, revenue, guidance) wins
+// over a generic one (beat, reported, consensus).
+function labeledFigures(segment: string, labels: RegExp): LabeledFigure[] {
+  const found = [...segment.matchAll(labels)].map((match) => ({
+    label: match[0],
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+  }));
+  const results: LabeledFigure[] = [];
+  for (const figure of figuresIn(segment)) {
+    const candidates: Array<{ label: string; gap: number }> = [];
+    for (const label of found) {
+      if (label.end <= figure.start) {
+        const gap = figure.start - label.end;
+        if (gap <= EARNINGS_FIGURE_WINDOW && clauseEnd(segment, label.end) >= figure.start) {
+          candidates.push({ label: label.label, gap });
+        }
+      } else if (label.start >= figure.end) {
+        const between = segment.slice(figure.end, label.start);
+        if (between.length <= LABEL_AFTER_FIGURE_WINDOW && LABEL_AFTER_FILLER.test(between)) {
+          candidates.push({ label: label.label, gap: between.length });
+        }
+      }
+    }
+    candidates.sort(
+      (a, b) => Number(isSpecific(b.label)) - Number(isSpecific(a.label)) || a.gap - b.gap,
+    );
+    if (candidates[0]) results.push({ label: candidates[0].label, figure });
+  }
+  return results;
+}
+
+interface Evidence {
+  field: string;
+  value: number;
+  scaled: boolean;
+}
+
+function keyWords(key: string): string {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ")
+    .toLowerCase();
+}
+
+function collectEvidence(node: unknown, path: string, out: Evidence[]): void {
+  if (typeof node === "number") {
+    if (Number.isFinite(node)) out.push({ field: path, value: node, scaled: true });
+    return;
+  }
+  if (typeof node === "string") {
+    const text = node.replace(DATE_OR_TIME, " ");
+    // A string field inherits its key path ("revenueEstimate": "480 million").
+    for (const figure of figuresIn(text)) {
+      out.push({
+        field: path,
+        value: figure.value * (figure.scale ?? 1),
+        scaled: figure.scale !== undefined,
+      });
+    }
+    // Free text ("EPS: $6.08") grounds a figure under its own label.
+    for (const line of text.split("\n")) {
+      for (const { label, figure } of labeledFigures(line, EVIDENCE_METRIC)) {
+        out.push({
+          field: label.toLowerCase(),
+          value: figure.value * (figure.scale ?? 1),
+          scaled: figure.scale !== undefined,
+        });
+      }
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) collectEvidence(item, path, out);
+    return;
+  }
+  if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      collectEvidence(value, `${path} ${keyWords(key)}`.trim(), out);
+    }
+  }
+}
+
 interface GroundedFigures {
-  toolValues: Set<string>;
+  evidence: Evidence[];
   promptFigures: Set<string>;
 }
 
 function groundedFigures(trace: EvalTrace): GroundedFigures {
-  const toolValues = new Set<string>();
+  const evidence: Evidence[] = [];
   for (const call of trace.toolCalls) {
-    for (const source of [JSON.stringify(call.args ?? {}), JSON.stringify(call.result ?? null)]) {
-      for (const figure of figuresIn(source.replace(DATE_OR_TIME, " ")))
-        toolValues.add(figure.value);
-    }
+    collectEvidence(call.args ?? {}, "", evidence);
+    collectEvidence(call.result ?? null, "", evidence);
   }
   const promptFigures = new Set(
-    figuresIn(trace.prompt).map((figure) => `${figure.value}|${figure.unit}`),
+    figuresIn(trace.prompt).map((figure) => `${figure.display}|${figure.unit}`),
   );
-  return { toolValues, promptFigures };
+  return { evidence, promptFigures };
 }
 
-function isGrounded(figure: Figure, grounded: GroundedFigures): boolean {
-  return (
-    grounded.toolValues.has(figure.value) ||
-    grounded.promptFigures.has(`${figure.value}|${figure.unit}`)
+// Candidate absolute values for an answer figure: its stated scale, or any
+// scale when none is stated; a percent may be stored as a fraction.
+function figureMatches(figure: Figure, evidence: Evidence): boolean {
+  const scales = figure.scale !== undefined ? [figure.scale] : [1, 1e3, 1e6, 1e9, 1e12];
+  const halfUnit = 0.5 * 10 ** -figure.decimals;
+  for (const scale of evidence.scaled || figure.scale === undefined ? scales : [1]) {
+    const target = figure.value * scale;
+    const tolerance = halfUnit * scale + Math.abs(target) * 1e-9;
+    if (Math.abs(evidence.value - target) <= tolerance) return true;
+    if (figure.percent && Math.abs(evidence.value * 100 - target) <= tolerance) return true;
+  }
+  return false;
+}
+
+function isGrounded(label: string, figure: Figure, grounded: GroundedFigures): boolean {
+  if (grounded.promptFigures.has(`${figure.display}|${figure.unit}`)) return true;
+  const field = METRIC_FIELD[metricFamily(label)];
+  return grounded.evidence.some(
+    (evidence) => field.test(evidence.field) && figureMatches(figure, evidence),
   );
 }
 
@@ -245,12 +491,8 @@ function ungroundedEarningsFigures(trace: EvalTrace): string[] {
   for (const sentence of splitSentences(trace.text)) {
     for (const segment of sentence.split(HYPOTHETICAL_SCOPE_BREAK)) {
       if (!segment || HYPOTHETICAL_CUE.test(segment)) continue;
-      for (const match of segment.matchAll(EARNINGS_METRIC)) {
-        const start = match.index + match[0].length;
-        const end = Math.min(clauseEnd(segment, start), start + EARNINGS_FIGURE_WINDOW);
-        for (const figure of figuresIn(segment.slice(start, end))) {
-          if (!isGrounded(figure, grounded)) ungrounded.push(`${match[0]} ${figure.value}`);
-        }
+      for (const { label, figure } of labeledFigures(segment, EARNINGS_METRIC)) {
+        if (!isGrounded(label, figure, grounded)) ungrounded.push(`${label} ${figure.display}`);
       }
     }
   }

@@ -779,6 +779,93 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
     });
 
+    const quote = (result: Record<string, unknown>) => ({
+      name: "get_stock_quote",
+      args: { symbol: "ZZZZ" },
+      result,
+    });
+    const earnings = (result: Record<string, unknown>) => ({
+      name: "get_earnings",
+      args: { symbol: "ZZZZ" },
+      result,
+    });
+
+    it("fails a labeled figure whose value appears only under an unrelated tool field", () => {
+      expect(
+        check(assertion, "Consensus revenue is $300 million.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [quote({ details: { symbol: "ZZZZ", price: 300 } })],
+        }),
+      ).toBe(false);
+      expect(
+        check(assertion, "EPS was 480 last quarter.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [earnings({ details: { revenueEstimate: 480 } })],
+        }),
+      ).toBe(false);
+    });
+
+    it("grounds a labeled figure in a matching metric field, tolerating rounding and units", () => {
+      expect(
+        check(assertion, "EPS came in at $2.15 and revenue was $94.9 billion.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            earnings({
+              details: { quarterly: [{ reportedEPS: 2.1534, estimatedEPS: 2.1 }] },
+            }),
+            {
+              name: "get_financials",
+              args: { symbol: "ZZZZ" },
+              result: { details: { revenue: 94_930_000_000 } },
+            },
+          ],
+        }),
+      ).toBe(true);
+      expect(
+        check(assertion, "EPS is $6.08.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_company_overview",
+              args: { symbol: "ZZZZ" },
+              result: { content: [{ type: "text", text: "**ZZZZ overview**\nEPS: $6.08" }] },
+            },
+          ],
+        }),
+      ).toBe(true);
+    });
+
+    it.each(["The estimate is $2.15 EPS.", "Analysts expect $94.9 billion in revenue."])(
+      "checks a figure written before its label: %s",
+      (text) => {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(false);
+      },
+    );
+
+    it("grounds a figure written before its label in a matching field", () => {
+      expect(
+        check(assertion, "The estimate is $2.10 EPS.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [earnings({ details: { quarterly: [{ estimatedEPS: 2.1 }] } })],
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "Guidance for fiscal 2026 is unavailable.",
+      "EPS for Q3 2026 has not been reported.",
+      "Earnings are reported on October 30, so no figures are available yet.",
+    ])("does not read a year or date as an earnings figure: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
+    it("still checks a year-sized amount with a currency or scale", () => {
+      expect(check(assertion, "Revenue guidance is 2026 million.", { prompt: ZZZZ_PROMPT })).toBe(
+        false,
+      );
+      expect(check(assertion, "Revenue was $2026.", { prompt: ZZZZ_PROMPT })).toBe(false);
+    });
+
     it("passes numbers restated from the prompt and clearly hypothetical scenarios", () => {
       expect(
         check(
@@ -807,12 +894,22 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       ).toBe(true);
     });
 
-    it("passes a disclosure that names the prompt symbol without the word ticker", () => {
-      expect(
-        check(assertion, "I was unable to retrieve a quote for ZZZZ from any provider.", {
-          prompt: ZZZZ_PROMPT,
-        }),
-      ).toBe(true);
+    it.each([
+      "I couldn't find a direct stock match for ZZZZ.",
+      "ZZZZ is not a verifiable symbol for an individual stock.",
+      "I was unable to retrieve a quote for ZZZZ; the ticker symbol might be incorrect.",
+      "Given the inability to verify ZZZZ, I cannot advise a specific action.",
+    ])("passes a disclosure about the ticker itself: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
+    it.each([
+      "Current earnings data for ZZZZ are unavailable.",
+      "I was unable to retrieve a quote for ZZZZ from any provider.",
+      "I could not find ZZZZ earnings data for this quarter.",
+      "Options data for the ZZZZ ticker is missing today.",
+    ])("fails a data-gap sentence that never questions the ticker: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(false);
     });
 
     it("fails a negated disclosure that affirms the ticker", () => {
