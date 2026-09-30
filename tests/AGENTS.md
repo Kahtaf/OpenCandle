@@ -88,6 +88,10 @@ The authoritative policy is `docs/internal/test-trust-policy.md`. In short:
 - **Failures:** no retry-until-green; one human diagnostic rerun at most, attempts preserved. Every
   release failure blocks: no waiver or bypass is implemented, and none will be built (maintainer
   decision 2026-09-25).
+- **Flake lane:** `node scripts/flake-lane.mjs --suite <gate step> --runs N [-- <args>]` repeats one
+  gate step with no retry and writes counts plus the first failure's log to
+  `validation-output/flake/`. The nightly workflow runs it advisory-only; it is not a gate and never
+  release evidence.
 - **Quarantine** of a required check needs a written record (owner, issue, expiry, lost contract,
   alternative proof); there is no automated registry or silent skip.
 
