@@ -151,6 +151,8 @@ describe("options quote freshness disclosure", () => {
     "If these quotes are stale, verify with your broker.",
     "Premiums may differ in case the market has closed.",
     "Quotes are last-session carryovers? No, the premiums above are executable now.",
+    "Buy the $210 call at the market open for $4.80.",
+    "Enter the order when the market opens.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
@@ -201,6 +203,7 @@ describe("options_screener quote freshness gate", () => {
     "Premium: 480 per contract for the 210 call.",
     "Bid: 4 dollars on the 210 strike.",
     "| Strike | Premium |\n| 210 | 480 |",
+    "The 210 call has a premium of 4.80 per share.",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(
@@ -212,19 +215,21 @@ describe("options_screener quote freshness gate", () => {
     ).toHaveLength(1);
   });
 
-  it.each(["Fetched the option chain.", "Fetched the chain for 2 expirations."])(
-    "does not treat a status line as quote figures: %s",
-    async (text) => {
-      const evidence = await chainEvidence(afterHoursFixture);
-      expect(
-        rankStepValidation().validate(text, {
-          stepType: "fetch_chain",
-          currentEvidence: evidence,
-          priorEvidence: [],
-        }),
-      ).toEqual([]);
-    },
-  );
+  it.each([
+    "Fetched the option chain.",
+    "Fetched the chain for 2 expirations.",
+    "No usable premium is available; require delta >= 0.20.",
+    "Delta 0.42, IV 0.35, put/call ratio 0.85.",
+  ])("does not treat a status line as quote figures: %s", async (text) => {
+    const evidence = await chainEvidence(afterHoursFixture);
+    expect(
+      rankStepValidation().validate(text, {
+        stepType: "fetch_chain",
+        currentEvidence: evidence,
+        priorEvidence: [],
+      }),
+    ).toEqual([]);
+  });
 
   it("also gates the first user-visible step, which presents a ranked premium table", async () => {
     const definition = buildOptionsScreenerWorkflowDefinition({

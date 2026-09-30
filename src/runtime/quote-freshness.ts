@@ -105,8 +105,9 @@ const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
   /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
   /\bmarkets?(?:'s)?[- ]closed\b/gi,
   /\b(?:options\s+)?markets?\s+(?:is|are)\s+(?:now\s+|currently\s+)?(?:in\s+)?(?:after[- ]hours|pre[- ]?market)\b/gi,
-  /\b(?:after|when|once|until|before)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?\b/gi,
-  /\b(?:at|after)\s+(?:the|tomorrow'?s|(?:mon|tues|wednes|thurs|fri)day'?s|next\s+session'?s)\s+(?:market\s+)?open\b/gi,
+  // A timing phrase alone ("buy at the open") is not a disclosure; it must be
+  // an instruction to recheck the figures once trading resumes.
+  /\b(?:re-?check|check|verify|confirm|refresh|re-?quote|re-?price)\b[^.;:!?\n]{0,60}?\b(?:(?:after|when|once|until|before)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?|(?:at|after)\s+(?:the|tomorrow'?s|(?:mon|tues|wednes|thurs|fri)day'?s|next\s+session'?s)\s+(?:market\s+)?open)\b/gi,
 ];
 
 /** Phrases whose negation is the disclosure itself ("not live", "no live quotes"). */
@@ -156,20 +157,26 @@ function clauseBefore(text: string, index: number): string {
   return last?.index === undefined ? window : window.slice(last.index + 1);
 }
 
+const QUOTE_VOCABULARY =
+  /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?)\b/i;
+
 /**
  * Whether the text shows any price-like figure an options quote could be read
- * from: a currency or two-decimal amount, or any number alongside quote
- * vocabulary ("Premium: 480 per contract", "Bid: 4 dollars"). A status line
- * such as "Fetched the chain for 2 expirations" shows none.
+ * from: a currency amount, a number next to quote vocabulary in the same
+ * clause ("premium of 4.80", "Bid: 4", "480 per contract", "4 dollars"), or a
+ * table whose header names a quote column. Greeks and ratios alone ("delta
+ * 0.42") and status lines ("Fetched the chain for 2 expirations") show none.
  */
 export function presentsQuoteFigures(text: string | undefined): boolean {
   if (!text) return false;
-  if (/\$\s?\d|\b\d+\.\d{2}\b/.test(text)) return true;
+  if (/\$\s?\d/.test(text)) return true;
+  const vocabulary = QUOTE_VOCABULARY.source;
+  if (new RegExp(`${vocabulary}[^\\n;!?]{0,25}?\\d`, "i").test(text)) return true;
+  if (/\d[^\n;]{0,15}?\b(?:dollars?|usd|per\s+(?:contract|share))\b/i.test(text)) return true;
+  const lines = text.split("\n");
+  const header = lines.findIndex((line) => line.includes("|") && QUOTE_VOCABULARY.test(line));
   return (
-    /\d/.test(text) &&
-    /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?|dollars?|usd|per\s+(?:contract|share))\b/i.test(
-      text,
-    )
+    header >= 0 && lines.slice(header + 1).some((line) => line.includes("|") && /\d/.test(line))
   );
 }
 
