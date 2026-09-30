@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
 import { notifySessionActionError } from "../lib/session-action-errors.js";
-import { markSessionModelsStale, modelAvailabilitySignature } from "../lib/session-model-setup.js";
+import { markSessionModelsStale, trackModelAvailability } from "../lib/session-model-setup.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -318,7 +318,15 @@ export function useGuiConnection() {
     }
     setAskUserPrompts(data.askUserPrompts || []);
     if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
-    if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
+    // Bootstraps (session loads, HTTP fallback commands) also report which
+    // models have keys; a change invalidates other sessions' cached models.
+    const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
+    if (nextSnapshot || availabilityChanged) {
+      setSessionSnapshots((current) => {
+        const marked = availabilityChanged ? markSessionModelsStale(current) : current;
+        return nextSnapshot ? mergeSessionSnapshotMap(marked, data) : marked;
+      });
+    }
     startTransition(() => {
       setSessions(data.sessions || []);
       if (updateVisibleState) {
@@ -381,7 +389,9 @@ export function useGuiConnection() {
               setCurrentSessionId(message.sessionId);
               setCurrentSessionPersisted(message.sessionPersisted === true);
               setAskUserPrompts(message.askUserPrompts || []);
-              modelAvailabilityRef.current = modelAvailabilitySignature(message.modelSetup);
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
               startTransition(() => {
                 setCatalog(message.catalog);
                 setModelSetup(
@@ -425,14 +435,9 @@ export function useGuiConnection() {
                 ),
               );
             } else if (message.type === "model.setup") {
-              const availability = modelAvailabilitySignature(message.modelSetup);
-              if (
-                modelAvailabilityRef.current !== null &&
-                modelAvailabilityRef.current !== availability
-              ) {
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
                 setSessionSnapshots((current) => markSessionModelsStale(current));
               }
-              modelAvailabilityRef.current = availability;
               startTransition(() =>
                 setModelSetup(
                   message.modelSetup || {

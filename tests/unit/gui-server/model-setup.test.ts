@@ -457,11 +457,12 @@ describe("GUI model setup", () => {
           provider === "google" && id === "gemini-2.5-flash" ? preferred : undefined,
         refresh: async () => {},
       };
+      const broadcastState = vi.fn();
       const controller = createModelSetupController({
         role: "writer",
         getSession: () => ({ modelRuntime, setModel, settingsManager }) as never,
         getSessionManager: () => currentManager,
-        broadcastState: vi.fn(),
+        broadcastState,
         settingsManager,
         resolveSessionManager: async (sessionId) =>
           sessionId === other.getSessionId() ? other : null,
@@ -481,6 +482,9 @@ describe("GUI model setup", () => {
         modelId: "gemini-2.5-flash",
       });
       expect(JSON.stringify(other.getEntries())).toContain("opencandle-model-setup");
+      // The server's current session did not change, so its state is not
+      // rebroadcast (that would switch a browser's Settings context to it).
+      expect(broadcastState).not.toHaveBeenCalled();
     });
 
     it("rejects a model without a configured key for a non-current session", async () => {

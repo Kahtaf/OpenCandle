@@ -29,6 +29,7 @@ import {
   modelAvailabilitySignature,
   resolveVisibleModelSetup,
   staleSessionModelToReload,
+  trackModelAvailability,
 } from "../../../gui/web/src/lib/session-model-setup.js";
 
 describe("useGuiConnection helpers", () => {
@@ -465,6 +466,25 @@ describe("useGuiConnection helpers", () => {
       expect(addressModelCommand("model.setup.select_model", { modelId: "m" }, "")).toEqual({
         modelId: "m",
       });
+    });
+
+    it("reports a change in the models with keys once a baseline exists", () => {
+      const ref = { current: null };
+      const one = { availableModels: [{ provider: "google", id: "a" }] };
+      const two = {
+        availableModels: [
+          { provider: "google", id: "a" },
+          { provider: "x", id: "b" },
+        ],
+      };
+
+      expect(trackModelAvailability(ref, one)).toBe(false);
+      expect(trackModelAvailability(ref, one)).toBe(false);
+      expect(trackModelAvailability(ref, two)).toBe(true);
+      expect(trackModelAvailability(ref, two)).toBe(false);
+      // A payload without model setup (e.g. an error body) is ignored.
+      expect(trackModelAvailability(ref, undefined)).toBe(false);
+      expect(trackModelAvailability(ref, two)).toBe(false);
     });
 
     it("reloads only a visible session whose model went stale", () => {

@@ -340,8 +340,9 @@ export function createModelSetupController({
       target = await applyModelToSession(model, sessionId);
     } catch (error) {
       if (error instanceof SessionBusyForModelChange) {
-        broadcastState();
-        return { current: isCurrentSessionId(sessionId) };
+        const current = isCurrentSessionId(sessionId);
+        if (current) broadcastState();
+        return { current };
       }
       throw error;
     }
@@ -352,7 +353,10 @@ export function createModelSetupController({
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );
-    broadcastState();
+    // A stored session reaches browsers as its own snapshot (see the hub);
+    // rebroadcasting the current session here would move a browser's
+    // Settings context onto it.
+    if (target.current) broadcastState();
     return target;
   }
 

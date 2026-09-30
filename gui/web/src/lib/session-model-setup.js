@@ -71,3 +71,15 @@ export function addressModelCommand(type, payload, visibleSessionId) {
 export function staleSessionModelToReload(snapshot, sessionId) {
   return snapshot?.sessionModelStale === true && sessionId ? sessionId : "";
 }
+
+/**
+ * Records the models with keys from a model setup payload and reports whether
+ * they changed since the last one seen. The first payload sets the baseline.
+ */
+export function trackModelAvailability(ref, modelSetup) {
+  if (!modelSetup || !Array.isArray(modelSetup.availableModels)) return false;
+  const next = modelAvailabilitySignature(modelSetup);
+  const changed = ref.current !== null && ref.current !== next;
+  ref.current = next;
+  return changed;
+}
