@@ -2,15 +2,13 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
-import type { RiskMetrics } from "../../types/portfolio.js";
-
-const RISK_PERIODS = ["6mo", "1y", "2y", "5y"] as const;
+import { RISK_LOOKBACK_PERIODS, type RiskMetrics } from "../../types/portfolio.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
   period: Type.Optional(
     Type.Union(
-      RISK_PERIODS.map((period) => Type.Literal(period)),
+      RISK_LOOKBACK_PERIODS.map((period) => Type.Literal(period)),
       {
         description:
           "Lookback window for historical returns (not the investment horizon): 6mo, 1y, 2y, or 5y. Default: 1y.",

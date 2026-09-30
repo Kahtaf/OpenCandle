@@ -3,6 +3,7 @@ import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import type { OHLCV } from "../../types/market.js";
+import { RISK_LOOKBACK_PERIODS } from "../../types/portfolio.js";
 import { computeDailyReturns } from "./risk-analysis.js";
 
 export function computeCorrelation(returnsA: number[], returnsB: number[]): number {
@@ -34,8 +35,6 @@ export function computeCorrelation(returnsA: number[], returnsB: number[]): numb
 }
 
 const DEFAULT_MIN_OVERLAP = 20;
-const CORRELATION_PERIODS = ["6mo", "1y", "2y", "5y"] as const;
-
 export function alignReturnsByDate(
   historiesBySymbol: Map<string, OHLCV[]>,
   minOverlap: number = DEFAULT_MIN_OVERLAP,
@@ -94,7 +93,7 @@ const params = Type.Object({
   }),
   period: Type.Optional(
     Type.Union(
-      CORRELATION_PERIODS.map((period) => Type.Literal(period)),
+      RISK_LOOKBACK_PERIODS.map((period) => Type.Literal(period)),
       {
         description:
           "Lookback window for historical returns (not the investment horizon): 6mo, 1y, 2y, or 5y. Default: 1y.",
