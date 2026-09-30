@@ -22,7 +22,10 @@ import {
   BackgroundQuoteRefreshes,
   createBackgroundQuotePoller,
 } from "./background-quotes.js";
-import { createInitialGuiSessionManager } from "./gui-session-manager.js";
+import {
+  createDetachedSessionRegistry,
+  createInitialGuiSessionManager,
+} from "./gui-session-manager.js";
 import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
 import { createLocalSessionCoordinator } from "./local-session-coordinator.js";
@@ -124,6 +127,7 @@ const heartbeat = setInterval(() => {
 }, 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const localSessionCoordinator = createLocalSessionCoordinator();
+const detachedSessions = createDetachedSessionRegistry();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 const indicesSnapshotStore = new MarketIndicesSnapshotStore(() => buildMarketIndicesSnapshot());
 quotePoller = createBackgroundQuotePoller({
@@ -173,7 +177,7 @@ const toolInvokeController = createToolInvokeController({
   syncWriterLockScope: syncCurrentWriterLockScope,
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(
-      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      { cwd, sessionDir, getSessionManager: () => sessionManager, detachedSessions },
       sessionId,
     ),
 });
@@ -190,6 +194,7 @@ const sessionActionsController = createSessionActionsController({
   broadcastState: () => wsHub.broadcastState(),
   broadcastSessions: () => wsHub.broadcastSessions(),
   localSessionCoordinator,
+  detachedSessions,
 });
 wsHub = createWsHub({
   role: lockResult.role,
@@ -261,6 +266,7 @@ const httpRequestHandler = createHttpRequestHandler({
   quoteSnapshotStore,
   indicesSnapshotStore,
   localSessionCoordinator,
+  detachedSessions,
   cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
   activeRunSessionIds,
 });

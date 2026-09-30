@@ -115,6 +115,11 @@ export function AppShell() {
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const homeResetSessionRef = useRef("");
+  // Latest route for async continuations that must not act on a stale page.
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
   const homeSessionCreationRef = useRef(null);
   const freshRunPendingRef = useRef(false);
   // True for the whole lifetime of an in-flight createFreshHomeSession()
@@ -127,6 +132,9 @@ export function AppShell() {
   // re-expose the stale transcript as fully interactive while the real
   // fresh-session request is still in flight.
   const [homeSessionPreparing, setHomeSessionPreparing] = useState(false);
+  // The session a home send started in place (empty current session). Its run
+  // belongs to home, so home keeps showing it until run.started routes there.
+  const [homeRunSessionId, setHomeRunSessionId] = useState("");
   const createFreshHomeSession = useCallback(() => {
     if (homeSessionCreationRef.current) return homeSessionCreationRef.current;
     const creation = gui.newSession();
@@ -137,6 +145,17 @@ export function AppShell() {
     return creation;
   }, [gui.newSession]);
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
+  const currentRunState = gui.currentSessionId ? chatRun.runStates[gui.currentSessionId] : "";
+  // Home while the server's current session is running a turn that home did
+  // not start: home is a new chat, not that running session. Runs are
+  // independent per session, so a send from here starts a fresh session.
+  const currentSessionRunActive =
+    pathname === "/" &&
+    gui.role === "writer" &&
+    gui.supportsSessionActions &&
+    !search?.messageId &&
+    (currentRunState === "connecting" || currentRunState === "streaming") &&
+    gui.currentSessionId !== homeRunSessionId;
   const canPrepareFreshHomeSession =
     gui.role === "writer" &&
     gui.supportsSessionActions &&
@@ -159,6 +178,7 @@ export function AppShell() {
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
     canStartFreshHomeSession: canPrepareFreshHomeSession,
     pendingFreshHomeSession: shouldPrepareFreshHomeSession || homeSessionPreparing,
+    currentSessionRunActive,
   });
   // Model and thinking level are per-session (issue #217): the picker shows,
   // and changes, the model of the session on screen.
@@ -310,6 +330,7 @@ export function AppShell() {
   useEffect(() => {
     if (pathname !== "/") {
       homeResetSessionRef.current = "";
+      setHomeRunSessionId("");
       return;
     }
     if (!shouldPrepareFreshHomeSession) return;
@@ -317,10 +338,29 @@ export function AppShell() {
     setHomeSessionPreparing(true);
     void createFreshHomeSession()
       .then((sessionId) => {
-        if (sessionId) homeResetSessionRef.current = sessionId;
+        if (!sessionId) return;
+        homeResetSessionRef.current = sessionId;
+        // The server kept its current session because a run is still in
+        // flight there (possibly started before this page loaded), so the new
+        // chat is not the current session: open it by its own route.
+        if (gui.isDetachedSession?.(sessionId) && pathnameRef.current === "/") {
+          void navigate({
+            to: "/sessions/$sessionId",
+            params: { sessionId },
+            search: (current) => ({ ...current, drawer: undefined }),
+            replace: true,
+          });
+        }
       })
       .finally(() => setHomeSessionPreparing(false));
-  }, [pathname, gui.currentSessionId, createFreshHomeSession, shouldPrepareFreshHomeSession]);
+  }, [
+    pathname,
+    gui.currentSessionId,
+    gui.isDetachedSession,
+    createFreshHomeSession,
+    navigate,
+    shouldPrepareFreshHomeSession,
+  ]);
 
   useEffect(() => {
     if (
@@ -373,6 +413,7 @@ export function AppShell() {
         supportsSessionActions: gui.supportsSessionActions,
         hasCurrentSessionContent: hasGuiSessionContent,
         canStartFreshHomeSession: gui.role === "writer",
+        currentSessionRunActive,
       });
       if (target.mode === "route") {
         const result = await chatRun.startChatRun(prompt, {
@@ -393,6 +434,7 @@ export function AppShell() {
       // silently dropping the prompt while writer ownership changes.
       const needsInitialHomeSession = target.mode === "current" && !activeSessionId;
       if (target.mode === "current" && !needsInitialHomeSession) {
+        if (pathname === "/") setHomeRunSessionId(activeSessionId);
         void chatRun.startChatRun(prompt, options);
         return;
       }
@@ -403,6 +445,15 @@ export function AppShell() {
           const freshSessionId = await createFreshHomeSession();
           if (!freshSessionId) return;
           homeResetSessionRef.current = freshSessionId;
+          if (currentSessionRunActive || gui.isDetachedSession?.(freshSessionId)) {
+            // The running session stays the server's current one, so route to
+            // the new session now; home would otherwise keep showing a draft.
+            await navigate({
+              to: "/sessions/$sessionId",
+              params: { sessionId: freshSessionId },
+              search: (current) => ({ ...current, drawer: undefined }),
+            });
+          }
           const result = await chatRun.startChatRun(prompt, {
             ...options,
             sessionId: freshSessionId,
@@ -422,12 +473,15 @@ export function AppShell() {
       activeSessionId,
       pathname,
       hasGuiSessionContent,
+      currentSessionRunActive,
       gui.role,
       gui.supportsSessionActions,
+      gui.isDetachedSession,
       createFreshHomeSession,
       gui.setToast,
       chatRun.startChatRun,
       clearLiveEventsForSession,
+      navigate,
     ],
   );
 
@@ -528,6 +582,7 @@ export function AppShell() {
         supportsSessionActions: gui.supportsSessionActions,
         hasCurrentSessionContent: hasGuiSessionContent,
         canStartFreshHomeSession: gui.role === "writer",
+        currentSessionRunActive,
       });
       let targetSessionId =
         target.mode === "route" ? target.sessionId : sessionView.activeSessionId;
@@ -567,6 +622,7 @@ export function AppShell() {
       gui.role,
       gui.adoptSessionId,
       hasGuiSessionContent,
+      currentSessionRunActive,
       sessionView.activeSessionId,
       createFreshHomeSession,
       invokeToolForVisibleSession,
@@ -635,8 +691,8 @@ export function AppShell() {
               role={gui.role}
               inputDisabled={inputDisabled}
               sessionLoading={sessionView.pendingSessionSwitch}
-              runState={chatRun.runState}
-              lastPrompt={chatRun.lastPrompt}
+              runState={sessionView.homeDraft ? "ready" : chatRun.runState}
+              lastPrompt={sessionView.homeDraft ? "" : chatRun.lastPrompt}
               catalog={gui.catalog}
               send={sendForVisibleSession}
               startChatRun={startRoutedChatRun}
