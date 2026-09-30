@@ -55,6 +55,32 @@ function userEntry(id: string): SessionEntry {
   } as unknown as SessionEntry;
 }
 
+function routeEntry(id: string, symbols: string[]): SessionEntry {
+  return {
+    type: "custom",
+    id,
+    parentId: null,
+    timestamp: "2026-05-21T02:10:00.000Z",
+    customType: "opencandle-route-context",
+    data: { routeKind: "agent_task", entities: { symbols } },
+  } as unknown as SessionEntry;
+}
+
+function assistantText(id: string): SessionEntry {
+  return {
+    type: "message",
+    id,
+    parentId: null,
+    timestamp: "2026-05-21T02:10:05.000Z",
+    message: { role: "assistant", content: [{ type: "text", text: "The 215 call is 3.10." }] },
+  } as unknown as SessionEntry;
+}
+
+// Saturday: the options market is closed all day.
+const SATURDAY = new Date("2026-05-23T15:00:00.000Z");
+// Tuesday 11:00 ET: regular options session.
+const REGULAR_SESSION = new Date("2026-05-19T15:00:00.000Z");
+
 function noticeEntry(id: string): SessionEntry {
   return {
     type: "custom_message",
@@ -183,5 +209,41 @@ describe("quoteNoticeForTurn", () => {
   it("returns nothing for a live regular-session chain", async () => {
     const entries = [userEntry("u1"), ...chainEntries(await optionChainToolResult(regularFixture))];
     expect(quoteNoticeForTurn(entries)).toBeUndefined();
+  });
+
+  it("carries a non-live chain into a follow-up on the same symbol that fetched no chain", async () => {
+    const entries = [
+      userEntry("u1"),
+      ...chainEntries(await optionChainToolResult(afterHoursFixture)),
+      noticeEntry("n1"),
+      routeEntry("r2", ["AAPL"]),
+      userEntry("u2"),
+      assistantText("a2"),
+    ];
+    expect(quoteNoticeForTurn(entries, SATURDAY)).toBe(
+      "Options market is closed. Option prices shown are from the last regular session and are not executable now.",
+    );
+  });
+
+  it("revalidates a live chain reused after the regular session ended", async () => {
+    const entries = [
+      userEntry("u1"),
+      ...chainEntries(await optionChainToolResult(regularFixture)),
+      routeEntry("r2", ["AAPL"]),
+      userEntry("u2"),
+      assistantText("a2"),
+    ];
+    expect(quoteNoticeForTurn(entries, SATURDAY)).toBe(
+      "Options market is closed. Option prices shown are from the last regular session and are not executable now.",
+    );
+    expect(quoteNoticeForTurn(entries, REGULAR_SESSION)).toBeUndefined();
+  });
+
+  it("does not carry a chain into a follow-up about other symbols or no symbol", async () => {
+    const chain = chainEntries(await optionChainToolResult(afterHoursFixture));
+    const other = [userEntry("u1"), ...chain, routeEntry("r2", ["MSFT"]), userEntry("u2")];
+    const none = [userEntry("u1"), ...chain, routeEntry("r2", []), userEntry("u2")];
+    expect(quoteNoticeForTurn(other, SATURDAY)).toBeUndefined();
+    expect(quoteNoticeForTurn(none, SATURDAY)).toBeUndefined();
   });
 });
