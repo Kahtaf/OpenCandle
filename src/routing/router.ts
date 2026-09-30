@@ -1487,17 +1487,17 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   return grounding.texts.some(({ text: turnText, isBasisReply }) => {
     const scopedText = maskOtherHoldingClauses(turnText, grounding);
     const parsed = parseStatedNumbers(scopedText, grounding.symbols, turnText);
-    // A basis-question reply may state a bare amount, but a quote or
-    // prospective price in the reply still does not answer the question.
+    // A basis-question reply may answer with a bare amount ("$150", "about
+    // $150 per share"); other amounts in the reply still need basis linkage.
     const amounts = parsed.amounts.filter(
-      (amount) => amount.isBasisLinked || (isBasisReply && !amount.isNonBasisContext),
+      (amount) => amount.isBasisLinked || (isBasisReply && amount.isBareAnswer),
     );
-    const { quantities } = parsed;
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
+    // A total divides only by a share count in its own clause.
     return amounts.some(
       (amount) =>
         !amount.isPerShare &&
-        quantities.some(
+        amount.clauseQuantities.some(
           (quantity) =>
             quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
         ),
@@ -1567,7 +1567,10 @@ const STATED_NUMBER =
 const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b/;
 const TICKER_SUFFIX = /^\s*([A-Za-z]{1,5})\b/;
 const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
-const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|each\b|apiece\b)/i;
+const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|(?:for\s+)?each\b|apiece\b)/i;
+// What may surround a bare basis answer: approximation, per-share, currency.
+const BARE_ANSWER_FILLER =
+  /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|[A-Z]{3})\b|[~$\s]/gi;
 const TOTAL_PREFIX = /\b(?:paid|spent|invested|total(?:\s+of)?|cost\s+me|for)\s*$/i;
 const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_BASIS_PREFIX =
@@ -1610,6 +1613,8 @@ interface StatedAmount {
   isBasisLinked: boolean;
   isNonBasisContext: boolean;
   isPerShare: boolean;
+  isBareAnswer: boolean;
+  clauseQuantities: number[];
 }
 
 function segmentStart(text: string, index: number, boundary: RegExp): number {
@@ -1640,7 +1645,7 @@ function parseStatedNumbers(
   text: string,
   resolvedSymbols: readonly string[],
   contextText: string = text,
-): { amounts: StatedAmount[]; quantities: number[] } {
+): { amounts: StatedAmount[] } {
   const extractedSymbols = extractEntities(text).symbols;
   const isTicker = (token: string) =>
     resolvedSymbols.includes(token) ||
@@ -1648,11 +1653,12 @@ function parseStatedNumbers(
   const candidates: Array<{
     value: number;
     start: number;
+    end: number;
     previousEnd: number;
     before: string;
     rest: string;
   }> = [];
-  const quantities: number[] = [];
+  const quantities: Array<{ value: number; clauseStart: number }> = [];
   let previousEnd = 0;
   for (const match of text.matchAll(STATED_NUMBER)) {
     const matchPreviousEnd = previousEnd;
@@ -1668,7 +1674,7 @@ function parseStatedNumbers(
       !scale &&
       (QUANTITY_SUFFIX.test(rest) || (ticker !== undefined && isTicker(ticker.toUpperCase())))
     ) {
-      quantities.push(base);
+      quantities.push({ value: base, clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY) });
       continue;
     }
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
@@ -1679,30 +1685,38 @@ function parseStatedNumbers(
     candidates.push({
       value: base * multiplier,
       start,
+      end: start + whole.length,
       previousEnd: matchPreviousEnd,
       before,
       rest,
     });
   }
-  const amounts = candidates.map(({ value, start, previousEnd: prevEnd, before, rest }) => {
+  const amounts = candidates.map(({ value, start, end, previousEnd: prevEnd, before, rest }) => {
     const perShare = PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(rest);
+    const clauseStart = segmentStart(text, start, CLAUSE_BOUNDARY);
     const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
+    const clauseQuantities = quantities
+      .filter((quantity) => quantity.clauseStart === clauseStart)
+      .map((quantity) => quantity.value);
+    const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
     const isNonBasisContext = NON_BASIS_CONTEXT.test(localLeadIn(text, start, prevEnd));
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
       value,
       isTotal:
-        quantities.length > 0 &&
+        clauseQuantities.length > 0 &&
         !perShare &&
         (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
       isBasisLinked:
         !isNonBasisContext && (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence))),
       isNonBasisContext,
       isPerShare: perShare,
+      isBareAnswer: clauseWithoutAmount.replace(BARE_ANSWER_FILLER, "").length === 0,
+      clauseQuantities,
     };
   });
-  return { amounts, quantities };
+  return { amounts };
 }
 
 // A historical reply to a basis question qualifies only when it actually supplies

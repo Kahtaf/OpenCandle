@@ -3314,6 +3314,49 @@ describe("router cost-basis context guard", () => {
     expect(stated.entities.costBasis).toBe(150);
   });
 
+  it("pairs a purchase total only with the share count in its own clause", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I paid $15,000 for 100 AAPL shares and later sold 50 shares. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("admits only answer-shaped amounts from a basis-question reply", async () => {
+    const performance = await route(
+      {
+        ...BASE_INPUT,
+        text: "I don't know; the shares are up $20 today",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 20 }),
+    );
+    const approximate = await route(
+      {
+        ...BASE_INPUT,
+        text: "about $150 per share",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(performance.entities.costBasis).toBeUndefined();
+    expect(approximate.entities.costBasis).toBe(150);
+  });
+
+  it("recognizes 'for each' as per-share wording", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid $150 for each of my 100 shares of AAPL. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
