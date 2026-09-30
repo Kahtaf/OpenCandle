@@ -17,6 +17,7 @@ npx tsx tests/harness/cli.ts run --prompt "What is AAPL trading at?" --ipc /tmp/
 npx tsx tests/harness/cli.ts wait --ipc /tmp/oc-test
 # exit 0 → done (prints trace summary)
 # exit 100 → question pending (prints question JSON)
+# exit 3 → incomplete: run timed out mid-prompt (prints reason + partial summary)
 # exit 1 → error
 
 # 3. If a question is pending, answer it
@@ -46,11 +47,31 @@ const { evalTrace, agentTrace } = await runOpenCandleSession({
 
 | Command | Description | Exit Codes |
 |---------|-------------|------------|
-| `run --prompt <text> --ipc <dir> [--timeout <ms>] [--linger <ms>]` | Start a session, write trace on completion, then wait a bounded follow-up window (default 120s, `--linger` overrides) for `send` prompts before exiting; cleans up its session and any self-created temp home on exit | 0=ok, 1=error |
+| `run --prompt <text> --ipc <dir> [--timeout <ms>] [--settle-ms <ms>] [--linger <ms>]` | Start a session, wait for the prompt to complete (see [Completion](#completion)), write the trace, then wait a bounded follow-up window (default 120s, `--linger` overrides) for `send` prompts before exiting; cleans up its session and any self-created temp home on exit | 0=ok, 1=error, 3=incomplete |
 | `send --prompt <text> --ipc <dir>` | Send a follow-up prompt into a still-live `run` session | 0=ok, 1=error |
-| `wait --ipc <dir> [--timeout <ms>]` | Block until question or done | 0=done, 100=question, 1=error, 2=timeout |
+| `wait --ipc <dir> [--timeout <ms>]` | Block until question, done, or incomplete (default timeout 900s) | 0=done, 100=question, 3=incomplete, 1=error or run died, 2=wait timeout |
 | `answer --ipc <dir> --value <text>` | Send answer to pending question | 0=ok |
 | `trace --ipc <dir>` | Read and print trace.json | 0=ok, 1=not found |
+
+### Completion
+
+`run` (and so `wait`) treats a prompt as complete only when all of these hold,
+using the same signal as `runOpenCandleSession()` (`tests/harness/session-settle.ts`):
+
+- any active OpenCandle workflow, including every queued step prompt, has finished
+  (`createOpenCandleSession().waitForSettled()`);
+- the Pi session is idle (no agent run, retry, or compaction) with no pending
+  steering or follow-up messages;
+- no session event arrives for a quiet window (default 2000 ms, `--settle-ms`
+  overrides).
+
+A multi-step workflow (portfolio builder, compare, options screener, deep
+analysis) therefore returns only after its final synthesis step, however long
+each model call takes. The whole prompt is bounded by `--timeout` (default 900s
+for analysis prompts, 300s otherwise). If the timeout hits first, `run` writes
+the partial trace, sets status `incomplete`, writes `incomplete.json`
+(`reason`: `workflow_running` with the `workflow` name, or `session_busy`), and
+exits 3. It never reports a timed-out run as `done`.
 
 `send` requires the target `run` to be in `done` or `waiting` status and its process to still be alive (checked via the `pid` file); it fails fast with a non-zero exit if the run already exited its linger window.
 
@@ -58,13 +79,14 @@ const { evalTrace, agentTrace } = await runOpenCandleSession({
 
 ```
 <ipc-dir>/
-├── status        "running" | "waiting" | "done" | "error"
+├── status        "running" | "waiting" | "done" | "incomplete" | "error"
 ├── pid           harness process ID (liveness check)
 ├── question.json question payload (when status=waiting)
 ├── answer.json   agent's answer (agent writes, harness reads)
 ├── prompt-request.json  follow-up prompt from `send` (agent writes, harness reads)
 ├── events.jsonl  streaming event log (append-only)
-├── trace.json    final structured trace (when status=done)
+├── trace.json    final structured trace (status=done), or partial trace (status=incomplete)
+├── incomplete.json  why the run timed out before completing (when status=incomplete)
 └── error.txt     error message (when status=error)
 ```
 

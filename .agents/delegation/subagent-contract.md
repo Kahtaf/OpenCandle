@@ -29,5 +29,5 @@
 - Always ensure you never print secret values.
 - Touch only your Owned tasks and do not rewrite parallel work.
 - Add one `CHANGELOG` `[Unreleased]` entry per atomic feature or fix.
-- If the run opens or updates a PR, check for any advisory Codex review that ran automatically when the PR was created; request another with `@codex review` when useful. Do not wait for or require a Codex status check, but every Codex review comment must be resolved in that same PR: fix real issues regardless of severity (test first), or rebut with concrete evidence; never defer them to follow-up issues.
+- If the run opens or updates a PR, check for any advisory Codex review that ran automatically when the PR was created; request another with `@codex review` when useful. Do not wait for or require a Codex status check, but Codex review comments follow AGENTS.md GIT & REVIEW: fix real bugs in the same PR (test first); rebut fail-safe heuristic edge cases and collect them in one follow-up issue; after 3 Codex rounds of new findings, stop and escalate to the parent instead of looping.
 - Final report: files changed, proof outputs, and deviations.
