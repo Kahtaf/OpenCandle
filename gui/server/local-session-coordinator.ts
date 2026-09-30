@@ -17,7 +17,7 @@ export interface SessionActionEnvelope {
 
 export type SessionActionResult<T = unknown> =
   | { ok: true; duplicate: boolean; result: T }
-  | { ok: false; code: "session_busy"; message: string };
+  | { ok: false; code: "session_busy"; message: string; activeActionId?: string };
 
 export interface LocalSessionCoordinator {
   runSessionAction<T>(
@@ -46,7 +46,7 @@ export function createLocalSessionCoordinator(
   const dedupeRetentionMs = options.dedupeRetentionMs ?? DEFAULT_DEDUPE_RETENTION_MS;
   const acceptedActions = new Map<string, AcceptedAction>();
   const activeActions = new Map<string, Promise<unknown>>();
-  const sessionRunTails = new Map<string, Promise<void>>();
+  const sessionRunTails = new Map<string, { tail: Promise<void>; actionId: string }>();
 
   async function runSessionAction<T>(
     action: SessionActionEnvelope,
@@ -64,8 +64,14 @@ export function createLocalSessionCoordinator(
     // Queueing a second chat let a later Stop or session state change retire
     // the first run while the queued prompt still executed afterwards.
     const runAdmissionAction = isRunAdmissionAction(action);
-    if (runAdmissionAction && sessionRunTails.has(action.sessionId)) {
-      return { ok: false, code: "session_busy", message: BUSY_MESSAGE };
+    const owner = runAdmissionAction ? sessionRunTails.get(action.sessionId) : undefined;
+    if (owner) {
+      return {
+        ok: false,
+        code: "session_busy",
+        message: BUSY_MESSAGE,
+        activeActionId: owner.actionId,
+      };
     }
 
     const runAction = (async () => {
@@ -81,9 +87,9 @@ export function createLocalSessionCoordinator(
         () => undefined,
         () => undefined,
       );
-      sessionRunTails.set(action.sessionId, runTail);
+      sessionRunTails.set(action.sessionId, { tail: runTail, actionId: action.actionId });
       void runTail.finally(() => {
-        if (sessionRunTails.get(action.sessionId) === runTail) {
+        if (sessionRunTails.get(action.sessionId)?.tail === runTail) {
           sessionRunTails.delete(action.sessionId);
         }
       });
