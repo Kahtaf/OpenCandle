@@ -2956,9 +2956,9 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBeUndefined();
   });
 
-  it("keeps a later follow-up basis when the earlier basis reply gave holding context without a value", async () => {
-    // Holding context is basis-role presence, matching how the guard treats a
-    // same-symbol holding turn: the model keeps its interpretation.
+  it("drops a later follow-up basis when the earlier basis reply gave holding context without a value", async () => {
+    // Holding context establishes a basis role but states no basis amount, so
+    // the model's 150 does not trace to any user-stated number.
     const result = await route(
       {
         ...BASE_INPUT,
@@ -2972,12 +2972,12 @@ describe("router cost-basis context guard", () => {
       outputFor({ symbols: ["AAPL"], costBasis: 150 }),
     );
 
-    expect(result.entities.costBasis).toBe(150);
+    expect(result.entities.costBasis).toBeUndefined();
   });
 
   it("keeps a derived basis from a purchase total", async () => {
-    // The user states quantity and total, not a per-share price: role presence
-    // is enough, and the model keeps the interpretation.
+    // The user states quantity and total, not a per-share price: the model's
+    // basis traces to the stated total divided by the stated quantity.
     const result = await route(
       {
         ...BASE_INPUT,
@@ -2987,6 +2987,108 @@ describe("router cost-basis context guard", () => {
     );
 
     expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("drops a model basis when the user only states that they own the holding", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own AAPL, covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("drops a model basis when the user states only a share count for the holding", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own 300 AAPL. What covered calls should I sell?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 330 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("drops a model basis in a holding-only reply to a basis question", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 shares last year",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("never grounds a basis in a stated share count", async () => {
+    const shares = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 shares last year",
+        priorTurns: [{ role: "assistant", text: "What is your cost basis for AAPL?" }],
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 100 }),
+    );
+    const tickerCount = await route(
+      { ...BASE_INPUT, text: "I own 300 AAPL. What covered calls should I sell?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+
+    expect(shares.entities.costBasis).toBeUndefined();
+    expect(tickerCount.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a basis stated with ownership-at wording without the word shares", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own 100 AAPL at $150. What covered call should I sell?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("keeps a basis derived from a stated total and quantity, including a k suffix", async () => {
+    const paid = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+    const scaled = await route(
+      { ...BASE_INPUT, text: "I paid 15k for 100 shares of AAPL. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(paid.entities.costBasis).toBe(150);
+    expect(scaled.entities.costBasis).toBe(150);
+  });
+
+  it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 149 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("drops a spelled-out basis so the missing-basis path applies", async () => {
+    // Only numerals ground a basis. A spelled-out amount falls back to the
+    // deterministic extractor, which finds none, so no basis is presented as
+    // a user-stated number and the prompt discloses the missing basis instead.
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at one-fifty. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("prefers the extracted basis over an ungrounded model basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Sell a covered call on DRAM; cost basis is $51." },
+      outputFor({ symbols: ["DRAM"], costBasis: 510 }),
+    );
+
+    expect(result.entities.costBasis).toBe(51);
   });
 
   it("does not use another holding's prior question as basis context", async () => {

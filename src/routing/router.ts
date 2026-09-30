@@ -1389,13 +1389,15 @@ function readPortfolioPosition(
   };
 }
 
-// Absence-of-basis-role-context guard. A model-emitted cost basis is dropped
-// only when nothing establishes a basis/purchase/holding role: the current turn,
-// a same-symbol prior user turn, a reply to a preceding assistant basis
-// question, or a saved position. This is role presence, not numeric grounding,
-// so derived, scaled, or spelled amounts stay the model's interpretation and the
-// deterministic extractor remains the fallback. An assistant quote alone is
-// never a source.
+// Cost-basis grounding guard. A model-emitted cost basis is kept only when it
+// traces to user-stated numbers: a basis role must be established (the current
+// turn, a same-symbol prior user turn, a reply to a preceding assistant basis
+// question, or a saved position), and the value must equal a money amount stated
+// in a turn that carries that role, equal a stated total divided by a stated
+// quantity (within 0.5%), or match a saved-position basis. Share counts never
+// ground a basis, and spelled-out amounts are not parsed. Otherwise the
+// deterministic extractor is the fallback, and an undefined basis leads to the
+// missing-basis disclosure. An assistant quote alone is never a source.
 function resolveCostBasis(
   text: string,
   modelCostBasis: number | undefined,
@@ -1405,44 +1407,103 @@ function resolveCostBasis(
   symbols: string[],
 ): number | undefined {
   if (modelCostBasis === undefined) return extractedCostBasis;
-  if (extractedCostBasis !== undefined) return modelCostBasis;
-  if (hasBasisRoleContext(text, heldSymbol, symbols, inputContext)) return modelCostBasis;
+  const grounding = basisGrounding(text, heldSymbol, symbols, inputContext);
+  if (grounding && isGroundedBasis(modelCostBasis, grounding)) return modelCostBasis;
   return extractedCostBasis;
 }
 
 const COST_BASIS_CONTEXT =
   /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
-function hasBasisRoleContext(
+interface BasisGrounding {
+  texts: string[];
+  savedBases: number[];
+}
+
+// Collects the user turns that carry a basis role, plus saved-position bases.
+// Returns undefined when nothing establishes a basis role.
+function basisGrounding(
   text: string,
   heldSymbol: string | undefined,
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
-): boolean {
-  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text)) return true;
-  if (answersBasisQuestion(symbols, inputContext?.priorTurns)) return true;
+): BasisGrounding | undefined {
+  const texts: string[] = [];
   const turns = inputContext?.priorTurns ?? [];
+  if (
+    heldSymbol !== undefined ||
+    COST_BASIS_CONTEXT.test(text) ||
+    answersBasisQuestion(symbols, turns)
+  ) {
+    texts.push(text);
+  }
   for (let index = 0; index < turns.length; index += 1) {
     const turn = turns[index];
     if (turn.role !== "user") continue;
     const turnEntities = extractEntities(turn.text);
-    if (
+    const sameSymbolHolding =
       turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
-      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text))
-    ) {
-      return true;
-    }
+      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text));
     if (
-      answersBasisQuestion(symbols, turns.slice(0, index)) &&
-      suppliesBasisReply(turn.text, turnEntities)
+      sameSymbolHolding ||
+      (answersBasisQuestion(symbols, turns.slice(0, index)) &&
+        suppliesBasisReply(turn.text, turnEntities))
     ) {
-      return true;
+      texts.push(turn.text);
     }
   }
-  return symbols.some(
-    (symbol) =>
-      readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
-  );
+  const savedBases = symbols
+    .map((symbol) => readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis)
+    .filter((basis): basis is number => basis !== undefined);
+  if (texts.length === 0 && savedBases.length === 0) return undefined;
+  return { texts, savedBases };
+}
+
+const DERIVED_BASIS_TOLERANCE = 0.005;
+
+function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
+  if (!Number.isFinite(basis) || basis <= 0) return false;
+  const near = (value: number, tolerance: number) => Math.abs(value - basis) <= tolerance;
+  if (grounding.savedBases.some((saved) => near(saved, basis * DERIVED_BASIS_TOLERANCE))) {
+    return true;
+  }
+  return grounding.texts.some((turnText) => {
+    const { amounts, quantities } = parseStatedNumbers(turnText);
+    if (amounts.some((amount) => near(amount, 0.005))) return true;
+    return amounts.some((total) =>
+      quantities.some(
+        (quantity) => quantity > 0 && near(total / quantity, basis * DERIVED_BASIS_TOLERANCE),
+      ),
+    );
+  });
+}
+
+// A number is a quantity when it counts shares/contracts or directly precedes a
+// ticker ("300 AAPL"); a dollar-prefixed number is always an amount. Durations
+// and percentages are neither. k/m suffixes scale amounts.
+const STATED_NUMBER =
+  /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
+const QUANTITY_SUFFIX = /^\s*(?:shares?|contracts?|lots?|[A-Z]{1,5}\b(?![a-z]))/;
+const NON_AMOUNT_SUFFIX =
+  /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?)\b)/i;
+
+function parseStatedNumbers(text: string): { amounts: number[]; quantities: number[] } {
+  const amounts: number[] = [];
+  const quantities: number[] = [];
+  for (const match of text.matchAll(STATED_NUMBER)) {
+    const [whole, dollar, integer, fraction, scale] = match;
+    const base = Number.parseFloat(`${integer.replace(/,/g, "")}${fraction ?? ""}`);
+    if (!Number.isFinite(base)) continue;
+    const rest = text.slice((match.index ?? 0) + whole.length);
+    if (!dollar && !scale && QUANTITY_SUFFIX.test(rest)) {
+      quantities.push(base);
+      continue;
+    }
+    if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
+    const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
+    amounts.push(base * multiplier);
+  }
+  return { amounts, quantities };
 }
 
 // A historical reply to a basis question qualifies only when it actually supplies
