@@ -1660,6 +1660,8 @@ function isCurrencyUsage(text: string, symbol: string): boolean {
   );
 }
 
+const CORRECTION_CONTEXT = /\b(?:actually|rather|i\s+meant?|make\s+that|correction|sorry)\b/i;
+
 // Negation in an amount's lead-in ("cost basis is not $100") rejects it, even
 // after an explicit basis label.
 const NEGATION_CONTEXT = /\b(?:not|never|no\s+longer)\b|n't\b/i;
@@ -1815,7 +1817,13 @@ function parseStatedNumbers(
         !perShare &&
         (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
       isBasisLinked:
-        !isNonBasisContext && (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence))),
+        !isNonBasisContext &&
+        (acquisitionInClause ||
+          (perShare && HOLDING_CONTEXT.test(sentence)) ||
+          // A same-sentence correction ("cost basis is $100, but actually
+          // $150") carries the basis wording forward.
+          (CORRECTION_CONTEXT.test(fullLeadIn) &&
+            [...sentence.matchAll(ACQUISITION_CONTEXT)].length > 0)),
       isNonBasisContext,
       isPerShare: perShare,
       isBareAnswer: clauseWithoutAmount.replace(BARE_ANSWER_FILLER, "").length === 0,
