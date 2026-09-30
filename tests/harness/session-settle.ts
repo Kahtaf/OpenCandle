@@ -55,7 +55,6 @@ export async function promptAndWaitForCompletion(
   options: SettleOptions,
 ): Promise<SettleOutcome> {
   const { session } = target;
-  const deadline = Date.now() + options.timeoutMs;
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<typeof TIMED_OUT>((resolve) => {
     deadlineTimer = setTimeout(() => resolve(TIMED_OUT), options.timeoutMs);
@@ -106,12 +105,12 @@ export async function promptAndWaitForCompletion(
         continue;
       }
       const activityBefore = activity;
-      const quietMs = Math.min(options.resolveSettleMs(), Math.max(0, deadline - Date.now()));
-      const waited = await sleep(quietMs);
+      // The full quiet window must elapse inside the deadline; a window cut
+      // short by the timeout never counts as complete.
+      if ((await sleep(options.resolveSettleMs())) === TIMED_OUT) return incomplete();
       if (activity === activityBefore && !busy() && (await settledNow())) {
         return { status: "complete" };
       }
-      if (waited === TIMED_OUT) return incomplete();
     }
   } finally {
     clearTimeout(deadlineTimer);
