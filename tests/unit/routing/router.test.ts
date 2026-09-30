@@ -3498,6 +3498,44 @@ describe("router cost-basis context guard", () => {
     expect(average.entities.costBasis).toBe(150);
   });
 
+  it("attaches an amount to the nearest preceding holding in a mixed clause", async () => {
+    const other = await route(
+      { ...BASE_INPUT, text: "I own AAPL alongside MSFT at $300; covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL", "MSFT"], costBasis: 300 }),
+    );
+    const own = await route(
+      { ...BASE_INPUT, text: "I own AAPL at $150 alongside MSFT; covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL", "MSFT"], costBasis: 150 }),
+    );
+
+    expect(other.entities.costBasis).toBeUndefined();
+    expect(own.entities.costBasis).toBe(150);
+  });
+
+  it("never reads a model-listed currency code as a share-count ticker", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at 150 INR. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL", "INR"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not synthesize a weighted average across purchase lots", async () => {
+    // Out of the approved grounding sources (stated amount, total over
+    // quantity, saved position): a multi-lot average falls back to the
+    // missing-basis disclosure.
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I bought 100 AAPL at $150 and another 100 at $200. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 175 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

@@ -1534,8 +1534,31 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
       (symbol) => !ISO_CURRENCY_CODES.has(symbol),
     ),
   );
-  const mentions = (clause: string, symbol: string) =>
-    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`, "i").test(clause);
+  const mentionPattern = (symbol: string, flags = "i") =>
+    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`, flags);
+  const mentions = (clause: string, symbol: string) => mentionPattern(symbol).test(clause);
+  // In a clause naming both holdings, an amount belongs to the nearest
+  // preceding symbol ("AAPL alongside MSFT at $300" is MSFT's amount).
+  const maskForeignAmounts = (clause: string): string => {
+    const positions = [...mentioned].flatMap((symbol) =>
+      [...clause.matchAll(mentionPattern(symbol, "gi"))].map((match) => ({
+        symbol,
+        index: match.index ?? 0,
+      })),
+    );
+    let result = clause;
+    for (const number of clause.matchAll(STATED_NUMBER)) {
+      const at = number.index ?? 0;
+      const owner = positions
+        .filter((position) => position.index < at)
+        .sort((a, b) => b.index - a.index)[0];
+      if (owner !== undefined && owner.symbol !== target) {
+        result =
+          result.slice(0, at) + " ".repeat(number[0].length) + result.slice(at + number[0].length);
+      }
+    }
+    return result;
+  };
   let masked = "";
   let start = 0;
   const boundaries = [...text.matchAll(CLAUSE_BOUNDARY), { index: text.length, 0: "" }];
@@ -1545,7 +1568,11 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
     const namesOther = [...mentioned].some(
       (symbol) => symbol !== target && mentions(clause, symbol),
     );
-    masked += namesOther && !mentions(clause, target) ? " ".repeat(clause.length) : clause;
+    masked += !namesOther
+      ? clause
+      : mentions(clause, target)
+        ? maskForeignAmounts(clause)
+        : " ".repeat(clause.length);
     masked += text.slice(end, end + boundary[0].length);
     start = end + boundary[0].length;
   }
@@ -1663,8 +1690,8 @@ function parseStatedNumbers(
 ): { amounts: StatedAmount[] } {
   const extractedSymbols = extractEntities(text).symbols;
   const isTicker = (token: string) =>
-    resolvedSymbols.includes(token) ||
-    (extractedSymbols.includes(token) && !ISO_CURRENCY_CODES.has(token));
+    !ISO_CURRENCY_CODES.has(token) &&
+    (resolvedSymbols.includes(token) || extractedSymbols.includes(token));
   const candidates: Array<{
     value: number;
     start: number;
