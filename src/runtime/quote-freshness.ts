@@ -178,7 +178,7 @@ const PRECEDING_CONDITIONAL = /\b(?:if|whether|unless|in\s+case)\b/i;
  * with your broker" is compliant wording.
  */
 const LIVE_CLAIM =
-  /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)\s+(?:shown\s+|above\s+|below\s+|here\s+)?(?:are|is)\s+(?:currently\s+|now\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/gi;
+  /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)(?:\s+(?!(?:are|is|not)\b)[\w/-]+){0,4}\s+(?:are|is)\s+(?:currently\s+|now\s+|still\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/gi;
 
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
@@ -227,7 +227,7 @@ function clauseBefore(text: string, index: number): string {
 }
 
 const QUOTE_VOCABULARY =
-  /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?)\b/i;
+  /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?|last(?:\s+(?:price|trade))?)\b/i;
 
 /**
  * Whether the text shows any price-like figure an options quote could be read
@@ -266,15 +266,26 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   // The number must be a quote value, not a count ("for 3 expirations").
   const quoteValue =
     "\\b\\d[\\d,]*(?:\\.\\d+)?\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
-  if (new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "i").test(text)) return true;
-  // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask", "480 per contract".
-  if (
+  const nearQuote = [
+    new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "gi"),
+    // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask",
+    // "480 per contract". A comma ends that phrase ("200.15, no premium").
     new RegExp(
-      `\\d${clauseChar}{0,15}?(?:${vocabulary}|\\b(?:dollars?|usd|per\\s+(?:contract|share))\\b)`,
-      "i",
-    ).test(text)
-  )
-    return true;
+      `\\d(?:(?!,)${clauseChar}){0,15}?(?:${vocabulary}|\\b(?:dollars?|usd|per\\s+(?:contract|share))\\b)`,
+      "gi",
+    ),
+  ];
+  // "The stock price is 200" is the underlying, not an option quote.
+  const aboutOptions = (index: number, length: number): boolean => {
+    const lead = text.slice(Math.max(0, index - 25), index);
+    const span = lead.slice(lead.search(/[^.;!?\n]*$/)) + text.slice(index, index + length);
+    return !NON_OPTION_SUBJECT.test(span) || OPTION_SPECIFIC_SUBJECT.test(span);
+  };
+  for (const pattern of nearQuote) {
+    for (const match of text.matchAll(pattern)) {
+      if (aboutOptions(match.index, match[0].length)) return true;
+    }
+  }
   const lines = text.split("\n");
   const header = lines.findIndex((line) => line.includes("|") && QUOTE_VOCABULARY.test(line));
   return (

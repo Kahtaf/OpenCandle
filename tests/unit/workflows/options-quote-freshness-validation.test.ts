@@ -185,6 +185,8 @@ describe("options quote freshness disclosure", () => {
     "Stock closing prices look weak. Premium: $4.80.",
     "The options market was closed yesterday but reopened today. Premium: $4.80.",
     "The market closed higher on Friday. Premium: $4.80.",
+    "The option quotes listed above are live, although they are from the prior session.",
+    "Premiums in the table are currently live; they are last-session quotes.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
@@ -240,6 +242,9 @@ describe("options_screener quote freshness gate", () => {
     "The 210 call costs 4.80 premium.",
     "The 210 call: 4.80 / 5.00 bid/ask.",
     "Buy the 210C at $4.80.",
+    "| Strike | Last |\n| 210 | 4.80 |",
+    "Last: 4.80 on the 210 call.",
+    "Last price 4.80 for the 210 call.",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(
@@ -262,6 +267,8 @@ describe("options_screener quote freshness gate", () => {
     "No premium was available for 3 expirations.",
     "Bid/ask was missing on 12 contracts over 30 days.",
     "Premium cost would be about 5% of the position.",
+    "The stock price is 200; no usable premium is available.",
+    "Underlying price 200.15, no usable premium is available.",
   ])("does not treat a status line as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(
