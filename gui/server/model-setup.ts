@@ -179,8 +179,12 @@ export function findPreferredModel(
 }
 
 class SessionBusyForModelChange extends Error {
-  constructor() {
+  /** The stored session that was busy; absent for the current session. */
+  readonly sessionManager?: SessionManager;
+
+  constructor(sessionManager?: SessionManager) {
     super("Wait for this chat's reply to finish before changing its model.");
+    this.sessionManager = sessionManager;
   }
 }
 
@@ -267,7 +271,7 @@ export function createModelSetupController({
    * cannot slip in between the check and the write.
    */
   function assertStoredTargetIdle(sessionId: string, target: SessionManager): void {
-    if (isSessionBusy?.(sessionId, target)) throw new SessionBusyForModelChange();
+    if (isSessionBusy?.(sessionId, target)) throw new SessionBusyForModelChange(target);
   }
 
   /** A model switch mid-reply would split one answer across two models. */
@@ -340,9 +344,11 @@ export function createModelSetupController({
       target = await applyModelToSession(model, sessionId);
     } catch (error) {
       if (error instanceof SessionBusyForModelChange) {
-        const current = isCurrentSessionId(sessionId);
-        if (current) broadcastState();
-        return { current };
+        // Still name the addressed chat so responses bootstrap it, not the
+        // server's current session.
+        if (error.sessionManager) return { current: false, sessionManager: error.sessionManager };
+        broadcastState();
+        return { current: true };
       }
       throw error;
     }

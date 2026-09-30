@@ -487,6 +487,44 @@ describe("GUI model setup", () => {
       expect(broadcastState).not.toHaveBeenCalled();
     });
 
+    it("still reports the addressed stored session when a key save finds it busy", async () => {
+      const preferred = model("google", "gemini-2.5-flash");
+      const setModel = vi.fn(async () => {});
+      const broadcastState = vi.fn();
+      const other = SessionManager.inMemory();
+      const controller = createModelSetupController({
+        role: "writer",
+        getSession: () =>
+          ({
+            modelRuntime: {
+              login: async () => {},
+              getAvailableSnapshot: () => [preferred],
+              hasConfiguredAuth: () => true,
+              getModel: () => preferred,
+              refresh: async () => {},
+            },
+            setModel,
+            settingsManager: SettingsManager.inMemory(),
+          }) as never,
+        getSessionManager: () => SessionManager.inMemory(),
+        broadcastState,
+        settingsManager: SettingsManager.inMemory(),
+        resolveSessionManager: async () => other,
+        isSessionBusy: () => true,
+      });
+
+      const target = await controller.handleSaveModelApiKey(
+        "google",
+        "gem-key",
+        other.getSessionId(),
+      );
+
+      // The HTTP response must bootstrap the chat on screen, not the current one.
+      expect(target).toEqual({ current: false, sessionManager: other });
+      expect(other.buildSessionContext().model).toBeNull();
+      expect(broadcastState).not.toHaveBeenCalled();
+    });
+
     it("rejects a model without a configured key for a non-current session", async () => {
       const { controller, other } = await setup();
 
