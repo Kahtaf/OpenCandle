@@ -1036,7 +1036,7 @@ async function streamAcceptedSseChatRun({
   // token cancel above only reaches the extension input hook, which slash
   // commands such as `/analyze` never pass through.
   const cancelledDuringSetup = runHandle.cancelRequested;
-  if (!cancelledDuringSetup && !prompt.startsWith("/") && !runSessionManager.getSessionName()) {
+  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
   const beforeEntries = runSessionManager.getEntries();
@@ -1092,9 +1092,20 @@ async function streamAcceptedSseChatRun({
 
   try {
     if (cancelledDuringSetup) {
-      // Nothing was dispatched: no pending action, no input marker, no turn.
-      // Settle as a stopped run, never as a completed one; finally releases
-      // ownership and ends the stream.
+      // Nothing was dispatched: no pending action and no turn. Record the
+      // prompt as a stopped turn, the same trace the extension input hook
+      // writes for a turn stopped while routing, and persist it: a new chat
+      // has no session file until Pi flushes its first assistant reply, so
+      // without this a reload of the session URL opened an empty chat. The
+      // action stays unaccepted so Retry mints a fresh run. Settle as a
+      // stopped run, never as a completed one; finally releases ownership and
+      // ends the stream.
+      appendOriginalInputMarker();
+      runSessionManager.appendCustomEntry("opencandle-run-cancelled", {
+        text: dispatchedPrompt || prompt,
+      });
+      persistUnflushedSession(runSessionManager);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
       writeSse(res, {
         type: "run.failed",
         runId,
