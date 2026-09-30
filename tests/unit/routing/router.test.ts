@@ -3125,6 +3125,20 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a basis in an amount stated for a different holding", async () => {
+    const other = await route(
+      { ...BASE_INPUT, text: "I own MSFT at $300 and also own AAPL. Covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 300 }),
+    );
+    const own = await route(
+      { ...BASE_INPUT, text: "I own MSFT at $300 and AAPL at $150. Covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(other.entities.costBasis).toBeUndefined();
+    expect(own.entities.costBasis).toBe(150);
+  });
+
   it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },

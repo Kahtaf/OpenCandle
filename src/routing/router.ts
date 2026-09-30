@@ -1420,6 +1420,7 @@ interface BasisGrounding {
   texts: string[];
   savedBases: number[];
   symbols: string[];
+  targetSymbol: string | undefined;
 }
 
 // Collects the user turns that carry a basis role, plus saved-position bases.
@@ -1458,7 +1459,7 @@ function basisGrounding(
     .map((symbol) => readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis)
     .filter((basis): basis is number => basis !== undefined);
   if (texts.length === 0 && savedBases.length === 0) return undefined;
-  return { texts, savedBases, symbols };
+  return { texts, savedBases, symbols, targetSymbol: symbols[0] };
 }
 
 const DERIVED_BASIS_TOLERANCE = 0.005;
@@ -1470,7 +1471,8 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
     return true;
   }
   return grounding.texts.some((turnText) => {
-    const { amounts, quantities } = parseStatedNumbers(turnText, grounding.symbols);
+    const scopedText = maskOtherHoldingClauses(turnText, grounding);
+    const { amounts, quantities } = parseStatedNumbers(scopedText, grounding.symbols);
     if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
     return amounts.some((amount) =>
       quantities.some(
@@ -1479,6 +1481,37 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
       ),
     );
   });
+}
+
+// A clause that names another holding but not the target symbol ("I own MSFT at
+// $300 and also own AAPL") cannot ground the target's basis, so it is blanked
+// (length-preserving) before numbers are parsed.
+const CLAUSE_BOUNDARY = /[.;!?,]|\b(?:and|but|while|whereas)\b/gi;
+
+function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): string {
+  const target = grounding.targetSymbol;
+  if (target === undefined) return text;
+  const mentioned = new Set(
+    [...grounding.symbols, ...extractEntities(text).symbols].filter(
+      (symbol) => !ISO_CURRENCY_CODES.has(symbol),
+    ),
+  );
+  const mentions = (clause: string, symbol: string) =>
+    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`).test(clause);
+  let masked = "";
+  let start = 0;
+  const boundaries = [...text.matchAll(CLAUSE_BOUNDARY), { index: text.length, 0: "" }];
+  for (const boundary of boundaries) {
+    const end = boundary.index ?? text.length;
+    const clause = text.slice(start, end);
+    const namesOther = [...mentioned].some(
+      (symbol) => symbol !== target && mentions(clause, symbol),
+    );
+    masked += namesOther && !mentions(clause, target) ? " ".repeat(clause.length) : clause;
+    masked += text.slice(end, end + boundary[0].length);
+    start = end + boundary[0].length;
+  }
+  return masked;
 }
 
 // A number is a quantity when it counts shares/contracts ("100 shares",
