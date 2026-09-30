@@ -3383,6 +3383,24 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("reads any currency code before a per-share marker as per-share", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid 150 EUR per share for 100 shares of SAP. Covered calls?" },
+      outputFor({ symbols: ["SAP"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not ground a basis in a completed sale price", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at $150 then sold some at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

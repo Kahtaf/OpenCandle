@@ -1509,7 +1509,7 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
 // $300 and also own AAPL") cannot ground the target's basis, so it is blanked
 // (length-preserving) before numbers are parsed.
 // Punctuation inside a number ("1,000", "150.25") is not a boundary.
-const CLAUSE_BOUNDARY = /[;!?]|[.,](?!\d)|\b(?:and|but|while|whereas)\b/gi;
+const CLAUSE_BOUNDARY = /[;!?]|[.,](?!\d)|\b(?:and|but|while|whereas|then)\b/gi;
 const SENTENCE_BOUNDARY = /[.;!?](?!\d)/g;
 
 function segmentAround(text: string, index: number, boundary: RegExp): string {
@@ -1567,13 +1567,19 @@ const STATED_NUMBER =
 const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b/;
 const TICKER_SUFFIX = /^\s*([A-Za-z]{1,5})\b/;
 const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
-// A currency word may sit between the number and a following marker
-// ("150 dollars per share").
-const CURRENCY_WORD = String.raw`(?:\s*(?:dollars?|bucks|usd)\b)?`;
-const PER_SHARE_SUFFIX = new RegExp(
-  String.raw`^${CURRENCY_WORD}\s*(?:(?:per|a|\/)\s*share\b|(?:for\s+)?each\b|apiece\b)`,
-  "i",
-);
+const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|(?:for\s+)?each\b|apiece\b)/i;
+// A currency word or ISO code may sit between the number and a following
+// marker ("150 dollars per share", "150 EUR per share"); it is skipped before
+// suffix checks.
+const LEADING_CURRENCY = /^\s*(?:dollars?|bucks|euros?|pounds?|yen|([A-Za-z]{3}))\b/i;
+
+function skipLeadingCurrency(rest: string): string {
+  const match = rest.match(LEADING_CURRENCY);
+  if (!match) return rest;
+  const code = match[1];
+  if (code !== undefined && !ISO_CURRENCY_CODES.has(code.toUpperCase())) return rest;
+  return rest.slice(match[0].length);
+}
 // What may surround a bare basis answer: approximation, per-share, currency.
 const BARE_ANSWER_FILLER =
   /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|[A-Z]{3})\b|[~$\s]/gi;
@@ -1581,10 +1587,8 @@ const TOTAL_PREFIX = /\b(?:paid|spent|invested|total(?:\s+of)?|cost\s+me|for)\s*
 const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
-const NON_BASIS_SUFFIX = new RegExp(
-  String.raw`^${CURRENCY_WORD}(?:\s*(?:per|a|\/)\s*share(?:\s+(?:in|of))?)?\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?|distributions?|income)\b`,
-  "i",
-);
+const NON_BASIS_SUFFIX =
+  /^(?:\s*(?:per|a|\/)\s*share(?:\s+(?:in|of))?)?\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?|distributions?|income)\b/i;
 // A direct amount is basis-linked when its clause carries acquisition or basis
 // wording ("bought at $150", "cost basis is $51"), or when its sentence states a
 // holding and the amount is per-share ("I own 100 AAPL at $150"), and its
@@ -1597,7 +1601,7 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|market|worth|valued?|spot|last|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|order|limit)\b/i;
+  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current(?:ly)?|now|market|worth|valued?|spot|last|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1688,7 +1692,9 @@ function parseStatedNumbers(
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
     const before = text.slice(0, start);
     if (!dollar && !scale && isDateComponent(fraction, before, rest)) continue;
-    if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(rest)) continue;
+    if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(skipLeadingCurrency(rest))) {
+      continue;
+    }
     const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
     candidates.push({
       value: base * multiplier,
@@ -1700,7 +1706,8 @@ function parseStatedNumbers(
     });
   }
   const amounts = candidates.map(({ value, start, end, previousEnd: prevEnd, before, rest }) => {
-    const perShare = PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(rest);
+    const perShare =
+      PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(skipLeadingCurrency(rest));
     const clauseStart = segmentStart(text, start, CLAUSE_BOUNDARY);
     const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
     const clauseQuantities = quantities
