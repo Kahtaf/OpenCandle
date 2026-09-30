@@ -1,5 +1,5 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { classifyMarketStatusAt } from "../infra/market-calendar.js";
+import { classifyMarketStatusAt, localDateTimeParts } from "../infra/market-calendar.js";
 import type { EvidenceRecord } from "./evidence.js";
 import { captureToolEvidence } from "./prompt-step.js";
 import { buildNonLiveQuoteNotice, extractQuoteStatusSummary } from "./quote-freshness.js";
@@ -33,7 +33,7 @@ export function quoteNoticeForTurn(
   if (symbols.size === 0) return undefined;
   const carried = earlierChainEvidence(entries.slice(0, start), symbols);
   if (carried.length === 0) return undefined;
-  return buildNonLiveQuoteNotice(revalidateForSession(carried, currentOptionsSession(now)));
+  return buildNonLiveQuoteNotice(revalidateForSession(carried, currentOptionsSession(now), now));
 }
 
 export function isQuoteNotice(entry: SessionEntry): boolean {
@@ -110,18 +110,28 @@ function currentOptionsSession(now: Date): OptionsSession {
 /**
  * Restate carried chain evidence as of the current session: quotes that were
  * live when fetched are carried over from the last regular session once that
- * session has ended.
+ * session has ended, or once the chain was fetched on an earlier ET day.
  */
 function revalidateForSession(
   records: readonly EvidenceRecord[],
   session: OptionsSession,
+  now: Date,
 ): EvidenceRecord[] {
+  const today = etDate(now);
   return records.map((record) => {
     const value = asRecord(record.value);
     const status = asRecord(value.quoteStatus);
+    const fetchedAt = asRecord(value.freshness).fetchedAt;
+    const fetched = typeof fetchedAt === "string" ? new Date(fetchedAt) : undefined;
+    // Unknown fetch time is treated as expired rather than live.
+    const sameSession =
+      session === "regular" &&
+      fetched !== undefined &&
+      !Number.isNaN(fetched.getTime()) &&
+      etDate(fetched) === today;
     let bidAskState = status.bidAskState;
-    if (session !== "regular" && bidAskState === "live_quotes") bidAskState = "last_session_quotes";
-    if (session !== "regular" && bidAskState === "live_zero_bid_ask") {
+    if (!sameSession && bidAskState === "live_quotes") bidAskState = "last_session_quotes";
+    if (!sameSession && bidAskState === "live_zero_bid_ask") {
       bidAskState = "closed_market_or_stale_quotes";
     }
     return {
@@ -129,6 +139,10 @@ function revalidateForSession(
       value: { ...value, quoteStatus: { ...status, marketSession: session, bidAskState } },
     };
   });
+}
+
+function etDate(date: Date): string {
+  return localDateTimeParts(date, "America/New_York").date;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

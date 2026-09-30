@@ -236,7 +236,6 @@ describe("quoteNoticeForTurn", () => {
     expect(quoteNoticeForTurn(entries, SATURDAY)).toBe(
       "Options market is closed. Option prices shown are from the last regular session and are not executable now.",
     );
-    expect(quoteNoticeForTurn(entries, REGULAR_SESSION)).toBeUndefined();
   });
 
   it("does not carry a chain into a follow-up about other symbols or no symbol", async () => {
@@ -245,5 +244,30 @@ describe("quoteNoticeForTurn", () => {
     const none = [userEntry("u1"), ...chain, routeEntry("r2", []), userEntry("u2")];
     expect(quoteNoticeForTurn(other, SATURDAY)).toBeUndefined();
     expect(quoteNoticeForTurn(none, SATURDAY)).toBeUndefined();
+  });
+
+  it("expires a live chain reused on a later trading day", async () => {
+    const fetchedAt = async (iso: string) => {
+      const result = (await optionChainToolResult(regularFixture)) as {
+        content: unknown;
+        details: { freshness: { fetchedAt: string } };
+      };
+      result.details.freshness.fetchedAt = iso;
+      return [
+        userEntry("u1"),
+        ...chainEntries(result),
+        routeEntry("r2", ["AAPL"]),
+        userEntry("u2"),
+        assistantText("a2"),
+      ];
+    };
+    // Fetched Monday during the session, reused Tuesday during the session.
+    expect(quoteNoticeForTurn(await fetchedAt("2026-05-18T15:00:00.000Z"), REGULAR_SESSION)).toBe(
+      "Option prices shown are from the last regular session and are not executable now.",
+    );
+    // Fetched earlier the same session: still live.
+    expect(
+      quoteNoticeForTurn(await fetchedAt("2026-05-19T14:00:00.000Z"), REGULAR_SESSION),
+    ).toBeUndefined();
   });
 });
