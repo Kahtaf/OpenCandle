@@ -1583,7 +1583,8 @@ function skipLeadingCurrency(rest: string): string {
 // What may surround a bare basis answer: approximation, per-share, currency.
 const BARE_ANSWER_FILLER =
   /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|[A-Z]{3})\b|[~$\s]/gi;
-const TOTAL_PREFIX = /\b(?:paid|spent|invested|total(?:\s+of)?|cost\s+me|for)\s*$/i;
+const TOTAL_PREFIX =
+  /\b(?:paid|spent|invested|total(?:\s+of)?|totall?ing|(?<!\b(?:average|avg|unit|share)\s)costs?(?:\s+me)?|for)\s*$/i;
 const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
@@ -1601,7 +1602,9 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:trad(?:ing|es|ed)|quot(?:e|es|ed)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+  /\b(?:(?:it|it's|its\s+price|price|stock|shares?)\s+(?:is\s+|are\s+)?(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+// Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
+const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
   ...CURRENCY_CODES,
   ...Intl.supportedValuesOf("currency"),
@@ -1718,7 +1721,8 @@ function parseStatedNumbers(
       .map((quantity) => quantity.value);
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
-    const isNonBasisContext = NON_BASIS_CONTEXT.test(localLeadIn(text, start, prevEnd));
+    const leadIn = localLeadIn(text, start, prevEnd);
+    const isNonBasisContext = NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn);
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {
       value,

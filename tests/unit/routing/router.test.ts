@@ -3439,6 +3439,65 @@ describe("router cost-basis context guard", () => {
     expect(lastPrice.entities.costBasis).toBeUndefined();
   });
 
+  it("targets the extracted held symbol for an existing-position option request", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "NVDA earnings are next week; I own AMD at $150, covered calls?" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols[0]).toBe("AMD");
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("treats bare 'is at' price wording as a quote", async () => {
+    const pronoun = await route(
+      { ...BASE_INPUT, text: "I own AAPL and it is at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+    const ticker = await route(
+      { ...BASE_INPUT, text: "I own AAPL and AAPL is at $200. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 200 }),
+    );
+    const basisIsAt = await route(
+      { ...BASE_INPUT, text: "I own AAPL and my cost basis is at $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(pronoun.entities.costBasis).toBeUndefined();
+    expect(ticker.entities.costBasis).toBeUndefined();
+    expect(basisIsAt.entities.costBasis).toBe(150);
+  });
+
+  it("treats a position cost after a share count as a purchase total", async () => {
+    const total = await route(
+      { ...BASE_INPUT, text: "I bought 100 AAPL shares that cost $15,000. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+    const derived = await route(
+      { ...BASE_INPUT, text: "I bought 100 AAPL shares that cost $15,000. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    const average = await route(
+      { ...BASE_INPUT, text: "I own 100 AAPL shares with avg cost $150. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(total.entities.costBasis).toBeUndefined();
+    expect(derived.entities.costBasis).toBe(150);
+    expect(average.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
