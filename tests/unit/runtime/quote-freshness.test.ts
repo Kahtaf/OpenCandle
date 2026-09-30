@@ -66,6 +66,17 @@ function routeEntry(id: string, symbols: string[]): SessionEntry {
   } as unknown as SessionEntry;
 }
 
+/** Pi records the turn's system prompt between the route context and the user message. */
+function systemEntry(id: string): SessionEntry {
+  return {
+    type: "message",
+    id,
+    parentId: null,
+    timestamp: "2026-05-21T02:10:01.000Z",
+    message: { role: "system", content: "system prompt" },
+  } as unknown as SessionEntry;
+}
+
 function assistantText(id: string): SessionEntry {
   return {
     type: "message",
@@ -217,6 +228,7 @@ describe("quoteNoticeForTurn", () => {
       ...chainEntries(await optionChainToolResult(afterHoursFixture)),
       noticeEntry("n1"),
       routeEntry("r2", ["AAPL"]),
+      systemEntry("s2"),
       userEntry("u2"),
       assistantText("a2"),
     ];
@@ -230,6 +242,7 @@ describe("quoteNoticeForTurn", () => {
       userEntry("u1"),
       ...chainEntries(await optionChainToolResult(regularFixture)),
       routeEntry("r2", ["AAPL"]),
+      systemEntry("s2"),
       userEntry("u2"),
       assistantText("a2"),
     ];
@@ -257,6 +270,7 @@ describe("quoteNoticeForTurn", () => {
         userEntry("u1"),
         ...chainEntries(result),
         routeEntry("r2", ["AAPL"]),
+        systemEntry("s2"),
         userEntry("u2"),
         assistantText("a2"),
       ];
@@ -269,5 +283,18 @@ describe("quoteNoticeForTurn", () => {
     expect(
       quoteNoticeForTurn(await fetchedAt("2026-05-19T14:00:00.000Z"), REGULAR_SESSION),
     ).toBeUndefined();
+  });
+
+  it("does not reuse an earlier turn's route context when the latest turn has none", async () => {
+    const entries = [
+      routeEntry("r1", ["AAPL"]),
+      userEntry("u1"),
+      ...chainEntries(await optionChainToolResult(afterHoursFixture)),
+      noticeEntry("n1"),
+      // Routing failed for this turn, so it wrote no route context.
+      userEntry("u2"),
+      assistantText("a2"),
+    ];
+    expect(quoteNoticeForTurn(entries, SATURDAY)).toBeUndefined();
   });
 });

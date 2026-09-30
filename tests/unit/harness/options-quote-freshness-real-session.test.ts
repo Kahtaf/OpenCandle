@@ -29,6 +29,8 @@ interface Scenario {
   route: "workflow" | "agent_task";
   fixture: unknown;
   expectedNotice?: string;
+  /** Send a same-symbol follow-up the model answers without fetching again. */
+  followUp?: boolean;
 }
 
 const scenarios: Scenario[] = [
@@ -46,7 +48,16 @@ const scenarios: Scenario[] = [
     expectedNotice: AFTER_HOURS_NOTICE,
   },
   { name: "single-turn agent task on a live chain", route: "agent_task", fixture: regularFixture },
+  {
+    name: "same-symbol follow-up reusing an after-hours chain",
+    route: "agent_task",
+    fixture: afterHoursFixture,
+    expectedNotice: AFTER_HOURS_NOTICE,
+    followUp: true,
+  },
 ];
+
+const FOLLOW_UP = "Follow-up: what about the 215 strike?";
 
 describe("real session non-live option quote notice", () => {
   it.each(scenarios)(
@@ -64,7 +75,10 @@ describe("real session non-live option quote notice", () => {
         if (last?.role === "tool") return { kind: "text", text: UNDISCLOSED };
         // Rank from the chain already fetched: a second fetch would be a cache
         // read whose session is rechecked against the wall clock.
-        if (JSON.stringify(last?.content).includes("Now rank and present")) {
+        if (
+          JSON.stringify(last?.content).includes("Now rank and present") ||
+          JSON.stringify(last?.content).includes("Follow-up:")
+        ) {
           return { kind: "text", text: UNDISCLOSED };
         }
         chainCalls += 1;
@@ -145,6 +159,10 @@ describe("real session non-live option quote notice", () => {
         });
         await created.session.prompt("Find me a bullish AAPL call about a month out.");
         await created.waitForSettled();
+        if (scenario.followUp) {
+          await created.session.prompt(FOLLOW_UP);
+          await created.waitForSettled();
+        }
         const all = manager.getEntries();
         const validationEvents = all.filter(
           (entry) =>
@@ -159,7 +177,14 @@ describe("real session non-live option quote notice", () => {
         expect(chainCalls).toBe(1);
         // No model repair is ever requested for quote freshness.
         expect(validationEvents).toEqual([]);
-        if (scenario.expectedNotice) {
+        if (scenario.followUp) {
+          // The follow-up reuses the earlier chain without fetching it again,
+          // so it gets its own notice, restated for the current session.
+          expect(notices).toHaveLength(2);
+          expect(JSON.stringify((notices[1] as { content: unknown }).content)).toContain(
+            "Option prices shown are from the last regular session and are not executable now.",
+          );
+        } else if (scenario.expectedNotice) {
           expect(notices).toHaveLength(1);
           const notice = notices[0] as { content: unknown; display: boolean };
           expect(JSON.stringify(notice.content)).toContain(scenario.expectedNotice);

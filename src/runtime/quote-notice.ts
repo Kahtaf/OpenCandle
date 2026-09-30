@@ -29,7 +29,7 @@ export function quoteNoticeForTurn(
   if (turn.some(isQuoteNotice)) return undefined;
   const current = captureToolEvidence([...turn]).filter(hasQuoteStatus);
   if (current.length > 0) return buildNonLiveQuoteNotice(current);
-  const symbols = routedSymbols(entries);
+  const symbols = routedSymbols(entries, start - 1);
   if (symbols.size === 0) return undefined;
   const carried = earlierChainEvidence(entries.slice(0, start), symbols);
   if (carried.length === 0) return undefined;
@@ -55,10 +55,22 @@ function hasQuoteStatus(record: EvidenceRecord): boolean {
   return extractQuoteStatusSummary(record.value) !== undefined;
 }
 
-/** Symbols the router resolved for the latest turn (its route-context entry). */
-function routedSymbols(entries: readonly SessionEntry[]): Set<string> {
-  for (let i = entries.length - 1; i >= 0; i--) {
+/**
+ * Symbols the router resolved for the latest turn: its route-context entry,
+ * written just before the latest user message. A turn whose routing wrote no
+ * route context (for example a router failure) has none, so an earlier turn's
+ * context is never reused.
+ */
+function routedSymbols(entries: readonly SessionEntry[], userIndex: number): Set<string> {
+  for (let i = userIndex - 1; i >= 0; i--) {
     const entry = entries[i] as { type: string; customType?: unknown; data?: unknown };
+    // Pi records the turn's system prompt between the route context and the
+    // user message; any other message belongs to an earlier turn.
+    if (entry.type === "message") {
+      const role = (entry as { message?: { role?: unknown } }).message?.role;
+      if (role !== "system") break;
+      continue;
+    }
     if (entry.type !== "custom" || entry.customType !== "opencandle-route-context") continue;
     const entities = asRecord(asRecord(entry.data).entities);
     const symbols = Array.isArray(entities.symbols) ? entities.symbols : [];
