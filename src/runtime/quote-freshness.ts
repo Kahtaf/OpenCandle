@@ -93,15 +93,19 @@ export function findNonLiveQuoteEvidence(
  * negate it ("these are not last-session quotes").
  */
 /**
- * Session and close timestamps ("last-session", "as of the prior close"). They
- * only disclose when their sentence is about the option quotes: "Underlying:
- * $200 as of market close" timestamps the stock, not the premiums shown.
+ * Session and close timestamps ("last-session", "as of the prior close",
+ * "outside regular trading"). They only disclose when their sentence is about
+ * the option quotes: "Underlying: $200 as of market close" timestamps the
+ * stock, not the premiums shown.
  */
 const SESSION_TIMESTAMP_PATTERNS: readonly RegExp[] = [
   /\blast[- ]session\b/gi,
   /\b(?:prior|previous|last|most\s+recent)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/gi,
   /\b(?:yesterday|(?:mon|tues|wednes|thurs|fri|satur|sun)day)'?s\s+(?:close|session|quotes?)\b/gi,
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
+  // "Liquidity can deteriorate outside regular hours" is generic advice; it
+  // must say the chain or quotes were observed outside regular trading.
+  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,
 ];
 
 const QUOTE_SUBJECT =
@@ -139,7 +143,6 @@ const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
   /\b(?:stale|delayed)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures)\b/gi,
   /\b(?:closing|indicative|cached|carried[- ]over|end[- ]of[- ]day|after[- ]hours|pre[- ]?market)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/gi,
   /\bfrom\s+(?:a|the)\s+(?:stale\s+)?cache\b/gi,
-  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,
   /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
   /\bmarkets?(?:'s)?[- ]closed\b/gi,
   /\b(?:options\s+)?markets?\s+(?:is|are)\s+(?:now\s+|currently\s+)?(?:in\s+)?(?:after[- ]hours|pre[- ]?market)\b/gi,
@@ -228,15 +231,38 @@ const QUOTE_VOCABULARY =
  * table whose header names a quote column. Greeks and ratios alone ("delta
  * 0.42") and status lines ("Fetched the chain for 2 expirations") show none.
  */
+/**
+ * A currency amount that is not a strike or an underlying/stock price. "The
+ * $210 strike" and "Underlying: $200" name no quote; "at $4.80" does.
+ */
+function presentsCurrencyQuote(text: string): boolean {
+  for (const match of text.matchAll(/\$\s?\d[\d,]*(?:\.\d+)?/g)) {
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 12);
+    if (/^\s*(?:strikes?|calls?|puts?|[cp])\b/i.test(after)) continue;
+    const before = text.slice(Math.max(0, match.index - 25), match.index);
+    const lead = before.slice(before.search(/[^.;:!?\n]*$/));
+    if (
+      /\b(?:strike|underlying|stock|shares?|spot|trad(?:es|ing)\s+at)\b/i.test(lead) &&
+      !/\b(?:premium|bid|ask|mid|cost|debit|credit)\b/i.test(lead)
+    )
+      continue;
+    if (/\b(?:underlying|stock|spot)\s*:\s*$/i.test(before)) continue;
+    return true;
+  }
+  return false;
+}
+
 export function presentsQuoteFigures(text: string | undefined): boolean {
   if (!text) return false;
-  if (/\$\s?\d/.test(text)) return true;
+  if (presentsCurrencyQuote(text)) return true;
   const vocabulary = QUOTE_VOCABULARY.source;
-  if (new RegExp(`${vocabulary}[^\\n;!?]{0,25}?\\d`, "i").test(text)) return true;
+  // Same clause only: a sentence end (not a decimal point) breaks proximity.
+  const clauseChar = "(?:[^\\n;!?.]|\\.(?=\\d))";
+  if (new RegExp(`${vocabulary}${clauseChar}{0,25}?\\d`, "i").test(text)) return true;
   // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask", "480 per contract".
   if (
     new RegExp(
-      `\\d[^\\n;!?]{0,15}?(?:${vocabulary}|\\b(?:dollars?|usd|per\\s+(?:contract|share))\\b)`,
+      `\\d${clauseChar}{0,15}?(?:${vocabulary}|\\b(?:dollars?|usd|per\\s+(?:contract|share))\\b)`,
       "i",
     ).test(text)
   )
