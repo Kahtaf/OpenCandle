@@ -195,6 +195,39 @@ async function optionalAlphaVantage<T>(
   }
 }
 
+/** LSE statements first; Alpha Vantage only when LSE has no fresh statements. */
+async function loadStatementFinancials(
+  symbol: string,
+  lseConfigured: boolean,
+  alphaVantageApiKey: string | undefined,
+): Promise<{
+  lseFinancialsResult: ProviderResult<FinancialStatement[]> | undefined;
+  lseIsFresh: boolean;
+  alphaVantageFinancialsResult: ProviderResult<FinancialStatement[]> | undefined;
+}> {
+  let lseFinancialsResult: ProviderResult<FinancialStatement[]> | undefined;
+  if (lseConfigured && !isOverSoftThreshold()) {
+    try {
+      lseFinancialsResult = await wrapProvider("lse", () => getLseFinancials(symbol));
+    } catch (error) {
+      if (!(error instanceof ProviderCredentialError)) throw error;
+      lseFinancialsResult = {
+        status: "unavailable",
+        reason: `London Strategic Edge credential ${error.reason}`,
+        provider: "lse",
+      };
+    }
+  }
+  const lseIsFresh =
+    lseFinancialsResult?.status === "ok" &&
+    lseFinancialsResult.data.length > 0 &&
+    !lseFinancialsResult.stale;
+  const alphaVantageFinancialsResult = lseIsFresh
+    ? undefined
+    : await optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey));
+  return { lseFinancialsResult, lseIsFresh, alphaVantageFinancialsResult };
+}
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   growth_rate: Type.Optional(
@@ -224,32 +257,14 @@ export const dcfTool: AgentTool<typeof params> = {
     const symbol = args.symbol.toUpperCase();
     const config = getConfig();
     const alphaVantageApiKey = config.alphaVantageApiKey;
-    const quotePromise = wrapProvider("yahoo", () => getQuote(symbol));
-    const lseEligible = !!config.lseApiKey && !isOverSoftThreshold();
-    let lseFinancialsResult: ProviderResult<FinancialStatement[]> | undefined;
-    if (lseEligible) {
-      try {
-        lseFinancialsResult = await wrapProvider("lse", () => getLseFinancials(symbol));
-      } catch (error) {
-        if (error instanceof ProviderCredentialError) {
-          lseFinancialsResult = {
-            status: "unavailable",
-            reason: `London Strategic Edge credential ${error.reason}`,
-            provider: "lse",
-          };
-        } else {
-          throw error;
-        }
-      }
-    }
-    const lseIsFresh =
-      lseFinancialsResult?.status === "ok" &&
-      lseFinancialsResult.data.length > 0 &&
-      !lseFinancialsResult.stale;
-    const alphaVantageFinancialsResult = lseIsFresh
-      ? undefined
-      : await optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey));
-    const quoteResult = await quotePromise;
+    // The quote loads alongside the statements. Promise.all observes both, so
+    // when Stop fails one while the other is still pending, the rejection is
+    // never left unhandled (an unhandled rejection exits the process).
+    const [quoteResult, { lseFinancialsResult, lseIsFresh, alphaVantageFinancialsResult }] =
+      await Promise.all([
+        wrapProvider("yahoo", () => getQuote(symbol)),
+        loadStatementFinancials(symbol, !!config.lseApiKey, alphaVantageApiKey),
+      ]);
 
     const missing: string[] = [];
     if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);

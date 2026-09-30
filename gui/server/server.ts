@@ -37,6 +37,7 @@ import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
+import { installUnhandledRejectionGuard } from "./unhandled-rejection-guard.js";
 import {
   acquireWriterLock,
   isSessionTranscriptHeld,
@@ -48,6 +49,8 @@ import {
 import { createWsHub, type WsHub } from "./ws-hub.js";
 
 assertSupportedNodeVersion();
+// A request leaked by a stopped run must not exit the server and every other run.
+installUnhandledRejectionGuard();
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
