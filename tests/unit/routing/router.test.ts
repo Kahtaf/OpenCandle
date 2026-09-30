@@ -3102,6 +3102,29 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a basis in a premium, strike, or target amount", async () => {
+    const premium = await route(
+      { ...BASE_INPUT, text: "I own AAPL and want at least $2 premium. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+    const strike = await route(
+      { ...BASE_INPUT, text: "I own AAPL. Covered calls with a strike above $340?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 340 }),
+    );
+
+    expect(premium.entities.costBasis).toBeUndefined();
+    expect(strike.entities.costBasis).toBeUndefined();
+  });
+
+  it("treats any ISO currency code after an amount as a currency, not a ticker", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at 150 INR. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
