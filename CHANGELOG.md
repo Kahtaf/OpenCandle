@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.
+
 - Options answers built on after-hours, closed-market, or stale option quotes now end with a short notice that the prices shown are not live or executable now.
 
 - When no model has been saved, OpenCandle now starts on its own default for the first configured provider (Google Gemini, then OpenAI, then Anthropic), including keys that only come from environment variables.
