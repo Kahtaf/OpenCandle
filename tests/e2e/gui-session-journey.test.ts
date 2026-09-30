@@ -1017,15 +1017,56 @@ describe("GUI session journey", () => {
 
 describe("GUI session journey: per-session model", () => {
   beforeEach(async () => {
+    answerHold = createHoldGate();
     harness = await startGuiJourneyHarness({
-      modelScript: createJourneyModelScript(),
+      modelScript: createJourneyModelScript({ answerHold }),
       extraModelIds: [GUI_JOURNEY_SECOND_MODEL_ID],
     });
   });
 
   afterEach(async () => {
+    answerHold.release();
     await harness?.stop();
   });
+
+  it("a model picked in a new chat started during a held run is the one its first run uses", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A: a run held mid native answer stream.
+    await startNewSession(page);
+    const waitCountBefore = answerHold.waitCount;
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+
+    // New chat while A runs is a detached, unsaved session. It starts on the
+    // saved default, and a pick in it lands on it.
+    await startNewSession(page);
+    const sessionB = sessionIdFromUrl(page);
+    expect(sessionB).not.toBe(sessionA);
+    await expectModelPicker(page, GUI_JOURNEY_MODEL_ID);
+    await pickModel(page, GUI_JOURNEY_MODEL_ID, GUI_JOURNEY_SECOND_MODEL_ID);
+
+    const beforeB = harness.modelServer.requests.length;
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+    expect(requestModels(beforeB)).toEqual([GUI_JOURNEY_SECOND_MODEL_ID]);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionB))).toBe(
+      GUI_JOURNEY_SECOND_MODEL_ID,
+    );
+
+    // A keeps the model it started on.
+    answerHold.release();
+    expect(
+      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+    ).toBe(true);
+    expect(lastAssistantModel(harness.readSessionEntries(sessionA))).toBe(GUI_JOURNEY_MODEL_ID);
+    expect(harness.unexpectedServerRequests()).toEqual([]);
+  }, 150_000);
 
   it("runs a reopened session on its own model, and the picker shows it", async () => {
     const page = harness.page;

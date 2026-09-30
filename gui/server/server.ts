@@ -150,9 +150,11 @@ const modelSetupController = createModelSetupController({
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
   settingsManager,
+  // Includes detached, still-unsaved new chats, so a pick made before their
+  // first message lands on the in-memory session their run will use.
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(
-      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      { cwd, sessionDir, getSessionManager: () => sessionManager, detachedSessions },
       sessionId,
     ),
   isSessionBusy: (sessionId, targetSessionManager) =>
