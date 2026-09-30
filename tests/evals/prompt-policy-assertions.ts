@@ -1,3 +1,9 @@
+import {
+  affirmsForbidden,
+  hasUnnegatedMarker,
+  splitSentences,
+  withoutPromptEcho,
+} from "./text-assertions.js";
 import type { EvalTrace } from "./types.js";
 
 export interface FinalAnswerAssertionResult {
@@ -51,24 +57,18 @@ export function evaluateFinalAnswerAssertion(
     },
     {
       pattern: /states the ticker could not be verified if lookup fails/i,
-      passed:
-        /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|invalid (?:ticker|symbol)|placeholder|not recognized|no verified|not find|no results|not available|mutual fund|not (?:an? )?(?:company|stock)|does not report earnings|earnings premise/i.test(
-          text,
-        ) || asksForTickerClarification(trace),
+      passed: statesTickerUnverified(trace) || asksForTickerClarification(trace),
       reason: asksForTickerClarification(trace)
         ? "asked user to clarify ambiguous ticker"
-        : "expected unresolved-ticker disclosure",
+        : "expected an unnegated unresolved-ticker disclosure in a sentence that names the ticker or symbol",
     },
     {
       pattern: /does not invent current earnings facts|no invented current earnings facts/i,
-      passed:
-        /could not|unavailable|not verified|not verify|missing|unknown|unable|no current|provider gap/i.test(
-          text,
-        ) ||
-        !/\b(?:eps|revenue|guidance|beat|miss|reported|consensus|actual)\b.{0,40}\b\d+(?:\.\d+)?\b/i.test(
-          trace.text,
-        ),
-      reason: "expected no fabricated current earnings figures",
+      passed: ungroundedEarningsFigures(trace).length === 0,
+      reason:
+        ungroundedEarningsFigures(trace).length === 0
+          ? "no earnings figure outside tool output, the prompt, or an explicit hypothetical"
+          : `expected no fabricated current earnings figures; ungrounded: ${ungroundedEarningsFigures(trace).join(", ")}`,
     },
     {
       pattern: /does not invent an intraday move on weekends or holidays/i,
@@ -100,8 +100,8 @@ export function evaluateFinalAnswerAssertion(
     },
     {
       pattern: /event-risk framework|expected move|trim\/hedge|trim, hedge|trim or hedge|gap risk/i,
-      passed: /trim|hedge|hold|position size|event[- ]risk|earnings|gap risk|stop/.test(text),
-      reason: "expected event-risk decision framework",
+      passed: eventRiskFrameworkConcepts(trace).length >= EVENT_RISK_MIN_CONCEPTS,
+      reason: `expected at least ${EVENT_RISK_MIN_CONCEPTS} unnegated event-risk framework concepts outside prompt echo (gap/expected move, position size, trim/hedge/stop, what would change the answer); observed: ${eventRiskFrameworkConcepts(trace).join(", ") || "none"}`,
     },
     {
       pattern:
@@ -137,6 +137,558 @@ export function evaluateFinalAnswerAssertion(
     reason: manifestCheck.reason,
     deterministic: manifestCheck.deterministic,
   };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tickerSubjectSource(trace: EvalTrace): string {
+  const symbols = new Set<string>([
+    ...(trace.classification.entities?.symbols ?? []),
+    ...(trace.prompt.match(/\b[A-Z]{2,5}\b/g) ?? []),
+  ]);
+  const alternatives = ["tickers?", "symbols?", ...[...symbols].map(escapeRegExp)];
+  return `\\b(?:${alternatives.join("|")})\\b`;
+}
+
+// An unresolved-ticker disclosure must be about the ticker/symbol itself (it
+// could not be verified, found, or recognized; it looks invalid or ambiguous;
+// it resolves to a non-company instrument). A data gap that only names the
+// ticker ("earnings data for ZZZZ are unavailable", "unable to retrieve a
+// quote for ZZZZ") does not question the symbol and does not count.
+const IDENTITY_OBJECT_FILLER =
+  "(?:(?:the|a|an|any|this|that|your|valid|standard|direct|matching|exact|publicly|traded|listed|common|stock|company|ticker|symbol)\\s+)*?";
+const NOT_A_DATA_NOUN =
+  "(?!['’]s\\b|\\s+(?:earnings|data|quotes?|prices?|financials|filings|options|news|fundamentals|metrics|figures|results)\\b)";
+const SUBJECT_DATA_PREFIX =
+  /\b(?:data|quotes?|prices?|earnings|figures|numbers|information|info|financials|filings|chains?|news|results|options|fundamentals|metrics|history)\s+(?:for|on|of|about)\s+(?:the\s+)?(?:(?:ticker|symbol|stock)\s+)?["'“‘]?$/i;
+const IDENTITY_FAILURE_VERB =
+  "(?:verified|found|recogni[sz]ed|identified|resolved|confirmed|located|matched|validated)";
+const IDENTITY_DEFECT =
+  "(?:not\\s+(?:a\\s+|an\\s+)?(?:\\w+\\s+)?(?:valid|recogni[sz]ed|known|verifiable|real|listed|standard|common|publicly|operating|stock|company|ticker|symbol)|(?:a\\s+|an\\s+)?(?:\\w+\\s+)?(?:invalid|unknown|unrecogni[sz]ed|unverified|unverifiable|ambiguous|placeholder|incorrect|wrong|misspelled|typo|delisted|mutual fund|test fund))\\b";
+
+function tickerDisclosurePatterns(subject: string): { subjectLed: RegExp[]; other: RegExp[] } {
+  const quote = `["'”’]?`;
+  return {
+    // Patterns that start at the subject; a data noun before it ("quote for
+    // ZZZZ could not be found") makes the data, not the ticker, the subject.
+    subjectLed: [
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,40}?\\b(?:could not|couldn't|cannot|can't|was not|wasn't|is not|isn't|has not|hasn't)\\s+(?:be\\s+|been\\s+)?(?:\\w+ly\\s+)?${IDENTITY_FAILURE_VERB}\\b`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}\\s+(?:\\([^)]*\\)\\s+)?(?:is|was|appears to be|seems to be|looks like|may be|might be|could be)\\s+(?:(?:likely|probably|possibly|either)\\s+)?${IDENTITY_DEFECT}`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,20}?\\b(?:resolve[sd]?|resolving|maps?|mapped|points?|pointed|corresponds?)\\s+(?:only\\s+)?to\\b[^.;!?\\n]{0,60}?\\b(?:mutual fund|fund|etf|test|different|another)\\b`,
+        "gi",
+      ),
+      new RegExp(
+        `${subject}${quote}[^.;!?\\n]{0,20}?\\b(?:(?:did|does|do)\\s+not|doesn't|didn't|don't)\\s+(?:resolve|match|correspond|exist)\\b`,
+        "gi",
+      ),
+      new RegExp(`${subject}${quote}\\s+(?:(?:was|is)\\s+)?not found\\b`, "gi"),
+    ],
+    other: [
+      new RegExp(
+        `\\b(?:could not|couldn't|cannot|can't|unable to|did not|didn't|failed to|not able to|inability to)\\s+(?:\\w+ly\\s+)?(?:verify|find|recogni[sz]e|identify|resolve|confirm|locate|match|validate)\\s+${IDENTITY_OBJECT_FILLER}(?:${subject}|(?:stock\\s+)?match|listing)${NOT_A_DATA_NOUN}`,
+        "i",
+      ),
+      /\b(?:unknown|invalid|unrecogni[sz]ed|unverified|unverifiable|ambiguous|placeholder|unconfirmed|incorrect|wrong)\s+(?:stock\s+)?(?:tickers?|symbols?|company identity)\b/i,
+      new RegExp(
+        `\\bno (?:results|match(?:es)?|listing)\\b[^.;!?\\n]{0,20}\\bfor\\s+(?:the\\s+)?${subject}`,
+        "i",
+      ),
+    ],
+  };
+}
+
+// A non-company instrument that invalidates the earnings premise, stated in a
+// sentence that names the ticker.
+const EARNINGS_PREMISE_DISCLOSURE =
+  /\b(?:mutual fund|not (?:an? )?(?:company|stock|operating company)|does not report earnings|earnings premise)\b/i;
+
+function statesTickerUnverified(trace: EvalTrace): boolean {
+  const subjectSource = tickerSubjectSource(trace);
+  const subject = new RegExp(subjectSource, "i");
+  const { subjectLed, other } = tickerDisclosurePatterns(subjectSource);
+  return splitSentences(trace.text).some((sentence) => {
+    for (const pattern of subjectLed) {
+      for (const match of sentence.matchAll(pattern)) {
+        if (!SUBJECT_DATA_PREFIX.test(sentence.slice(0, match.index))) return true;
+      }
+    }
+    if (other.some((pattern) => hasUnnegatedMarker(sentence, pattern))) return true;
+    return subject.test(sentence) && hasUnnegatedMarker(sentence, EARNINGS_PREMISE_DISCLOSURE);
+  });
+}
+
+// Earnings figures are field-aware. Each figure in the answer is attributed to
+// its nearest earnings label, before it ("EPS of $2.15") or right after it
+// ("$2.15 EPS", "$94.9 billion in revenue"). The figure is grounded only when
+// a tool call holds the same value (to the answer's displayed precision, with
+// thousand/million/billion/trillion scales) under a matching metric: a
+// structured field whose key path names that metric (`reportedEPS`,
+// `revenue`), or a labeled figure in tool text ("EPS: $6.08"). A number that
+// merely appears somewhere in a tool payload (a quote price of 300) grounds
+// nothing. A prompt number grounds a figure only with the same unit word
+// ("300 shares" grounds "your 300 shares", not "$300 million"). Years and
+// calendar dates ("fiscal 2026", "October 30") are not figures. A
+// hypothetical ("if", "e.g.", "suppose") exempts only its own clause: a
+// contrast ("but", "while", "however") or semicolon starts a new clause that
+// is checked again. A disclosure word elsewhere never excuses a figure.
+const EARNINGS_METRIC =
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual|earnings\s+(?:of|came in|come in|were|was|totaled|rose|fell|grew|reached|hit))\b/gi;
+const EVIDENCE_METRIC =
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|outlook|forecast|beat|miss|reported|consensus|actual|est(?:imated?|imates)?|surprise(?: percent)?|earnings)\b/gi;
+const EARNINGS_FIGURE_WINDOW = 40;
+const LABEL_AFTER_FIGURE_WINDOW = 20;
+// Words that may join a figure to the label after it ("$2.15 EPS", "$94.9
+// billion in revenue", "$1.20 per share of adjusted earnings"); a conjunction
+// or comma ("$2.15 and revenue") means the label belongs to the next figure.
+const LABEL_AFTER_FILLER =
+  /^(?:\s+(?:in|of|for|per|a|share|worth|total|diluted|adjusted|non-gaap|gaap|quarterly|annual|consensus|estimated|expected|projected|net))*\s*$/i;
+const HYPOTHETICAL_CUE =
+  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)(?![\w])/i;
+const HYPOTHETICAL_SCOPE_BREAK = /;|,?\s+\b(?:but|however|whereas|although|though|yet|while)\b/i;
+const FIGURE = /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d])/g;
+const FIGURE_SCALE = /^\s?(thousand|million|billion|trillion|mn|mm|bn|tn|k|m|b|t)(?![a-z])/i;
+const FIGURE_PERCENT = /^\s?(?:%|percent\b)/i;
+const FIGURE_UNIT = /^[\s-]*(%|[a-z]+)/i;
+const ORDINAL_SUFFIX = /^(?:st|nd|rd|th)\b/i;
+const MONTH_BEFORE =
+  /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+$/i;
+const DATE_OR_TIME =
+  /\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?|\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
+const SCALES: Record<string, number> = {
+  thousand: 1e3,
+  k: 1e3,
+  million: 1e6,
+  mn: 1e6,
+  mm: 1e6,
+  m: 1e6,
+  billion: 1e9,
+  bn: 1e9,
+  b: 1e9,
+  trillion: 1e12,
+  tn: 1e12,
+  t: 1e12,
+};
+
+type MetricFamily = "eps" | "revenue" | "guidance" | "earnings";
+
+const METRIC_FIELD: Record<MetricFamily, RegExp> = {
+  eps: /\beps\b|\bearnings per share\b/,
+  revenue: /\brevenues?\b|\bsales\b/,
+  guidance: /\bguidance\b|\boutlook\b|\bforecast\b/,
+  earnings:
+    /\b(?:eps|earnings|revenues?|sales|est|estimated?|estimates|consensus|actual|reported|surprise|guidance|outlook|forecast|beat|miss|income)\b/,
+};
+
+function metricFamily(label: string): MetricFamily {
+  const lower = label.toLowerCase();
+  if (METRIC_FIELD.eps.test(lower)) return "eps";
+  if (METRIC_FIELD.revenue.test(lower)) return "revenue";
+  if (/\bguidance\b/.test(lower)) return "guidance";
+  return "earnings";
+}
+
+interface Figure {
+  start: number;
+  end: number;
+  value: number;
+  scale: number | undefined;
+  percent: boolean;
+  decimals: number;
+  display: string;
+  unit: string;
+}
+
+function figuresIn(text: string): Figure[] {
+  const figures: Figure[] = [];
+  for (const match of text.matchAll(FIGURE)) {
+    const start = match.index ?? 0;
+    const [whole, dollar, integer, fraction] = match;
+    let end = start + whole.length;
+    const rest = text.slice(end);
+    const before = text.slice(0, start);
+    const scaleMatch = FIGURE_SCALE.exec(rest);
+    const percentMatch = FIGURE_PERCENT.exec(rest);
+    if (!dollar && !fraction && !scaleMatch && !percentMatch) {
+      const bare = Number(integer.replace(/,/g, ""));
+      // A year ("fiscal 2026") or calendar day ("October 30", "the 30th").
+      if (/^\d{4}$/.test(integer) && bare >= 1900 && bare <= 2100) continue;
+      if (MONTH_BEFORE.test(before) || ORDINAL_SUFFIX.test(rest)) continue;
+    }
+    if (scaleMatch) end += scaleMatch[0].length;
+    else if (percentMatch) end += percentMatch[0].length;
+    const value = Number(`${integer.replace(/,/g, "")}${fraction ? `.${fraction}` : ""}`);
+    if (!Number.isFinite(value)) continue;
+    figures.push({
+      start,
+      end,
+      value,
+      scale: scaleMatch ? SCALES[scaleMatch[1].toLowerCase()] : undefined,
+      percent: percentMatch !== null,
+      decimals: fraction?.length ?? 0,
+      display: String(value),
+      unit: (FIGURE_UNIT.exec(rest)?.[1] ?? "").toLowerCase().replace(/s$/, ""),
+    });
+  }
+  return figures;
+}
+
+type FigureBasis = "estimate" | "reported" | undefined;
+
+interface LabeledFigure {
+  label: string;
+  figure: Figure;
+  basis: FigureBasis;
+}
+
+// Whether a figure is an estimate ("consensus EPS is 2.15", "analysts
+// estimate $2.15 EPS") or a reported result ("EPS came in at $2.15"): the
+// qualifier nearest the figure, read from the text since the previous figure
+// and the label that follows it.
+const ESTIMATE_QUALIFIER =
+  /\b(?:consensus|estimate[sd]?|est|expected|expect|expects|expectations?|forecast(?:ed|s)?|projected|anticipated|street)\b/gi;
+const REPORTED_QUALIFIER =
+  /\b(?:reported|actual|actually|came in|come in|posted|delivered|printed)\b/gi;
+
+function lastQualifier(text: string): FigureBasis {
+  const last = (pattern: RegExp) =>
+    Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index ?? -1));
+  const estimate = last(ESTIMATE_QUALIFIER);
+  const reported = last(REPORTED_QUALIFIER);
+  if (estimate < 0 && reported < 0) return undefined;
+  return estimate > reported ? "estimate" : "reported";
+}
+
+function fieldBasis(field: string): FigureBasis {
+  return lastQualifier(field);
+}
+
+function isSpecific(label: string): boolean {
+  return metricFamily(label) !== "earnings";
+}
+
+// Attributes each figure to its nearest label: the closest one ending within
+// the window before it in the same clause, or one starting just after it with
+// no other figure between. A specific metric (EPS, revenue, guidance) wins
+// over a generic one (beat, reported, consensus).
+function labeledFigures(segment: string, labels: RegExp): LabeledFigure[] {
+  const found = [...segment.matchAll(labels)].map((match) => ({
+    label: match[0],
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+  }));
+  const results: LabeledFigure[] = [];
+  let previousEnd = 0;
+  for (const figure of figuresIn(segment)) {
+    const before = segment.slice(Math.max(previousEnd, figure.start - 60), figure.start);
+    previousEnd = figure.end;
+    const candidates: Array<{ label: string; gap: number; after: string }> = [];
+    for (const label of found) {
+      if (label.end <= figure.start) {
+        const gap = figure.start - label.end;
+        if (gap <= EARNINGS_FIGURE_WINDOW && clauseEnd(segment, label.end) >= figure.start) {
+          candidates.push({ label: label.label, gap, after: "" });
+        }
+      } else if (label.start >= figure.end) {
+        const between = segment.slice(figure.end, label.start);
+        if (between.length <= LABEL_AFTER_FIGURE_WINDOW && LABEL_AFTER_FILLER.test(between)) {
+          candidates.push({
+            label: label.label,
+            gap: between.length,
+            after: segment.slice(figure.end, label.end),
+          });
+        }
+      }
+    }
+    candidates.sort(
+      (a, b) => Number(isSpecific(b.label)) - Number(isSpecific(a.label)) || a.gap - b.gap,
+    );
+    const chosen = candidates[0];
+    if (chosen) {
+      results.push({
+        label: chosen.label,
+        figure,
+        basis: lastQualifier(before) ?? lastQualifier(chosen.after),
+      });
+    }
+  }
+  return results;
+}
+
+interface Evidence {
+  field: string;
+  value: number;
+  scaled: boolean;
+}
+
+function keyWords(key: string): string {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ")
+    .toLowerCase();
+}
+
+function collectEvidence(node: unknown, path: string, out: Evidence[]): void {
+  if (typeof node === "number") {
+    if (Number.isFinite(node)) out.push({ field: path, value: node, scaled: true });
+    return;
+  }
+  if (typeof node === "string") {
+    const text = node.replace(DATE_OR_TIME, " ");
+    // A string field inherits its key path ("revenueEstimate": "480 million").
+    for (const figure of figuresIn(text)) {
+      out.push({
+        field: path,
+        value: figure.value * (figure.scale ?? 1),
+        scaled: figure.scale !== undefined,
+      });
+    }
+    // Free text ("EPS: $6.08") grounds a figure under its own label.
+    for (const line of text.split("\n")) {
+      for (const { label, figure } of labeledFigures(line, EVIDENCE_METRIC)) {
+        out.push({
+          field: label.toLowerCase(),
+          value: figure.value * (figure.scale ?? 1),
+          scaled: figure.scale !== undefined,
+        });
+      }
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) collectEvidence(item, path, out);
+    return;
+  }
+  if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      collectEvidence(value, `${path} ${keyWords(key)}`.trim(), out);
+    }
+  }
+}
+
+interface GroundedFigures {
+  evidence: Evidence[];
+  promptFigures: Set<string>;
+}
+
+function groundedFigures(trace: EvalTrace): GroundedFigures {
+  const evidence: Evidence[] = [];
+  for (const call of trace.toolCalls) {
+    collectEvidence(call.args ?? {}, "", evidence);
+    collectEvidence(call.result ?? null, "", evidence);
+  }
+  const promptFigures = new Set(
+    figuresIn(trace.prompt).map((figure) => `${figure.display}|${figure.unit}`),
+  );
+  return { evidence, promptFigures };
+}
+
+// Candidate absolute values for an answer figure: its stated scale, or any
+// scale when none is stated; a percent may be stored as a fraction.
+function figureMatches(figure: Figure, evidence: Evidence): boolean {
+  const scales = figure.scale !== undefined ? [figure.scale] : [1, 1e3, 1e6, 1e9, 1e12];
+  const halfUnit = 0.5 * 10 ** -figure.decimals;
+  for (const scale of evidence.scaled || figure.scale === undefined ? scales : [1]) {
+    const target = figure.value * scale;
+    const tolerance = halfUnit * scale + Math.abs(target) * 1e-9;
+    if (Math.abs(evidence.value - target) <= tolerance) return true;
+    if (figure.percent && Math.abs(evidence.value * 100 - target) <= tolerance) return true;
+  }
+  return false;
+}
+
+// An estimate is grounded only by an estimate/consensus field, and a reported
+// figure never by one, so a reported EPS of 2.15 cannot ground "consensus EPS
+// is 2.15". Guidance is forward-looking by nature and is not split.
+function basisCompatible(family: MetricFamily, basis: FigureBasis, field: string): boolean {
+  if (family === "guidance" || basis === undefined) return true;
+  const evidenceBasis = fieldBasis(field);
+  return basis === "estimate" ? evidenceBasis === "estimate" : evidenceBasis !== "estimate";
+}
+
+function isGrounded({ label, figure, basis }: LabeledFigure, grounded: GroundedFigures): boolean {
+  if (grounded.promptFigures.has(`${figure.display}|${figure.unit}`)) return true;
+  const family = metricFamily(label);
+  const field = METRIC_FIELD[family];
+  return grounded.evidence.some(
+    (evidence) =>
+      field.test(evidence.field) &&
+      basisCompatible(family, basis, evidence.field) &&
+      figureMatches(figure, evidence),
+  );
+}
+
+function clauseEnd(text: string, from: number): number {
+  for (let i = from; i < text.length; i += 1) {
+    if (";!?\n".includes(text[i])) return i;
+    if (text[i] === "." && !(/\d/.test(text[i - 1] ?? "") && /\d/.test(text[i + 1] ?? ""))) {
+      return i;
+    }
+  }
+  return text.length;
+}
+
+function ungroundedEarningsFigures(trace: EvalTrace): string[] {
+  const grounded = groundedFigures(trace);
+  const ungrounded: string[] = [];
+  for (const sentence of splitSentences(trace.text)) {
+    for (const segment of sentence.split(HYPOTHETICAL_SCOPE_BREAK)) {
+      if (!segment || HYPOTHETICAL_CUE.test(segment)) continue;
+      for (const labeled of labeledFigures(segment, EARNINGS_METRIC)) {
+        if (!isGrounded(labeled, grounded)) {
+          ungrounded.push(`${labeled.label} ${labeled.figure.display}`);
+        }
+      }
+    }
+  }
+  return ungrounded;
+}
+
+// Event-risk framework concept families, evaluated on the answer's own
+// content (prompt echo removed) and only when not directly negated.
+const EVENT_RISK_MIN_CONCEPTS = 3;
+const EVENT_RISK_CONCEPTS: Array<{ name: string; marker: RegExp }> = [
+  {
+    name: "gap risk or expected move",
+    marker:
+      /\bgap(?:s|ped|ping)?\b|\b(?:expected|implied) (?:earnings )?(?:move|volatility|vol)\b|\bimplied\s+(?:price\s+)?(?:swing|range)\b|\b(?:iv|volatility) crush\b|\bstraddle\b|\b(?:overnight|post-earnings|earnings[- ]day|after-hours) (?:move|moves|drop|jump|swing|reaction|price (?:move|movement))\b|\bbinary (?:event|outcome)\b/i,
+  },
+  {
+    name: "position size",
+    marker:
+      /\bposition[- ]siz\w*|\bsiz(?:e|ing)\b[^.;!?\n]{0,30}\b(?:position|stake|exposure)\b|\b(?:position|stake|exposure|holding)\b[^.;!?\n]{0,30}\b(?:siz(?:e|ing)|too (?:large|big|small))\b|\b(?:how (?:big|large)|oversized|undersized|right-sized|too (?:large|big))\b[^.;!?\n]{0,20}\b(?:position|stake|holding)\b|\b(?:share|percent(?:age)?|portion|fraction|%) of (?:your )?(?:total )?(?:portfolio|net worth|capital|investable assets)\b|\bportfolio (?:weight|concentration)\b|\bconcentrat\w*|\b(?:more|less|too much) exposure than\b|\bsingle[- ](?:stock|name|position) (?:limit|cap|weight)\b|\b(?:dollar )?value of (?:your |the )?(?:\d[\d,]* )?(?:shares|position|stake|holding)\b|\b(?:dollar )?loss you (?:can|could) (?:accept|tolerate|absorb|afford)\b|\bhow much (?:you can|you could|you're willing to) (?:afford to )?lose\b/i,
+  },
+  {
+    name: "trim/hedge/stop",
+    marker:
+      /\btrim\w*|\bhedg\w*|\bstop[- ]?loss\w*|\bstop (?:order|level)\b|\bset a stop\b|\bprotective puts?\b|\bcollars?\b|\breduc\w* (?:your |the )?(?:position|exposure|stake)\b/i,
+  },
+  {
+    name: "what would change the answer",
+    marker:
+      /\bwould (?:change|flip|alter|shift)\b|\bchange (?:the|my|this|your|our) (?:answer|view|call|recommendation|decision|read)\b|\binvalidat\w*|\bwhat would make\b|\bfacts? that would\b|\bhinges? on\b|\bdepends? on\b|\b(?:if|once|when) you (?:tell|share|give|provide|send|confirm|verify|know|have)\b|\b(?:once|until|after) (?:the|we|i|you)\b[^.;!?\n]{0,40}\b(?:confirm|verif|known|available|fetch)\w*/i,
+  },
+];
+
+function eventRiskFrameworkConcepts(trace: EvalTrace): string[] {
+  const content = withoutPromptEcho(trace.text, trace.prompt);
+  return EVENT_RISK_CONCEPTS.filter(({ marker }) => hasUnnegatedMarker(content, marker)).map(
+    ({ name }) => name,
+  );
+}
+
+const OPTION_CHAIN_TOOL = "get_option_chain";
+
+// The owned underlying: an unnegated text mention, or structured evidence that
+// the option chain was fetched for that symbol. Either way, the answer must not
+// affirmatively recommend an option on another ticker from the request ("buy
+// the NVDA put"): a fetched chain shows available evidence, not the underlying
+// the answer settled on.
+function usesOwnedUnderlying(
+  symbol: string,
+  trace: EvalTrace,
+): { passed: boolean; reason: string; deterministic: boolean } {
+  const upper = symbol.toUpperCase();
+  const fetchedChain = trace.toolCalls.some(
+    (call) =>
+      call.name === OPTION_CHAIN_TOOL && String(call.args?.symbol ?? "").toUpperCase() === upper,
+  );
+  const mentioned = hasUnnegatedMarker(
+    trace.text,
+    new RegExp(`(?<![\\w$.])${escapeRegExp(symbol)}(?![\\w])`, "i"),
+  );
+  const committed = withoutConditionalClauses(trace.text);
+  const conflicting = otherRequestSymbols(trace, upper).filter((other) =>
+    affirmsForbidden(committed, optionOnSymbol(other)),
+  );
+  return {
+    passed: conflicting.length === 0 && (fetchedChain || mentioned),
+    reason:
+      conflicting.length > 0
+        ? `final answer recommends an option on ${conflicting.join(", ")} instead of ${upper}`
+        : fetchedChain
+          ? `observed ${OPTION_CHAIN_TOOL} for ${upper}`
+          : mentioned
+            ? `final answer names ${upper} as the underlying`
+            : `expected ${OPTION_CHAIN_TOOL} args or an unnegated final-answer mention of ${upper}`,
+    deterministic: true,
+  };
+}
+
+// Drops conditional clauses ("If you meant a call on NVDA, tell me"), which
+// offer an alternative rather than recommend it.
+const CONDITIONAL_CLAUSE = /^\s*(?:if|unless|suppose|supposing|in case|should you)\b/i;
+
+function withoutConditionalClauses(text: string): string {
+  return splitSentences(text)
+    .map((sentence) =>
+      sentence
+        .split(/(?<=[,;])/)
+        .filter((clause) => !CONDITIONAL_CLAUSE.test(clause))
+        .join(""),
+    )
+    .join("\n");
+}
+
+function otherRequestSymbols(trace: EvalTrace, owned: string): string[] {
+  const symbols = new Set<string>([
+    ...(trace.classification.entities?.symbols ?? []).map((symbol) => symbol.toUpperCase()),
+    ...(trace.prompt.match(/\b[A-Z]{2,5}\b/g) ?? []),
+  ]);
+  symbols.delete(owned);
+  return [...symbols];
+}
+
+// An option bound to a ticker: "NVDA put", "NVDA 150 put", "NVDA Oct 150
+// call", or "puts on NVDA". Only expiry and strike tokens may sit between, so
+// "NVDA earnings could hurt your call" is not an NVDA call.
+const EXPIRY_WORD =
+  "(?:[Jj]an(?:uary)?|[Ff]eb(?:ruary)?|[Mm]ar(?:ch)?|[Aa]pr(?:il)?|[Mm]ay|[Jj]une?|[Jj]uly?|[Aa]ug(?:ust)?|[Ss]ep(?:t(?:ember)?)?|[Oo]ct(?:ober)?|[Nn]ov(?:ember)?|[Dd]ec(?:ember)?|[Ww]eekly|[Mm]onthly)\\.?";
+function optionOnSymbol(symbol: string): RegExp {
+  const ticker = escapeRegExp(symbol);
+  // Case-sensitive, so the ticker never matches an ordinary word ("how many
+  // puts" is not a MANY put).
+  const option = "(?:[Pp]uts?|[Cc]alls?|[Oo]ptions?|[Cc]ontracts?|[Cc]ollars?|[Ss]preads?)";
+  return new RegExp(
+    `(?<![\\w$.])${ticker}(?:\\s+(?:${EXPIRY_WORD}|\\$?\\d+(?:\\.\\d+)?(?:-strike)?|strike))*\\s+${option}\\b|\\b${option}\\s+(?:on|for)\\s+${ticker}(?![\\w])`,
+  );
+}
+
+const SMALL_NUMBER_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+
+// An owned share quantity stated with its share unit (not a "$200 strike"), or
+// the matching number of put contracts at 100 shares per contract.
+function preservesShareQuantity(text: string, shares: number): boolean {
+  const normalized = stripMarkdownEmphasis(text);
+  const sharePattern = new RegExp(
+    `(?<![\\d.$,])${shares}(?![\\d.,])\\s*[- ]?\\s*(?:[a-z]{1,5}\\s+)?(?:shares?|sh\\b)`,
+    "i",
+  );
+  if (sharePattern.test(normalized)) return true;
+  if (shares % 100 !== 0) return false;
+  const contracts = shares / 100;
+  return hasHedgePutQuantity(normalized, String(contracts), SMALL_NUMBER_WORDS[contracts] ?? "");
 }
 
 function asksForTickerClarification(trace: EvalTrace): boolean {
@@ -194,8 +746,10 @@ function stripMarkdownEmphasis(text: string): string {
 // not satisfy the sizing. The trailing boundary keeps "4 putative" out.
 function hasHedgePutQuantity(text: string, digit: string, word: string): boolean {
   const digitPattern = new RegExp(`(?<![\\d.])${digit}(?![\\d.])\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  if (digitPattern.test(text)) return true;
+  if (!word) return false;
   const wordPattern = new RegExp(`\\b${word}\\b\\s+${HEDGE_PUT_UNIT}\\b`, "i");
-  return digitPattern.test(text) || wordPattern.test(text);
+  return wordPattern.test(text);
 }
 
 // A 50-share quantity stated with its share unit (not the "50" inside 450/"$50"
@@ -433,7 +987,7 @@ function evaluateManifestAssertion(
   }
   if (lowerAssertion.includes("does not ask for a portfolio budget")) {
     return {
-      passed: !/need .*budget|what .*budget|provide .*budget/.test(text),
+      passed: !affirmsForbidden(text, /\b(?:need|what|provide)\b[^.;?!\n]{0,60}\bbudget\b/),
       reason: "expected answer not to request a portfolio budget",
       deterministic: true,
     };
@@ -471,8 +1025,11 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("6.8% rate")) {
     return requiredTerms(/6\.8\s*%|6\.8 percent/, /default|would|practical/);
   }
-  if (lowerAssertion.includes("uses dram as the covered-call underlying")) {
-    return requires(/\bdram\b/);
+  const ownedUnderlying = lowerAssertion.match(
+    /\buses ([a-z][a-z.]{0,5}) as (?:the )?(?:covered-call|protective-put) underlying\b/,
+  );
+  if (ownedUnderlying) {
+    return usesOwnedUnderlying(ownedUnderlying[1], trace);
   }
   if (lowerAssertion.includes("preserves nvda as catalyst context")) {
     return requires(/\bnvda\b/, /catalyst|context|earnings|event/);
@@ -489,17 +1046,24 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("covered-call assignment")) {
     return requiredTerms(/assignment/, /downside/, /opportunity cost|capped upside/);
   }
-  if (lowerAssertion.includes("uses amd as protective-put underlying")) {
-    return requires(/\bamd\b/);
-  }
-  if (lowerAssertion.includes("uses aapl as protective-put underlying")) {
-    return requires(/\baapl\b/);
-  }
-  if (lowerAssertion.includes("200-share hedge quantity")) {
-    return requires(/200/, /month|dte|days? to expiration/);
+  const hedgeQuantity = lowerAssertion.match(/\b(\d+)-share hedge quantity\b/);
+  if (hedgeQuantity) {
+    const shares = Number(hedgeQuantity[1]);
+    const quantity = preservesShareQuantity(text, shares);
+    const monthHint = /month|dte|days? to expiration/.test(text);
+    return {
+      passed: quantity && monthHint,
+      reason: `expected the ${shares}-share quantity with a share unit (or ${shares / 100} put contracts) and a month/DTE hint; quantity=${quantity}, monthHint=${monthHint}`,
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("does not convert protective put request into a bullish call")) {
-    return forbids(/bullish call|bull call|call spread|covered call/);
+    const bullishCall = /bullish call|bull call|call spread|covered call/;
+    return {
+      passed: !affirmsForbidden(text, bullishCall),
+      reason: `expected final answer not to recommend a bullish call strategy (negated or contrasted mentions allowed): ${bullishCall}`,
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("sizes hedge from 450 shares")) {
     return evaluateHedgeSizingFromShares(text);
@@ -507,7 +1071,7 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("hedge floor, premium")) {
     const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/);
     if (!base.passed) return base;
-    if (!HEDGE_DOWNSIDE_HAZARD.test(text)) {
+    if (!hasUnnegatedMarker(text, HEDGE_DOWNSIDE_HAZARD)) {
       return {
         passed: false,
         reason:

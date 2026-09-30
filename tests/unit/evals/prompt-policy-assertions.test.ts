@@ -84,9 +84,13 @@ describe("prompt-policy final answer assertions", () => {
   it("accepts a verified non-company instrument that invalidates the earnings premise", () => {
     const result = evaluateFinalAnswerAssertion(
       "states the ticker could not be verified if lookup fails",
-      trace(
-        "ZZZZ resolves to a mutual fund, not an operating company, so the premise that it reports earnings tonight is invalid.",
-      ),
+      {
+        ...trace(
+          "ZZZZ resolves to a mutual fund, not an operating company, so the premise that it reports earnings tonight is invalid.",
+        ),
+        prompt:
+          "I hold 300 shares of ZZZZ and earnings are tonight. Should I trim, hedge, or hold through it?",
+      },
     );
 
     expect(result.passed).toBe(true);
@@ -666,6 +670,589 @@ describe("prompt-policy final answer assertions", () => {
 
     expect(result.passed).toBe(false);
     expect(result.reason).toContain("hazard");
+  });
+});
+
+// Frozen competitive panel mandatory assertions (#204 phase 1). Each touched
+// assertion has a positive control, a negated or echoed negative control, and
+// the exact false-pass/false-fail probe strings from the issue.
+describe("frozen competitive panel assertions are negation and echo aware", () => {
+  const ZZZZ_PROMPT =
+    "I hold 300 shares of ZZZZ and earnings are tonight. Should I trim, hedge, or hold through it?";
+  const AMD_PROMPT =
+    "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?";
+  const DRAM_PROMPT =
+    "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?";
+  const REVIEW_PROMPT =
+    "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.";
+
+  const check = (assertion: string, text: string, extra: Partial<EvalTrace> = {}) =>
+    evaluateFinalAnswerAssertion(assertion, { ...trace(text), ...extra }).passed;
+
+  describe("does not invent current earnings facts", () => {
+    const assertion = "does not invent current earnings facts";
+
+    it("fails the confirmed false pass: a disclosure word does not excuse fabricated figures", () => {
+      expect(
+        check(
+          assertion,
+          "ZZZZ could not be verified. Consensus EPS of 2.15 and revenue of 480 million are expected tonight.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+
+    it("fails ungrounded reported earnings figures with no disclosure", () => {
+      expect(
+        check(assertion, "EPS came in at $1.05 versus consensus of $0.98.", {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it("passes an unverified-ticker answer that states no earnings figures", () => {
+      expect(
+        check(
+          assertion,
+          "ZZZZ could not be verified, so I have no current EPS, revenue, or guidance figures for it.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("passes earnings figures grounded in tool output", () => {
+      expect(
+        check(assertion, "Consensus EPS of 2.15 and revenue of 480 million are expected tonight.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_earnings",
+              args: { symbol: "ZZZZ" },
+              result: { consensusEps: 2.15, revenueEstimate: "480 million" },
+            },
+          ],
+        }),
+      ).toBe(true);
+    });
+
+    it("fails a prompt number reused as an earnings figure with a different unit", () => {
+      expect(check(assertion, "Consensus revenue is $300 million.", { prompt: ZZZZ_PROMPT })).toBe(
+        false,
+      );
+    });
+
+    it("scopes the hypothetical exemption to the hypothetical clause", () => {
+      expect(
+        check(assertion, "Consensus EPS is 2.15, but if guidance disappoints the stock may fall.", {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not ground a figure on date components in tool output", () => {
+      expect(
+        check(assertion, "Revenue grew 26% last quarter.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_stock_quote",
+              args: { symbol: "ZZZZ" },
+              result: { error: "Not Found", asOf: "2026-09-26T02:07:45Z" },
+            },
+          ],
+        }),
+      ).toBe(false);
+    });
+
+    it("fails an ungrounded earnings-per-share figure stated as earnings", () => {
+      expect(
+        check(assertion, "ZZZZ earnings came in at $1.20 a share last quarter.", {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it.each([
+      "If EPS comes in at 2.15, the stock could rise.",
+      "Suppose guidance is cut, revenue of 480 million would still cover the dividend.",
+    ])("passes a hypothetical whose cue governs the figure: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
+    const quote = (result: Record<string, unknown>) => ({
+      name: "get_stock_quote",
+      args: { symbol: "ZZZZ" },
+      result,
+    });
+    const earnings = (result: Record<string, unknown>) => ({
+      name: "get_earnings",
+      args: { symbol: "ZZZZ" },
+      result,
+    });
+
+    it("fails a labeled figure whose value appears only under an unrelated tool field", () => {
+      expect(
+        check(assertion, "Consensus revenue is $300 million.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [quote({ details: { symbol: "ZZZZ", price: 300 } })],
+        }),
+      ).toBe(false);
+      expect(
+        check(assertion, "EPS was 480 last quarter.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [earnings({ details: { revenueEstimate: 480 } })],
+        }),
+      ).toBe(false);
+    });
+
+    it("grounds a labeled figure in a matching metric field, tolerating rounding and units", () => {
+      expect(
+        check(assertion, "EPS came in at $2.15 and revenue was $94.9 billion.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            earnings({
+              details: { quarterly: [{ reportedEPS: 2.1534, estimatedEPS: 2.1 }] },
+            }),
+            {
+              name: "get_financials",
+              args: { symbol: "ZZZZ" },
+              result: { details: { revenue: 94_930_000_000 } },
+            },
+          ],
+        }),
+      ).toBe(true);
+      expect(
+        check(assertion, "EPS is $6.08.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_company_overview",
+              args: { symbol: "ZZZZ" },
+              result: { content: [{ type: "text", text: "**ZZZZ overview**\nEPS: $6.08" }] },
+            },
+          ],
+        }),
+      ).toBe(true);
+    });
+
+    it.each(["The estimate is $2.15 EPS.", "Analysts expect $94.9 billion in revenue."])(
+      "checks a figure written before its label: %s",
+      (text) => {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(false);
+      },
+    );
+
+    it("keeps estimated and reported earnings figures distinct", () => {
+      const tool = [
+        earnings({ details: { quarterly: [{ reportedEPS: 2.15, estimatedEPS: 1.9 }] } }),
+      ];
+      for (const text of [
+        "Consensus EPS is 2.15.",
+        "Analysts estimate $2.15 EPS.",
+        "EPS came in at $1.90.",
+        "Reported EPS was 1.90.",
+      ]) {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT, toolCalls: tool })).toBe(false);
+      }
+      for (const text of [
+        "Consensus EPS is 1.90.",
+        "EPS came in at $2.15 versus consensus of $1.90.",
+        "Reported EPS was 2.15.",
+        "EPS was 2.15.",
+      ]) {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT, toolCalls: tool })).toBe(true);
+      }
+    });
+
+    it("does not ground a consensus figure in an unqualified trailing EPS field", () => {
+      expect(
+        check(assertion, "Consensus EPS is 6.08.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_company_overview",
+              args: { symbol: "ZZZZ" },
+              result: { details: { eps: 6.08 } },
+            },
+          ],
+        }),
+      ).toBe(false);
+    });
+
+    it("grounds a figure written before its label in a matching field", () => {
+      expect(
+        check(assertion, "The estimate is $2.10 EPS.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [earnings({ details: { quarterly: [{ estimatedEPS: 2.1 }] } })],
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "Guidance for fiscal 2026 is unavailable.",
+      "EPS for Q3 2026 has not been reported.",
+      "Earnings are reported on October 30, so no figures are available yet.",
+    ])("does not read a year or date as an earnings figure: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
+    it("still checks a year-sized amount with a currency or scale", () => {
+      expect(check(assertion, "Revenue guidance is 2026 million.", { prompt: ZZZZ_PROMPT })).toBe(
+        false,
+      );
+      expect(check(assertion, "Revenue was $2026.", { prompt: ZZZZ_PROMPT })).toBe(false);
+    });
+
+    it("passes numbers restated from the prompt and clearly hypothetical scenarios", () => {
+      expect(
+        check(
+          assertion,
+          "Earnings guidance for your 300 shares is unknown. If revenue misses consensus by 5%, the stock could gap lower.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+  });
+
+  describe("states the ticker could not be verified if lookup fails", () => {
+    const assertion = "states the ticker could not be verified if lookup fails";
+
+    it("fails the confirmed false pass: a bare unknown/missing word unrelated to the ticker", () => {
+      expect(check(assertion, "unknown catalysts aside, hold it", { prompt: ZZZZ_PROMPT })).toBe(
+        false,
+      );
+    });
+
+    it("passes a disclosure tied to the ticker", () => {
+      expect(
+        check(assertion, 'The ticker "ZZZZ" could not be verified with our data providers.', {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "I couldn't find a direct stock match for ZZZZ.",
+      "ZZZZ is not a verifiable symbol for an individual stock.",
+      "I was unable to retrieve a quote for ZZZZ; the ticker symbol might be incorrect.",
+      "Given the inability to verify ZZZZ, I cannot advise a specific action.",
+    ])("passes a disclosure about the ticker itself: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
+    it.each([
+      "Current earnings data for ZZZZ are unavailable.",
+      "I was unable to retrieve a quote for ZZZZ from any provider.",
+      "I could not find ZZZZ earnings data for this quarter.",
+      "Options data for the ZZZZ ticker is missing today.",
+    ])("fails a data-gap sentence that never questions the ticker: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(false);
+    });
+
+    it("fails a negated disclosure that affirms the ticker", () => {
+      expect(
+        check(
+          assertion,
+          "ZZZZ is a listed ticker with no ambiguity, so hold it through earnings.",
+          {
+            prompt: ZZZZ_PROMPT,
+          },
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe("event-risk framework", () => {
+    const assertion =
+      "gives an event-risk framework covering expected move/gap risk, guidance, drivers, position size, trim/hedge/stop choices, and facts that would change the answer";
+
+    it("fails the confirmed false pass: an echoed prompt", () => {
+      expect(
+        check(assertion, "You asked whether to trim, hedge, or hold.", { prompt: ZZZZ_PROMPT }),
+      ).toBe(false);
+    });
+
+    it("keeps the answer's own clauses after an echo lead-in and a semicolon", () => {
+      expect(
+        check(
+          assertion,
+          "You asked whether to trim or hedge; gap risk is high, the position is oversized, so hedge, and verification would change the answer.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("fails an echoed heading followed by filler", () => {
+      expect(
+        check(
+          assertion,
+          "## Should I trim, hedge, or hold through it?\nThat depends on many things. Stay informed.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+
+    it("fails an answer that names only the trim/hedge choice", () => {
+      expect(
+        check(assertion, "Trim half the position. Hedge the rest.", { prompt: ZZZZ_PROMPT }),
+      ).toBe(false);
+    });
+
+    it("passes an answer covering gap risk, position size, trim/hedge, and what would change it", () => {
+      expect(
+        check(
+          assertion,
+          [
+            "Earnings can gap the stock well past a normal day's range, so the implied move sets the stakes.",
+            "Position size matters: 300 shares may be too large to hold unhedged into the print.",
+            "Trim a third, or hedge the rest with a protective put, and set a stop below support.",
+            "A verified ticker and the options-implied move would change the answer.",
+          ].join("\n"),
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("fails a clarification-only dead end even though it names the ticker and earnings", () => {
+      expect(
+        check(
+          assertion,
+          "I couldn't find a direct stock match for ZZZZ. Could you provide the exact ticker symbol for the company you hold shares in before earnings?",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+
+    it("passes a loss-tolerance sizing framework conditioned on verification", () => {
+      expect(
+        check(
+          assertion,
+          [
+            "Trim if 300 shares is more exposure than you'd accept after a sharp overnight drop.",
+            "A collar can cap the cost of protection.",
+            "Once the ticker is confirmed, compare the options-implied move with the loss you can tolerate.",
+          ].join("\n"),
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("keeps framework concepts in a sentence that repeats prompt context", () => {
+      expect(
+        check(
+          assertion,
+          "Because you hold 300 shares of ZZZZ and earnings are tonight, this is an oversized position, so trim or hedge it. The expected move could gap the stock overnight.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("does not count framework concepts denied by a trailing predicate", () => {
+      expect(
+        check(
+          assertion,
+          "Gap risk is nonexistent here. Position size is not a concern. Hedging is unnecessary. The answer depends on nothing else.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+
+    it("does not count negated framework concepts", () => {
+      expect(
+        check(
+          assertion,
+          "There is no gap risk to worry about. Trim nothing and just hold. Position size is not a concern.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe("preserves 200-share hedge quantity and month DTE hint", () => {
+    const assertion = "preserves 200-share hedge quantity and month DTE hint";
+
+    it("fails the confirmed false pass: a $200 strike is not a share quantity", () => {
+      expect(
+        check(assertion, "Buy 1 put at the $200 strike expiring next month.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it("passes a 200-share quantity with a month expiry", () => {
+      expect(
+        check(assertion, "To protect your 200 shares, buy puts expiring next month.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes a 200-share quantity that names the ticker between number and unit", () => {
+      expect(
+        check(assertion, "Protect your 200 AMD shares with puts expiring next month.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes two put contracts with a DTE hint", () => {
+      expect(
+        check(assertion, "Buy **2** put contracts about 30 DTE out.", { prompt: AMD_PROMPT }),
+      ).toBe(true);
+    });
+
+    it("fails two call contracts with no 200-share quantity", () => {
+      expect(
+        check(assertion, "Buy 2 call contracts expiring next month.", { prompt: AMD_PROMPT }),
+      ).toBe(false);
+    });
+  });
+
+  describe("does not ask for a portfolio budget", () => {
+    const assertion = "does not ask for a portfolio budget";
+
+    it("passes the confirmed false fail: a negated budget request", () => {
+      expect(
+        check(assertion, "You don't need to share a budget for this review.", {
+          prompt: REVIEW_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes when 'what' and 'budget' sit in different clauses", () => {
+      expect(
+        check(assertion, "What matters most is duration risk; budget is irrelevant here.", {
+          prompt: REVIEW_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "What is your budget for this portfolio?",
+      "I need to know your budget before reviewing the allocation.",
+      "Please provide a budget so I can size each sleeve.",
+    ])("fails an affirmative budget request: %s", (text) => {
+      expect(check(assertion, text, { prompt: REVIEW_PROMPT })).toBe(false);
+    });
+  });
+
+  describe("does not convert protective put request into a bullish call strategy", () => {
+    const assertion = "does not convert protective put request into a bullish call strategy";
+
+    it("passes the confirmed false fail: a contrasted covered call", () => {
+      expect(
+        check(assertion, "This is a protective put, not a covered call.", { prompt: AMD_PROMPT }),
+      ).toBe(true);
+    });
+
+    it("passes a strategy rejected after it is named", () => {
+      expect(
+        check(assertion, "A covered call is not appropriate here; buy the AMD protective put.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes a rather-than contrast", () => {
+      expect(
+        check(assertion, "Buy the AMD put rather than a bull call spread on NVDA.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "You can't beat a bull call spread into NVDA earnings.",
+      "No doubt a covered call on AMD is the better trade.",
+      "Instead, sell a covered call on AMD.",
+      "Consider a bull call spread into NVDA earnings.",
+    ])("fails an affirmed bullish call strategy: %s", (text) => {
+      expect(check(assertion, text, { prompt: AMD_PROMPT })).toBe(false);
+    });
+  });
+
+  describe("owned underlying accepts structured option-chain evidence", () => {
+    const chain = (symbol: string) => ({
+      name: "get_option_chain",
+      args: { symbol, type: "call" },
+      result: { symbol },
+    });
+
+    it("passes a DRAM text mention", () => {
+      expect(
+        check("uses DRAM as the covered-call underlying", "Sell a DRAM $55 call.", {
+          prompt: DRAM_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes when the option chain was fetched for the owned underlying", () => {
+      expect(
+        check("uses DRAM as the covered-call underlying", "Sell the $55 call expiring in 9 days.", {
+          prompt: DRAM_PROMPT,
+          toolCalls: [chain("DRAM")],
+        }),
+      ).toBe(true);
+    });
+
+    it("fails when the only mention of the owned underlying is negated", () => {
+      expect(
+        check("uses DRAM as the covered-call underlying", "Use NVDA calls, not DRAM.", {
+          prompt: DRAM_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it("fails an answer that recommends another ticker's option despite the owned chain", () => {
+      for (const text of [
+        "Buy the NVDA 150 put.",
+        "AMD is your holding, but buy the NVDA put for the event.",
+        "Buy puts on NVDA ahead of the print.",
+      ]) {
+        expect(
+          check("uses AMD as protective-put underlying", text, {
+            prompt: AMD_PROMPT,
+            toolCalls: [chain("AMD")],
+          }),
+        ).toBe(false);
+      }
+    });
+
+    it.each([
+      "Buy the $150 put expiring October 17.",
+      "Buy an AMD put; NVDA earnings could still move AMD.",
+      "Buy an AMD put, not an NVDA put.",
+      "Buy an AMD put; NVDA earnings could hurt your call exposure elsewhere.",
+      "Decide how many puts to buy on AMD.",
+      "Buy the AMD put. If you meant a put on NVDA instead, tell me and I'll redo this.",
+    ])("passes an owned-underlying option that only mentions the catalyst: %s", (text) => {
+      expect(
+        check("uses AMD as protective-put underlying", text, {
+          prompt: `${AMD_PROMPT} HOW MANY contracts?`,
+          toolCalls: [chain("AMD")],
+        }),
+      ).toBe(true);
+    });
+
+    it("fails when the chain was fetched for the catalyst ticker instead", () => {
+      expect(
+        check("uses AMD as protective-put underlying", "Buy the NVDA 150 put.", {
+          prompt: AMD_PROMPT,
+          toolCalls: [chain("NVDA")],
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("protective-put hazard is negation aware", () => {
+    it("rejects a hedge answer whose only hazard word is denied", () => {
+      expect(
+        check(
+          "frames hedge floor, premium, Greeks, liquidity, and protective-put risks",
+          "The put floors your shares at the $150 strike minus the premium. Delta is -0.30 and liquidity is deep. There is no risk here.",
+        ),
+      ).toBe(false);
+    });
   });
 });
 
