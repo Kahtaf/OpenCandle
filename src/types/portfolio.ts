@@ -81,3 +81,7 @@ export interface TechnicalIndicators {
   macd: { macd: number; signal: number; histogram: number }[];
   bollingerBands: { upper: number; middle: number; lower: number }[];
 }
+
+/** Historical lookback windows accepted by analyze_risk and analyze_correlation. */
+export const RISK_LOOKBACK_PERIODS = ["6mo", "1y", "2y", "5y"] as const;
+export type RiskLookbackPeriod = (typeof RISK_LOOKBACK_PERIODS)[number];
