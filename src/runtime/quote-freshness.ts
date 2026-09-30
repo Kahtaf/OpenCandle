@@ -103,7 +103,11 @@ const QUOTE_SCOPED_PATTERNS: readonly RegExp[] = [
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
   // "Liquidity can deteriorate outside regular hours" is generic advice; it
   // must say the chain or quotes were observed outside regular trading.
-  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi, // "stale" and "delayed" must describe the quotes, not another subject
+  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,
+  // "Markets closed" can be past tense ("the market closed higher"), so it must
+  // sit in a sentence about the quotes.
+  /\bmarkets?(?:'s)?[- ]closed\b/gi,
+  // "stale" and "delayed" must describe the quotes, not another subject
   // ("the earnings release was delayed"), and must not be negated in between.
   /\b(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures|numbers)\b(?:(?!\bnot\b|n't\b|\bnever\b)(?:[^.;:!?\n]|\.(?=\d))){0,30}?\b(?:stale|delayed)\b/gi,
   /\b(?:stale|delayed)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures)\b/gi,
@@ -147,8 +151,8 @@ function sentenceAround(text: string, index: number, length: number): string {
  * after-hours trading"). These describe why no quote is live right now.
  */
 const MARKET_STATUS_PATTERNS: readonly RegExp[] = [
-  /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
-  /\bmarkets?(?:'s)?[- ]closed\b/gi,
+  // Present tense only: "the market was closed yesterday" says nothing about now.
+  /\b(?:options\s+)?markets?\s+(?:is|are|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
   /\b(?:options\s+)?markets?\s+(?:is|are)\s+(?:now\s+|currently\s+)?(?:in\s+)?(?:after[- ]hours|pre[- ]?market)\b/gi,
 ];
 
@@ -259,7 +263,10 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   const vocabulary = QUOTE_VOCABULARY.source;
   // Same clause only: a sentence end (not a decimal point) breaks proximity.
   const clauseChar = "(?:[^\\n;!?.]|\\.(?=\\d))";
-  if (new RegExp(`${vocabulary}${clauseChar}{0,25}?\\d`, "i").test(text)) return true;
+  // The number must be a quote value, not a count ("for 3 expirations").
+  const quoteValue =
+    "\\b\\d[\\d,]*(?:\\.\\d+)?\\b(?!\\s*(?:%|(?:expirations?|contracts?|strikes?|days?|weeks?|months?|dte|percent|shares?|times)\\b))";
+  if (new RegExp(`${vocabulary}${clauseChar}{0,25}?${quoteValue}`, "i").test(text)) return true;
   // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask", "480 per contract".
   if (
     new RegExp(

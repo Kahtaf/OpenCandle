@@ -183,6 +183,8 @@ describe("options quote freshness disclosure", () => {
     "The stock data is delayed. Premium: $4.80.",
     "Recheck the stock price at the open. Premium: $4.80.",
     "Stock closing prices look weak. Premium: $4.80.",
+    "The options market was closed yesterday but reopened today. Premium: $4.80.",
+    "The market closed higher on Friday. Premium: $4.80.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
@@ -257,6 +259,9 @@ describe("options_screener quote freshness gate", () => {
     "No usable premium is available; conditional candidate: the $210 strike.",
     "Underlying: $200. No usable premium is available.",
     "The stock trades at $200; wait for a usable quote.",
+    "No premium was available for 3 expirations.",
+    "Bid/ask was missing on 12 contracts over 30 days.",
+    "Premium cost would be about 5% of the position.",
   ])("does not treat a status line as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(
