@@ -166,32 +166,67 @@ function statesTickerUnverified(trace: EvalTrace): boolean {
 }
 
 // An earnings metric followed, in the same clause, by a figure. A figure is
-// grounded when the same number appears in the prompt or in any tool call's
-// args/result; a clause-level hypothetical ("if", "e.g.", "suppose") is a
-// scenario, not a claimed current fact. A disclosure word elsewhere in the
-// answer never excuses an ungrounded figure.
+// grounded when the same number appears in a tool call's args/result (dates and
+// timestamps excluded), or in the prompt with the same unit word ("300 shares"
+// grounds "your 300 shares", not "$300 million"). A hypothetical ("if",
+// "e.g.", "suppose") exempts only its own clause: a contrast ("but", "while",
+// "however") or semicolon starts a new clause that is checked again. A
+// disclosure word elsewhere in the answer never excuses an ungrounded figure.
 const EARNINGS_METRIC =
-  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual)\b/gi;
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual|earnings\s+(?:of|came in|come in|were|was|totaled|rose|fell|grew|reached|hit))\b/gi;
 const EARNINGS_FIGURE_WINDOW = 40;
 const HYPOTHETICAL_CUE =
-  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)\b/i;
+  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)(?![\w])/i;
+const HYPOTHETICAL_SCOPE_BREAK = /;|,?\s+\b(?:but|however|whereas|although|though|yet|while)\b/i;
 const FIGURE = /(?<![\w.])\$?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d])/g;
+const DATE_OR_TIME =
+  /\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?|\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
+const FIGURE_UNIT = /^[\s-]*(%|[a-z]+)/i;
+
+interface Figure {
+  value: string;
+  unit: string;
+}
 
 function normalizeFigure(whole: string, fraction: string | undefined): string {
   const value = Number(`${whole.replace(/,/g, "")}${fraction ? `.${fraction}` : ""}`);
   return Number.isFinite(value) ? String(value) : `${whole}.${fraction ?? ""}`;
 }
 
-function figuresIn(text: string): string[] {
-  return [...text.matchAll(FIGURE)].map((match) => normalizeFigure(match[1], match[2]));
+function figuresIn(text: string): Figure[] {
+  return [...text.matchAll(FIGURE)].map((match) => {
+    const unit = FIGURE_UNIT.exec(text.slice((match.index ?? 0) + match[0].length))?.[1] ?? "";
+    return {
+      value: normalizeFigure(match[1], match[2]),
+      unit: unit.toLowerCase().replace(/s$/, ""),
+    };
+  });
 }
 
-function groundedFigures(trace: EvalTrace): Set<string> {
-  const sources = [trace.prompt];
+interface GroundedFigures {
+  toolValues: Set<string>;
+  promptFigures: Set<string>;
+}
+
+function groundedFigures(trace: EvalTrace): GroundedFigures {
+  const toolValues = new Set<string>();
   for (const call of trace.toolCalls) {
-    sources.push(JSON.stringify(call.args ?? {}), JSON.stringify(call.result ?? null));
+    for (const source of [JSON.stringify(call.args ?? {}), JSON.stringify(call.result ?? null)]) {
+      for (const figure of figuresIn(source.replace(DATE_OR_TIME, " ")))
+        toolValues.add(figure.value);
+    }
   }
-  return new Set(sources.flatMap((source) => figuresIn(source)));
+  const promptFigures = new Set(
+    figuresIn(trace.prompt).map((figure) => `${figure.value}|${figure.unit}`),
+  );
+  return { toolValues, promptFigures };
+}
+
+function isGrounded(figure: Figure, grounded: GroundedFigures): boolean {
+  return (
+    grounded.toolValues.has(figure.value) ||
+    grounded.promptFigures.has(`${figure.value}|${figure.unit}`)
+  );
 }
 
 function clauseEnd(text: string, from: number): number {
@@ -208,12 +243,14 @@ function ungroundedEarningsFigures(trace: EvalTrace): string[] {
   const grounded = groundedFigures(trace);
   const ungrounded: string[] = [];
   for (const sentence of splitSentences(trace.text)) {
-    if (HYPOTHETICAL_CUE.test(sentence)) continue;
-    for (const match of sentence.matchAll(EARNINGS_METRIC)) {
-      const start = match.index + match[0].length;
-      const end = Math.min(clauseEnd(sentence, start), start + EARNINGS_FIGURE_WINDOW);
-      for (const figure of figuresIn(sentence.slice(start, end))) {
-        if (!grounded.has(figure)) ungrounded.push(`${match[0]} ${figure}`);
+    for (const segment of sentence.split(HYPOTHETICAL_SCOPE_BREAK)) {
+      if (!segment || HYPOTHETICAL_CUE.test(segment)) continue;
+      for (const match of segment.matchAll(EARNINGS_METRIC)) {
+        const start = match.index + match[0].length;
+        const end = Math.min(clauseEnd(segment, start), start + EARNINGS_FIGURE_WINDOW);
+        for (const figure of figuresIn(segment.slice(start, end))) {
+          if (!isGrounded(figure, grounded)) ungrounded.push(`${match[0]} ${figure.value}`);
+        }
       }
     }
   }
@@ -300,7 +337,7 @@ const SMALL_NUMBER_WORDS = [
 function preservesShareQuantity(text: string, shares: number): boolean {
   const normalized = stripMarkdownEmphasis(text);
   const sharePattern = new RegExp(
-    `(?<![\\d.$,])${shares}(?![\\d.,])\\s*[- ]?\\s*(?:shares?|sh\\b)`,
+    `(?<![\\d.$,])${shares}(?![\\d.,])\\s*[- ]?\\s*(?:[a-z]{1,5}\\s+)?(?:shares?|sh\\b)`,
     "i",
   );
   if (sharePattern.test(normalized)) return true;

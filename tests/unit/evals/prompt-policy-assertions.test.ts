@@ -735,6 +735,50 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       ).toBe(true);
     });
 
+    it("fails a prompt number reused as an earnings figure with a different unit", () => {
+      expect(check(assertion, "Consensus revenue is $300 million.", { prompt: ZZZZ_PROMPT })).toBe(
+        false,
+      );
+    });
+
+    it("scopes the hypothetical exemption to the hypothetical clause", () => {
+      expect(
+        check(assertion, "Consensus EPS is 2.15, but if guidance disappoints the stock may fall.", {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not ground a figure on date components in tool output", () => {
+      expect(
+        check(assertion, "Revenue grew 26% last quarter.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_stock_quote",
+              args: { symbol: "ZZZZ" },
+              result: { error: "Not Found", asOf: "2026-09-26T02:07:45Z" },
+            },
+          ],
+        }),
+      ).toBe(false);
+    });
+
+    it("fails an ungrounded earnings-per-share figure stated as earnings", () => {
+      expect(
+        check(assertion, "ZZZZ earnings came in at $1.20 a share last quarter.", {
+          prompt: ZZZZ_PROMPT,
+        }),
+      ).toBe(false);
+    });
+
+    it.each([
+      "If EPS comes in at 2.15, the stock could rise.",
+      "Suppose guidance is cut, revenue of 480 million would still cover the dividend.",
+    ])("passes a hypothetical whose cue governs the figure: %s", (text) => {
+      expect(check(assertion, text, { prompt: ZZZZ_PROMPT })).toBe(true);
+    });
+
     it("passes numbers restated from the prompt and clearly hypothetical scenarios", () => {
       expect(
         check(
@@ -849,6 +893,26 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       ).toBe(true);
     });
 
+    it("keeps framework concepts in a sentence that repeats prompt context", () => {
+      expect(
+        check(
+          assertion,
+          "Because you hold 300 shares of ZZZZ and earnings are tonight, this is an oversized position, so trim or hedge it. The expected move could gap the stock overnight.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(true);
+    });
+
+    it("does not count framework concepts denied by a trailing predicate", () => {
+      expect(
+        check(
+          assertion,
+          "Gap risk is nonexistent here. Position size is not a concern. Hedging is unnecessary. The answer depends on nothing else.",
+          { prompt: ZZZZ_PROMPT },
+        ),
+      ).toBe(false);
+    });
+
     it("does not count negated framework concepts", () => {
       expect(
         check(
@@ -874,6 +938,14 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
     it("passes a 200-share quantity with a month expiry", () => {
       expect(
         check(assertion, "To protect your 200 shares, buy puts expiring next month.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
+    it("passes a 200-share quantity that names the ticker between number and unit", () => {
+      expect(
+        check(assertion, "Protect your 200 AMD shares with puts expiring next month.", {
           prompt: AMD_PROMPT,
         }),
       ).toBe(true);
@@ -929,6 +1001,14 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       ).toBe(true);
     });
 
+    it("passes a strategy rejected after it is named", () => {
+      expect(
+        check(assertion, "A covered call is not appropriate here; buy the AMD protective put.", {
+          prompt: AMD_PROMPT,
+        }),
+      ).toBe(true);
+    });
+
     it("passes a rather-than contrast", () => {
       expect(
         check(assertion, "Buy the AMD put rather than a bull call spread on NVDA.", {
@@ -938,6 +1018,8 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
     });
 
     it.each([
+      "You can't beat a bull call spread into NVDA earnings.",
+      "No doubt a covered call on AMD is the better trade.",
       "Instead, sell a covered call on AMD.",
       "Consider a bull call spread into NVDA earnings.",
     ])("fails an affirmed bullish call strategy: %s", (text) => {
