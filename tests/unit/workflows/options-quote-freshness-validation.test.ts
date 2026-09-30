@@ -2,7 +2,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import type { OptionsScreenerSlots, SlotResolution } from "../../../src/routing/types.js";
 import type { EvidenceRecord } from "../../../src/runtime/evidence.js";
-import { captureToolEvidence } from "../../../src/runtime/prompt-step.js";
+import { captureToolEvidence, combineOutputValidations } from "../../../src/runtime/prompt-step.js";
 import {
   disclosesNonLiveQuotes,
   extractQuoteStatusSummary,
@@ -190,5 +190,34 @@ describe("options_screener quote freshness gate", () => {
     const repair = validation.repairPrompt(errors, context);
     expect(repair).toContain("failed position-sizing or premium arithmetic validation");
     expect(repair).toContain("not live");
+  });
+});
+
+describe("combineOutputValidations", () => {
+  const first = {
+    validate: () => ["a"],
+    repairPrompt: (errors: string[]) => `first:${errors.join(",")}`,
+  };
+  const second = {
+    validate: () => [],
+    repairPrompt: (errors: string[]) => `second:${errors.join(",")}`,
+  };
+
+  it("returns a lone validator unchanged and undefined when none apply", () => {
+    expect(combineOutputValidations(undefined, first)).toBe(first);
+    expect(combineOutputValidations(undefined)).toBeUndefined();
+  });
+
+  it("repairs only the failing validator for errors it produced", () => {
+    const combined = combineOutputValidations(first, second);
+    const errors = combined?.validate("text") ?? [];
+    expect(errors).toEqual(["a"]);
+    expect(combined?.repairPrompt(errors)).toBe("first:a");
+  });
+
+  it("falls back to every validator for errors it did not produce", () => {
+    expect(combineOutputValidations(first, second)?.repairPrompt(["x"])).toBe(
+      "first:x\n\nsecond:x",
+    );
   });
 });
