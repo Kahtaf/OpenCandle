@@ -3651,6 +3651,52 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("targets the extracted holding when the model lists only a catalyst", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "NVDA earnings are next week; I own AMD at $150, covered calls?" },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], heldSymbol: "NVDA", costBasis: 150 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered calls",
+        }),
+      ),
+    );
+
+    expect(result.entities.heldSymbol).toBe("AMD");
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not ground a stock basis in an option-leg price", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own AAPL and bought a put for $2 per share; suggest covered calls too",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("masks another holding whose ticker is also a currency code", async () => {
+    const other = await route(
+      { ...BASE_INPUT, text: "I own AMD at $120 and also own AAPL. Covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 120 }),
+    );
+    const quantity = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 AMD. Covered calls?" },
+      outputFor({ symbols: ["AMD"], costBasis: 150 }),
+    );
+
+    expect(other.entities.costBasis).toBeUndefined();
+    expect(quantity.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

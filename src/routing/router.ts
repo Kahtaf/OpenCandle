@@ -346,6 +346,11 @@ export function postProcessRouterOutput(
         extracted.heldSymbol,
         inputContext,
         next.entities.symbols,
+        // An existing-position option request is later rewritten onto the
+        // extracted holding, so its basis is validated against that holding.
+        next.workflow === "options_screener" && isExistingPositionOptionRequest(text, extracted)
+          ? extracted.heldSymbol
+          : undefined,
       ),
     },
   };
@@ -1408,9 +1413,10 @@ function resolveCostBasis(
   heldSymbol: string | undefined,
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   symbols: string[],
+  underlyingSymbol?: string,
 ): number | undefined {
   if (modelCostBasis === undefined) return extractedCostBasis;
-  const grounding = basisGrounding(text, heldSymbol, symbols, inputContext);
+  const grounding = basisGrounding(text, heldSymbol, symbols, inputContext, underlyingSymbol);
   if (grounding && isGroundedBasis(modelCostBasis, grounding)) return modelCostBasis;
   return extractedCostBasis;
 }
@@ -1437,6 +1443,7 @@ function basisGrounding(
   heldSymbol: string | undefined,
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
+  underlyingSymbol?: string,
 ): BasisGrounding | undefined {
   const texts: BasisGroundingTurn[] = [];
   const turns = inputContext?.priorTurns ?? [];
@@ -1461,7 +1468,8 @@ function basisGrounding(
   // Cost-basis validation runs before the existing-position reorder, so prefer
   // the held symbol over textual symbol order when the model resolved it.
   const targetSymbol =
-    heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0];
+    underlyingSymbol ??
+    (heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0]);
   const hasSavedBasis = symbols.some(
     (symbol) =>
       readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
@@ -1486,7 +1494,12 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
   }
   return grounding.texts.some(({ text: turnText, isBasisReply }) => {
     const scopedText = maskOtherHoldingClauses(turnText, grounding);
-    const parsed = parseStatedNumbers(scopedText, grounding.symbols, turnText);
+    const parsed = parseStatedNumbers(
+      scopedText,
+      grounding.symbols,
+      turnText,
+      grounding.targetSymbol,
+    );
     // A basis-question reply may answer with a bare amount ("$150", "about
     // $150 per share"); other amounts in the reply still need basis linkage.
     const amounts = parsed.amounts.filter(
@@ -1531,7 +1544,7 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
   if (target === undefined) return text;
   const mentioned = new Set(
     [...grounding.symbols, ...extractEntities(text).symbols].filter(
-      (symbol) => !ISO_CURRENCY_CODES.has(symbol),
+      (symbol) => symbol === target || !isCurrencyUsage(text, symbol),
     ),
   );
   const mentionPattern = (symbol: string, flags = "i") =>
@@ -1631,7 +1644,18 @@ const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|positio
 // a quote or planned order, not a basis ("trading at $200", "plan to buy more
 // at $150", "would sell at $350").
 const NON_BASIS_CONTEXT =
-  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit)\b/i;
+  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
+// An ISO code reads as a currency, not a holding, when every mention follows a
+// number ("150 INR"); a ticker that is also a code ("own AMD at $120") stays a
+// holding.
+function isCurrencyUsage(text: string, symbol: string): boolean {
+  if (!ISO_CURRENCY_CODES.has(symbol)) return false;
+  const mentions = [...text.matchAll(new RegExp(`(?<![A-Za-z])${symbol}(?![A-Za-z])`, "gi"))];
+  return (
+    mentions.length > 0 && mentions.every((match) => /\d\s*$/.test(text.slice(0, match.index ?? 0)))
+  );
+}
+
 // Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
 const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
 const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
@@ -1699,10 +1723,13 @@ function parseStatedNumbers(
   text: string,
   resolvedSymbols: readonly string[],
   contextText: string = text,
+  targetSymbol?: string,
 ): { amounts: StatedAmount[] } {
   const extractedSymbols = extractEntities(text).symbols;
+  // A code right after a number is a currency ("150 INR") unless it is the
+  // holding being priced ("100 AMD").
   const isTicker = (token: string) =>
-    !ISO_CURRENCY_CODES.has(token) &&
+    (token === targetSymbol || !ISO_CURRENCY_CODES.has(token)) &&
     (resolvedSymbols.includes(token) || extractedSymbols.includes(token));
   const candidates: Array<{
     value: number;
