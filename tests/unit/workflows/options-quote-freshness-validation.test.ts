@@ -262,6 +262,8 @@ describe("options_screener quote freshness gate", () => {
     "| Strike | Premium |\n| 220 | .45 |",
     "AAPL 210C @ 4.80",
     "AAPL 205P = 3.10",
+    "Top pick: the 210 call, $4.80.",
+    "Pay about $480 per contract.",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | 4.80 |",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
@@ -287,6 +289,11 @@ describe("options_screener quote freshness gate", () => {
     "Premium cost would be about 5% of the position.",
     "The stock price is 200; no usable premium is available.",
     "Underlying price 200.15, no usable premium is available.",
+    "No usable premium is available; your cost basis is $190.",
+    "No usable premium was found; the position value is $20,000.",
+    "Budget: $500. No usable premium was found.",
+    "Your max premium of $500 could not be checked; no usable quotes.",
+    "Target $250 by expiry; wait for usable quotes.",
     "| Strike | Expiry | Premium |\n| --- | --- | --- |\n| 210 | 2026-06-19 | N/A |",
     "No premium for the 210 call.",
     "No usable bid/ask on the 210 put or the 205 puts.",

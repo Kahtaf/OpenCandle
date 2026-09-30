@@ -253,22 +253,42 @@ const QUOTE_VOCABULARY =
  * 0.42") and status lines ("Fetched the chain for 2 expirations") show none.
  */
 /**
- * A currency amount that is not a strike or an underlying/stock price. "The
- * $210 strike" and "Underlying: $200" name no quote; "at $4.80" does.
+ * Amounts that are the user's own inputs or targets, not quotes: "cost basis
+ * $190", "position value $20,000", "budget $500", "max premium of $500".
+ */
+const NON_QUOTE_AMOUNT =
+  /\b(?:basis|budget|position|portfolio|account|notional|target|stop|max(?:imum)?|cap)\b/i;
+
+/**
+ * Option-quote context next to a currency amount: quote vocabulary, a named
+ * contract ("210 call", "210C"), a per-contract unit, or a price link ("at").
+ */
+const CURRENCY_QUOTE_CONTEXT =
+  /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?|last|calls?|puts?|options?|contracts?|\d+[cp]|at)\b|@|\bper\s+(?:contract|share)\b/i;
+
+/**
+ * A currency amount that reads as an option quote: it sits next to quote
+ * context and is not a strike, an underlying/stock price, or a user input.
+ * "The $210 strike", "Underlying: $200", and "cost basis $190" name no quote;
+ * "the 210 call at $4.80" does.
  */
 function presentsCurrencyQuote(text: string): boolean {
   for (const match of text.matchAll(/\$\s?(?:\d[\d,]*(?:\.\d+)?|\.\d+)/g)) {
-    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 12);
+    const end = match.index + match[0].length;
+    const after = text.slice(end, end + 15);
     if (/^\s*(?:strikes?|calls?|puts?|[cp])\b/i.test(after)) continue;
-    const before = text.slice(Math.max(0, match.index - 25), match.index);
+    const before = text.slice(Math.max(0, match.index - 30), match.index);
     const lead = before.slice(before.search(/[^.;:!?\n]*$/));
+    const wideLead = before.slice(before.search(/[^.;!?\n]*$/));
+    if (NON_QUOTE_AMOUNT.test(wideLead)) continue;
     if (
       /\b(?:strike|underlying|stock|shares?|spot)\b/i.test(lead) &&
       !/\b(?:premium|bid|ask|mid|cost|debit|credit|calls?|puts?|options?|contracts?)\b/i.test(lead)
     )
       continue;
     if (/\b(?:underlying|stock|spot)\s*:\s*$/i.test(before)) continue;
-    return true;
+    const tail = after.slice(0, after.search(/[.;!?\n](?!\d)|$/));
+    if (CURRENCY_QUOTE_CONTEXT.test(wideLead) || CURRENCY_QUOTE_CONTEXT.test(tail)) return true;
   }
   return false;
 }
@@ -302,6 +322,7 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   const aboutOptions = (index: number, length: number): boolean => {
     const lead = text.slice(Math.max(0, index - 25), index);
     const span = lead.slice(lead.search(/[^.;!?\n]*$/)) + text.slice(index, index + length);
+    if (NON_QUOTE_AMOUNT.test(span)) return false;
     return !NON_OPTION_SUBJECT.test(span) || OPTION_SPECIFIC_SUBJECT.test(span);
   };
   for (const pattern of nearQuote) {
