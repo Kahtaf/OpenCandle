@@ -5,6 +5,7 @@ import type {
   StructuredCheckId,
   TaskFamily,
 } from "../../src/routing/planning.js";
+import { disclosesNonLiveQuotes } from "../../src/runtime/quote-freshness.js";
 import type { PlanningEvidenceRecord, PlanningEvidenceType } from "./planning-evidence.js";
 
 export type FinalAnswerField =
@@ -413,7 +414,12 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
   const results: StructuredCheckResult[] = [
     checkRequiredEvidence(input.contract, input.evidenceRecords),
     checkFreshness(input.contract, input.finalAnswerMetadata),
-    checkDataGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
+    checkDataGapDisclosure(
+      input.contract,
+      input.evidenceRecords,
+      input.finalAnswerMetadata,
+      input.answerText,
+    ),
     checkCommitmentMode(input.contract, input.finalAnswerMetadata),
     checkRequiredFinalFields(input.contract, input.finalAnswerMetadata),
     checkSourceCoverage(input.contract, input.finalAnswerMetadata),
@@ -592,17 +598,30 @@ function checkDataGapDisclosure(
   contract: AnswerContractDefinition,
   evidenceRecords: PlanningEvidenceRecord[],
   metadata: FinalAnswerMetadata,
+  answerText?: string,
 ): StructuredCheckResult {
   if (!contract.requiresDataGapDisclosure) return structuredResult("data_gap_disclosed", true);
-  const evidenceHasGaps = evidenceRecords.some((record) => record.gaps.length > 0);
+  const gaps = evidenceRecords.flatMap((record) => record.gaps);
+  const quoteFreshnessGaps = gaps.filter((gap) => gap.kind === "quote_freshness");
+  const otherGapsPresent = gaps.length > quoteFreshnessGaps.length;
   const fieldPresent = metadata.finalFields.includes("data_gap_disclosure");
   const disclosedProvider = (metadata.disclosedProviderStatuses?.length ?? 0) > 0;
   const disclosedCapability = (metadata.disclosedCapabilityGapIds?.length ?? 0) > 0;
-  const passed = fieldPresent && (!evidenceHasGaps || disclosedProvider || disclosedCapability);
+  const otherGapsCovered = !otherGapsPresent || disclosedProvider || disclosedCapability;
+  // Non-live option quotes need their own disclosure: generic provider or
+  // broker-verification wording does not tell the reader the premiums shown
+  // are not tradable now.
+  const quoteFreshnessCovered =
+    quoteFreshnessGaps.length === 0 || disclosesNonLiveQuotes(answerText);
+  const passed = fieldPresent && otherGapsCovered && quoteFreshnessCovered;
   return structuredResult(
     "data_gap_disclosed",
     passed,
-    passed ? undefined : "Data-gap disclosure metadata does not cover observed evidence gaps.",
+    passed
+      ? undefined
+      : !quoteFreshnessCovered
+        ? "Evidence shows non-live option quotes, but the answer does not disclose that the quotes are last-session, stale, or not executable now."
+        : "Data-gap disclosure metadata does not cover observed evidence gaps.",
   );
 }
 

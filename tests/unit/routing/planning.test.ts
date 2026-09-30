@@ -494,6 +494,11 @@ describe("planning layer", () => {
     expect(planning.answerContractId).toBe("options_strategy");
     expect(planning.commitmentMode).toBe("decision");
     expect(planning.behaviorMode).toBe("replacement_active");
+    expect(planning.structuredCheckIds).toEqual([
+      "required_evidence_present",
+      "freshness_disclosed",
+      "data_gap_disclosed",
+    ]);
   });
 
   it("keeps covered-call prompts in options strategy even when earnings timing is mentioned", () => {

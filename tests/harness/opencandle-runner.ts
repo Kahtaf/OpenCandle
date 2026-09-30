@@ -22,6 +22,7 @@ import type {
   ExtractedEntities,
   WorkflowType,
 } from "../../src/routing/types.js";
+import { disclosesNonLiveQuotes } from "../../src/runtime/quote-freshness.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import {
@@ -582,7 +583,8 @@ function inferFinalAnswerFieldsForEval(text: string, taskFamily?: string): Final
   }
   if (
     /\b(unavailable|missing|cannot verify|not available|no live|unknown)\b/.test(lower) ||
-    disclosesObservedDataGap(lower)
+    disclosesObservedDataGap(lower) ||
+    disclosesNonLiveQuotes(text)
   ) {
     fields.push("data_gap_disclosure");
   }
