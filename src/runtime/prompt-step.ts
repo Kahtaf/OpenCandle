@@ -34,43 +34,6 @@ export interface PromptOutputValidation {
 }
 
 /**
- * Run several output validators as one gate. Errors from every validator are
- * reported together, and the single repair prompt carries only the repair
- * instructions of the validators that actually failed, so the coordinator's
- * one bounded repair attempt covers all of them at once.
- */
-export function combineOutputValidations(
-  ...validations: (PromptOutputValidation | undefined)[]
-): PromptOutputValidation | undefined {
-  const active = validations.filter(
-    (validation): validation is PromptOutputValidation => validation !== undefined,
-  );
-  if (active.length <= 1) return active[0];
-  const failuresByErrors = new WeakMap<string[], Array<[PromptOutputValidation, string[]]>>();
-  return {
-    validate(rawText, context) {
-      const failures = active
-        .map((validation): [PromptOutputValidation, string[]] => [
-          validation,
-          validation.validate(rawText, context),
-        ])
-        .filter(([, errors]) => errors.length > 0);
-      const errors = failures.flatMap(([, validationErrors]) => validationErrors);
-      failuresByErrors.set(errors, failures);
-      return errors;
-    },
-    repairPrompt(errors, context) {
-      const failures =
-        failuresByErrors.get(errors) ??
-        active.map((v): [PromptOutputValidation, string[]] => [v, errors]);
-      return failures
-        .map(([validation, validationErrors]) => validation.repairPrompt(validationErrors, context))
-        .join("\n\n");
-    },
-  };
-}
-
-/**
  * A complete workflow definition: typed step metadata + prompt text for each step.
  */
 export interface WorkflowDefinition {

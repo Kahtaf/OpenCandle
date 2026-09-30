@@ -5,8 +5,8 @@ import type {
   StructuredCheckId,
   TaskFamily,
 } from "../../src/routing/planning.js";
-import { disclosesNonLiveQuotes } from "../../src/runtime/quote-freshness.js";
 import type { PlanningEvidenceRecord, PlanningEvidenceType } from "./planning-evidence.js";
+import { disclosesNonLiveQuotes } from "./quote-disclosure.js";
 
 export type FinalAnswerField =
   | "clear_commitment"

@@ -1,8 +1,7 @@
 import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
-import { combineOutputValidations, promptStep } from "../runtime/prompt-step.js";
-import { createOptionsQuoteFreshnessValidation } from "./options-quote-freshness-validation.js";
+import { promptStep } from "../runtime/prompt-step.js";
 import {
   buildProtectivePutSizingContract,
   createProtectivePutValidation,
@@ -82,9 +81,6 @@ ${s.shareQuantity !== undefined ? buildProtectivePutSizingContract(s.shareQuanti
       promptStep("fetch_chain", "Fetch option chain data", buildOptionsScreenerPrompt(resolution), {
         requiredInputs: ["symbol"],
         expectedOutputs: ["option_chain"],
-        // This step's prompt already asks for a ranked premium table, and that
-        // answer is shown to the user, so it gets the same disclosure gate.
-        outputValidation: createOptionsQuoteFreshnessValidation(),
       }),
       promptStep(
         "rank_and_present",
@@ -113,12 +109,9 @@ Length constraints:
         {
           requiredInputs: ["option_chain"],
           expectedOutputs: ["ranked_contracts"],
-          outputValidation: combineOutputValidations(
-            isProtectivePutContext && s.shareQuantity !== undefined
-              ? createProtectivePutValidation(s.shareQuantity)
-              : undefined,
-            createOptionsQuoteFreshnessValidation(),
-          ),
+          ...(isProtectivePutContext && s.shareQuantity !== undefined
+            ? { outputValidation: createProtectivePutValidation(s.shareQuantity) }
+            : {}),
         },
       ),
     ],

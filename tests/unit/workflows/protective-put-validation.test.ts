@@ -134,9 +134,6 @@ ${unavailable}`;
       expect(step.prompt).toContain("75 shares");
       expect(step.prompt).toContain("25 shares");
     }
-    // Covered calls carry only the quote-freshness gate, never put sizing checks.
-    expect(
-      workflow(375, "covered_call").steps[1].outputValidation?.validate("No sizing table."),
-    ).toEqual([]);
+    expect(workflow(375, "covered_call").steps[1].outputValidation).toBeUndefined();
   });
 });

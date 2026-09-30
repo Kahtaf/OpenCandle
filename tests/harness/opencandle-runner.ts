@@ -22,7 +22,6 @@ import type {
   ExtractedEntities,
   WorkflowType,
 } from "../../src/routing/types.js";
-import { disclosesNonLiveQuotes } from "../../src/runtime/quote-freshness.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import {
@@ -32,6 +31,7 @@ import {
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
 } from "./planning-evidence.js";
+import { disclosesNonLiveQuotes } from "./quote-disclosure.js";
 import { assertSessionCompleted, failSessionCompletion } from "./session-completion.js";
 import {
   ANSWER_CONTRACT_REGISTRY,

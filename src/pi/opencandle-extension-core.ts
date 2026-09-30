@@ -42,6 +42,7 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
+import { OPTION_QUOTE_NOTICE_TYPE, quoteNoticeForTurn } from "../runtime/quote-notice.js";
 import {
   SessionCoordinator,
   type SessionCoordinatorOptions,
@@ -356,6 +357,39 @@ export default function openCandleExtension(
       pi.appendEntry("opencandle-turn-gap", { annotation });
     }
     degradationAccumulator.reset();
+  });
+
+  // Single-turn answers (agent tasks) built from non-live option chains get a
+  // fixed notice at the final settle boundary, derived from the chain's own
+  // quote status. Workflows append theirs when the run finishes, so skip here
+  // while one is active. quoteNoticeForTurn returns nothing once a notice
+  // follows the latest user message, so repeated boundaries never duplicate it.
+  pi.on("agent_before_settle", async (event, ctx) => {
+    if (event.outcome !== "completed") return;
+    if (coordinator.getActiveWorkflowType() !== undefined) return;
+    if (
+      event.entries.some(
+        (entry) => entry.type === "custom_message" && entry.customType === OPTION_QUOTE_NOTICE_TYPE,
+      )
+    ) {
+      return;
+    }
+    const branch = ctx?.sessionManager?.getBranch?.();
+    if (!branch) return;
+    const notice = quoteNoticeForTurn(branch);
+    if (!notice) return;
+    return {
+      entries: [
+        ...event.entries,
+        {
+          type: "custom_message",
+          customType: OPTION_QUOTE_NOTICE_TYPE,
+          content: [{ type: "text", text: notice }],
+          display: true,
+          details: { reason: "non_live_option_quotes" },
+        },
+      ],
+    };
   });
 
   // LLM session titles. After the first completed user↔assistant exchange,

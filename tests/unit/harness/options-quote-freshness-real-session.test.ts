@@ -8,6 +8,7 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { createOpenCandleSessionCore } from "../../../src/pi/session-core.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
+import { OPTION_QUOTE_NOTICE_TYPE } from "../../../src/runtime/quote-notice.js";
 import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
 import regularFixture from "../../fixtures/yahoo/options-AAPL-regular.json";
 import { installDeterministicFetchGuard } from "../../helpers/deterministic-fetch-guard.js";
@@ -20,62 +21,36 @@ const UNDISCLOSED = `| Strike | Expiry | Premium | Delta |
 | $210 | 2026-06-19 | $4.80 | 0.42 |
 Bottom line: buy the $210 call for a $480 premium per contract. Max loss = premium. Verify with your broker before trading.`;
 
-const DISCLOSED = `| Strike | Expiry | Last-session premium | Delta |
-| --- | --- | --- | --- |
-| $210 | 2026-06-19 | $4.80 | 0.42 |
-These are last-session quotes and are not executable now; recheck bid/ask after regular options trading opens.
-Bottom line: the $210 call ranks first. Max loss = premium.`;
+const AFTER_HOURS_NOTICE =
+  "Options market is after hours. Option prices shown are from the last regular session and are not executable now.";
 
 interface Scenario {
   name: string;
+  route: "workflow" | "agent_task";
   fixture: unknown;
-  repairReply?: string;
-  /** First-step text after the chain fetch; defaults to a figure-free status line. */
-  fetchReply?: string;
-  expectedRepairs: number;
-  expectedValidationFailures: number;
-  expectedStatus: "completed" | "failed";
+  expectedNotice?: string;
 }
 
 const scenarios: Scenario[] = [
   {
-    name: "stale chain, repair discloses",
+    name: "options_screener workflow on an after-hours chain",
+    route: "workflow",
     fixture: afterHoursFixture,
-    repairReply: DISCLOSED,
-    expectedRepairs: 1,
-    expectedValidationFailures: 1,
-    expectedStatus: "completed",
+    expectedNotice: AFTER_HOURS_NOTICE,
   },
+  { name: "options_screener workflow on a live chain", route: "workflow", fixture: regularFixture },
   {
-    name: "stale chain, repair still undisclosed",
+    name: "single-turn agent task on an after-hours chain",
+    route: "agent_task",
     fixture: afterHoursFixture,
-    repairReply: UNDISCLOSED,
-    expectedRepairs: 1,
-    expectedValidationFailures: 2,
-    expectedStatus: "failed",
+    expectedNotice: AFTER_HOURS_NOTICE,
   },
-  {
-    name: "live regular-session chain",
-    fixture: regularFixture,
-    fetchReply: UNDISCLOSED,
-    expectedRepairs: 0,
-    expectedValidationFailures: 0,
-    expectedStatus: "completed",
-  },
-  {
-    name: "stale chain, first-step table undisclosed",
-    fixture: afterHoursFixture,
-    fetchReply: UNDISCLOSED,
-    repairReply: DISCLOSED,
-    expectedRepairs: 2,
-    expectedValidationFailures: 2,
-    expectedStatus: "completed",
-  },
+  { name: "single-turn agent task on a live chain", route: "agent_task", fixture: regularFixture },
 ];
 
-describe("real options_screener quote-freshness gate", () => {
+describe("real session non-live option quote notice", () => {
   it.each(scenarios)(
-    "$name: at most one repair per step and no repeated chain fetch",
+    "$name: deterministic notice, no model repair",
     { timeout: 20_000 },
     async (scenario) => {
       const home = mkdtempSync(join(tmpdir(), "oc-quote-gate-"));
@@ -83,23 +58,15 @@ describe("real options_screener quote-freshness gate", () => {
       cache.clear();
       clearCrumbCache();
       rateLimiter.configure("yahoo", 5, 5);
-      let repairCalls = 0;
       let chainCalls = 0;
       const server = await startDeterministicModelServer((request) => {
         const last = request.messages.at(-1);
-        if (last?.role === "tool") {
-          return { kind: "text", text: scenario.fetchReply ?? "Fetched the option chain." };
+        if (last?.role === "tool") return { kind: "text", text: UNDISCLOSED };
+        // Rank from the chain already fetched: a second fetch would be a cache
+        // read whose session is rechecked against the wall clock.
+        if (JSON.stringify(last?.content).includes("Now rank and present")) {
+          return { kind: "text", text: UNDISCLOSED };
         }
-        const lastUser = [...request.messages].reverse().find((message) => message.role === "user");
-        const text =
-          typeof lastUser?.content === "string"
-            ? lastUser.content
-            : JSON.stringify(lastUser?.content);
-        if (text.includes("failed quote-freshness validation")) {
-          repairCalls += 1;
-          return { kind: "text", text: scenario.repairReply ?? UNDISCLOSED };
-        }
-        if (text.includes("Now rank and present")) return { kind: "text", text: UNDISCLOSED };
         chainCalls += 1;
         return {
           kind: "tool_call",
@@ -146,40 +113,73 @@ describe("real options_screener quote-freshness gate", () => {
           titleCompletion: async () => "Call screen",
           routerLlmClient: {
             complete: async () =>
-              JSON.stringify({
-                routeKind: "workflow_dispatch",
-                workflow: "options_screener",
-                entities: {
-                  symbols: ["AAPL"],
-                  direction: "bullish",
-                  dteTarget: "25_to_45_days",
-                },
-                slots: {},
-                preference_updates: [],
-                missing_required: [],
-                tool_bundles: ["core_market", "options"],
-                diagnostics: [],
-                reasoning: "Screen calls.",
-              }),
+              JSON.stringify(
+                scenario.route === "workflow"
+                  ? {
+                      routeKind: "workflow_dispatch",
+                      workflow: "options_screener",
+                      entities: {
+                        symbols: ["AAPL"],
+                        direction: "bullish",
+                        dteTarget: "25_to_45_days",
+                      },
+                      slots: {},
+                      preference_updates: [],
+                      missing_required: [],
+                      tool_bundles: ["core_market", "options"],
+                      diagnostics: [],
+                      reasoning: "Screen calls.",
+                    }
+                  : {
+                      routeKind: "agent_task",
+                      entities: { symbols: ["AAPL"] },
+                      slots: {},
+                      preference_updates: [],
+                      missing_required: [],
+                      tool_bundles: ["core_market", "options"],
+                      diagnostics: [],
+                      reasoning: "Quote an option.",
+                    },
+              ),
           },
         });
         await created.session.prompt("Find me a bullish AAPL call about a month out.");
         await created.waitForSettled();
-        const entries = manager.getEntries().filter((entry) => entry.type === "custom");
-        const validationEvents = entries.filter(
+        const all = manager.getEntries();
+        const validationEvents = all.filter(
           (entry) =>
+            entry.type === "custom" &&
             entry.customType === "opencandle-workflow-event" &&
             (entry.data as { eventType?: string }).eventType === "output_validation_failed",
         );
+        const notices = all.filter(
+          (entry) =>
+            entry.type === "custom_message" && entry.customType === OPTION_QUOTE_NOTICE_TYPE,
+        );
         expect(chainCalls).toBe(1);
-        expect(repairCalls).toBe(scenario.expectedRepairs);
-        expect(validationEvents).toHaveLength(scenario.expectedValidationFailures);
-        if (scenario.expectedRepairs > 0) {
-          expect(JSON.stringify(validationEvents[0].data)).toContain("last_session_quotes");
+        // No model repair is ever requested for quote freshness.
+        expect(validationEvents).toEqual([]);
+        if (scenario.expectedNotice) {
+          expect(notices).toHaveLength(1);
+          const notice = notices[0] as { content: unknown; display: boolean };
+          expect(JSON.stringify(notice.content)).toContain(scenario.expectedNotice);
+          expect(notice.display).toBe(true);
+          // The notice follows the final answer.
+          const lastAssistant = all.findLastIndex(
+            (entry) => entry.type === "message" && entry.message.role === "assistant",
+          );
+          expect(all.indexOf(notices[0])).toBeGreaterThan(lastAssistant);
+        } else {
+          expect(notices).toEqual([]);
         }
-        expect(
-          entries.findLast((entry) => entry.customType === "opencandle-workflow-complete")?.data,
-        ).toMatchObject({ status: scenario.expectedStatus });
+        if (scenario.route === "workflow") {
+          expect(
+            all.findLast(
+              (entry) =>
+                entry.type === "custom" && entry.customType === "opencandle-workflow-complete",
+            ),
+          ).toMatchObject({ data: { status: "completed" } });
+        }
         expect(guard.unrecognizedUrls).toEqual([]);
       } finally {
         created?.session.dispose();
