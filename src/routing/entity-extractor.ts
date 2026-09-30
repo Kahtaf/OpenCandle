@@ -191,6 +191,9 @@ const LOWERCASE_FINANCE_TERMS = new Set([
   "calls",
   "option",
   "options",
+  // Per-share wording ("$150 per share", "each share") is not a ticker.
+  "per",
+  "each",
 ]);
 
 export function extractEntities(input: string): ExtractedEntities {
