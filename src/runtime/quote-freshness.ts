@@ -92,11 +92,38 @@ export function findNonLiveQuoteEvidence(
  * "markets are closed"), so a match only counts when the same clause does not
  * negate it ("these are not last-session quotes").
  */
-const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
+/**
+ * Session and close timestamps ("last-session", "as of the prior close"). They
+ * only disclose when their sentence is about the option quotes: "Underlying:
+ * $200 as of market close" timestamps the stock, not the premiums shown.
+ */
+const SESSION_TIMESTAMP_PATTERNS: readonly RegExp[] = [
   /\blast[- ]session\b/gi,
   /\b(?:prior|previous|last|most\s+recent)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/gi,
   /\b(?:yesterday|(?:mon|tues|wednes|thurs|fri|satur|sun)day)'?s\s+(?:close|session|quotes?)\b/gi,
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
+];
+
+const OPTION_QUOTE_SUBJECT =
+  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures)\b/i;
+const GENERIC_PRICE_SUBJECT = /\bprices?\b/i;
+const NON_OPTION_SUBJECT = /\b(?:underlying|stock|shares?|equity|index)\b/i;
+
+function sentenceDescribesOptionQuotes(text: string, index: number, length: number): boolean {
+  const before = text.slice(Math.max(0, index - 120), index);
+  const breaksBefore = [...before.matchAll(/[!?\n]|\.(?!\d)/g)];
+  const start = breaksBefore.at(-1)?.index;
+  const after = text.slice(index + length, index + length + 120);
+  const end = after.search(/[!?\n]|\.(?!\d)/);
+  const sentence =
+    (start === undefined ? before : before.slice(start + 1)) +
+    text.slice(index, index + length) +
+    (end < 0 ? after : after.slice(0, end));
+  if (OPTION_QUOTE_SUBJECT.test(sentence)) return true;
+  return GENERIC_PRICE_SUBJECT.test(sentence) && !NON_OPTION_SUBJECT.test(sentence);
+}
+
+const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
   // "stale" and "delayed" must describe the quotes, not another subject
   // ("the earnings release was delayed"), and must not be negated in between.
   /\b(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures|numbers)\b(?:(?!\bnot\b|n't\b|\bnever\b)(?:[^.;:!?\n]|\.(?=\d))){0,30}?\b(?:stale|delayed)\b/gi,
@@ -151,7 +178,18 @@ export function disclosesNonLiveQuotes(text: string | undefined): boolean {
     patterns.some((pattern) =>
       [...text.matchAll(pattern)].some((match) => counts(match.index, checkNegation)),
     );
-  return matches(NEGATED_NON_LIVE_PATTERNS, false) || matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true);
+  const sessionTimestamp = SESSION_TIMESTAMP_PATTERNS.some((pattern) =>
+    [...text.matchAll(pattern)].some(
+      (match) =>
+        counts(match.index, true) &&
+        sentenceDescribesOptionQuotes(text, match.index, match[0].length),
+    ),
+  );
+  return (
+    sessionTimestamp ||
+    matches(NEGATED_NON_LIVE_PATTERNS, false) ||
+    matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true)
+  );
 }
 
 /** Text of the current clause before `index` (bounded, stops at clause breaks). */

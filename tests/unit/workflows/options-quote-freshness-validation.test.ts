@@ -139,6 +139,9 @@ describe("options quote freshness disclosure", () => {
     "Option data may be delayed.",
     "Stale quotes: recheck before trading.",
     "Premiums at 4.80 are stale.",
+    "Prices as of the last close.",
+    "Option prices are from the prior session.",
+    "Premium: $4.80 per share as of the last close.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -162,6 +165,9 @@ describe("options quote freshness disclosure", () => {
     "The earnings release was delayed. The option premium is 4.80.",
     "Your thesis may be stale after earnings. The option premium is 4.80.",
     "Premiums are never delayed here.",
+    "Underlying: $200 as of market close. Premium: $4.80.",
+    "The stock price of $200 is from the prior session. Premium: $4.80.",
+    "Earnings were reported after yesterday's close. Premium: $4.80.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
