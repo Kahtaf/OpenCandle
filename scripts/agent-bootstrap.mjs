@@ -11,6 +11,7 @@ import {
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { compareVersions, getCodexVersion, MIN_CODEX_VERSION } from "./check-codex-version.mjs";
 import { getUnsupportedNodeVersionMessage } from "./check-node-version-lib.mjs";
 import { buildNpmInvocation } from "./npm-command.mjs";
 
@@ -133,6 +134,18 @@ function commandIsPresent(command) {
   return false;
 }
 
+// Codex is optional for bootstrap, so an outdated version only warns: it
+// matters for `npm run review:pr`, which enforces the minimum itself.
+function describeCodex() {
+  if (!commandIsPresent("codex")) return "missing";
+  const detected = getCodexVersion();
+  if (detected.status !== "ok") return "present (version unknown)";
+  if (compareVersions(detected.version, MIN_CODEX_VERSION) < 0) {
+    return `present ${detected.version} (update needed: >= ${MIN_CODEX_VERSION} for review:pr)`;
+  }
+  return `present ${detected.version}`;
+}
+
 function blocked(reason) {
   console.log(`blocked: ${reason}; proof command: ${proofCommand}`);
   process.exitCode = 1;
@@ -167,7 +180,8 @@ if (options && roots) {
   );
   console.log(`env: ${envStatus}`);
   console.log(`deps: ${depsStatus}`);
-  for (const tool of ["codex", "agent-browser", "graphify"]) {
+  console.log(`tool: codex ${describeCodex()}`);
+  for (const tool of ["agent-browser", "graphify"]) {
     console.log(`tool: ${tool} ${commandIsPresent(tool) ? "present" : "missing"}`);
   }
 
