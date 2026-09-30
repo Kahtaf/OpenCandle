@@ -14,6 +14,12 @@ export interface Question {
   reason?: string;
 }
 
+export interface IncompleteRun {
+  reason: "workflow_running" | "session_busy";
+  workflow?: string;
+  timeoutMs: number;
+}
+
 export interface PromptRequest {
   prompt: string;
 }
@@ -81,15 +87,27 @@ export class IpcChannel {
     return result;
   }
 
-  /** Write trace.json atomically and set status=done. */
-  writeTrace(trace: AgentTrace): void {
+  /** Write trace.json atomically and set status (done unless stated). */
+  writeTrace(trace: AgentTrace, status: "done" | "incomplete" = "done"): void {
     // tmp+rename like every other IPC write: a follow-up prompt rewrites
     // trace.json, and a concurrent `trace` CLI read of a truncated file
     // throws "Unexpected end of JSON input".
     const tmp = join(this.dir, "trace.json.tmp");
     writeFileSync(tmp, JSON.stringify(trace, null, 2), "utf-8");
     renameSync(tmp, join(this.dir, "trace.json"));
-    this.setStatus("done");
+    this.setStatus(status);
+  }
+
+  /**
+   * Record that the run hit its timeout before the prompt completed, with its
+   * partial trace. status=incomplete is distinct from done and error, and is
+   * set only after both files are in place.
+   */
+  writeIncomplete(details: IncompleteRun, partialTrace: AgentTrace): void {
+    const tmp = join(this.dir, "incomplete.json.tmp");
+    writeFileSync(tmp, JSON.stringify(details, null, 2), "utf-8");
+    renameSync(tmp, join(this.dir, "incomplete.json"));
+    this.writeTrace(partialTrace, "incomplete");
   }
 
   /** Consume a pending follow-up prompt request, if one exists. */
@@ -143,6 +161,12 @@ export class IpcChannel {
     writeFileSync(tmp, JSON.stringify({ prompt }, null, 2), "utf-8");
     renameSync(tmp, join(dir, "prompt-request.json"));
     new IpcChannel(dir).setStatus("running");
+  }
+
+  static readIncomplete(dir: string): IncompleteRun | null {
+    const p = join(dir, "incomplete.json");
+    if (!existsSync(p)) return null;
+    return JSON.parse(readFileSync(p, "utf-8")) as IncompleteRun;
   }
 
   static readTrace(dir: string): AgentTrace | null {
