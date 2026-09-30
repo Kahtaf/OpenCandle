@@ -121,12 +121,28 @@ const NEGATED_NON_LIVE_PATTERNS: readonly RegExp[] = [
 const PRECEDING_NEGATION =
   /\b(?:not|never|no\s+longer|isn'?t|aren'?t|wasn'?t|weren'?t)\s+(?:[\w/'-]+\s+){0,3}$/i;
 
+/** A conditional opening the current sub-clause, e.g. "if these quotes are". */
+const PRECEDING_CONDITIONAL = /\b(?:if|whether|unless|in\s+case)\b/i;
+
+/**
+ * An explicit claim that the shown figures are live ("the premiums shown are
+ * live"). It contradicts any disclaimer elsewhere, so the answer does not
+ * disclose. Adjectival "live bid/ask" is not a claim: "verify live bid/ask
+ * with your broker" is compliant wording.
+ */
+const LIVE_CLAIM =
+  /\b(?:quotes?|premiums?|prices?|bid\/ask|bids?|asks?|figures|numbers)\s+(?:shown\s+|above\s+|below\s+|here\s+)?(?:are|is)\s+(?:currently\s+|now\s+)?(?:live|executable|tradable|tradeable|real[- ]?time)\b/i;
+
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
+  if (LIVE_CLAIM.test(text)) return false;
   if (NEGATED_NON_LIVE_PATTERNS.some((pattern) => pattern.test(text))) return true;
   return AFFIRMATIVE_NON_LIVE_PATTERNS.some((pattern) => {
     for (const match of text.matchAll(pattern)) {
-      if (!PRECEDING_NEGATION.test(clauseBefore(text, match.index))) return true;
+      const clause = clauseBefore(text, match.index);
+      const subClause = clause.slice(clause.lastIndexOf(",") + 1);
+      if (PRECEDING_NEGATION.test(clause) || PRECEDING_CONDITIONAL.test(subClause)) continue;
+      return true;
     }
     return false;
   });
@@ -140,10 +156,21 @@ function clauseBefore(text: string, index: number): string {
   return last?.index === undefined ? window : window.slice(last.index + 1);
 }
 
-/** Whether the text shows any price-like figure an options quote could be read from. */
+/**
+ * Whether the text shows any price-like figure an options quote could be read
+ * from: a currency or two-decimal amount, or any number alongside quote
+ * vocabulary ("Premium: 480 per contract", "Bid: 4 dollars"). A status line
+ * such as "Fetched the chain for 2 expirations" shows none.
+ */
 export function presentsQuoteFigures(text: string | undefined): boolean {
   if (!text) return false;
-  return /\$\s?\d|\b\d+\.\d{2}\b/.test(text);
+  if (/\$\s?\d|\b\d+\.\d{2}\b/.test(text)) return true;
+  return (
+    /\d/.test(text) &&
+    /\b(?:premiums?|bids?|asks?|bid\/ask|mid(?:point)?s?|prices?|costs?|debits?|credits?|marks?|dollars?|usd|per\s+(?:contract|share))\b/i.test(
+      text,
+    )
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

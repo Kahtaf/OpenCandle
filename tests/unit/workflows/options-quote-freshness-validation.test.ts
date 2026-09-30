@@ -133,6 +133,8 @@ describe("options quote freshness disclosure", () => {
     "These are cached quotes from earlier today.",
     "After-hours quotes: premiums below may differ tomorrow.",
     "The options market is in after-hours trading.",
+    "If you trade, note these are last-session quotes.",
+    "Quotes are not live, so treat the premiums shown as a guide.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -145,7 +147,11 @@ describe("options quote freshness disclosure", () => {
     "Bid/ask are not closing quotes.",
     "The market is not closed.",
     "Live premium $3.20. Verify with your broker.",
-  ])("rejects negated or missing non-live wording: %s", (text) => {
+    "If these quotes are stale, recheck them after the open; the premiums shown are live.",
+    "If these quotes are stale, verify with your broker.",
+    "Premiums may differ in case the market has closed.",
+    "Quotes are last-session carryovers? No, the premiums above are executable now.",
+  ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
 });
@@ -190,6 +196,35 @@ describe("options_screener quote freshness gate", () => {
       }),
     ).toEqual([]);
   });
+
+  it.each([
+    "Premium: 480 per contract for the 210 call.",
+    "Bid: 4 dollars on the 210 strike.",
+    "| Strike | Premium |\n| 210 | 480 |",
+  ])("treats integer premiums as quote figures: %s", async (text) => {
+    const evidence = await chainEvidence(afterHoursFixture);
+    expect(
+      rankStepValidation().validate(text, {
+        stepType: "rank_and_present",
+        currentEvidence: evidence,
+        priorEvidence: [],
+      }),
+    ).toHaveLength(1);
+  });
+
+  it.each(["Fetched the option chain.", "Fetched the chain for 2 expirations."])(
+    "does not treat a status line as quote figures: %s",
+    async (text) => {
+      const evidence = await chainEvidence(afterHoursFixture);
+      expect(
+        rankStepValidation().validate(text, {
+          stepType: "fetch_chain",
+          currentEvidence: evidence,
+          priorEvidence: [],
+        }),
+      ).toEqual([]);
+    },
+  );
 
   it("also gates the first user-visible step, which presents a ranked premium table", async () => {
     const definition = buildOptionsScreenerWorkflowDefinition({
