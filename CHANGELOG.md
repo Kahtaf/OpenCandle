@@ -26,6 +26,7 @@
 
 - The headless harness `run` command now waits for multi-step workflows to finish before reporting done, and reports `incomplete` with a distinct exit code when the timeout expires first.
 - Portfolio and comparison workflows now pick a supported risk lookback window for any investment horizon, so 3-year, 10-year, or 18-month plans no longer make rejected risk or correlation calls.
+- Covered-call answers no longer assume a cost basis you never gave; a basis is used only when it matches a price you stated, a total you paid divided by your share count, or a saved position, and is otherwise reported as not provided.
 - Pressing Stop in the GUI while a tool is running, such as during `/analyze` or while a question is open, now shows the turn as Stopped with Retry instead of "Model connection failed", including after a reload.
 - Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
 - Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.

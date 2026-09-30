@@ -1,4 +1,5 @@
 import {
+  CURRENCY_CODES,
   extractEntities,
   isAmbiguousConceptUsage,
   isCurrencyCodeUsage,
@@ -345,6 +346,11 @@ export function postProcessRouterOutput(
         extracted.heldSymbol,
         inputContext,
         next.entities.symbols,
+        // An existing-position option request is later rewritten onto the
+        // extracted holding, so its basis is validated against that holding.
+        next.workflow === "options_screener" && isExistingPositionOptionRequest(text, extracted)
+          ? extracted.heldSymbol
+          : undefined,
       ),
     },
   };
@@ -626,7 +632,9 @@ export function postProcessRouterOutput(
           reorderedSymbols.length > 1
             ? reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol)
             : undefined,
-        costBasis: extracted.costBasis ?? savedPosition?.costBasis ?? next.entities.costBasis,
+        // The basis was already validated against this holding (falling back to
+        // the extractor), so keep it and use the saved position only when absent.
+        costBasis: next.entities.costBasis ?? savedPosition?.costBasis,
         shareQuantity:
           extracted.shareQuantity ?? savedPosition?.quantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
@@ -1389,13 +1397,17 @@ function readPortfolioPosition(
   };
 }
 
-// Absence-of-basis-role-context guard. A model-emitted cost basis is dropped
-// only when nothing establishes a basis/purchase/holding role: the current turn,
-// a same-symbol prior user turn, a reply to a preceding assistant basis
-// question, or a saved position. This is role presence, not numeric grounding,
-// so derived, scaled, or spelled amounts stay the model's interpretation and the
-// deterministic extractor remains the fallback. An assistant quote alone is
-// never a source.
+// Cost-basis grounding guard. A model-emitted cost basis is kept only when it
+// traces to user-stated numbers: a basis role must be established (the current
+// turn, a same-symbol prior user turn, a reply to a preceding assistant basis
+// question, or a saved position), and the value must equal a money amount stated
+// in a turn that carries that role and linked to acquisition or basis wording
+// (or given as a reply to a basis question), equal such a stated total divided
+// by a stated quantity (within 0.5%), or match a saved-position basis. Quotes,
+// market values, premiums, strikes, and share counts never ground a basis, and
+// spelled-out amounts are not parsed. Otherwise the
+// deterministic extractor is the fallback, and an undefined basis leads to the
+// missing-basis disclosure. An assistant quote alone is never a source.
 function resolveCostBasis(
   text: string,
   modelCostBasis: number | undefined,
@@ -1403,46 +1415,485 @@ function resolveCostBasis(
   heldSymbol: string | undefined,
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
   symbols: string[],
+  underlyingSymbol?: string,
 ): number | undefined {
   if (modelCostBasis === undefined) return extractedCostBasis;
-  if (extractedCostBasis !== undefined) return modelCostBasis;
-  if (hasBasisRoleContext(text, heldSymbol, symbols, inputContext)) return modelCostBasis;
-  return extractedCostBasis;
+  const grounding = basisGrounding(text, heldSymbol, symbols, inputContext, underlyingSymbol);
+  if (!grounding) return extractedCostBasis;
+  // A basis stated in the current turn supersedes earlier turns and saved
+  // positions, so the model value must then trace to the current turn.
+  const current = grounding.texts.filter((turn) => turn.isCurrent);
+  const scope = current.some((turn) => basisAmounts(turn, grounding).length > 0)
+    ? { ...grounding, texts: current, savedBases: [] }
+    : grounding;
+  if (isGroundedBasis(modelCostBasis, scope)) return modelCostBasis;
+  // The extractor fallback is held to the same scope, so it cannot restore a
+  // superseded amount either.
+  return extractedCostBasis !== undefined && isGroundedBasis(extractedCostBasis, scope)
+    ? extractedCostBasis
+    : undefined;
 }
 
 const COST_BASIS_CONTEXT =
-  /\b(?:cost\s*basis|basis|average\s+cost|avg\s+cost|entry(?:\s*price)?|purchase\s+price|bought|purchased|acquired|paid|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
+  /\b(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|got\s+in|cost\s+me|own|owns|owned|hold|holds|holding|(?:my|the)\s+(?:position|shares?|holding|stock)|i(?:'m| am)\s+(?:in|long))\b/i;
 
-function hasBasisRoleContext(
+interface BasisGroundingTurn {
+  text: string;
+  isBasisReply: boolean;
+  isCurrent: boolean;
+}
+
+interface BasisGrounding {
+  texts: BasisGroundingTurn[];
+  savedBases: number[];
+  symbols: string[];
+  targetSymbol: string | undefined;
+}
+
+// Collects the user turns that carry a basis role, plus saved-position bases.
+// Returns undefined when nothing establishes a basis role.
+function basisGrounding(
   text: string,
   heldSymbol: string | undefined,
   symbols: string[],
   inputContext: Pick<RouterInputContext, "priorTurns" | "portfolioPositions"> | undefined,
-): boolean {
-  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text)) return true;
-  if (answersBasisQuestion(symbols, inputContext?.priorTurns)) return true;
+  underlyingSymbol?: string,
+): BasisGrounding | undefined {
+  // The later existing-position rewrite may restore an underlying the model
+  // omitted, so prior turns about it count too.
+  const scopeSymbols =
+    underlyingSymbol !== undefined && !symbols.includes(underlyingSymbol)
+      ? [underlyingSymbol, ...symbols]
+      : symbols;
+  const texts: BasisGroundingTurn[] = [];
   const turns = inputContext?.priorTurns ?? [];
+  const currentIsBasisReply = answersBasisQuestion(scopeSymbols, turns);
+  if (heldSymbol !== undefined || COST_BASIS_CONTEXT.test(text) || currentIsBasisReply) {
+    texts.push({ text, isBasisReply: currentIsBasisReply, isCurrent: true });
+  }
   for (let index = 0; index < turns.length; index += 1) {
     const turn = turns[index];
     if (turn.role !== "user") continue;
     const turnEntities = extractEntities(turn.text);
-    if (
-      turnEntities.symbols.some((symbol) => symbols.includes(symbol)) &&
-      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text))
-    ) {
-      return true;
-    }
-    if (
-      answersBasisQuestion(symbols, turns.slice(0, index)) &&
-      suppliesBasisReply(turn.text, turnEntities)
-    ) {
-      return true;
+    const sameSymbolHolding =
+      turnEntities.symbols.some((symbol) => scopeSymbols.includes(symbol)) &&
+      (turnEntities.heldSymbol !== undefined || COST_BASIS_CONTEXT.test(turn.text));
+    const isBasisReply =
+      answersBasisQuestion(scopeSymbols, turns.slice(0, index)) &&
+      suppliesBasisReply(turn.text, turnEntities);
+    if (sameSymbolHolding || isBasisReply) {
+      texts.push({ text: turn.text, isBasisReply, isCurrent: false });
     }
   }
-  return symbols.some(
+  // Cost-basis validation runs before the existing-position reorder, so prefer
+  // the held symbol over textual symbol order when the model resolved it.
+  const targetSymbol =
+    underlyingSymbol ??
+    (heldSymbol !== undefined && symbols.includes(heldSymbol) ? heldSymbol : symbols[0]);
+  const hasSavedBasis = scopeSymbols.some(
     (symbol) =>
       readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis !== undefined,
   );
+  if (texts.length === 0 && !hasSavedBasis) return undefined;
+  // Only the target holding's saved basis can ground the target's basis.
+  const targetSavedBasis =
+    targetSymbol === undefined
+      ? undefined
+      : readPortfolioPosition(inputContext?.portfolioPositions, targetSymbol)?.costBasis;
+  const savedBases = targetSavedBasis === undefined ? [] : [targetSavedBasis];
+  return { texts, savedBases, symbols: scopeSymbols, targetSymbol };
+}
+
+const DERIVED_BASIS_TOLERANCE = 0.005;
+
+// The amounts in a turn that can state a basis: linked to acquisition or basis
+// wording, or a bare amount replying to a basis question ("$150", "about $150
+// per share").
+function basisAmounts(turn: BasisGroundingTurn, grounding: BasisGrounding) {
+  const scopedText = maskOtherHoldingClauses(turn.text, grounding);
+  const parsed = parseStatedNumbers(
+    scopedText,
+    grounding.symbols,
+    turn.text,
+    grounding.targetSymbol,
+  );
+  // Amounts stated before a correction are superseded by it.
+  let lastCorrection = -1;
+  parsed.amounts.forEach((amount, index) => {
+    if (amount.isCorrection) lastCorrection = index;
+  });
+  return parsed.amounts
+    .slice(Math.max(lastCorrection, 0))
+    .filter((amount) => amount.isBasisLinked || (turn.isBasisReply && amount.isBareAnswer));
+}
+
+function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
+  if (!Number.isFinite(basis) || basis <= 0) return false;
+  const near = (value: number, tolerance: number) => Math.abs(value - basis) <= tolerance;
+  if (grounding.savedBases.some((saved) => near(saved, basis * DERIVED_BASIS_TOLERANCE))) {
+    return true;
+  }
+  return grounding.texts.some((turn) => {
+    const amounts = basisAmounts(turn, grounding);
+    if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
+    // A total divides only by a share count in its own clause.
+    return amounts.some(
+      (amount) =>
+        amount.isTotal &&
+        amount.clauseQuantities.some(
+          (quantity) =>
+            quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
+        ),
+    );
+  });
+}
+
+// A clause that names another holding but not the target symbol ("I own MSFT at
+// $300 and also own AAPL") cannot ground the target's basis, so it is blanked
+// (length-preserving) before numbers are parsed.
+// Punctuation inside a number ("1,000", "150.25") is not a boundary.
+const CLAUSE_BOUNDARY = /[;!?]|[.,](?!\d)|\b(?:and|but|while|whereas|then)\b/gi;
+const SENTENCE_BOUNDARY = /[.;!?](?!\d)/g;
+// Clause boundaries without the comma, for comma appositives.
+const PHRASE_BOUNDARY = /[;!?]|[.](?!\d)|\b(?:and|but|while|whereas|then)\b/gi;
+
+function segmentAround(text: string, index: number, boundary: RegExp): string {
+  let start = 0;
+  let end = text.length;
+  for (const match of text.matchAll(boundary)) {
+    const at = match.index ?? 0;
+    if (at < index) start = at + match[0].length;
+    else {
+      end = at;
+      break;
+    }
+  }
+  return text.slice(start, end);
+}
+
+function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): string {
+  const target = grounding.targetSymbol;
+  if (target === undefined) return text;
+  const mentioned = new Set(
+    [...grounding.symbols, ...extractEntities(text).symbols].filter(
+      (symbol) => symbol === target || !isCurrencyUsage(text, symbol),
+    ),
+  );
+  const mentionPattern = (symbol: string, flags = "i") =>
+    new RegExp(`(?<![A-Za-z])\\$?${symbol}(?![A-Za-z])`, flags);
+  const mentions = (clause: string, symbol: string) => mentionPattern(symbol).test(clause);
+  // In a clause naming both holdings, an amount belongs to the nearest
+  // preceding symbol ("AAPL alongside MSFT at $300" is MSFT's amount).
+  const maskForeignAmounts = (clause: string): string => {
+    const positions = [...mentioned].flatMap((symbol) =>
+      [...clause.matchAll(mentionPattern(symbol, "gi"))].map((match) => ({
+        symbol,
+        index: match.index ?? 0,
+      })),
+    );
+    let result = clause;
+    for (const number of clause.matchAll(STATED_NUMBER)) {
+      const at = number.index ?? 0;
+      // The amount belongs to the nearest symbol by gap, preceding on a tie
+      // ("AAPL at $150", "paid $150 for AAPL", "plus $300 for MSFT").
+      const end = at + number[0].length;
+      const gap = (position: { symbol: string; index: number }) =>
+        position.index < at ? at - (position.index + position.symbol.length) : position.index - end;
+      const owner = [...positions].sort(
+        (a, b) => gap(a) - gap(b) || (a.index < at ? -1 : 1) - (b.index < at ? -1 : 1),
+      )[0];
+      if (owner !== undefined && owner.symbol !== target) {
+        result =
+          result.slice(0, at) + " ".repeat(number[0].length) + result.slice(at + number[0].length);
+      }
+    }
+    return result;
+  };
+  let masked = "";
+  let start = 0;
+  const boundaries = [...text.matchAll(CLAUSE_BOUNDARY), { index: text.length, 0: "" }];
+  for (const boundary of boundaries) {
+    const end = boundary.index ?? text.length;
+    const clause = text.slice(start, end);
+    const namesOther = [...mentioned].some(
+      (symbol) => symbol !== target && mentions(clause, symbol),
+    );
+    masked += !namesOther
+      ? clause
+      : mentions(clause, target)
+        ? maskForeignAmounts(clause)
+        : " ".repeat(clause.length);
+    masked += text.slice(end, end + boundary[0].length);
+    start = end + boundary[0].length;
+  }
+  return masked;
+}
+
+// A number is a quantity when it counts shares/contracts ("100 shares",
+// "100-share") or directly precedes a ticker ("300 AAPL"). A token counts as a
+// ticker when it is a resolved symbol, or when the extractor sees a symbol that
+// is not an ISO currency code ("150 USD", "150 INR" stay amounts). A
+// dollar-prefixed number is always an amount. Durations, percentages, and
+// amounts stated as a premium, strike, target, limit, or bound are not basis
+// amounts. k/m suffixes scale amounts.
+// When a quantity is stated, an amount phrased as the purchase total ("paid
+// $15,000 for 100 shares") grounds a basis only through division, never
+// directly, unless it carries a per-share marker ("at $150", "$150 per share").
+const STATED_NUMBER =
+  /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
+// Only share counts are quantities; option contracts or lots are not shares.
+const QUANTITY_SUFFIX = /^(?:\s*|-)shares?\b/;
+const TICKER_SUFFIX = /^\s*([A-Za-z]{1,5})\b/;
+const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
+const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|(?:for\s+)?each\b|apiece\b)/i;
+// A currency word or ISO code may sit between the number and a following
+// marker ("150 dollars per share", "150 EUR per share"); it is skipped before
+// suffix checks.
+const LEADING_CURRENCY = /^\s*(?:dollars?|bucks|euros?|pounds?|yen|([A-Za-z]{3}))\b/i;
+
+function skipLeadingCurrency(rest: string): string {
+  const match = rest.match(LEADING_CURRENCY);
+  if (!match) return rest;
+  const code = match[1];
+  if (code !== undefined && !ISO_CURRENCY_CODES.has(code.toUpperCase())) return rest;
+  return rest.slice(match[0].length);
+}
+// What may surround a bare basis answer: approximation, per-share, currency.
+const BARE_ANSWER_FILLER =
+  /\b(?:it\s+was|it's|was|is|i\s+think|maybe|about|around|roughly|approximately|approx|like|at|per\s+share|a\s+share|each|apiece|dollars?|bucks|euros?|pounds?|yen|[A-Z]{3})\b|[~$\s]/gi;
+const TOTAL_PREFIX =
+  /\b(?:paid|spent|invested|total(?:\s+of)?|totall?ing|(?<!\b(?:average|avg|unit|share)\s)costs?(?:\s+(?:me|of))?|for)\s*$/i;
+const TOTAL_SUFFIX = /^\s*(?:(?:total\s+|in\s+total\s+)?for|worth)\b/i;
+const NON_BASIS_PREFIX =
+  /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
+const NON_BASIS_SUFFIX =
+  /^(?:\s*(?:per|a|\/)\s*share(?:\s+(?:in|of))?)?\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?|distributions?|income|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
+// A direct amount is basis-linked when its clause carries acquisition or basis
+// wording ("bought at $150", "cost basis is $51"), or when its sentence states a
+// holding and the amount is per-share ("I own 100 AAPL at $150"), and its
+// lead-in has no quote or prospective wording ("it is trading at $200").
+const ACQUISITION_CONTEXT =
+  /\b(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price)|bought|purchased|acquired|paid|spent|invested|cost\s+me|got\s+in)\b/gi;
+const HOLDING_CONTEXT = /\b(?:own|owns|owned|hold|holds|holding|have|has|position|shares?)\b/i;
+// Quote or prospective wording between an amount and the nearest preceding
+// acquisition word (or clause start, or previous number) marks that amount as
+// a quote or planned order, not a basis ("trading at $200", "plan to buy more
+// at $150", "would sell at $350").
+const NON_BASIS_CONTEXT =
+  /\b(?:it(?:'s|\s+is)\s+(?:at|around|near)|(?:its\s+price|price|stock|shares?)\s+(?:is|are)\s+(?:at|around|near)|trad(?:ing|es|ed)|quot(?:e|es|ed)|clos(?:ed|es|ing)|open(?:ed|s|ing)|hit|reach(?:ed|es)?|rose|fell|dropped|jumped|climbed|sank|went\s+(?:up|down)|(?:am|are|is|i'm|we're|it's|i\s+am)\s+(?:up|down)|gain(?:ed|s)?|loss(?:es)?|lost|profit(?:s)?|underwater|current\s+(?:price|quote|value|market)|(?:currently|now)(?!\s+(?:own|hold|have|holding))|market\s+(?:price|value)|worth|valued?|spot|last\s+(?:price|trade|traded|close|closed|sale|quote)|receiv(?:e|ed|ing)|earn(?:ed|ing)?|collect(?:ed|ing)?|plan(?:s|ning)?|want(?:s|ing)?|will|would|could|should|going\s+to|intend(?:s|ing)?|hop(?:e|ing)|consider(?:ing)?|thinking|looking|buy|add(?:ing)?|sell(?:ing)?|sold|trimm?(?:ed|ing)?|exit(?:ed|ing)?|order|limit|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
+// An ISO code reads as a currency, not a holding, when every mention follows a
+// number ("150 INR"); a ticker that is also a code ("own AMD at $120") stays a
+// holding.
+function isCurrencyUsage(text: string, symbol: string): boolean {
+  if (!ISO_CURRENCY_CODES.has(symbol)) return false;
+  const mentions = [...text.matchAll(new RegExp(`(?<![A-Za-z])${symbol}(?![A-Za-z])`, "gi"))];
+  return (
+    mentions.length > 0 && mentions.every((match) => /\d\s*$/.test(text.slice(0, match.index ?? 0)))
+  );
+}
+
+const CORRECTION_CONTEXT = /\b(?:actually|rather|i\s+meant?|make\s+that|correction|sorry)\b/i;
+
+// Negation in an amount's lead-in ("cost basis is not $100") rejects it, even
+// after an explicit basis label.
+const NEGATION_CONTEXT = /\b(?:not|never|no\s+longer)\b|n't\b/i;
+const NEGATED_ACQUISITION = /(?:\b(?:not|never|no\s+longer)|n't)(?:\s+\w+)?\s*$/i;
+
+// Case-sensitive: an uppercase ticker subject quoting a price ("AAPL is at").
+const TICKER_QUOTE_CONTEXT = /\b[A-Z]{1,5}\s+(?:is|are)\s+(?:at|around|near)\b/;
+const ISO_CURRENCY_CODES: ReadonlySet<string> = new Set([
+  ...CURRENCY_CODES,
+  ...Intl.supportedValuesOf("currency"),
+]);
+const NON_AMOUNT_SUFFIX =
+  /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?|contracts?|lots?)\b)/i;
+
+// Calendar years ("in 2020") and date components ("3/15", "March 15") are not
+// amounts.
+const DATE_PREFIX =
+  /(?:\b(?:in|since|from|during|until|by|year|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|\d[/-])\s*$/i;
+const RATIO_SUFFIX = /^-for-\d|^:\d/i;
+const RATIO_PREFIX = /\d-for-$|\d:$/i;
+const DATE_SUFFIX = /^(?:[/-]\d|(?:st|nd|rd|th)\b)/i;
+
+function isDateComponent(fraction: string | undefined, before: string, rest: string): boolean {
+  return fraction === undefined && (DATE_SUFFIX.test(rest) || DATE_PREFIX.test(before));
+}
+
+interface StatedAmount {
+  value: number;
+  isTotal: boolean;
+  isBasisLinked: boolean;
+  isNonBasisContext: boolean;
+  isPerShare: boolean;
+  isBareAnswer: boolean;
+  isCorrection: boolean;
+  clauseQuantities: number[];
+}
+
+function segmentStart(text: string, index: number, boundary: RegExp): number {
+  let start = 0;
+  for (const match of text.matchAll(boundary)) {
+    const at = match.index ?? 0;
+    if (at >= index) break;
+    start = at + match[0].length;
+  }
+  return start;
+}
+
+// The local lead-in to an amount: from the clause start or previous number,
+// and after the last acquisition word, so "Sell calls on AAPL I bought at $150"
+// judges only " at ".
+// An explicit basis label ("cost basis is now $150") outranks quote wording.
+const BASIS_LABEL =
+  /^(?:cost\s*basis|basis|(?:average|avg)\s+(?:cost|price)|entry(?:\s*price)?|purchase\s+price|buy(?:-in|\s+price))$/i;
+
+function localLeadIn(
+  text: string,
+  start: number,
+  previousEnd: number,
+): { leadIn: string; afterBasisLabel: boolean; isNegated: boolean } {
+  const from = Math.max(segmentStart(text, start, CLAUSE_BOUNDARY), previousEnd);
+  const fullLeadIn = text.slice(from, start);
+  const lastAcquisition = [...fullLeadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
+  if (lastAcquisition === undefined) {
+    return {
+      leadIn: fullLeadIn,
+      afterBasisLabel: false,
+      isNegated: NEGATION_CONTEXT.test(fullLeadIn),
+    };
+  }
+  const acquisitionAt = lastAcquisition.index ?? 0;
+  const leadIn = fullLeadIn.slice(acquisitionAt + lastAcquisition[0].length);
+  // Negation counts when it sits between the acquisition word and the amount
+  // ("basis is not $100") or directly before the acquisition word ("never
+  // bought"), not when it modifies an earlier, separate claim.
+  return {
+    leadIn,
+    afterBasisLabel: BASIS_LABEL.test(lastAcquisition[0]),
+    isNegated:
+      NEGATION_CONTEXT.test(leadIn) || NEGATED_ACQUISITION.test(fullLeadIn.slice(0, acquisitionAt)),
+  };
+}
+
+// `contextText` is the unmasked turn (same length as `text`), so holding
+// wording in a blanked clause still frames the sentence.
+function parseStatedNumbers(
+  text: string,
+  resolvedSymbols: readonly string[],
+  contextText: string = text,
+  targetSymbol?: string,
+): { amounts: StatedAmount[] } {
+  const extractedSymbols = extractEntities(text).symbols;
+  // A code right after a number is a currency ("150 INR") unless it is the
+  // holding being priced ("100 AMD").
+  const isTicker = (token: string) =>
+    (token === targetSymbol || !ISO_CURRENCY_CODES.has(token)) &&
+    (resolvedSymbols.includes(token) || extractedSymbols.includes(token));
+  const candidates: Array<{
+    value: number;
+    start: number;
+    end: number;
+    previousEnd: number;
+    before: string;
+    rest: string;
+  }> = [];
+  const quantities: Array<{
+    value: number;
+    clauseStart: number;
+    phraseStart: number;
+    index: number;
+  }> = [];
+  let previousEnd = 0;
+  for (const match of text.matchAll(STATED_NUMBER)) {
+    const matchPreviousEnd = previousEnd;
+    previousEnd = (match.index ?? 0) + match[0].length;
+    const [whole, dollar, integer, fraction, scale] = match;
+    const base = Number.parseFloat(`${integer.replace(/,/g, "")}${fraction ?? ""}`);
+    if (!Number.isFinite(base)) continue;
+    const start = match.index ?? 0;
+    const rest = text.slice(start + whole.length);
+    const ticker = rest.match(TICKER_SUFFIX)?.[1];
+    const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
+    // Scaled counts ("1k AAPL shares") are quantities too.
+    if (
+      !dollar &&
+      (QUANTITY_SUFFIX.test(rest) || (ticker !== undefined && isTicker(ticker.toUpperCase())))
+    ) {
+      quantities.push({
+        value: base * multiplier,
+        clauseStart: segmentStart(text, start, CLAUSE_BOUNDARY),
+        phraseStart: segmentStart(text, start, PHRASE_BOUNDARY),
+        index: start,
+      });
+      continue;
+    }
+    if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
+    const before = text.slice(0, start);
+    if (!dollar && !scale && isDateComponent(fraction, before, rest)) continue;
+    // Ratio components ("4-for-1", "2:1") are neither amounts nor counts.
+    if (!dollar && (RATIO_SUFFIX.test(rest) || RATIO_PREFIX.test(before))) continue;
+    if (NON_BASIS_PREFIX.test(before) || NON_BASIS_SUFFIX.test(skipLeadingCurrency(rest))) {
+      continue;
+    }
+    candidates.push({
+      value: base * multiplier,
+      start,
+      end: start + whole.length,
+      previousEnd: matchPreviousEnd,
+      before,
+      rest,
+    });
+  }
+  const amounts = candidates.map(({ value, start, end, previousEnd: prevEnd, before, rest }) => {
+    const perShare =
+      PER_SHARE_PREFIX.test(before) || PER_SHARE_SUFFIX.test(skipLeadingCurrency(rest));
+    const clauseStart = segmentStart(text, start, CLAUSE_BOUNDARY);
+    const clause = segmentAround(text, start, CLAUSE_BOUNDARY);
+    // A total pairs only with its nearest share count in the same clause, or
+    // failing that in a comma appositive ("$15,000 for AAPL, representing
+    // 100 shares"), never across and/but/then.
+    const byDistance = (a: { index: number }, b: { index: number }) =>
+      Math.abs(a.index - start) - Math.abs(b.index - start);
+    const phraseStart = segmentStart(text, start, PHRASE_BOUNDARY);
+    const nearestQuantity =
+      quantities.filter((quantity) => quantity.clauseStart === clauseStart).sort(byDistance)[0] ??
+      quantities.filter((quantity) => quantity.phraseStart === phraseStart).sort(byDistance)[0];
+    const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
+    const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
+    const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
+    const { leadIn, afterBasisLabel, isNegated } = localLeadIn(text, start, prevEnd);
+    const isNonBasisContext =
+      isNegated ||
+      (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
+    const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
+    // A correction ("cost basis is $100, but actually $150", or "... $100.
+    // Actually, it is $150") carries earlier basis wording forward within the
+    // same turn and supersedes the amounts stated before it.
+    const isCorrection =
+      !isNonBasisContext &&
+      (CORRECTION_CONTEXT.test(
+        contextText.slice(segmentStart(contextText, start, SENTENCE_BOUNDARY), start),
+      ) ||
+        (/\bbut\s*$/i.test(text.slice(0, clauseStart)) && NEGATION_CONTEXT.test(sentence))) &&
+      [...contextText.slice(0, start).matchAll(ACQUISITION_CONTEXT)].length > 0;
+    return {
+      value,
+      isTotal:
+        clauseQuantities.length > 0 &&
+        !perShare &&
+        (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
+      isBasisLinked:
+        !isNonBasisContext &&
+        (acquisitionInClause || (perShare && HOLDING_CONTEXT.test(sentence)) || isCorrection),
+      isNonBasisContext,
+      isPerShare: perShare,
+      isBareAnswer: clauseWithoutAmount.replace(BARE_ANSWER_FILLER, "").length === 0,
+      isCorrection,
+      clauseQuantities,
+    };
+  });
+  return { amounts };
 }
 
 // A historical reply to a basis question qualifies only when it actually supplies

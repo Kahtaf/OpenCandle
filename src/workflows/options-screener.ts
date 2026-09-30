@@ -1,4 +1,7 @@
-import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
+import {
+  buildOptionsScreenerPrompt,
+  MISSING_COST_BASIS_INSTRUCTION,
+} from "../prompts/workflow-prompts.js";
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
@@ -19,10 +22,14 @@ export function buildOptionsScreenerWorkflowDefinition(
     (s.optionStrategy === "covered_call" ||
       s.costBasis !== undefined ||
       (s.catalystSymbols?.length ?? 0) > 0);
+  const strikeGuide =
+    s.costBasis !== undefined
+      ? "strike above cost basis"
+      : "strike that fits the requested moneyness";
   const rankingInstruction = isProtectivePutContext
     ? "Rank by protection per dollar of premium, expiration fit, moneyness, hedge floor, live liquidity, and premium as a percent of the stock position."
     : isCoveredCallContext
-      ? "Rank by premium collected, strike above cost basis, assignment risk, event risk, live liquidity, and probability of expiring out of the money."
+      ? `Rank by premium collected, ${strikeGuide}, assignment risk, event risk, live liquidity, and probability of expiring out of the money.`
       : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.`;
   const maxPremiumInstruction =
     s.maxPremium !== undefined
@@ -43,10 +50,10 @@ export function buildOptionsScreenerWorkflowDefinition(
 - Do NOT conclude with "I cannot provide a recommendation" in this fallback case.
 - The final answer MUST include:
   - "Best action:" no trade unless the user's broker shows a real bid.
-  - "Conditional candidate:" a conditional limit-order candidate using the user's cost basis and catalyst context.
+  - "Conditional candidate:" a conditional limit-order candidate using ${s.costBasis !== undefined ? "the stated cost basis" : "the current share price"} and catalyst context.
 - If you cannot compute an exact premium, say "premium: use live broker bid/ask" rather than omitting the candidate.
-- Choose a conditional candidate strike above cost basis that the user would accept for assignment, prefer near-term expirations around the catalyst, and label it as conditional on live bid/ask and premium collected.
-- For the top pick, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? `$${s.costBasis}` : "user's"} cost basis.
+- Choose a conditional candidate with a ${strikeGuide} that the user would accept for assignment, prefer near-term expirations around the catalyst, and label it as conditional on live bid/ask and premium collected.
+- For the top pick, include the effective assignment sale price (strike + premium collected)${s.costBasis !== undefined ? ` and compare it with the $${s.costBasis} cost basis.` : `. ${MISSING_COST_BASIS_INSTRUCTION}`}
 - Include return-if-assigned when cost basis is available: (strike - cost basis + premium received) / cost basis.
 - Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
 - Mention the catalyst only as event/sympathy risk; do not switch the underlying away from ${s.symbol}.
@@ -61,7 +68,7 @@ export function buildOptionsScreenerWorkflowDefinition(
 `
     : "";
   const coveredCallNoDataGuidance = isCoveredCallContext
-    ? "- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk."
+    ? `- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, ${s.costBasis !== undefined ? "avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned" : "calculate static premium yield (compute return-if-assigned only once the user states a cost basis)"}, and flag catalyst/IV-crush risk.`
     : "";
   const protectivePutFallback = isProtectivePutContext
     ? `
