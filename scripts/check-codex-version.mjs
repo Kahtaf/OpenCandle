@@ -5,7 +5,9 @@
 // Usage: node scripts/check-codex-version.mjs [min-version]
 
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { accessSync, constants, realpathSync } from "node:fs";
+import { posix, win32 } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** Minimum Codex CLI that accepts the gpt-6.1-sol reviewer model. */
 export const MIN_CODEX_VERSION = "0.159.0";
@@ -29,16 +31,95 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-function defaultRunCommand() {
-  // Codex installed through npm is a `.cmd` shim on Windows, which cannot be
-  // spawned without a shell. The arguments are fixed literals, so a shell is safe.
-  return spawnSync("codex", ["--version"], {
-    encoding: "utf8",
-    shell: process.platform === "win32",
-  });
+const defaultRepoRoot = fileURLToPath(new URL("..", import.meta.url));
+
+function isExecutableFile(path) {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Read the installed Codex CLI version. */
+function realpathOrSelf(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * Resolve the Codex binary exactly as autoreview's `find_command` does, so the
+ * preflight probes the binary the reviewer will run: `CODEX_BIN` when set
+ * (relative paths resolve against the repo root), otherwise the first PATH
+ * entry that is absolute, not a `node_modules/.bin` shim directory, and not
+ * inside the repo. Returns null when no trusted binary exists.
+ */
+export function resolveCodexBinary({
+  env = process.env,
+  repoRoot = defaultRepoRoot,
+  platform = process.platform,
+  isExecutable = isExecutableFile,
+  realpath = realpathOrSelf,
+} = {}) {
+  const path = platform === "win32" ? win32 : posix;
+  const extensions =
+    platform === "win32"
+      ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+          .split(";")
+          .filter(Boolean)
+          .map((extension) => extension.toLowerCase())
+      : [""];
+  const firstExecutable = (base) => {
+    const candidates =
+      platform === "win32" && !path.extname(base)
+        ? extensions.map((extension) => `${base}${extension}`)
+        : [base];
+    return candidates.find((candidate) => isExecutable(candidate)) ?? null;
+  };
+
+  const name = env.CODEX_BIN || "codex";
+  const root = realpath(repoRoot);
+  if (
+    path.isAbsolute(name) ||
+    name.includes("/") ||
+    (platform === "win32" && name.includes("\\"))
+  ) {
+    return firstExecutable(path.isAbsolute(name) ? name : path.join(root, name));
+  }
+
+  const separator = platform === "win32" ? ";" : ":";
+  for (const entry of (env.PATH ?? "").split(separator)) {
+    if (!entry || entry === "." || !path.isAbsolute(entry)) continue;
+    const directory = realpath(entry);
+    const isNodeModulesBin =
+      path.basename(directory) === ".bin" &&
+      path.basename(path.dirname(directory)) === "node_modules";
+    const relative = path.relative(root, directory);
+    const isWithinRepo =
+      relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    if (isNodeModulesBin || isWithinRepo) continue;
+    const found = firstExecutable(path.join(directory, name));
+    if (found) return found;
+  }
+  return null;
+}
+
+function defaultRunCommand() {
+  const binary = resolveCodexBinary();
+  if (!binary)
+    return { status: null, error: Object.assign(new Error("codex not found"), { code: "ENOENT" }) };
+  // Codex installed through npm is a `.cmd` shim on Windows, which cannot be
+  // spawned without a shell. The path is quoted and the argument is a fixed literal.
+  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(binary)) {
+    return spawnSync(`"${binary}"`, ["--version"], { encoding: "utf8", shell: true });
+  }
+  return spawnSync(binary, ["--version"], { encoding: "utf8" });
+}
+
+/** Read the version of the Codex CLI that autoreview will run. */
 export function getCodexVersion({ runCommand = defaultRunCommand } = {}) {
   const result = runCommand();
   if (result.error) {
@@ -60,7 +141,7 @@ export function checkCodexVersion(minVersion = MIN_CODEX_VERSION, options = {}) 
     return {
       ok: false,
       status: "missing",
-      message: `Codex CLI was not found on PATH. review:pr needs Codex CLI >= ${minVersion} for the gpt-6.1-sol reviewer; install it with \`npm install -g @openai/codex\`.`,
+      message: `Codex CLI was not found (set CODEX_BIN or add it to PATH outside node_modules/.bin). review:pr needs Codex CLI >= ${minVersion} for the gpt-6.1-sol reviewer; install it with \`npm install -g @openai/codex\`.`,
     };
   }
   if (detected.status === "unknown") {
