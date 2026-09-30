@@ -842,6 +842,43 @@ describe("frozen competitive panel assertions are negation and echo aware", () =
       },
     );
 
+    it("keeps estimated and reported earnings figures distinct", () => {
+      const tool = [
+        earnings({ details: { quarterly: [{ reportedEPS: 2.15, estimatedEPS: 1.9 }] } }),
+      ];
+      for (const text of [
+        "Consensus EPS is 2.15.",
+        "Analysts estimate $2.15 EPS.",
+        "EPS came in at $1.90.",
+        "Reported EPS was 1.90.",
+      ]) {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT, toolCalls: tool })).toBe(false);
+      }
+      for (const text of [
+        "Consensus EPS is 1.90.",
+        "EPS came in at $2.15 versus consensus of $1.90.",
+        "Reported EPS was 2.15.",
+        "EPS was 2.15.",
+      ]) {
+        expect(check(assertion, text, { prompt: ZZZZ_PROMPT, toolCalls: tool })).toBe(true);
+      }
+    });
+
+    it("does not ground a consensus figure in an unqualified trailing EPS field", () => {
+      expect(
+        check(assertion, "Consensus EPS is 6.08.", {
+          prompt: ZZZZ_PROMPT,
+          toolCalls: [
+            {
+              name: "get_company_overview",
+              args: { symbol: "ZZZZ" },
+              result: { details: { eps: 6.08 } },
+            },
+          ],
+        }),
+      ).toBe(false);
+    });
+
     it("grounds a figure written before its label in a matching field", () => {
       expect(
         check(assertion, "The estimate is $2.10 EPS.", {

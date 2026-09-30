@@ -341,9 +341,34 @@ function figuresIn(text: string): Figure[] {
   return figures;
 }
 
+type FigureBasis = "estimate" | "reported" | undefined;
+
 interface LabeledFigure {
   label: string;
   figure: Figure;
+  basis: FigureBasis;
+}
+
+// Whether a figure is an estimate ("consensus EPS is 2.15", "analysts
+// estimate $2.15 EPS") or a reported result ("EPS came in at $2.15"): the
+// qualifier nearest the figure, read from the text since the previous figure
+// and the label that follows it.
+const ESTIMATE_QUALIFIER =
+  /\b(?:consensus|estimate[sd]?|est|expected|expect|expects|expectations?|forecast(?:ed|s)?|projected|anticipated|street)\b/gi;
+const REPORTED_QUALIFIER =
+  /\b(?:reported|actual|actually|came in|come in|posted|delivered|printed)\b/gi;
+
+function lastQualifier(text: string): FigureBasis {
+  const last = (pattern: RegExp) =>
+    Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index ?? -1));
+  const estimate = last(ESTIMATE_QUALIFIER);
+  const reported = last(REPORTED_QUALIFIER);
+  if (estimate < 0 && reported < 0) return undefined;
+  return estimate > reported ? "estimate" : "reported";
+}
+
+function fieldBasis(field: string): FigureBasis {
+  return lastQualifier(field);
 }
 
 function isSpecific(label: string): boolean {
@@ -361,25 +386,39 @@ function labeledFigures(segment: string, labels: RegExp): LabeledFigure[] {
     end: (match.index ?? 0) + match[0].length,
   }));
   const results: LabeledFigure[] = [];
+  let previousEnd = 0;
   for (const figure of figuresIn(segment)) {
-    const candidates: Array<{ label: string; gap: number }> = [];
+    const before = segment.slice(Math.max(previousEnd, figure.start - 60), figure.start);
+    previousEnd = figure.end;
+    const candidates: Array<{ label: string; gap: number; after: string }> = [];
     for (const label of found) {
       if (label.end <= figure.start) {
         const gap = figure.start - label.end;
         if (gap <= EARNINGS_FIGURE_WINDOW && clauseEnd(segment, label.end) >= figure.start) {
-          candidates.push({ label: label.label, gap });
+          candidates.push({ label: label.label, gap, after: "" });
         }
       } else if (label.start >= figure.end) {
         const between = segment.slice(figure.end, label.start);
         if (between.length <= LABEL_AFTER_FIGURE_WINDOW && LABEL_AFTER_FILLER.test(between)) {
-          candidates.push({ label: label.label, gap: between.length });
+          candidates.push({
+            label: label.label,
+            gap: between.length,
+            after: segment.slice(figure.end, label.end),
+          });
         }
       }
     }
     candidates.sort(
       (a, b) => Number(isSpecific(b.label)) - Number(isSpecific(a.label)) || a.gap - b.gap,
     );
-    if (candidates[0]) results.push({ label: candidates[0].label, figure });
+    const chosen = candidates[0];
+    if (chosen) {
+      results.push({
+        label: chosen.label,
+        figure,
+        basis: lastQualifier(before) ?? lastQualifier(chosen.after),
+      });
+    }
   }
   return results;
 }
@@ -467,11 +506,24 @@ function figureMatches(figure: Figure, evidence: Evidence): boolean {
   return false;
 }
 
-function isGrounded(label: string, figure: Figure, grounded: GroundedFigures): boolean {
+// An estimate is grounded only by an estimate/consensus field, and a reported
+// figure never by one, so a reported EPS of 2.15 cannot ground "consensus EPS
+// is 2.15". Guidance is forward-looking by nature and is not split.
+function basisCompatible(family: MetricFamily, basis: FigureBasis, field: string): boolean {
+  if (family === "guidance" || basis === undefined) return true;
+  const evidenceBasis = fieldBasis(field);
+  return basis === "estimate" ? evidenceBasis === "estimate" : evidenceBasis !== "estimate";
+}
+
+function isGrounded({ label, figure, basis }: LabeledFigure, grounded: GroundedFigures): boolean {
   if (grounded.promptFigures.has(`${figure.display}|${figure.unit}`)) return true;
-  const field = METRIC_FIELD[metricFamily(label)];
+  const family = metricFamily(label);
+  const field = METRIC_FIELD[family];
   return grounded.evidence.some(
-    (evidence) => field.test(evidence.field) && figureMatches(figure, evidence),
+    (evidence) =>
+      field.test(evidence.field) &&
+      basisCompatible(family, basis, evidence.field) &&
+      figureMatches(figure, evidence),
   );
 }
 
@@ -491,8 +543,10 @@ function ungroundedEarningsFigures(trace: EvalTrace): string[] {
   for (const sentence of splitSentences(trace.text)) {
     for (const segment of sentence.split(HYPOTHETICAL_SCOPE_BREAK)) {
       if (!segment || HYPOTHETICAL_CUE.test(segment)) continue;
-      for (const { label, figure } of labeledFigures(segment, EARNINGS_METRIC)) {
-        if (!isGrounded(label, figure, grounded)) ungrounded.push(`${label} ${figure.display}`);
+      for (const labeled of labeledFigures(segment, EARNINGS_METRIC)) {
+        if (!isGrounded(labeled, grounded)) {
+          ungrounded.push(`${labeled.label} ${labeled.figure.display}`);
+        }
       }
     }
   }
