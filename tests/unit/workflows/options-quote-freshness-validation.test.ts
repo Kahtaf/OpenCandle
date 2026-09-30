@@ -146,6 +146,8 @@ describe("options quote freshness disclosure", () => {
     "Stock quotes are live; the option quotes are last-session quotes.",
     "The underlying is live but the option premiums are not live.",
     "The chain was fetched outside regular trading hours.",
+    "The data may be delayed.",
+    "The underlying is live, but option quotes come from a stale cache.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -177,6 +179,10 @@ describe("options quote freshness disclosure", () => {
     "Option prices are live. The stock is from the prior session.",
     "The numbers shown are live. Quotes are from the prior session.",
     "Liquidity can deteriorate outside regular trading hours. Premium: $4.80.",
+    "The underlying quote is from a stale cache. Option premium: $4.80.",
+    "The stock data is delayed. Premium: $4.80.",
+    "Recheck the stock price at the open. Premium: $4.80.",
+    "Stock closing prices look weak. Premium: $4.80.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });

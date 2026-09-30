@@ -83,33 +83,39 @@ export function findNonLiveQuoteEvidence(
   return found;
 }
 
+// Explicit statements that option quotes are not live. A generic "verify with
+// your broker" line is deliberately not enough: it does not tell the reader
+// that the numbers shown are not tradable right now. Affirmative phrases
+// ("last-session quotes", "markets are closed") only count when the same
+// clause does not negate them ("these are not last-session quotes").
+
 /**
- * Explicit statements that option quotes are not live. A generic "verify with
- * your broker" line is deliberately not enough: it does not tell the reader
- * that the numbers shown are not tradable right now.
- *
- * These phrases state non-liveness affirmatively ("last-session quotes",
- * "markets are closed"), so a match only counts when the same clause does not
- * negate it ("these are not last-session quotes").
+ * Session, cache, and staleness wording ("last-session", "as of the prior
+ * close", "outside regular trading", "stale", "from a stale cache", "recheck
+ * at the open"). It only discloses when its sentence is about the option
+ * quotes: "Underlying: $200 as of market close" timestamps the stock, not the
+ * premiums shown.
  */
-/**
- * Session and close timestamps ("last-session", "as of the prior close",
- * "outside regular trading"). They only disclose when their sentence is about
- * the option quotes: "Underlying: $200 as of market close" timestamps the
- * stock, not the premiums shown.
- */
-const SESSION_TIMESTAMP_PATTERNS: readonly RegExp[] = [
+const QUOTE_SCOPED_PATTERNS: readonly RegExp[] = [
   /\blast[- ]session\b/gi,
   /\b(?:prior|previous|last|most\s+recent)\s+(?:regular\s+)?(?:trading\s+)?(?:session|close|trading day)\b/gi,
   /\b(?:yesterday|(?:mon|tues|wednes|thurs|fri|satur|sun)day)'?s\s+(?:close|session|quotes?)\b/gi,
   /\bas\s+of\s+(?:the\s+)?(?:market\s+)?close\b/gi,
   // "Liquidity can deteriorate outside regular hours" is generic advice; it
   // must say the chain or quotes were observed outside regular trading.
-  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi,
+  /\boutside\s+(?:of\s+)?(?:the\s+)?(?:regular\s+)?(?:options\s+|market\s+)?(?:trading|market|session)\b/gi, // "stale" and "delayed" must describe the quotes, not another subject
+  // ("the earnings release was delayed"), and must not be negated in between.
+  /\b(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures|numbers)\b(?:(?!\bnot\b|n't\b|\bnever\b)(?:[^.;:!?\n]|\.(?=\d))){0,30}?\b(?:stale|delayed)\b/gi,
+  /\b(?:stale|delayed)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures)\b/gi,
+  /\b(?:closing|indicative|cached|carried[- ]over|end[- ]of[- ]day|after[- ]hours|pre[- ]?market)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/gi,
+  /\bfrom\s+(?:a|the)\s+(?:stale\s+)?cache\b/gi,
+  // A timing phrase alone ("buy at the open") is not a disclosure; it must be
+  // an instruction to recheck the figures once trading resumes.
+  /\b(?:re-?check|check|verify|confirm|refresh|re-?quote|re-?price)\b[^.;:!?\n]{0,60}?\b(?:(?:after|when|once|until|before)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?|(?:at|after)\s+(?:the|tomorrow'?s|(?:mon|tues|wednes|thurs|fri)day'?s|next\s+session'?s)\s+(?:market\s+)?open)\b/gi,
 ];
 
 const QUOTE_SUBJECT =
-  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures|numbers|prices?)\b/i;
+  /\b(?:quotes?|premiums?|bid\/ask|bids?|asks?|marks?|options?|chain|contracts?|figures|numbers|prices?|data)\b/i;
 const OPTION_SPECIFIC_SUBJECT = /\b(?:options?|premiums?|bid\/ask|chain|contracts?)\b/i;
 const NON_OPTION_SUBJECT = /\b(?:underlying|stock|(?<!per\s)shares?|equity|index)\b/i;
 
@@ -136,19 +142,14 @@ function sentenceAround(text: string, index: number, length: number): string {
   );
 }
 
-const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
-  // "stale" and "delayed" must describe the quotes, not another subject
-  // ("the earnings release was delayed"), and must not be negated in between.
-  /\b(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures|numbers)\b(?:(?!\bnot\b|n't\b|\bnever\b)(?:[^.;:!?\n]|\.(?=\d))){0,30}?\b(?:stale|delayed)\b/gi,
-  /\b(?:stale|delayed)\s+(?:option\s+)?(?:quotes?|premiums?|prices?|bids?|asks?|bid\/ask|marks?|data|chain|figures)\b/gi,
-  /\b(?:closing|indicative|cached|carried[- ]over|end[- ]of[- ]day|after[- ]hours|pre[- ]?market)\s+(?:option\s+)?(?:quotes?|prices?|premiums?|bids?|bid\/ask|marks?)\b/gi,
-  /\bfrom\s+(?:a|the)\s+(?:stale\s+)?cache\b/gi,
+/**
+ * Present market status ("markets are closed", "the options market is in
+ * after-hours trading"). These describe why no quote is live right now.
+ */
+const MARKET_STATUS_PATTERNS: readonly RegExp[] = [
   /\b(?:options\s+)?markets?\s+(?:is|are|was|were|has|have|has been|have been)\s+(?:now\s+|currently\s+)?closed\b/gi,
   /\bmarkets?(?:'s)?[- ]closed\b/gi,
   /\b(?:options\s+)?markets?\s+(?:is|are)\s+(?:now\s+|currently\s+)?(?:in\s+)?(?:after[- ]hours|pre[- ]?market)\b/gi,
-  // A timing phrase alone ("buy at the open") is not a disclosure; it must be
-  // an instruction to recheck the figures once trading resumes.
-  /\b(?:re-?check|check|verify|confirm|refresh|re-?quote|re-?price)\b[^.;:!?\n]{0,60}?\b(?:(?:after|when|once|until|before)\s+(?:the\s+)?(?:regular\s+)?(?:options\s+)?(?:market|trading|session)\s+(?:re)?opens?|(?:at|after)\s+(?:the|tomorrow'?s|(?:mon|tues|wednes|thurs|fri)day'?s|next\s+session'?s)\s+(?:market\s+)?open)\b/gi,
 ];
 
 /** Phrases whose negation is the disclosure itself ("not live", "no live quotes"). */
@@ -191,26 +192,26 @@ export function disclosesNonLiveQuotes(text: string | undefined): boolean {
     if (PRECEDING_CONDITIONAL.test(subClause)) return false;
     return !(checkNegation && PRECEDING_NEGATION.test(clause));
   };
-  const matches = (patterns: readonly RegExp[], checkNegation: boolean): boolean =>
+  const matches = (
+    patterns: readonly RegExp[],
+    checkNegation: boolean,
+    aboutOptionQuotes: boolean,
+  ): boolean =>
     patterns.some((pattern) =>
-      [...text.matchAll(pattern)].some((match) => counts(match.index, checkNegation)),
+      [...text.matchAll(pattern)].some(
+        (match) =>
+          counts(match.index, checkNegation) &&
+          (!aboutOptionQuotes ||
+            describesOptionQuotes(sentenceAround(text, match.index, match[0].length))),
+      ),
     );
-  // "not live" and similar must be about the option quotes, not the underlying.
-  const negatedStatus = NEGATED_NON_LIVE_PATTERNS.some((pattern) =>
-    [...text.matchAll(pattern)].some(
-      (match) =>
-        counts(match.index, false) &&
-        describesOptionQuotes(sentenceAround(text, match.index, match[0].length)),
-    ),
+  // "Not live", staleness, and session wording must be about the option
+  // quotes, not the underlying; present market status needs no subject.
+  return (
+    matches(NEGATED_NON_LIVE_PATTERNS, false, true) ||
+    matches(QUOTE_SCOPED_PATTERNS, true, true) ||
+    matches(MARKET_STATUS_PATTERNS, true, false)
   );
-  const sessionTimestamp = SESSION_TIMESTAMP_PATTERNS.some((pattern) =>
-    [...text.matchAll(pattern)].some(
-      (match) =>
-        counts(match.index, true) &&
-        describesOptionQuotes(sentenceAround(text, match.index, match[0].length)),
-    ),
-  );
-  return sessionTimestamp || negatedStatus || matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true);
 }
 
 /** Text of the current clause before `index` (bounded, stops at clause breaks). */
