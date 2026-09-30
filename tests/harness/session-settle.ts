@@ -60,8 +60,20 @@ export async function promptAndWaitForCompletion(
     deadlineTimer = setTimeout(() => resolve(TIMED_OUT), options.timeoutMs);
   });
   const withDeadline = <T>(promise: Promise<T>) => Promise.race([promise, timedOut]);
-  const sleep = (ms: number) =>
-    withDeadline(new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms))));
+  // A sleep that loses the race to the deadline clears its own timer so it
+  // never keeps the event loop alive after this function returns.
+  const sleep = async (ms: number) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await withDeadline(
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, Math.max(0, ms));
+        }),
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   let activity = 0;
   const unsubscribe = session.subscribe(() => {
