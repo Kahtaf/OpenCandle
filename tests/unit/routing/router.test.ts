@@ -3357,6 +3357,32 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a basis in per-share income", async () => {
+    const dividends = await route(
+      { ...BASE_INPUT, text: "I own AAPL and received $2 per share in dividends. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+    const labeled = await route(
+      { ...BASE_INPUT, text: "I own 100 AAPL at $2 per share dividend. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+
+    expect(dividends.entities.costBasis).toBeUndefined();
+    expect(labeled.entities.costBasis).toBeUndefined();
+  });
+
+  it("reads currency words before a per-share marker as per-share", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I paid 150 dollars per share for 100 shares of AAPL. Covered calls?",
+      },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
