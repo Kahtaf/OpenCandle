@@ -10,8 +10,8 @@
     "preview": "vite preview",
     "test:browser": "npm run build && node tests/hosted-pwa.e2e.mjs",
     "test:browser:live": "npm run build && OPENCANDLE_HOSTED_LIVE=1 node tests/hosted-pwa.e2e.mjs",
-    "deploy": "npm run build && wrangler deploy",
-    "deploy:dry-run": "npm run build && wrangler deploy --dry-run"
+    "deploy": "node scripts/check-deploy-env.mjs && npm run build && wrangler deploy",
+    "deploy:dry-run": "node scripts/check-deploy-env.mjs && npm run build && wrangler deploy --dry-run"
   },
   "dependencies": {
     "@opencandle/gui-web": "*",

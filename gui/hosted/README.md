@@ -7,7 +7,7 @@ The provider relay (`workers/provider-relay`) owns the more specific `web.openca
 ## Prerequisites
 
 - Access to the Cloudflare account that owns the `opencandle.app` zone, and `npm --workspace @opencandle/gui-hosted exec wrangler login` (or a `CLOUDFLARE_API_TOKEN` with Workers deploy rights).
-- A clean checkout with `npm ci`. `wrangler` is a devDependency of this package, pinned to the same version as the relay.
+- A clean checkout with `npm ci`. `wrangler` is a devDependency of this package, pinned to the same version as the relay. Workspaces hoist it to the repository root, so the binary is `node_modules/.bin/wrangler`; the `npm --workspace @opencandle/gui-hosted exec wrangler` form below runs it from this directory so it picks up `wrangler.jsonc`.
 
 ## Build environment
 
@@ -15,6 +15,8 @@ The provider relay (`workers/provider-relay`) owns the more specific `web.openca
 |----------|------------------|-------|
 | `VITE_WEBCONTAINER_API_KEY` | unset | See [WebContainer API key status](#webcontainer-api-key-status). If it is ever set, it is build-time and ships in the public bundle: not a secret, but never commit it. Loopback origins ignore it. |
 | `VITE_PROVIDER_RELAY_URL` | unset | Production uses the same-origin relay. Only loopback origins are accepted, for local relay development. |
+
+The deploy scripts run `scripts/check-deploy-env.mjs` first and refuse to build when `VITE_WEBCONTAINER_API_KEY` is set in the shell or in any env file Vite loads for a production build (`.env`, `.env.local`, `.env.production`, `.env.production.local` in this directory). The repository-root `.env` is not read by Vite, but exporting it into the deploy shell is. Set `OPENCANDLE_ALLOW_WEBCONTAINER_API_KEY=1` only once a licensed key is in place.
 
 Provider API keys (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`) are never needed for a build. If they are present, the runtime payload audit fails the build when any of those values leak into the bundle. Prefer a shell without them.
 
@@ -27,6 +29,8 @@ npm run gui:hosted:deploy:dry-run     # build + wrangler deploy --dry-run, no up
 npm --workspace @opencandle/gui-hosted exec wrangler deployments list   # record the current version id
 npm run gui:hosted:deploy             # build + wrangler deploy
 ```
+
+The custom domain already exists on `opencandle-web`, so redeploying with the declared route leaves it unchanged. Wrangler replaces the Worker's custom-domain set with the one in `wrangler.jsonc`, so add any new hostname there rather than in the dashboard. In a non-interactive shell Wrangler also takes over a hostname or DNS record that points elsewhere without prompting; deploy from an interactive terminal.
 
 The dry run needs no Cloudflare credentials. It builds `dist` and reports the asset count without uploading. Record the version id marked `(100%)` in the newest entry of `wrangler deployments list` before deploying; that is the rollback target.
 
