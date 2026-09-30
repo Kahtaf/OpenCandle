@@ -13,12 +13,16 @@
  * `createHttpRequestHandler`. The only seam is a deterministic gate at the
  * writer-lock module boundary, which holds setup open until the Stop lands.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSession, SessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+  type AgentSession,
+  type SessionEntry,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHttpRequestHandler } from "../../../gui/server/http-routes.js";
 import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
@@ -62,6 +66,8 @@ describe("chat-run Stop during setup", () => {
   let agentSession: AgentSession;
   let promptCalls: string[];
   let previousHome: string | undefined;
+  // A real Pi session manager for a brand-new chat (no file on disk yet).
+  let realManager: SessionManager | null = null;
 
   const runRegistry = createGuiRunRegistry();
   const handlerRejections: unknown[] = [];
@@ -118,7 +124,7 @@ describe("chat-run Stop during setup", () => {
       localCoordinatorSecret: "coordinator-secret",
       allowRemotePrivateApi: false,
       getSession: () => agentSession,
-      getSessionManager: currentSessionManager,
+      getSessionManager: () => realManager ?? currentSessionManager(),
       createSessionForManager: async () => ({ session: agentSession }),
       wsHub: fakeWsHub(),
       modelSetupController: fakeModelSetupController(),
@@ -161,6 +167,7 @@ describe("chat-run Stop during setup", () => {
     handlerRejections.length = 0;
     lockGate.entered = undefined;
     lockGate.release = undefined;
+    realManager = null;
     agentSession = {
       modelRuntime,
       model,
@@ -223,6 +230,59 @@ describe("chat-run Stop during setup", () => {
     expect(body).not.toContain("Timed out");
     expect(handlerRejections).toHaveLength(0);
     await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
+  });
+
+  it("keeps a new chat's prompt and Stopped marker on disk when Stop lands during setup", async () => {
+    // A brand-new chat has no session file until Pi flushes its first
+    // assistant reply. A Stop during setup used to return without recording
+    // anything, so a reload of the session URL fell back to an empty chat.
+    realManager = SessionManager.create(process.cwd(), sessionDir);
+    const newSessionId = realManager.getSessionId();
+    const sessionFilePath = realManager.getSessionFile();
+    expect(sessionFilePath && existsSync(sessionFilePath)).toBe(false);
+    const prompt = "What is MSFT trading at before I change my mind?";
+    const actionId = "chat-setup-new-session";
+    const entered = createDeferred<void>();
+    const release = createDeferred<void>();
+    lockGate.entered = () => entered.resolve();
+    lockGate.release = release.promise;
+
+    const runPromise = fetch(`${endpoint}/api/sessions/${newSessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId, prompt, sessionId: newSessionId }),
+    });
+    await entered.promise;
+    const stop = await fetch(`${endpoint}/api/sessions/${newSessionId}/run-cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: `stop-${actionId}`, targetActionId: actionId }),
+    });
+    await expect(stop.json()).resolves.toEqual({ ok: true, cancelled: true, duplicate: false });
+    release.resolve();
+    const response = await runPromise;
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(promptCalls).toEqual([]);
+    expect(body).toContain("Run stopped.");
+    expect(handlerRejections).toHaveLength(0);
+    // Durable: the file exists and replays the prompt as a stopped turn.
+    expect(sessionFilePath && existsSync(sessionFilePath)).toBe(true);
+    const persisted = readFileSync(String(sessionFilePath), "utf-8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(persisted).toContainEqual(
+      expect.objectContaining({
+        type: "custom",
+        customType: "opencandle-run-cancelled",
+        data: expect.objectContaining({ text: prompt }),
+      }),
+    );
+    // The action stays unaccepted so Retry mints a fresh run.
+    expect(JSON.stringify(persisted)).not.toContain(`"${actionId}"`);
+    await vi.waitFor(() => expect(runRegistry.has(newSessionId)).toBe(false));
   });
 
   it("never starts a run whose Stop overtook the run request", async () => {

@@ -1,5 +1,6 @@
 import YahooFinance from "yahoo-finance2";
 import type { OptionsResult as YahooFinance2OptionsResult } from "yahoo-finance2/modules/options";
+import { withCurrentAbortSignal } from "../infra/abort-context.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { classifyMarketStatusAt } from "../infra/market-calendar.js";
@@ -862,7 +863,7 @@ export async function getOptionsChain(symbol: string, expiration?: number): Prom
 }
 
 function yahooRawFetchSignal(): AbortSignal {
-  return AbortSignal.timeout(YAHOO_RAW_FETCH_TIMEOUT_MS);
+  return withCurrentAbortSignal(AbortSignal.timeout(YAHOO_RAW_FETCH_TIMEOUT_MS));
 }
 
 /**

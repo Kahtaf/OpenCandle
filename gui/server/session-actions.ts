@@ -287,17 +287,21 @@ export async function promptAndSettle(
   beforeIds: Set<string>,
   observation?: PromptObservation,
   options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> },
+  isCancelled?: () => boolean,
 ): Promise<void> {
   await runSession.prompt(prompt, options);
   await settleWithEventProgress(
     runSession,
     settleIdleGraceMsForPrompt(prompt, runSession.sessionManager.getEntries(), beforeIds),
+    isCancelled,
   );
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
   );
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
+  // A stopped run must not re-send its workflow prompt.
+  if (isCancelled?.()) return;
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
 }
 
@@ -315,6 +319,7 @@ export async function promptAndSettle(
 async function settleWithEventProgress(
   runSession: AgentSession,
   idleGraceMs?: number,
+  isCancelled?: () => boolean,
 ): Promise<void> {
   let progressToken = 0;
   const unsubscribe = runSession.subscribe(() => {
@@ -327,7 +332,10 @@ async function settleWithEventProgress(
         pendingMessageCount: runSession.pendingMessageCount,
         progressToken,
       }),
-      idleGraceMs !== undefined ? { idleGraceMs } : undefined,
+      {
+        ...(idleGraceMs !== undefined ? { idleGraceMs } : {}),
+        ...(isCancelled ? { isCancelled } : {}),
+      },
     );
   } finally {
     unsubscribe();
