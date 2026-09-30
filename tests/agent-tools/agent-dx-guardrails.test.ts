@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,11 +31,21 @@ function makeFixtureRoots(): { from: string; to: string } {
   return { from, to };
 }
 
-function runBootstrap(args: string[]) {
+function runBootstrap(args: string[], env: NodeJS.ProcessEnv = process.env) {
   return spawnSync(process.execPath, [repoPath("scripts/agent-bootstrap.mjs"), ...args], {
     cwd: repoRoot,
     encoding: "utf8",
+    env,
   });
+}
+
+/** Put a fake `codex` that prints the given version first on PATH. */
+function envWithFakeCodex(version: string): NodeJS.ProcessEnv {
+  const root = mkdtempSync(join(tmpdir(), "opencandle-fake-codex-"));
+  tempRoots.push(root);
+  const codexPath = join(root, "codex");
+  writeFileSync(codexPath, `#!/bin/sh\necho "codex-cli ${version}"\n`, { mode: 0o755 });
+  return { ...process.env, PATH: `${root}${delimiter}${process.env.PATH ?? ""}` };
 }
 
 afterEach(() => {
@@ -242,6 +252,60 @@ describe("agent developer guardrails", () => {
       expect(result.stdout).toContain("env: copied (planned, dry-run)");
       expect(existsSync(join(to, ".env"))).toBe(false);
     });
+
+    it.skipIf(process.platform === "win32")(
+      "warns without blocking when codex is older than the review:pr minimum",
+      () => {
+        const { from, to } = makeFixtureRoots();
+
+        const result = runBootstrap(
+          ["--from", from, "--to", to, "--skip-install"],
+          envWithFakeCodex("0.157.1"),
+        );
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toContain(
+          "tool: codex present 0.157.1 (update needed: >= 0.159.0 for review:pr)",
+        );
+        expect(result.stdout).toMatch(/^ready:/m);
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "reports the codex version when it meets the review:pr minimum",
+      () => {
+        const { from, to } = makeFixtureRoots();
+
+        const result = runBootstrap(
+          ["--from", from, "--to", to, "--skip-install"],
+          envWithFakeCodex("0.159.2"),
+        );
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toMatch(/^tool: codex present 0\.159\.2$/m);
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "reports a CODEX_BIN outside PATH instead of calling codex missing",
+      () => {
+        const { from, to } = makeFixtureRoots();
+        const fakeEnv = envWithFakeCodex("0.159.2");
+        const fakeDir = (fakeEnv.PATH ?? "").split(delimiter)[0];
+
+        const result = runBootstrap(["--from", from, "--to", to, "--skip-install"], {
+          ...process.env,
+          PATH: (process.env.PATH ?? "")
+            .split(delimiter)
+            .filter((entry) => !existsSync(join(entry, "codex")))
+            .join(delimiter),
+          CODEX_BIN: join(fakeDir, "codex"),
+        });
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toMatch(/^tool: codex present 0\.159\.2$/m);
+      },
+    );
 
     it("reports real-repo readiness and the canonical proof command", () => {
       const result = runBootstrap(["--skip-install", "--dry-run"]);
