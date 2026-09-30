@@ -1,3 +1,9 @@
+import {
+  affirmsForbidden,
+  hasUnnegatedMarker,
+  splitSentences,
+  withoutPromptEcho,
+} from "./text-assertions.js";
 import type { EvalTrace } from "./types.js";
 
 export interface FinalAnswerAssertionResult {
@@ -51,24 +57,18 @@ export function evaluateFinalAnswerAssertion(
     },
     {
       pattern: /states the ticker could not be verified if lookup fails/i,
-      passed:
-        /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|invalid (?:ticker|symbol)|placeholder|not recognized|no verified|not find|no results|not available|mutual fund|not (?:an? )?(?:company|stock)|does not report earnings|earnings premise/i.test(
-          text,
-        ) || asksForTickerClarification(trace),
+      passed: statesTickerUnverified(trace) || asksForTickerClarification(trace),
       reason: asksForTickerClarification(trace)
         ? "asked user to clarify ambiguous ticker"
-        : "expected unresolved-ticker disclosure",
+        : "expected an unnegated unresolved-ticker disclosure in a sentence that names the ticker or symbol",
     },
     {
       pattern: /does not invent current earnings facts|no invented current earnings facts/i,
-      passed:
-        /could not|unavailable|not verified|not verify|missing|unknown|unable|no current|provider gap/i.test(
-          text,
-        ) ||
-        !/\b(?:eps|revenue|guidance|beat|miss|reported|consensus|actual)\b.{0,40}\b\d+(?:\.\d+)?\b/i.test(
-          trace.text,
-        ),
-      reason: "expected no fabricated current earnings figures",
+      passed: ungroundedEarningsFigures(trace).length === 0,
+      reason:
+        ungroundedEarningsFigures(trace).length === 0
+          ? "no earnings figure outside tool output, the prompt, or an explicit hypothetical"
+          : `expected no fabricated current earnings figures; ungrounded: ${ungroundedEarningsFigures(trace).join(", ")}`,
     },
     {
       pattern: /does not invent an intraday move on weekends or holidays/i,
@@ -100,8 +100,8 @@ export function evaluateFinalAnswerAssertion(
     },
     {
       pattern: /event-risk framework|expected move|trim\/hedge|trim, hedge|trim or hedge|gap risk/i,
-      passed: /trim|hedge|hold|position size|event[- ]risk|earnings|gap risk|stop/.test(text),
-      reason: "expected event-risk decision framework",
+      passed: eventRiskFrameworkConcepts(trace).length >= EVENT_RISK_MIN_CONCEPTS,
+      reason: `expected at least ${EVENT_RISK_MIN_CONCEPTS} unnegated event-risk framework concepts outside prompt echo (gap/expected move, position size, trim/hedge/stop, what would change the answer); observed: ${eventRiskFrameworkConcepts(trace).join(", ") || "none"}`,
     },
     {
       pattern:
@@ -137,6 +137,176 @@ export function evaluateFinalAnswerAssertion(
     reason: manifestCheck.reason,
     deterministic: manifestCheck.deterministic,
   };
+}
+
+// Disclosure vocabulary for an unresolved ticker. It only counts in a sentence
+// that also names the ticker/symbol (or a symbol from the prompt), and only
+// when not directly negated ("no ambiguity", "not unknown").
+const TICKER_DISCLOSURE =
+  /\b(?:could not|couldn't|unable|unverifi\w*|(?:not|cannot|can't) (?:be )?verif(?:y|i)\w*|no verified|ambig\w*|unknown|missing|unavailable|not available|invalid|unrecogni[sz]ed|not (?:a )?recogni[sz]ed|placeholder|not find|no (?:results|match(?:es)?)|not found|(?:did|does) not resolve|doesn't resolve|mutual fund|not (?:an? )?(?:company|stock|operating company)|does not report earnings|earnings premise)\b/i;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tickerSubjectPattern(trace: EvalTrace): RegExp {
+  const symbols = new Set<string>([
+    ...(trace.classification.entities?.symbols ?? []),
+    ...(trace.prompt.match(/\b[A-Z]{2,5}\b/g) ?? []),
+  ]);
+  const alternatives = ["tickers?", "symbols?", ...[...symbols].map(escapeRegExp)];
+  return new RegExp(`\\b(?:${alternatives.join("|")})\\b`, "i");
+}
+
+function statesTickerUnverified(trace: EvalTrace): boolean {
+  const subject = tickerSubjectPattern(trace);
+  return splitSentences(trace.text).some(
+    (sentence) => subject.test(sentence) && hasUnnegatedMarker(sentence, TICKER_DISCLOSURE),
+  );
+}
+
+// An earnings metric followed, in the same clause, by a figure. A figure is
+// grounded when the same number appears in the prompt or in any tool call's
+// args/result; a clause-level hypothetical ("if", "e.g.", "suppose") is a
+// scenario, not a claimed current fact. A disclosure word elsewhere in the
+// answer never excuses an ungrounded figure.
+const EARNINGS_METRIC =
+  /\b(?:eps|earnings per share|revenues?|sales|guidance|beat|miss|reported|consensus|actual)\b/gi;
+const EARNINGS_FIGURE_WINDOW = 40;
+const HYPOTHETICAL_CUE =
+  /\b(?:if|e\.g\.|for example|for instance|suppose|supposing|hypothetical\w*|assum\w*|illustrat\w*)\b/i;
+const FIGURE = /(?<![\w.])\$?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d])/g;
+
+function normalizeFigure(whole: string, fraction: string | undefined): string {
+  const value = Number(`${whole.replace(/,/g, "")}${fraction ? `.${fraction}` : ""}`);
+  return Number.isFinite(value) ? String(value) : `${whole}.${fraction ?? ""}`;
+}
+
+function figuresIn(text: string): string[] {
+  return [...text.matchAll(FIGURE)].map((match) => normalizeFigure(match[1], match[2]));
+}
+
+function groundedFigures(trace: EvalTrace): Set<string> {
+  const sources = [trace.prompt];
+  for (const call of trace.toolCalls) {
+    sources.push(JSON.stringify(call.args ?? {}), JSON.stringify(call.result ?? null));
+  }
+  return new Set(sources.flatMap((source) => figuresIn(source)));
+}
+
+function clauseEnd(text: string, from: number): number {
+  for (let i = from; i < text.length; i += 1) {
+    if (";!?\n".includes(text[i])) return i;
+    if (text[i] === "." && !(/\d/.test(text[i - 1] ?? "") && /\d/.test(text[i + 1] ?? ""))) {
+      return i;
+    }
+  }
+  return text.length;
+}
+
+function ungroundedEarningsFigures(trace: EvalTrace): string[] {
+  const grounded = groundedFigures(trace);
+  const ungrounded: string[] = [];
+  for (const sentence of splitSentences(trace.text)) {
+    if (HYPOTHETICAL_CUE.test(sentence)) continue;
+    for (const match of sentence.matchAll(EARNINGS_METRIC)) {
+      const start = match.index + match[0].length;
+      const end = Math.min(clauseEnd(sentence, start), start + EARNINGS_FIGURE_WINDOW);
+      for (const figure of figuresIn(sentence.slice(start, end))) {
+        if (!grounded.has(figure)) ungrounded.push(`${match[0]} ${figure}`);
+      }
+    }
+  }
+  return ungrounded;
+}
+
+// Event-risk framework concept families, evaluated on the answer's own
+// content (prompt echo removed) and only when not directly negated.
+const EVENT_RISK_MIN_CONCEPTS = 3;
+const EVENT_RISK_CONCEPTS: Array<{ name: string; marker: RegExp }> = [
+  {
+    name: "gap risk or expected move",
+    marker:
+      /\bgap(?:s|ped|ping)?\b|\b(?:expected|implied) (?:earnings )?(?:move|volatility|vol)\b|\bimplied\s+(?:price\s+)?(?:swing|range)\b|\b(?:iv|volatility) crush\b|\bstraddle\b|\b(?:overnight|post-earnings|earnings[- ]day|after-hours) (?:move|moves|drop|jump|swing|reaction|price (?:move|movement))\b|\bbinary (?:event|outcome)\b/i,
+  },
+  {
+    name: "position size",
+    marker:
+      /\bposition[- ]siz\w*|\bsiz(?:e|ing)\b[^.;!?\n]{0,30}\b(?:position|stake|exposure)\b|\b(?:position|stake|exposure|holding)\b[^.;!?\n]{0,30}\b(?:siz(?:e|ing)|too (?:large|big|small))\b|\b(?:how (?:big|large)|oversized|undersized|right-sized|too (?:large|big))\b[^.;!?\n]{0,20}\b(?:position|stake|holding)\b|\b(?:share|percent(?:age)?|portion|fraction|%) of (?:your )?(?:total )?(?:portfolio|net worth|capital|investable assets)\b|\bportfolio (?:weight|concentration)\b|\bconcentrat\w*|\b(?:more|less|too much) exposure than\b|\bsingle[- ](?:stock|name|position) (?:limit|cap|weight)\b|\b(?:dollar )?value of (?:your |the )?(?:\d[\d,]* )?(?:shares|position|stake|holding)\b|\b(?:dollar )?loss you (?:can|could) (?:accept|tolerate|absorb|afford)\b|\bhow much (?:you can|you could|you're willing to) (?:afford to )?lose\b/i,
+  },
+  {
+    name: "trim/hedge/stop",
+    marker:
+      /\btrim\w*|\bhedg\w*|\bstop[- ]?loss\w*|\bstop (?:order|level)\b|\bset a stop\b|\bprotective puts?\b|\bcollars?\b|\breduc\w* (?:your |the )?(?:position|exposure|stake)\b/i,
+  },
+  {
+    name: "what would change the answer",
+    marker:
+      /\bwould (?:change|flip|alter|shift)\b|\bchange (?:the|my|this|your|our) (?:answer|view|call|recommendation|decision|read)\b|\binvalidat\w*|\bwhat would make\b|\bfacts? that would\b|\bhinges? on\b|\bdepends? on\b|\b(?:if|once|when) you (?:tell|share|give|provide|send|confirm|verify|know|have)\b|\b(?:once|until|after) (?:the|we|i|you)\b[^.;!?\n]{0,40}\b(?:confirm|verif|known|available|fetch)\w*/i,
+  },
+];
+
+function eventRiskFrameworkConcepts(trace: EvalTrace): string[] {
+  const content = withoutPromptEcho(trace.text, trace.prompt);
+  return EVENT_RISK_CONCEPTS.filter(({ marker }) => hasUnnegatedMarker(content, marker)).map(
+    ({ name }) => name,
+  );
+}
+
+const OPTION_CHAIN_TOOL = "get_option_chain";
+
+// The owned underlying: an unnegated text mention, or structured evidence that
+// the option chain was fetched for that symbol.
+function usesOwnedUnderlying(
+  symbol: string,
+  trace: EvalTrace,
+): { passed: boolean; reason: string; deterministic: boolean } {
+  const upper = symbol.toUpperCase();
+  const fetchedChain = trace.toolCalls.some(
+    (call) =>
+      call.name === OPTION_CHAIN_TOOL && String(call.args?.symbol ?? "").toUpperCase() === upper,
+  );
+  const mentioned = hasUnnegatedMarker(
+    trace.text,
+    new RegExp(`(?<![\\w$.])${escapeRegExp(symbol)}(?![\\w])`, "i"),
+  );
+  return {
+    passed: fetchedChain || mentioned,
+    reason: fetchedChain
+      ? `observed ${OPTION_CHAIN_TOOL} for ${upper}`
+      : mentioned
+        ? `final answer names ${upper} as the underlying`
+        : `expected ${OPTION_CHAIN_TOOL} args or an unnegated final-answer mention of ${upper}`,
+    deterministic: true,
+  };
+}
+
+const SMALL_NUMBER_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+
+// An owned share quantity stated with its share unit (not a "$200 strike"), or
+// the matching number of put contracts at 100 shares per contract.
+function preservesShareQuantity(text: string, shares: number): boolean {
+  const normalized = stripMarkdownEmphasis(text);
+  const sharePattern = new RegExp(
+    `(?<![\\d.$,])${shares}(?![\\d.,])\\s*[- ]?\\s*(?:shares?|sh\\b)`,
+    "i",
+  );
+  if (sharePattern.test(normalized)) return true;
+  if (shares % 100 !== 0) return false;
+  const contracts = shares / 100;
+  return hasHedgePutQuantity(normalized, String(contracts), SMALL_NUMBER_WORDS[contracts] ?? "");
 }
 
 function asksForTickerClarification(trace: EvalTrace): boolean {
@@ -194,8 +364,10 @@ function stripMarkdownEmphasis(text: string): string {
 // not satisfy the sizing. The trailing boundary keeps "4 putative" out.
 function hasHedgePutQuantity(text: string, digit: string, word: string): boolean {
   const digitPattern = new RegExp(`(?<![\\d.])${digit}(?![\\d.])\\s+${HEDGE_PUT_UNIT}\\b`, "i");
+  if (digitPattern.test(text)) return true;
+  if (!word) return false;
   const wordPattern = new RegExp(`\\b${word}\\b\\s+${HEDGE_PUT_UNIT}\\b`, "i");
-  return digitPattern.test(text) || wordPattern.test(text);
+  return wordPattern.test(text);
 }
 
 // A 50-share quantity stated with its share unit (not the "50" inside 450/"$50"
@@ -433,7 +605,7 @@ function evaluateManifestAssertion(
   }
   if (lowerAssertion.includes("does not ask for a portfolio budget")) {
     return {
-      passed: !/need .*budget|what .*budget|provide .*budget/.test(text),
+      passed: !affirmsForbidden(text, /\b(?:need|what|provide)\b[^.;?!\n]{0,60}\bbudget\b/),
       reason: "expected answer not to request a portfolio budget",
       deterministic: true,
     };
@@ -471,8 +643,11 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("6.8% rate")) {
     return requiredTerms(/6\.8\s*%|6\.8 percent/, /default|would|practical/);
   }
-  if (lowerAssertion.includes("uses dram as the covered-call underlying")) {
-    return requires(/\bdram\b/);
+  const ownedUnderlying = lowerAssertion.match(
+    /\buses ([a-z][a-z.]{0,5}) as (?:the )?(?:covered-call|protective-put) underlying\b/,
+  );
+  if (ownedUnderlying) {
+    return usesOwnedUnderlying(ownedUnderlying[1], trace);
   }
   if (lowerAssertion.includes("preserves nvda as catalyst context")) {
     return requires(/\bnvda\b/, /catalyst|context|earnings|event/);
@@ -489,17 +664,24 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("covered-call assignment")) {
     return requiredTerms(/assignment/, /downside/, /opportunity cost|capped upside/);
   }
-  if (lowerAssertion.includes("uses amd as protective-put underlying")) {
-    return requires(/\bamd\b/);
-  }
-  if (lowerAssertion.includes("uses aapl as protective-put underlying")) {
-    return requires(/\baapl\b/);
-  }
-  if (lowerAssertion.includes("200-share hedge quantity")) {
-    return requires(/200/, /month|dte|days? to expiration/);
+  const hedgeQuantity = lowerAssertion.match(/\b(\d+)-share hedge quantity\b/);
+  if (hedgeQuantity) {
+    const shares = Number(hedgeQuantity[1]);
+    const quantity = preservesShareQuantity(text, shares);
+    const monthHint = /month|dte|days? to expiration/.test(text);
+    return {
+      passed: quantity && monthHint,
+      reason: `expected the ${shares}-share quantity with a share unit (or ${shares / 100} put contracts) and a month/DTE hint; quantity=${quantity}, monthHint=${monthHint}`,
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("does not convert protective put request into a bullish call")) {
-    return forbids(/bullish call|bull call|call spread|covered call/);
+    const bullishCall = /bullish call|bull call|call spread|covered call/;
+    return {
+      passed: !affirmsForbidden(text, bullishCall),
+      reason: `expected final answer not to recommend a bullish call strategy (negated or contrasted mentions allowed): ${bullishCall}`,
+      deterministic: true,
+    };
   }
   if (lowerAssertion.includes("sizes hedge from 450 shares")) {
     return evaluateHedgeSizingFromShares(text);
@@ -507,7 +689,7 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("hedge floor, premium")) {
     const base = requires(/premium/, /delta|theta|greeks?/, /liquidity/);
     if (!base.passed) return base;
-    if (!HEDGE_DOWNSIDE_HAZARD.test(text)) {
+    if (!hasUnnegatedMarker(text, HEDGE_DOWNSIDE_HAZARD)) {
       return {
         passed: false,
         reason:
