@@ -1562,11 +1562,14 @@ function maskOtherHoldingClauses(text: string, grounding: BasisGrounding): strin
     let result = clause;
     for (const number of clause.matchAll(STATED_NUMBER)) {
       const at = number.index ?? 0;
-      // Prefer the nearest preceding symbol; a price before any ticker
-      // ("paid $150 for AAPL") belongs to the nearest following one.
-      const owner =
-        positions.filter((position) => position.index < at).sort((a, b) => b.index - a.index)[0] ??
-        positions.filter((position) => position.index > at).sort((a, b) => a.index - b.index)[0];
+      // The amount belongs to the nearest symbol by gap, preceding on a tie
+      // ("AAPL at $150", "paid $150 for AAPL", "plus $300 for MSFT").
+      const end = at + number[0].length;
+      const gap = (position: { symbol: string; index: number }) =>
+        position.index < at ? at - (position.index + position.symbol.length) : position.index - end;
+      const owner = [...positions].sort(
+        (a, b) => gap(a) - gap(b) || (a.index < at ? -1 : 1) - (b.index < at ? -1 : 1),
+      )[0];
       if (owner !== undefined && owner.symbol !== target) {
         result =
           result.slice(0, at) + " ".repeat(number[0].length) + result.slice(at + number[0].length);
@@ -1711,13 +1714,16 @@ function localLeadIn(
   text: string,
   start: number,
   previousEnd: number,
-): { leadIn: string; afterBasisLabel: boolean } {
+): { leadIn: string; fullLeadIn: string; afterBasisLabel: boolean } {
   const from = Math.max(segmentStart(text, start, CLAUSE_BOUNDARY), previousEnd);
-  const leadIn = text.slice(from, start);
-  const lastAcquisition = [...leadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
-  if (lastAcquisition === undefined) return { leadIn, afterBasisLabel: false };
+  const fullLeadIn = text.slice(from, start);
+  const lastAcquisition = [...fullLeadIn.matchAll(ACQUISITION_CONTEXT)].at(-1);
+  if (lastAcquisition === undefined) {
+    return { leadIn: fullLeadIn, fullLeadIn, afterBasisLabel: false };
+  }
   return {
-    leadIn: leadIn.slice((lastAcquisition.index ?? 0) + lastAcquisition[0].length),
+    leadIn: fullLeadIn.slice((lastAcquisition.index ?? 0) + lastAcquisition[0].length),
+    fullLeadIn,
     afterBasisLabel: BASIS_LABEL.test(lastAcquisition[0]),
   };
 }
@@ -1795,9 +1801,11 @@ function parseStatedNumbers(
     const clauseQuantities = nearestQuantity === undefined ? [] : [nearestQuantity.value];
     const clauseWithoutAmount = `${text.slice(clauseStart, start)} ${text.slice(end, clauseStart + clause.length)}`;
     const sentence = segmentAround(contextText, start, SENTENCE_BOUNDARY);
-    const { leadIn, afterBasisLabel } = localLeadIn(text, start, prevEnd);
+    const { leadIn, fullLeadIn, afterBasisLabel } = localLeadIn(text, start, prevEnd);
+    // Negation anywhere in the lead-in, including before the acquisition
+    // verb ("never bought AAPL at $150"), rejects the amount.
     const isNonBasisContext =
-      NEGATION_CONTEXT.test(leadIn) ||
+      NEGATION_CONTEXT.test(fullLeadIn) ||
       (!afterBasisLabel && (NON_BASIS_CONTEXT.test(leadIn) || TICKER_QUOTE_CONTEXT.test(leadIn)));
     const acquisitionInClause = [...clause.matchAll(ACQUISITION_CONTEXT)].length > 0;
     return {

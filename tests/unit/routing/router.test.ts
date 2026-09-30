@@ -3715,6 +3715,29 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBeUndefined();
   });
 
+  it("honors negation before the acquisition verb", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I never bought AAPL at $150; I inherited it. Covered calls?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("attaches each amount to its genuinely nearest ticker", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid $150 for AAPL plus $300 for MSFT; covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL", "MSFT"], costBasis: 300 }),
+    );
+    const own = await route(
+      { ...BASE_INPUT, text: "I paid $150 for AAPL plus $300 for MSFT; covered calls on AAPL?" },
+      outputFor({ symbols: ["AAPL", "MSFT"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+    expect(own.entities.costBasis).toBe(150);
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {
