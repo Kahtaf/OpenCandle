@@ -130,6 +130,16 @@ export function getCodexVersion({ runCommand = defaultRunCommand } = {}) {
   return version ? { status: "ok", version } : { status: "unknown" };
 }
 
+/**
+ * Whether review:pr will run the Codex engine. Autoreview defaults to Codex but
+ * honors AUTOREVIEW_ENGINE (claude, droid, copilot), where the keyed
+ * `codex=gpt-6.1-sol` model does not apply and Codex need not be installed.
+ */
+export function reviewUsesCodex(env = process.env) {
+  const engine = env.AUTOREVIEW_ENGINE;
+  return !engine || engine === "codex";
+}
+
 /** Check the installed Codex CLI against `minVersion`. */
 export function checkCodexVersion(minVersion = MIN_CODEX_VERSION, options = {}) {
   if (!VERSION_PATTERN.test(minVersion)) {
@@ -166,7 +176,7 @@ function isMain() {
   return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 }
 
-if (isMain()) {
+if (isMain() && reviewUsesCodex()) {
   try {
     const result = checkCodexVersion(process.argv[2] ?? MIN_CODEX_VERSION);
     if (!result.ok) {

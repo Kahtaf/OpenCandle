@@ -286,6 +286,27 @@ describe("agent developer guardrails", () => {
       },
     );
 
+    it.skipIf(process.platform === "win32")(
+      "reports a CODEX_BIN outside PATH instead of calling codex missing",
+      () => {
+        const { from, to } = makeFixtureRoots();
+        const fakeEnv = envWithFakeCodex("0.159.2");
+        const fakeDir = (fakeEnv.PATH ?? "").split(delimiter)[0];
+
+        const result = runBootstrap(["--from", from, "--to", to, "--skip-install"], {
+          ...process.env,
+          PATH: (process.env.PATH ?? "")
+            .split(delimiter)
+            .filter((entry) => !existsSync(join(entry, "codex")))
+            .join(delimiter),
+          CODEX_BIN: join(fakeDir, "codex"),
+        });
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toMatch(/^tool: codex present 0\.159\.2$/m);
+      },
+    );
+
     it("reports real-repo readiness and the canonical proof command", () => {
       const result = runBootstrap(["--skip-install", "--dry-run"]);
 

@@ -137,8 +137,9 @@ function commandIsPresent(command) {
 // Codex is optional for bootstrap, so an outdated version only warns: it
 // matters for `npm run review:pr`, which enforces the minimum itself.
 function describeCodex() {
-  if (!commandIsPresent("codex")) return "missing";
+  // getCodexVersion resolves CODEX_BIN and PATH exactly like autoreview.
   const detected = getCodexVersion();
+  if (detected.status === "missing") return "missing";
   if (detected.status !== "ok") return "present (version unknown)";
   if (compareVersions(detected.version, MIN_CODEX_VERSION) < 0) {
     return `present ${detected.version} (update needed: >= ${MIN_CODEX_VERSION} for review:pr)`;

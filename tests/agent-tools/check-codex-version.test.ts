@@ -10,6 +10,7 @@ import {
   MIN_CODEX_VERSION,
   parseCodexVersion,
   resolveCodexBinary,
+  reviewUsesCodex,
 } from "../../scripts/check-codex-version.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -193,6 +194,27 @@ describe.skipIf(process.platform === "win32")("check-codex-version CLI binary se
     delete env.CODEX_BIN;
 
     const result = runCli(env);
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+});
+
+describe("reviewUsesCodex", () => {
+  it("checks Codex only when autoreview will run the Codex engine", () => {
+    expect(reviewUsesCodex({})).toBe(true);
+    expect(reviewUsesCodex({ AUTOREVIEW_ENGINE: "codex" })).toBe(true);
+    for (const engine of ["claude", "droid", "copilot"]) {
+      expect(reviewUsesCodex({ AUTOREVIEW_ENGINE: engine })).toBe(false);
+    }
+  });
+
+  it("skips the CLI check for a non-Codex engine even with no codex installed", () => {
+    const env = { ...process.env, AUTOREVIEW_ENGINE: "claude", PATH: "", CODEX_BIN: "" };
+    const result = spawnSync(
+      process.execPath,
+      [resolve(repoRoot, "scripts/check-codex-version.mjs")],
+      { cwd: repoRoot, encoding: "utf8", env },
+    );
 
     expect(result.status, result.stderr).toBe(0);
   });
