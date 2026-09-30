@@ -175,7 +175,14 @@ export function presentsQuoteFigures(text: string | undefined): boolean {
   if (/\$\s?\d/.test(text)) return true;
   const vocabulary = QUOTE_VOCABULARY.source;
   if (new RegExp(`${vocabulary}[^\\n;!?]{0,25}?\\d`, "i").test(text)) return true;
-  if (/\d[^\n;]{0,15}?\b(?:dollars?|usd|per\s+(?:contract|share))\b/i.test(text)) return true;
+  // The amount may also come first: "4.80 bid", "4.80 / 5.00 bid/ask", "480 per contract".
+  if (
+    new RegExp(
+      `\\d[^\\n;!?]{0,15}?(?:${vocabulary}|\\b(?:dollars?|usd|per\\s+(?:contract|share))\\b)`,
+      "i",
+    ).test(text)
+  )
+    return true;
   const lines = text.split("\n");
   const header = lines.findIndex((line) => line.includes("|") && QUOTE_VOCABULARY.test(line));
   return (

@@ -207,6 +207,9 @@ describe("options_screener quote freshness gate", () => {
     "Bid: 4 dollars on the 210 strike.",
     "| Strike | Premium |\n| 210 | 480 |",
     "The 210 call has a premium of 4.80 per share.",
+    "The 210 call shows 4.80 bid.",
+    "The 210 call costs 4.80 premium.",
+    "The 210 call: 4.80 / 5.00 bid/ask.",
   ])("treats integer premiums as quote figures: %s", async (text) => {
     const evidence = await chainEvidence(afterHoursFixture);
     expect(
