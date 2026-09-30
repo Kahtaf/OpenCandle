@@ -112,10 +112,10 @@ const AFFIRMATIVE_NON_LIVE_PATTERNS: readonly RegExp[] = [
 
 /** Phrases whose negation is the disclosure itself ("not live", "no live quotes"). */
 const NEGATED_NON_LIVE_PATTERNS: readonly RegExp[] = [
-  /\b(?:not|isn'?t|aren'?t|wasn'?t|weren'?t)\s+(?:currently\s+|yet\s+)?(?:live|executable|tradable|tradeable|firm|real[- ]?time)\b/i,
-  /\bnon[- ]?(?:live|executable|tradable|tradeable)\b/i,
-  /\bno\s+live\s+(?:quotes?|bid|ask|bid\/ask|prices?|premiums?|market)\b/i,
-  /\bcan(?:not|'t|\s+not)\s+be\s+(?:executed|traded|filled)\b/i,
+  /\b(?:not|isn'?t|aren'?t|wasn'?t|weren'?t)\s+(?:currently\s+|yet\s+)?(?:live|executable|tradable|tradeable|firm|real[- ]?time)\b/gi,
+  /\bnon[- ]?(?:live|executable|tradable|tradeable)\b/gi,
+  /\bno\s+live\s+(?:quotes?|bid|ask|bid\/ask|prices?|premiums?|market)\b/gi,
+  /\bcan(?:not|'t|\s+not)\s+be\s+(?:executed|traded|filled)\b/gi,
 ];
 
 /** A negation in the few words before a phrase, e.g. "are not from the". */
@@ -137,16 +137,19 @@ const LIVE_CLAIM =
 export function disclosesNonLiveQuotes(text: string | undefined): boolean {
   if (!text) return false;
   if (LIVE_CLAIM.test(text)) return false;
-  if (NEGATED_NON_LIVE_PATTERNS.some((pattern) => pattern.test(text))) return true;
-  return AFFIRMATIVE_NON_LIVE_PATTERNS.some((pattern) => {
-    for (const match of text.matchAll(pattern)) {
-      const clause = clauseBefore(text, match.index);
-      const subClause = clause.slice(clause.lastIndexOf(",") + 1);
-      if (PRECEDING_NEGATION.test(clause) || PRECEDING_CONDITIONAL.test(subClause)) continue;
-      return true;
-    }
-    return false;
-  });
+  // Any phrase in a conditional ("if these quotes are not live") is hypothetical,
+  // not a disclosure; affirmative phrases must also not be negated.
+  const counts = (index: number, checkNegation: boolean): boolean => {
+    const clause = clauseBefore(text, index);
+    const subClause = clause.slice(clause.lastIndexOf(",") + 1);
+    if (PRECEDING_CONDITIONAL.test(subClause)) return false;
+    return !(checkNegation && PRECEDING_NEGATION.test(clause));
+  };
+  const matches = (patterns: readonly RegExp[], checkNegation: boolean): boolean =>
+    patterns.some((pattern) =>
+      [...text.matchAll(pattern)].some((match) => counts(match.index, checkNegation)),
+    );
+  return matches(NEGATED_NON_LIVE_PATTERNS, false) || matches(AFFIRMATIVE_NON_LIVE_PATTERNS, true);
 }
 
 /** Text of the current clause before `index` (bounded, stops at clause breaks). */

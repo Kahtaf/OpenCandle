@@ -135,6 +135,7 @@ describe("options quote freshness disclosure", () => {
     "The options market is in after-hours trading.",
     "If you trade, note these are last-session quotes.",
     "Quotes are not live, so treat the premiums shown as a guide.",
+    "If you trade, note these quotes are not live.",
   ])("accepts common non-live phrasing: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(true);
   });
@@ -153,6 +154,8 @@ describe("options quote freshness disclosure", () => {
     "Quotes are last-session carryovers? No, the premiums above are executable now.",
     "Buy the $210 call at the market open for $4.80.",
     "Enter the order when the market opens.",
+    "If these quotes are not live, recheck them tomorrow; the premium is 4.80.",
+    "In case bid/ask are non-executable, use limit orders.",
   ])("rejects negated, hypothetical, or contradicted non-live wording: %s", (text) => {
     expect(disclosesNonLiveQuotes(text)).toBe(false);
   });
