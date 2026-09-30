@@ -320,6 +320,79 @@ describe("chat-run Stop while a tool call is executing", () => {
     await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
   }, 15_000);
 
+  it("names the run that owns a busy session so a Retry only waits on its own stopped run", async () => {
+    entries.length = 0;
+    snapshotsAtBroadcast.length = 0;
+    scenario = toolRunningScenario;
+    const actionId = "chat-busy-owner";
+    const started = new Promise<void>((resolve) => {
+      toolStarted = resolve;
+    });
+    const runPromise = fetch(`${endpoint}/api/sessions/${sessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId, prompt: "What is AAPL trading at?", sessionId }),
+    });
+    await started;
+
+    const second = await fetch(`${endpoint}/api/sessions/${sessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: "chat-busy-second", prompt: "Retry", sessionId }),
+    });
+    expect(second.status).toBe(409);
+    await expect(second.json()).resolves.toMatchObject({
+      code: "session_busy",
+      activeActionId: actionId,
+    });
+
+    await fetch(`${endpoint}/api/sessions/${sessionId}/run-cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: `stop-${actionId}`, targetActionId: actionId }),
+    });
+    await (await runPromise).text();
+    await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false));
+  });
+
+  it("frees the session promptly when Stop ends a multi-step workflow run", async () => {
+    // A workflow prompt widens the settle idle grace (the next step may still
+    // be on its way). A stopped workflow sends no further steps, so the run
+    // must not hold the session busy for that grace: a Retry right after Stop
+    // was rejected with 409 session_busy for about 30 seconds.
+    entries.length = 0;
+    snapshotsAtBroadcast.length = 0;
+    scenario = toolRunningScenario;
+    const actionId = "chat-stop-workflow-grace";
+    const started = new Promise<void>((resolve) => {
+      toolStarted = resolve;
+    });
+    const runPromise = fetch(`${endpoint}/api/sessions/${sessionId}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId, prompt: "Analyze AAPL", sessionId }),
+    });
+    await started;
+    const response = await runPromise;
+    expect(response.status).toBe(200);
+
+    const stoppedAt = Date.now();
+    const stop = await fetch(`${endpoint}/api/sessions/${sessionId}/run-cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...trustedHeaders },
+      body: JSON.stringify({ actionId: `stop-${actionId}`, targetActionId: actionId }),
+    });
+    await expect(stop.json()).resolves.toEqual({ ok: true, cancelled: true, duplicate: false });
+
+    const body = await response.text();
+    expect(body).toContain("Run stopped.");
+    await vi.waitFor(() => expect(runRegistry.has(sessionId)).toBe(false), {
+      timeout: 10_000,
+      interval: 25,
+    });
+    expect(Date.now() - stoppedAt).toBeLessThan(5_000);
+  }, 45_000);
+
   function push(message: Record<string, unknown>): void {
     entries.push({
       id: `entry-${entries.length}`,

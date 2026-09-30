@@ -1,3 +1,4 @@
+import { withCurrentAbortSignal } from "../infra/abort-context.js";
 import { cache, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
@@ -255,7 +256,7 @@ async function fetchText(url: string): Promise<string> {
   await rateLimiter.acquire("sec_edgar");
   const response = await fetch(url, {
     headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
-    signal: AbortSignal.timeout(SEC_DOCUMENT_FETCH_TIMEOUT_MS),
+    signal: withCurrentAbortSignal(AbortSignal.timeout(SEC_DOCUMENT_FETCH_TIMEOUT_MS)),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
   return response.text();

@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, CircleSlash } from "lucide-react";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { cn } from "../../lib/utils.js";
@@ -17,6 +17,7 @@ export function ToolDrawerStep({ step, isLast }) {
   const isPending = step.status === "pending";
   const isError = step.status === "error";
   const isComplete = step.status === "completed";
+  const isCancelled = step.status === "cancelled";
 
   return (
     <li className="grid grid-cols-[28px_minmax(0,1fr)]">
@@ -48,6 +49,11 @@ export function ToolDrawerStep({ step, isLast }) {
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
               <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
               Completed
+            </span>
+          ) : isCancelled ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <CircleSlash className="h-3 w-3" aria-hidden="true" />
+              Stopped
             </span>
           ) : null}
         </div>

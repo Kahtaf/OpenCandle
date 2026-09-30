@@ -2,7 +2,7 @@ import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
 import { normalizeToolOutput } from "../shared/tool-output.js";
-import { userStoppedAssistantEntries } from "./run-stop-marker.js";
+import { RUN_STOPPED_CUSTOM_TYPE, userStoppedAssistantEntries } from "./run-stop-marker.js";
 
 export interface SessionEventOptions {
   sessionId: string;
@@ -31,6 +31,8 @@ export function sessionEntriesToChatEvents(
   let lastEntryWasUserMessage = false;
   let lastUserCompletedEventIndex: number | null = null;
   let lastRetryPrompt: string | null = null;
+  // Whether the current user turn already ends in a Stopped or failure notice.
+  let turnHasTerminalNotice = false;
   const workflowSteps = workflowStepMetadata(entries);
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
@@ -58,6 +60,13 @@ export function sessionEntriesToChatEvents(
 
     if (entry.type === "custom_message") {
       lastEntryWasUserMessage = false;
+      const customType = (entry as { customType?: unknown }).customType;
+      if (
+        customType === "opencandle-model-run-failed" ||
+        customType === "opencandle-run-cancelled"
+      ) {
+        turnHasTerminalNotice = true;
+      }
       const messageId = entry.id;
       events.push({
         type: "custom.message",
@@ -116,6 +125,28 @@ export function sessionEntriesToChatEvents(
         details: originalText ? { ...details, prompt: originalText } : details,
         seq: seq++,
       });
+      turnHasTerminalNotice = true;
+      continue;
+    }
+
+    // A recorded user Stop that no aborted reply carries: the Stop landed
+    // while a workflow sat idle between steps, after every tool returned.
+    // Without a notice the turn would read as finished.
+    if (isCustomEntry(entry, RUN_STOPPED_CUSTOM_TYPE)) {
+      lastEntryWasUserMessage = false;
+      if (!turnHasTerminalNotice) {
+        const prompt = stringField(customEntryData(entry), "prompt") || lastRetryPrompt;
+        events.push({
+          type: "custom.message",
+          sessionId: options.sessionId,
+          messageId: `stopped-${entry.id}`,
+          customType: "opencandle-run-cancelled",
+          content: [{ type: "text", text: "Run stopped before it finished." }],
+          details: { reason: "stopped", ...(prompt ? { prompt } : {}) },
+          seq: seq++,
+        });
+        turnHasTerminalNotice = true;
+      }
       continue;
     }
 
@@ -127,6 +158,7 @@ export function sessionEntriesToChatEvents(
     const messageId = entry.id;
 
     if (message.role === "user") {
+      turnHasTerminalNotice = false;
       const workflowStep = workflowSteps.get(messageId);
       if (!workflowStep || workflowStep.preserveUserTurn) {
         const content = userMessageContent(message.content, pendingOriginalInput);
@@ -175,6 +207,7 @@ export function sessionEntriesToChatEvents(
       const userStopped = userStoppedAssistants.has(messageId);
       const failure = userStopped ? null : assistantFailure(message);
       if (failure) {
+        turnHasTerminalNotice = true;
         if (!assistantErrorsWithExplicitFailure.has(messageId)) {
           events.push({
             type: "custom.message",
@@ -206,6 +239,7 @@ export function sessionEntriesToChatEvents(
         events.push(
           stoppedAssistantEvent(options.sessionId, messageId, false, stoppedRetryPrompt, seq++),
         );
+        turnHasTerminalNotice = true;
         continue;
       }
       events.push({
@@ -250,6 +284,7 @@ export function sessionEntriesToChatEvents(
         events.push(
           stoppedAssistantEvent(options.sessionId, messageId, true, stoppedRetryPrompt, seq++),
         );
+        turnHasTerminalNotice = true;
       }
       continue;
     }

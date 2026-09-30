@@ -709,7 +709,15 @@ async function handleSseChatRun(
       throw error;
     }
     if (!result.ok) {
-      writeJson(res, { error: result.message, code: result.code }, 409);
+      writeJson(
+        res,
+        {
+          error: result.message,
+          code: result.code,
+          ...(result.activeActionId ? { activeActionId: result.activeActionId } : {}),
+        },
+        409,
+      );
       return;
     }
     if (result.duplicate && !res.headersSent) {
@@ -919,8 +927,22 @@ async function streamAcceptedSseChatRun({
   actionId: string;
 }): Promise<boolean> {
   const prompt = parsedRun.prompt;
+  // Name the run that owns the session so a client that just stopped that
+  // run can wait for its release without queueing behind any other run.
+  const writeSessionBusy = () => {
+    const activeActionId = activeGuiRuns.activeActionId(sessionId);
+    writeJson(
+      res,
+      {
+        error: "Session already has an active run",
+        code: "session_busy",
+        ...(activeActionId ? { activeActionId } : {}),
+      },
+      409,
+    );
+  };
   if (activeRunSessionIds.has(sessionId)) {
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   // Register ownership before any await or session creation so a Stop that
@@ -928,7 +950,7 @@ async function streamAcceptedSseChatRun({
   const runHandle = activeGuiRuns.start({ sessionId, actionId });
   if (!runHandle) {
     // A concurrent start won admission before activeRunSessionIds was set.
-    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    writeSessionBusy();
     return false;
   }
   let runCancellationState: SessionCancellationState | null = null;
@@ -1047,7 +1069,7 @@ async function streamAcceptedSseChatRun({
   // token cancel above only reaches the extension input hook, which slash
   // commands such as `/analyze` never pass through.
   const cancelledDuringSetup = runHandle.cancelRequested;
-  if (!cancelledDuringSetup && !prompt.startsWith("/") && !runSessionManager.getSessionName()) {
+  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
   const beforeEntries = runSessionManager.getEntries();
@@ -1103,9 +1125,20 @@ async function streamAcceptedSseChatRun({
 
   try {
     if (cancelledDuringSetup) {
-      // Nothing was dispatched: no pending action, no input marker, no turn.
-      // Settle as a stopped run, never as a completed one; finally releases
-      // ownership and ends the stream.
+      // Nothing was dispatched: no pending action and no turn. Record the
+      // prompt as a stopped turn, the same trace the extension input hook
+      // writes for a turn stopped while routing, and persist it: a new chat
+      // has no session file until Pi flushes its first assistant reply, so
+      // without this a reload of the session URL opened an empty chat. The
+      // action stays unaccepted so Retry mints a fresh run. Settle as a
+      // stopped run, never as a completed one; finally releases ownership and
+      // ends the stream.
+      appendOriginalInputMarker();
+      runSessionManager.appendCustomEntry("opencandle-run-cancelled", {
+        text: dispatchedPrompt || prompt,
+      });
+      persistUnflushedSession(runSessionManager);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
       writeSse(res, {
         type: "run.failed",
         runId,
@@ -1142,6 +1175,7 @@ async function streamAcceptedSseChatRun({
         beforeIds,
         observation,
         promptImages.length > 0 ? { images: promptImages } : undefined,
+        () => runHandle.cancelRequested,
       );
       if (runHandle.cancelRequested) {
         // User stopped this run. Keep it terminal: the extension records an
