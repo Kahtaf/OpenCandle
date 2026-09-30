@@ -124,10 +124,13 @@ describe("hosted PWA assets", () => {
     expect(entry).toContain("host.dispose()");
   });
 
-  it("does not reload when the service worker first claims an uncontrolled page", () => {
+  it("registers the worker through the update-aware helper outside dev", () => {
+    // First-claim and update announcement behavior is covered by
+    // service-worker-registration.test.ts; the entry must route through it.
     const entry = readFileSync(resolve(root, "gui/hosted/src/main.jsx"), "utf8");
-    expect(entry).toContain("Boolean(navigator.serviceWorker.controller)");
-    expect(entry).toContain("if (!reloadForUpdate)");
+    expect(entry).toContain('from "./service-worker-registration.js"');
+    expect(entry).toContain("registerHostedServiceWorker({ runtimeHost: host })");
+    expect(entry).toContain("!import.meta.env.DEV");
   });
 
   it("loads the WebContainer engine only when the hosted runtime boots", () => {

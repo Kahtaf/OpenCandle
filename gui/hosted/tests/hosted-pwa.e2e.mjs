@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +36,10 @@ const port = process.env.OPENCANDLE_HOSTED_TEST_PORT
   ? Number.parseInt(process.env.OPENCANDLE_HOSTED_TEST_PORT, 10)
   : 30_000 + (process.pid % 20_000);
 const origin = `http://127.0.0.1:${port}`;
+// The real-update stage swaps the preview server's worker script on disk; the
+// original is kept here so the finally block can restore the build output.
+const builtServiceWorker = new URL("../dist/sw.js", import.meta.url);
+let originalServiceWorker = null;
 const openAiModel = String(process.env.OPENCANDLE_HOSTED_E2E_OPENAI_MODEL || "gpt-6-luna");
 
 // Model and data credentials are read only in the live lane, so the default
@@ -212,6 +216,9 @@ try {
     "credential-holding shell CSP",
   );
   assert(await page.evaluate(() => globalThis.crossOriginIsolated), "cross-origin isolation");
+  // Check before the runtime boot settles: a later remount of the status pill
+  // re-reads the registration and can hide a stray first-install offer.
+  await assertNoUpdateOfferOnFirstInstall(page);
   await waitForText(page, "Market research, on your machine", 120_000);
   // Let the first WebContainer boot settle before checking PWA registration.
   // A newly opened page below proves service-worker control without replacing
@@ -650,6 +657,7 @@ try {
           detail: {
             registration: {
               waiting: {
+                state: "installed",
                 postMessage(message) {
                   globalThis.__opencandleUpdateMessages.push(message);
                 },
@@ -743,6 +751,24 @@ try {
 
     await follower.close();
     await mobile.close();
+    // Activating an update reloads every tab it controls, so this runs once
+    // the follower and mobile tabs are closed and cannot take the writer role
+    // mid-stage. The synthetic handoff's fake worker was dropped by the reload
+    // in "clear model key".
+    stage = "real service worker update";
+    assert((await updateOffer(page).count()) === 0, "no update offer before a new worker exists");
+    await publishUpdatedServiceWorker();
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+    await updateOffer(page).waitFor({ state: "visible", timeout: 60_000 });
+    const beforeUpdate = await markDocument(page);
+    await updateOffer(page).click();
+    await waitForReloadedDocument(page, beforeUpdate, 120_000);
+    assert(
+      (await page.evaluate(() => caches.keys())).some((key) => key.endsWith("-e2e-update")),
+      "the reloaded page runs under the updated worker",
+    );
+    assert((await updateOffer(page).count()) === 0, "the update offer clears once installed");
+
     stage = "clear and restore";
     await openHostedDataSettings(page);
     await page.getByRole("button", { name: "Clear all", exact: true }).click();
@@ -821,6 +847,7 @@ try {
   process.exitCode = 1;
 } finally {
   await browser?.close();
+  if (originalServiceWorker !== null) await writeFile(builtServiceWorker, originalServiceWorker);
   if (server.pid !== undefined) {
     try {
       process.kill(-server.pid, "SIGTERM");
@@ -849,6 +876,41 @@ async function assertInstallable(page) {
   assert(manifest.icons.some((icon) => icon.sizes === "192x192"), "192px icon");
   assert(manifest.icons.some((icon) => icon.sizes === "512x512"), "512px icon");
   await page.evaluate(() => navigator.serviceWorker.ready);
+}
+
+// A first install passes through `registration.waiting` on its way to
+// activation. That is not an update, so a brand-new profile must never offer
+// one (#219). Wait for the worker to take control, then give any stray
+// announcement time to render before asserting the offer is absent.
+async function assertNoUpdateOfferOnFirstInstall(page) {
+  await waitFor(
+    () => page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+    30_000,
+    "service worker control after the first install",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  assert((await updateOffer(page).count()) === 0, "first install without an update offer");
+}
+
+// Publish a changed worker script so the browser finds a genuine update.
+// Playwright routing does not see the browser's worker-script update check, so
+// the preview server's copy changes on disk. The changed copy stays in place
+// for the rest of the run, or a later update check would see the original as
+// yet another update; the finally block restores the build output.
+async function publishUpdatedServiceWorker() {
+  originalServiceWorker ??= await readFile(builtServiceWorker, "utf8");
+  const updated = originalServiceWorker.replace(
+    /const CACHE_NAME = "([^"]+)";/,
+    'const CACHE_NAME = "$1-e2e-update";',
+  );
+  assert(updated !== originalServiceWorker, "built service worker exposes its cache name");
+  await writeFile(builtServiceWorker, updated);
+}
+
+function updateOffer(page) {
+  // Count the offer in the DOM, not the accessibility tree: an open dialog
+  // hides the rest of the page from role queries.
+  return page.locator("button", { hasText: "Install update?" });
 }
 
 // Clear all and archive import finish with location.reload(). The old document

@@ -30,6 +30,8 @@
 
 ### Fixed
 
+- The hosted web app no longer shows "Install update?" on a first visit, and clicking it for a real update now installs the new version and reloads onto it.
+- The GUI now checks for watchlist, portfolio, and alert changes with one shared request at a time, pauses while the tab is hidden, and refreshes as soon as you return.
 - The headless harness `run` command now waits for multi-step workflows to finish before reporting done, and reports `incomplete` with a distinct exit code when the timeout expires first.
 - Portfolio and comparison workflows now pick a supported risk lookback window for any investment horizon, so 3-year, 10-year, or 18-month plans no longer make rejected risk or correlation calls.
 - Covered-call answers no longer assume a cost basis you never gave; a basis is used only when it matches a price you stated, a total you paid divided by your share count, or a saved position, and is otherwise reported as not provided.
