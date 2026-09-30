@@ -393,6 +393,22 @@ describe("findUnresolvedToolCalls", () => {
       },
     ]);
   });
+
+  // Pi never executes the tool calls of an assistant reply that ended in an
+  // abort or error (a Stop while the model was streaming a tool call), so no
+  // result will ever arrive for them. Waiting on them stalls a stopped run.
+  it.each(["aborted", "error"])("ignores tool calls of a %s assistant reply", (stopReason) => {
+    expect(
+      findUnresolvedToolCalls([
+        messageEntry("a1", {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "call-cut", name: "get_stock_quote", arguments: {} }],
+          stopReason,
+          errorMessage: "This operation was aborted",
+        }),
+      ]),
+    ).toEqual([]);
+  });
 });
 
 function messageEntry(id: string, message: unknown) {

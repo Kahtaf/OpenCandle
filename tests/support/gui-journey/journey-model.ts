@@ -15,6 +15,12 @@ export const QUOTE_PROMPT = "What is AAPL trading at?";
 export const SECOND_PROMPT = "What is MSFT trading at?";
 export const PREFERENCE_PROMPT = "I am an aggressive investor with a long time horizon.";
 export const ASK_USER_PROMPT = "Ask me which horizon I want and then give the plan.";
+/**
+ * Opens an ask_user question; once Stop cancels it, the follow-up model
+ * request fails with an abort-shaped error (persisted as stopReason "error"),
+ * the shape a real provider leaves after a Stop during a tool call.
+ */
+export const ASK_USER_STOP_PROMPT = "Ask me which horizon I want, unless I press Stop first.";
 /** Holds the router model response so the run is active before the router settles. */
 export const CANCEL_PROMPT = "Hold the NVDA router while I think about it.";
 /** Holds the native Pi answer stream (the main-agent text after the tool result). */
@@ -102,6 +108,9 @@ export function createJourneyModelScript(
     }
 
     const toolText = toolResultText(request);
+    if (lastUserText.includes("unless I press Stop") && toolText.includes("User cancelled")) {
+      return { kind: "error", message: "This operation was aborted" };
+    }
     if (toolText.includes("User answered:")) {
       const answer = toolText.split("User answered:")[1]?.trim() ?? "";
       return {
@@ -171,6 +180,7 @@ function titleForPrompt(text: string): string {
   if (text.includes("AAPL")) return "AAPL quote journey";
   if (text.includes("MSFT")) return "MSFT quote journey";
   if (text.includes("aggressive")) return "Aggressive investor profile";
+  if (text.includes("unless I press Stop")) return "Horizon stop probe";
   if (text.includes("Ask me which horizon")) return "Horizon plan";
   if (text.includes("Hold the NVDA router")) return "NVDA router hold probe";
   if (text.includes("Stream the NVDA answer")) return "NVDA answer hold probe";

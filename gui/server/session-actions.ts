@@ -19,6 +19,7 @@ import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
 interface AskUserBridge {
   answer(id: string, answer: string): boolean;
   cancel(id: string): boolean;
+  has?(id: string, sessionId?: string): boolean;
 }
 
 interface SessionActionsRuntime {
@@ -108,22 +109,36 @@ export function createSessionActionsController({
   ): Promise<void> {
     const answer = String(value ?? "").trim();
     if (!answer) throw new Error("Answer cannot be empty");
-    if (shouldProxyAskUserAction(action)) {
-      if (await proxyAskUserAction("ask_user.answer", { id, answer }, action)) return;
-      throw new Error("OpenCandle is reconnecting to this session.");
-    }
-    await runCoordinatedSessionAction("ask_user.answer", { id, answer }, action, async () => {
-      if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
-    });
+    await routeAskUserAction("ask_user.answer", id, { id, answer }, action, () =>
+      askUserBridge.answer(id, answer),
+    );
   }
 
   async function handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void> {
-    if (shouldProxyAskUserAction(action)) {
-      if (await proxyAskUserAction("ask_user.cancel", { id }, action)) return;
-      throw new Error("OpenCandle is reconnecting to this session.");
+    await routeAskUserAction("ask_user.cancel", id, { id }, action, () => askUserBridge.cancel(id));
+  }
+
+  /**
+   * Settle a question here when this process owns it, and proxy only when
+   * another live process holds the target session's run. A reopened
+   * (non-current) session whose run this process started holds its question
+   * in this process's bridge; proxying it would target this process itself.
+   */
+  async function routeAskUserAction(
+    actionType: "ask_user.answer" | "ask_user.cancel",
+    id: string,
+    payload: Record<string, unknown>,
+    action: SessionActionMeta | undefined,
+    settle: () => boolean,
+  ): Promise<void> {
+    const ownsPrompt = askUserBridge.has?.(id, action?.sessionId?.trim() || undefined) ?? false;
+    if (!ownsPrompt && shouldProxyAskUserAction(action)) {
+      const route = await proxyAskUserAction(actionType, payload, action);
+      if (route === "proxied") return;
+      if (route === "unavailable") throw new Error("OpenCandle is reconnecting to this session.");
     }
-    await runCoordinatedSessionAction("ask_user.cancel", { id }, action, async () => {
-      if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
+    await runCoordinatedSessionAction(actionType, payload, action, async () => {
+      if (!settle()) throw new Error("Unknown or resolved question");
     });
   }
 
@@ -206,18 +221,23 @@ export function createSessionActionsController({
     if (!result.ok) throw new Error(result.message);
   }
 
+  /**
+   * "proxied": another process accepted the action. "local": this process is
+   * the session's run owner (or the proxy target), so settle it here.
+   * "unavailable": the owner cannot be reached.
+   */
   async function proxyAskUserAction(
     actionType: "ask_user.answer" | "ask_user.cancel",
     payload: Record<string, unknown>,
     action: SessionActionMeta | undefined,
-  ): Promise<boolean> {
-    if (action?.allowProxy === false) return false;
+  ): Promise<"proxied" | "local" | "unavailable"> {
+    // allowProxy: false marks the coordinator receiver; re-proxying loops.
+    if (action?.allowProxy === false) return "local";
     const sessionManager = await resolveActionSessionManager(action);
     const lock = readWriterLock(writerLockScopeForSession(sessionManager));
-    if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
-      return false;
-    }
-    if (lock.processKind === "tui") return false;
+    if (!lock || lock.pid === process.pid) return role === "writer" ? "local" : "unavailable";
+    if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return "unavailable";
+    if (lock.processKind === "tui") return "unavailable";
     const endpoint = new URL("/api/local-coordinator/ask-user", lock.coordinatorEndpoint);
     let response: Response;
     try {
@@ -235,9 +255,9 @@ export function createSessionActionsController({
         }),
       });
     } catch {
-      return false;
+      return "unavailable";
     }
-    if (response.ok) return true;
+    if (response.ok) return "proxied";
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error || "OpenCandle is reconnecting to this session.");
   }

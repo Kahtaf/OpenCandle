@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
+import { notifySessionActionError } from "../lib/session-action-errors.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -55,6 +56,32 @@ export function resolveModelSetupErrorFromSocketError(message, options = {}) {
   const pendingActionId = String(options.pendingModelKeySaveActionId || "");
   if (actionId && pendingActionId && actionId === pendingActionId) return text;
   return text.startsWith("Key was rejected by ") ? text : "";
+}
+
+/**
+ * Apply a socket `error` frame: tell the request that caused it (by its
+ * echoed actionId), then show it inline in model setup or as a toast.
+ * Returns the in-flight key save's actionId, cleared when this frame is its
+ * failure.
+ */
+export function applySocketErrorFrame(
+  message,
+  { pendingModelKeySaveActionId, setModelSetupError, setToast },
+) {
+  notifySessionActionError(message.actionId);
+  const inlineSetupError = resolveModelSetupErrorFromSocketError(message.message, {
+    actionId: message.actionId,
+    pendingModelKeySaveActionId,
+  });
+  // An error rendered inline in model setup is not also toasted: it would
+  // duplicate the message the user is already looking at, and a Radix Toast
+  // mounts its own dismissable layer above the setup dialog, which would then
+  // swallow the first Escape.
+  if (inlineSetupError) setModelSetupError(inlineSetupError);
+  else setToast(message.message, { destructive: true });
+  return message.actionId && message.actionId === pendingModelKeySaveActionId
+    ? ""
+    : pendingModelKeySaveActionId;
 }
 
 export function buildHttpFallbackMessageRequest(type, payload = {}) {
@@ -426,19 +453,11 @@ export function useGuiConnection() {
                 );
               }
             } else if (message.type === "error") {
-              const inlineSetupError = resolveModelSetupErrorFromSocketError(message.message, {
-                actionId: message.actionId,
+              pendingModelKeySaveRef.current = applySocketErrorFrame(message, {
                 pendingModelKeySaveActionId: pendingModelKeySaveRef.current,
+                setModelSetupError,
+                setToast,
               });
-              if (message.actionId && message.actionId === pendingModelKeySaveRef.current) {
-                pendingModelKeySaveRef.current = "";
-              }
-              // An error rendered inline in model setup is not also toasted:
-              // it would duplicate the message the user is already looking at,
-              // and a Radix Toast mounts its own dismissable layer above the
-              // setup dialog, which would then swallow the first Escape.
-              if (inlineSetupError) setModelSetupError(inlineSetupError);
-              else setToast(message.message, { destructive: true });
             }
           },
           onClose: () => {

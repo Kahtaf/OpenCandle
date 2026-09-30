@@ -136,4 +136,21 @@ describe("GUI ask_user bridge run cancellation", () => {
     expect(bridge.getPrompts()).toEqual([]);
     expect(broadcast).not.toHaveBeenCalled();
   });
+  it("reports which pending prompts this process owns, per session", async () => {
+    const bridge = createAskUserBridge({ broadcast: vi.fn(), getSessionId: () => "current" });
+    const pending = bridge.askForSession("reopened")({
+      question: "Include X?",
+      questionType: "confirm",
+    });
+    const prompt = bridge.getPrompts()[0];
+
+    expect(bridge.has(prompt.id, "reopened")).toBe(true);
+    expect(bridge.has(prompt.id)).toBe(true);
+    expect(bridge.has(prompt.id, "current")).toBe(false);
+    expect(bridge.has("ask-user-missing", "reopened")).toBe(false);
+
+    bridge.answer(prompt.id, "Yes");
+    await pending;
+    expect(bridge.has(prompt.id, "reopened")).toBe(false);
+  });
 });

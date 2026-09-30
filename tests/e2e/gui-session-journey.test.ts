@@ -6,6 +6,7 @@ import {
 } from "../support/gui-journey/journey-harness.js";
 import {
   ASK_USER_PROMPT,
+  ASK_USER_STOP_PROMPT,
   CANCEL_PROMPT,
   createHoldGate,
   createJourneyModelScript,
@@ -220,6 +221,41 @@ describe("GUI session journey", () => {
     ).toBe(true);
   }, 90_000);
 
+  it("answers an ask_user question in a reopened session that is not the server's current one", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    // Session A answers a quote, then New chat makes B the server's current
+    // session. Reopening A from the sidebar leaves the server on B, so the
+    // ask_user run below targets a non-current session owned by this process.
+    await startNewSession(page);
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(page.getByText("$189.42").first(), 30_000);
+    await waitForRunIdle(page);
+    const reopenedSessionId = sessionIdFromUrl(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await startNewSession(page);
+    expect(sessionIdFromUrl(page)).not.toBe(reopenedSessionId);
+    await openSession(page, "AAPL quote journey");
+    expect(sessionIdFromUrl(page)).toBe(reopenedSessionId);
+
+    await submitPrompt(page, ASK_USER_PROMPT);
+    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+    await page.getByRole("button", { name: "1 year" }).click();
+    await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
+    await waitForRunIdle(page);
+
+    // The answer reached the model as the ask_user tool result.
+    expect(
+      harness.modelServer.requests.some((request) =>
+        request.messages.some(
+          (message) => message.role === "tool" && JSON.stringify(message).includes("User answered"),
+        ),
+      ),
+    ).toBe(true);
+    expect(sessionIdFromUrl(page)).toBe(reopenedSessionId);
+  }, 120_000);
+
   it("explicit Stop while an ask_user question is open ends the run and frees the session", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
@@ -265,6 +301,34 @@ describe("GUI session journey", () => {
     );
     await waitForRunIdle(page);
     expect(sessionIdFromUrl(page)).toBe(stoppedSessionId);
+  }, 120_000);
+
+  it("Stop during a tool call whose follow-up model request errors renders Stopped, live and after reload", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+
+    await startNewSession(page);
+    const runActionId = await submitPromptAndCaptureRunActionId(page, ASK_USER_STOP_PROMPT);
+    const stoppedSessionId = sessionIdFromUrl(page);
+    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+
+    await stopAndAwaitCancelAccepted(page, {
+      sessionId: stoppedSessionId,
+      targetActionId: runActionId,
+    });
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    // The persisted shape a real provider leaves: the tool settled, then the
+    // next model request failed with an abort-shaped error.
+    const snapshot = await waitForSessionEntries(page, stoppedSessionId, (entries) =>
+      assistantMessages(entries).some((message) => message.stopReason === "error"),
+    );
+    expect(
+      assistantMessages(snapshot.entries).some((message) => message.stopReason === "error"),
+    ).toBe(true);
+
+    await expectStoppedTurn(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await expectStoppedTurn(page);
   }, 120_000);
 
   it("passive reload does not cancel; the held run completes normally", async () => {
@@ -638,6 +702,14 @@ describe("GUI session journey", () => {
     }
   }, 120_000);
 });
+
+/** A stopped turn shows the neutral Stopped marker with Retry, never a model failure. */
+async function expectStoppedTurn(page: Page): Promise<void> {
+  await expectVisible(page.getByText("Stopped", { exact: true }).first(), 30_000);
+  await expectVisible(page.getByRole("button", { name: "Retry" }).first(), 15_000);
+  await expect(page.getByText("Model connection failed").count()).resolves.toBe(0);
+  await expect(page.getByRole("button", { name: "Fix model key" }).count()).resolves.toBe(0);
+}
 
 async function submitPrompt(page: Page, text: string): Promise<void> {
   await page.getByLabel("Message OpenCandle").fill(text);

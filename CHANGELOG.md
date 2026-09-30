@@ -22,6 +22,8 @@
 
 ### Fixed
 
+- Pressing Stop in the GUI while a tool is running, such as during `/analyze` or while a question is open, now shows the turn as Stopped with Retry instead of "Model connection failed", including after a reload.
+- Answering or cancelling a question in a reopened GUI chat now reaches the waiting run instead of failing, and a typed answer stays in place if it is refused.
 - Risk and correlation analysis now accept a 5-year lookback and state the lookback window used, so long-horizon portfolio reviews no longer fail on a rejected risk call.
 - Option chains checked outside regular trading hours or on market holidays now label bid/ask as last-session and not executable, and show each contract's last trade time.
 - Pressing Stop in the GUI while a run is still starting now stops it before the request runs, including slash commands such as `/analyze`.
