@@ -122,6 +122,64 @@ describe("route session state", () => {
     ]);
   });
 
+  it("shows home as a fresh draft while the current session is still running elsewhere", () => {
+    const view = routeSessionView({
+      pathname: "/",
+      currentSessionId: "running-session",
+      events: [messageCompleted("running-entry", "running transcript")],
+      runState: "streaming",
+      liveBaseEventCount: 0,
+      currentSessionRunActive: true,
+    });
+
+    // New chat must not land on the running session's transcript and Stop
+    // control: home is an empty draft that is not bound to that session.
+    expect(view.homeDraft).toBe(true);
+    expect(view.activeSessionId).toBe("");
+    expect(view.events).toEqual([]);
+  });
+
+  it("keeps home bound to its own session when that session is the one running", () => {
+    const events = [messageCompleted("home-entry", "home transcript")];
+    const view = routeSessionView({
+      pathname: "/",
+      currentSessionId: "home-session",
+      events,
+      runState: "ready",
+      liveBaseEventCount: 0,
+      currentSessionRunActive: false,
+    });
+
+    expect(view.homeDraft).toBe(false);
+    expect(view.activeSessionId).toBe("home-session");
+    expect(view.events).toBe(events);
+  });
+
+  it("never treats a session route as a home draft", () => {
+    const view = routeSessionView({
+      pathname: "/sessions/running-session",
+      currentSessionId: "running-session",
+      events: [],
+      runState: "streaming",
+      liveBaseEventCount: 0,
+      currentSessionRunActive: true,
+    });
+
+    expect(view.homeDraft).toBe(false);
+    expect(view.activeSessionId).toBe("running-session");
+  });
+
+  it("starts home sends in a fresh session while the current session is still running", () => {
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+        hasCurrentSessionContent: false,
+        currentSessionRunActive: true,
+      }),
+    ).toEqual({ mode: "fresh" });
+  });
+
   it("targets the route session for sends on session routes", () => {
     expect(
       chatRunSessionTarget({

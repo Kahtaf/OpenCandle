@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "../components/ui/use-toast.jsx";
 import { notifySessionActionError } from "../lib/session-action-errors.js";
+import { markSessionModelsStale, trackModelAvailability } from "../lib/session-model-setup.js";
 import { useRuntimeTransport } from "../runtime/runtime-transport-context.js";
 
 const EMPTY_DASHBOARD = {
@@ -95,17 +96,25 @@ export function buildHttpFallbackMessageRequest(type, payload = {}) {
           provider: payload.provider,
           apiKey: payload.apiKey,
           ...(payload.storageMode ? { storageMode: payload.storageMode } : {}),
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
         },
       };
     case "model.setup.select_model":
       return {
         path: "/api/model-setup/model",
-        body: { provider: payload.provider, modelId: payload.modelId },
+        body: {
+          provider: payload.provider,
+          modelId: payload.modelId,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "model.setup.set_thinking":
       return {
         path: "/api/model-setup/thinking",
-        body: { level: payload.level },
+        body: {
+          level: payload.level,
+          ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+        },
       };
     case "provider.save_api_key":
       return {
@@ -141,17 +150,26 @@ export function sessionSnapshotFromPayload(payload) {
   const sessionId = String(record.sessionId ?? snapshot.sessionId ?? "").trim();
   if (!sessionId) return null;
   const dashboard = asRecord(snapshot.state);
+  const sessionModel = snapshot.sessionModel ?? record.sessionModel;
   return {
     sessionId,
     entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
     dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
+    ...(sessionModel && typeof sessionModel === "object" ? { sessionModel } : {}),
   };
 }
 
 export function mergeSessionSnapshotMap(current, payload) {
   const snapshot = sessionSnapshotFromPayload(payload);
-  return snapshot ? { ...current, [snapshot.sessionId]: snapshot } : current;
+  if (!snapshot) return current;
+  // A payload without the session's model keeps the one already known.
+  const previousModel = current[snapshot.sessionId]?.sessionModel;
+  const next =
+    snapshot.sessionModel || !previousModel
+      ? snapshot
+      : { ...snapshot, sessionModel: previousModel };
+  return { ...current, [snapshot.sessionId]: next };
 }
 
 export function buildToolInvokeSocketMessage(payload, currentSessionId = "", targetSessionId = "") {
@@ -208,6 +226,25 @@ export function resolveBootstrapRole(currentRole, data, updateRole = true) {
   return updateRole ? data.role || "writer" : currentRole;
 }
 
+/**
+ * A new chat started while the server's current session is still running is
+ * created beside it (`detached`). Merge it as a routable session snapshot only:
+ * the server's current session, its visible transcript, and the role are
+ * unchanged.
+ */
+export function newSessionBootstrapOptions(data) {
+  if (data?.detached !== true) return {};
+  return { updateRole: false, updateCurrentSessionId: false, updateVisibleState: false };
+}
+
+/**
+ * A run's session becomes the tracked current session, except a detached new
+ * chat: the server kept its running session current while that chat ran.
+ */
+export function resolveAdoptedSessionId(currentSessionId, sessionId, detachedSessionIds) {
+  return detachedSessionIds.has(sessionId) ? currentSessionId : sessionId;
+}
+
 export function resolveBootstrapSessionId(
   currentSessionId,
   responseSessionId,
@@ -259,9 +296,25 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
+  // New chats the server created beside its still-running current session.
+  // They never become the tracked current session, so callers route to them.
+  const [detachedSessionIds] = useState(() => new Set());
+  const isDetachedSession = useCallback(
+    (sessionId) => detachedSessionIds.has(String(sessionId ?? "")),
+    [detachedSessionIds],
+  );
+  const adoptSessionId = useCallback(
+    (sessionId) =>
+      setCurrentSessionId((currentSessionId) =>
+        resolveAdoptedSessionId(currentSessionId, String(sessionId ?? ""), detachedSessionIds),
+      ),
+    [detachedSessionIds],
+  );
   const [currentSessionPersisted, setCurrentSessionPersisted] = useState(false);
   const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState(transport.initialModelSetup || EMPTY_MODEL_SETUP);
+  // Last seen set of models with keys; a change invalidates per-session models.
+  const modelAvailabilityRef = useRef(null);
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {
@@ -298,7 +351,15 @@ export function useGuiConnection() {
     }
     setAskUserPrompts(data.askUserPrompts || []);
     if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
-    if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
+    // Bootstraps (session loads, HTTP fallback commands) also report which
+    // models have keys; a change invalidates other sessions' cached models.
+    const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
+    if (nextSnapshot || availabilityChanged) {
+      setSessionSnapshots((current) => {
+        const marked = availabilityChanged ? markSessionModelsStale(current) : current;
+        return nextSnapshot ? mergeSessionSnapshotMap(marked, data) : marked;
+      });
+    }
     startTransition(() => {
       setSessions(data.sessions || []);
       if (updateVisibleState) {
@@ -361,6 +422,9 @@ export function useGuiConnection() {
               setCurrentSessionId(message.sessionId);
               setCurrentSessionPersisted(message.sessionPersisted === true);
               setAskUserPrompts(message.askUserPrompts || []);
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
               startTransition(() => {
                 setCatalog(message.catalog);
                 setModelSetup(
@@ -404,6 +468,9 @@ export function useGuiConnection() {
                 ),
               );
             } else if (message.type === "model.setup") {
+              if (trackModelAvailability(modelAvailabilityRef, message.modelSetup)) {
+                setSessionSnapshots((current) => markSessionModelsStale(current));
+              }
               startTransition(() =>
                 setModelSetup(
                   message.modelSetup || {
@@ -661,13 +728,15 @@ export function useGuiConnection() {
     try {
       const data = await transport.createSession();
       setSupportsSessionActions(true);
-      applyBootstrap(data);
-      return String(data?.sessionId ?? "");
+      applyBootstrap(data, "", newSessionBootstrapOptions(data));
+      const sessionId = String(data?.sessionId ?? "");
+      if (data?.detached === true && sessionId) detachedSessionIds.add(sessionId);
+      return sessionId;
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error), { destructive: true });
       return "";
     }
-  }, [applyBootstrap, setToast, transport]);
+  }, [applyBootstrap, detachedSessionIds, setToast, transport]);
 
   const loadSession = useCallback(
     async (sessionId) => {
@@ -710,8 +779,9 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      isDetachedSession,
       loadSession,
-      adoptSessionId: setCurrentSessionId,
+      adoptSessionId,
     }),
     [
       role,
@@ -732,7 +802,9 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      isDetachedSession,
       loadSession,
+      adoptSessionId,
     ],
   );
 }

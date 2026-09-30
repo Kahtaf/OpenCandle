@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runWithAbortSignal } from "../../../src/infra/abort-context.js";
 import { HttpError, httpGet, httpPost } from "../../../src/infra/http-client.js";
 
 describe("httpGet", () => {
@@ -161,6 +162,57 @@ describe("httpGet", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("honours a Retry-After HTTP date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T20:00:00.000Z"));
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "retry-after" ? "Wed, 15 Jul 2026 20:00:03 GMT" : null,
+        },
+        text: () => Promise.reject(new Error("body unavailable")),
+      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ recovered: true }) });
+
+    const resultPromise = httpGet("https://api.example.com/limited", {
+      maxRetries: 1,
+      retryDelayMs: 1,
+      maxRetryAfterMs: 5_000,
+    });
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(resultPromise).resolves.toEqual({ recovered: true });
+  });
+
+  it("aborts a request that exceeds its timeout", async () => {
+    vi.useFakeTimers();
+    let aborted = false;
+    globalThis.fetch = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new DOMException("This operation was aborted", "AbortError"));
+          });
+        }),
+    ) as typeof fetch;
+
+    const resultPromise = httpGet("https://api.example.com/slow", {
+      timeoutMs: 100,
+      maxRetries: 0,
+    });
+    resultPromise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(resultPromise).rejects.toThrow(/aborted/i);
+    expect(aborted).toBe(true);
+  });
+
   it("caps oversized Retry-After delays to the safe default", async () => {
     vi.useFakeTimers();
     globalThis.fetch = vi
@@ -269,5 +321,70 @@ describe("httpPost", () => {
       body: "invalid field",
     } satisfies Partial<HttpError>);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  describe("inside a stopped run", () => {
+    it("does not start a request once the run was stopped", async () => {
+      globalThis.fetch = vi.fn();
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        runWithAbortSignal(controller.signal, () => httpGet("https://api.example.com/quote")),
+      ).rejects.toBeDefined();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("stops waiting to retry when the run is stopped during the retry delay", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: () => Promise.resolve(""),
+      });
+      const controller = new AbortController();
+      const request = runWithAbortSignal(controller.signal, () =>
+        httpGet("https://api.example.com/quote", { retryDelayMs: 60_000 }),
+      );
+      request.catch(() => {});
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      // Let the failed attempt reach its 60s retry delay.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      controller.abort();
+      await expect(request).rejects.toBeDefined();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not wait to retry when the run is stopped while reading an error body", async () => {
+      const controller = new AbortController();
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: () => {
+          controller.abort();
+          return Promise.resolve("");
+        },
+      });
+      await expect(
+        runWithAbortSignal(controller.signal, () =>
+          httpGet("https://api.example.com/quote", { retryDelayMs: 60_000 }),
+        ),
+      ).rejects.toBeDefined();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not retry a request the stopped run aborted", async () => {
+      const controller = new AbortController();
+      globalThis.fetch = vi.fn(() => {
+        controller.abort();
+        return Promise.reject(new DOMException("This operation was aborted", "AbortError"));
+      }) as typeof fetch;
+      await expect(
+        runWithAbortSignal(controller.signal, () =>
+          httpGet("https://api.example.com/quote", { retryDelayMs: 1 }),
+        ),
+      ).rejects.toThrow(/aborted/i);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 });

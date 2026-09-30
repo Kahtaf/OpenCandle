@@ -17,7 +17,7 @@ import type {
   SessionCoordinatorOptions,
 } from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
-import { chooseOpenCandleInitialModel } from "./default-model.js";
+import { chooseOpenCandleInitialModel, recordedSessionThinkingLevel } from "./default-model.js";
 import { guardModelRuntimeApiKeyLogins } from "./model-key-login-guard.js";
 import openCandleExtensionCore, {
   type OpenCandleExtensionOptions,
@@ -132,7 +132,9 @@ export async function createOpenCandleSessionCore(
     agentDir,
     modelRuntime,
     model: options.model ?? initialModel?.model,
-    thinkingLevel: options.thinkingLevel,
+    // Pi restores a session's thinking level only once it has messages; a
+    // level picked before the first message is the session's too.
+    thinkingLevel: options.thinkingLevel ?? recordedSessionThinkingLevel(options.sessionManager),
     sessionManager: options.sessionManager,
     settingsManager,
     resourceLoader,
@@ -146,8 +148,6 @@ export async function createOpenCandleSessionCore(
   attachSessionCancellationState(result.session, cancellation);
   if (coordinator) sessionCoordinators.set(result.session, coordinator);
 
-  await applySavedDefaultModel(result);
-
   if (options.bindExtensions !== false) {
     await result.session.bindExtensions({});
   }
@@ -160,19 +160,4 @@ export async function createOpenCandleSessionCore(
       await result.session.waitForIdle();
     },
   };
-}
-
-async function applySavedDefaultModel(result: CreateAgentSessionResult): Promise<void> {
-  const provider = result.session.settingsManager.getDefaultProvider();
-  const modelId = result.session.settingsManager.getDefaultModel();
-  if (!provider || !modelId) return;
-
-  const savedDefault = result.session.modelRuntime.getModel(provider, modelId);
-  if (!savedDefault || !result.session.modelRuntime.hasConfiguredAuth(savedDefault.provider))
-    return;
-
-  const current = result.session.model;
-  if (current?.provider === savedDefault.provider && current.id === savedDefault.id) return;
-
-  await result.session.setModel(savedDefault);
 }

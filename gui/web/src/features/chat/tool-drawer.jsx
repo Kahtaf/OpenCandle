@@ -90,12 +90,17 @@ function DrawerHeader({ run, onClose }) {
     <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-foreground">{title}</div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground">
+        <div
+          className="mt-0.5 text-[11px] text-muted-foreground"
+          data-drawer-run-status={run.status}
+        >
           {run.status === "pending"
             ? "In progress"
             : run.status === "error"
               ? "Errored"
-              : "Completed"}
+              : run.status === "stopped"
+                ? "Stopped"
+                : "Completed"}
         </div>
       </div>
       <Badge variant="outline" size="sm" className="font-mono">

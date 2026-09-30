@@ -55,6 +55,8 @@ export interface StartHarnessOptions {
   modelScript: ModelScript;
   /** Optional bounded external-HTTP fixture holds (e.g. held tool fetch). */
   fixture?: StartFixtureServerOptions;
+  /** Extra fixture model ids beside the default one. */
+  extraModelIds?: string[];
 }
 
 /**
@@ -112,7 +114,11 @@ export async function startGuiJourneyHarness(
   try {
     modelServer = await startDeterministicModelServer(options.modelScript);
     aux = await startGuiJourneyFixtureServer(options.fixture);
-    writeModelRuntimeConfig({ agentDir, modelBaseUrl: modelServer.baseUrl });
+    writeModelRuntimeConfig({
+      agentDir,
+      modelBaseUrl: modelServer.baseUrl,
+      extraModelIds: options.extraModelIds,
+    });
 
     const port = await allocatePort();
     gui = await startGuiServer({

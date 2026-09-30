@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import type { AgentSession, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, SessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import {
@@ -14,7 +14,7 @@ import type { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import { getSavedMarketStateSymbols } from "./market-state-api.js";
-import type { ModelSetupController } from "./model-setup.js";
+import type { ModelSetupController, ModelSetupTarget } from "./model-setup.js";
 import {
   deleteStoredPreference,
   deleteStoredToolDefault,
@@ -151,24 +151,44 @@ export function createWsHub({
           await getSession().modelRuntime.refresh();
           broadcastModelSetup();
           break;
-        case "model.setup.save_api_key":
-          await modelSetupController.handleSaveModelApiKey(
+        case "model.setup.save_api_key": {
+          // The key is global; its model lands on the session on screen.
+          const target = await modelSetupController.handleSaveModelApiKey(
             String(data.provider ?? ""),
             String(data.apiKey ?? ""),
+            optionalSessionId(data),
           );
           broadcastModelSetup();
+          if (target && !target.current && target.sessionManager) {
+            broadcastSessionSnapshot(target.sessionManager);
+          }
           break;
-        case "model.setup.select_model":
-          await modelSetupController.handleSelectModel(
+        }
+        case "model.setup.select_model": {
+          // Session-addressed (issue #217): the pick applies to the session
+          // the browser shows, which need not be the server's current one.
+          const target = await modelSetupController.handleSelectModel(
             String(data.provider ?? ""),
             String(data.modelId ?? ""),
+            optionalSessionId(data),
           );
-          broadcastModelSetup();
+          broadcastModelSetupChange(
+            { broadcastModelSetup, broadcastState, broadcastSessionSnapshot },
+            target,
+          );
           break;
-        case "model.setup.set_thinking":
-          await modelSetupController.handleSetThinkingLevel?.(String(data.level ?? ""));
-          broadcastModelSetup();
+        }
+        case "model.setup.set_thinking": {
+          const target = await modelSetupController.handleSetThinkingLevel?.(
+            String(data.level ?? ""),
+            optionalSessionId(data),
+          );
+          broadcastModelSetupChange(
+            { broadcastModelSetup, broadcastState, broadcastSessionSnapshot },
+            target,
+          );
           break;
+        }
         case "provider.save_api_key":
           await modelSetupController.handleSaveProviderApiKey(
             String(data.providerId ?? ""),
@@ -339,6 +359,7 @@ export function createWsHub({
         sessionId,
         getSavedMarketStateSymbols(),
       ),
+      sessionModel: modelSetupController.buildSessionModelState?.(sessionManager),
       entries,
       events: currentChatEvents(entries),
       // Ownership can change mid-run (e.g. a TUI takes over the session), so
@@ -358,6 +379,9 @@ export function createWsHub({
         sessionId,
         getSavedMarketStateSymbols(),
       ),
+      // The model this session runs on, so the picker follows the visible
+      // session rather than the server's current one (issue #217).
+      sessionModel: modelSetupController.buildSessionModelState?.(sessionManager),
       entries,
       events: sessionEntriesToChatEvents(entries, {
         sessionId,
@@ -480,4 +504,27 @@ function asRecord(value: unknown): Record<string, unknown> {
 function isSessionPersisted(sessionManager: SessionManager): boolean {
   const sessionFile = sessionManager.getSessionFile?.();
   return Boolean(sessionFile && existsSync(sessionFile));
+}
+
+/**
+ * Tells browsers about a model or thinking change. A change to a non-current
+ * session reaches them as that session's snapshot (which carries its model),
+ * and the session is returned so the HTTP response bootstraps it.
+ */
+export function broadcastModelSetupChange(
+  wsHub: Pick<WsHub, "broadcastModelSetup" | "broadcastState" | "broadcastSessionSnapshot">,
+  target: ModelSetupTarget | undefined | void,
+): SessionManager | undefined {
+  if (target && !target.current && target.sessionManager) {
+    wsHub.broadcastSessionSnapshot(target.sessionManager);
+    return target.sessionManager;
+  }
+  wsHub.broadcastModelSetup();
+  wsHub.broadcastState();
+  return undefined;
+}
+
+function optionalSessionId(data: Record<string, unknown>): string | undefined {
+  const sessionId = String(data.sessionId ?? "").trim();
+  return sessionId || undefined;
 }

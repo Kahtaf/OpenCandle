@@ -21,6 +21,7 @@ export function StepsCard({ run, autoOpen = false, onRetry, retryDisabled = fals
   const title = summarizeRunTitle(run.steps.map((s) => s.name));
   const isPending = run.status === "pending";
   const isError = run.status === "error";
+  const isStopped = run.status === "stopped";
   const completedCount = run.steps.filter((s) => s.status === "completed").length;
   const sources = extractRunSources(run);
   const canRetry = isError && Boolean(run.retryPrompt) && Boolean(onRetry);
@@ -36,10 +37,12 @@ export function StepsCard({ run, autoOpen = false, onRetry, retryDisabled = fals
   const activeMeta = activeStep ? toolMeta(activeStep.name) : null;
 
   return (
-    <div className="max-w-[760px]">
+    <div className="max-w-[760px]" data-run-status={run.status}>
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
-        <span>{isPending ? "Working" : isError ? "Tool error" : "Answer"}</span>
+        <span>
+          {isPending ? "Working" : isError ? "Tool error" : isStopped ? "Stopped" : "Answer"}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <button

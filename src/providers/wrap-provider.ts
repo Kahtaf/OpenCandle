@@ -1,3 +1,4 @@
+import { currentAbortSignal } from "../infra/abort-context.js";
 import { runWithStaleMetadata } from "../infra/cache.js";
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
@@ -48,6 +49,10 @@ export async function wrapProvider<T>(
       stale: cache?.status === "stale" ? true : undefined,
     };
   } catch (error) {
+    // The user stopped the run: this is not a provider failure. Do not count
+    // it toward the circuit (a Retry must find the provider healthy) and do
+    // not offer it as unavailable data for fallbacks.
+    if (currentAbortSignal()?.aborted) throw error;
     // Credential errors are re-thrown so the tool-layer `withCredentialCheck`
     // helper can convert them into LLM-visible tagged content. Do NOT record
     // these as tracker failures — they are a user-config problem, not a

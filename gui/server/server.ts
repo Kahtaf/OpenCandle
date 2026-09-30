@@ -22,7 +22,10 @@ import {
   BackgroundQuoteRefreshes,
   createBackgroundQuotePoller,
 } from "./background-quotes.js";
-import { createInitialGuiSessionManager } from "./gui-session-manager.js";
+import {
+  createDetachedSessionRegistry,
+  createInitialGuiSessionManager,
+} from "./gui-session-manager.js";
 import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
 import { createLocalSessionCoordinator } from "./local-session-coordinator.js";
@@ -34,8 +37,10 @@ import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
+import { installUnhandledRejectionGuard } from "./unhandled-rejection-guard.js";
 import {
   acquireWriterLock,
+  isSessionTranscriptHeld,
   migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
@@ -44,6 +49,8 @@ import {
 import { createWsHub, type WsHub } from "./ws-hub.js";
 
 assertSupportedNodeVersion();
+// A request leaked by a stopped run must not exit the server and every other run.
+installUnhandledRejectionGuard();
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
@@ -123,6 +130,7 @@ const heartbeat = setInterval(() => {
 }, 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const localSessionCoordinator = createLocalSessionCoordinator();
+const detachedSessions = createDetachedSessionRegistry();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 const indicesSnapshotStore = new MarketIndicesSnapshotStore(() => buildMarketIndicesSnapshot());
 quotePoller = createBackgroundQuotePoller({
@@ -136,11 +144,27 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
   getSessionId: () => sessionManager.getSessionId(),
   intervalMs: automationHeartbeatMs,
 });
+// Sessions a chat run currently owns in this process; shared by the run routes
+// and session-addressed model changes, which must not race a running reply.
+const activeRunSessionIds = new Set<string>();
 const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  settingsManager,
+  // Includes detached, still-unsaved new chats, so a pick made before their
+  // first message lands on the in-memory session their run will use.
+  resolveSessionManager: (sessionId) =>
+    resolveSessionManagerById(
+      { cwd, sessionDir, getSessionManager: () => sessionManager, detachedSessions },
+      sessionId,
+    ),
+  isSessionBusy: (sessionId, targetSessionManager) =>
+    activeRunSessionIds.has(sessionId) ||
+    // A stored session is also busy while a tool invoke in this process or
+    // another live process holds its transcript.
+    (targetSessionManager ? isSessionTranscriptHeld(targetSessionManager) : false),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
@@ -158,7 +182,7 @@ const toolInvokeController = createToolInvokeController({
   syncWriterLockScope: syncCurrentWriterLockScope,
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(
-      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      { cwd, sessionDir, getSessionManager: () => sessionManager, detachedSessions },
       sessionId,
     ),
 });
@@ -175,6 +199,7 @@ const sessionActionsController = createSessionActionsController({
   broadcastState: () => wsHub.broadcastState(),
   broadcastSessions: () => wsHub.broadcastSessions(),
   localSessionCoordinator,
+  detachedSessions,
 });
 wsHub = createWsHub({
   role: lockResult.role,
@@ -246,7 +271,9 @@ const httpRequestHandler = createHttpRequestHandler({
   quoteSnapshotStore,
   indicesSnapshotStore,
   localSessionCoordinator,
+  detachedSessions,
   cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
+  activeRunSessionIds,
 });
 
 const server = createServer((req, res) => {

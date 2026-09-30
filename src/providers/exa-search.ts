@@ -1,4 +1,5 @@
 import { getConfig } from "../config.js";
+import { withCurrentAbortSignal } from "../infra/abort-context.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import type { WebSearchEnvelope, WebSearchResult } from "../types/sentiment.js";
@@ -225,7 +226,7 @@ async function exaMcpSearch(query: string, opts: WebSearchOpts): Promise<WebSear
         },
       },
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: withCurrentAbortSignal(AbortSignal.timeout(TIMEOUT_MS)),
   });
 
   // Anti-abuse handling
@@ -307,7 +308,7 @@ async function exaApiSearch(
         highlights: true,
       },
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: withCurrentAbortSignal(AbortSignal.timeout(TIMEOUT_MS)),
   });
 
   if (!response.ok) {
