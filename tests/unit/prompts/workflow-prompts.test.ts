@@ -343,6 +343,18 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).not.toContain("strike above cost basis");
   });
 
+  it("keeps an in-the-money covered-call preference when the basis is missing", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { symbol: "AAPL", optionStrategy: "covered_call", moneynessPreference: "itm" },
+        { symbol: "user", optionStrategy: "user", moneynessPreference: "user" },
+      ),
+    );
+
+    expect(prompt).not.toContain("strike above the current share price");
+    expect(prompt).toContain("strike that fits the requested moneyness");
+  });
+
   it("does not disclose a missing basis when the covered-call basis is stated", () => {
     const prompt = buildOptionsScreenerPrompt(
       makeOptionsResolution(

@@ -253,7 +253,10 @@ export function buildOptionsScreenerPrompt(
       s.costBasis !== undefined ||
       (s.catalystSymbols?.length ?? 0) > 0);
   const isMissingCoveredCallBasis = isCoveredCallContext && s.costBasis === undefined;
-  const strikeFloor = s.costBasis !== undefined ? "cost basis" : "the current share price";
+  const strikeGuide =
+    s.costBasis !== undefined
+      ? "strike above cost basis"
+      : "strike that fits the requested moneyness";
   const workflowConstraints = [
     ...(isBalanced ? ["delta >= 0.20 (balanced objective)", "prefer ATM to slightly OTM"] : []),
     ...(isMissingCoveredCallBasis ? ["cost basis not provided"] : []),
@@ -320,11 +323,11 @@ Covered-call sale guidance:
 - Because the user phrased ${s.symbol} as an existing holding, briefly state that you are treating ${s.symbol} as the held ticker. If they meant memory exposure or a different ticker, tell them to clarify and do not silently switch to another underlying.
 - Do not substitute catalyst/context tickers as the option-chain underlying.
 - Use catalyst/context tickers only to frame event risk, sympathy moves, and whether a nearer expiration is appropriate.
-- Rank by premium collected, strike above ${strikeFloor}, assignment risk, event risk, and live liquidity.
+- Rank by premium collected, ${strikeGuide}, assignment risk, event risk, and live liquidity.
 - Do not describe max loss as the option premium paid. Covered-call sale risks are assignment/capped upside, share-price downside in the owned stock, IV/event risk, and poor exit liquidity.
 - If the option-chain tool reports closed_market_or_stale_quotes, do not treat zero bid/ask as confirmed live illiquidity; say the chain was checked outside regular options trading and recheck after regular options trading opens.
 - If retrieved contracts have zero bid/ask, zero open interest, or otherwise unusable live quotes, the final answer MUST still include "Best action:" and "Conditional candidate:".
-- In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a strike above ${strikeFloor} labeled conditional on live bid/ask.
+- In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a ${strikeGuide} labeled conditional on live bid/ask.
 `
     : "";
   const protectivePutInstructions = isProtectivePutContext

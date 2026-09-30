@@ -142,6 +142,8 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
     expect(followUp).not.toContain("using the user's cost basis");
     expect(followUp).not.toContain("violate the user's cost basis");
     expect(followUp).not.toContain("calculate static premium yield and return-if-assigned");
+    expect(followUp).not.toContain("strike above the current share price");
+    expect(followUp).toContain("strike that fits the requested moneyness");
     expect(followUp).not.toContain("strike above cost basis");
   });
 
