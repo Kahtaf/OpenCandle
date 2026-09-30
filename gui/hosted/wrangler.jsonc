@@ -4,6 +4,12 @@
   "compatibility_date": "2026-07-31",
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "web.opencandle.app",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
