@@ -283,7 +283,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     policyCardId: "options_strategy",
     evidencePlanId: "placeholder_options_strategy",
     answerContractId: "options_strategy",
-    structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+    structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "options", "sentiment", "clarification"],
     migrated: false,

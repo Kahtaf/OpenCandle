@@ -30,6 +30,7 @@ import {
   captureEvidenceFromToolCall,
   type PlanningEvidenceRecord,
 } from "./planning-evidence.js";
+import { disclosesNonLiveQuotes } from "./quote-disclosure.js";
 import { assertSessionCompleted, failSessionCompletion } from "./session-completion.js";
 import { promptAndWaitForCompletion } from "./session-settle.js";
 import {
@@ -516,7 +517,8 @@ function inferFinalAnswerFieldsForEval(text: string, taskFamily?: string): Final
   }
   if (
     /\b(unavailable|missing|cannot verify|not available|no live|unknown)\b/.test(lower) ||
-    disclosesObservedDataGap(lower)
+    disclosesObservedDataGap(lower) ||
+    disclosesNonLiveQuotes(text)
   ) {
     fields.push("data_gap_disclosure");
   }

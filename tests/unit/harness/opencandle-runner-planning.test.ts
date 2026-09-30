@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import afterHoursFixture from "../../fixtures/yahoo/options-AAPL-after-hours.json";
+import regularFixture from "../../fixtures/yahoo/options-AAPL-regular.json";
 import { toEvalTrace } from "../../harness/opencandle-runner.js";
 import type { AgentTrace, ToolCallTrace } from "../../harness/types.js";
+import { optionChainToolResult } from "../../helpers/option-chain-results.js";
 
 interface PlanningTraceOptions {
   prompt: string;
@@ -765,5 +768,62 @@ describe("OpenCandle harness freshness metadata inference", () => {
     );
 
     expect(failureIds(trace)).not.toContain("freshness_disclosed");
+  });
+});
+
+describe("OpenCandle harness option quote freshness checks", () => {
+  const undisclosed =
+    "Bottom line: buy the $210 call for $4.80 per share ($480 per contract) as of 2026-05-20. " +
+    "Main risk: the premium can be lost. Source: Yahoo options chain. IV rank is not available. Verify with your broker before trading.";
+  const disclosed =
+    "Bottom line: buy the $210 call; the $4.80 figure is a last-session quote as of 2026-05-20 and is not executable now. " +
+    "Main risk: the premium can be lost. Source: Yahoo options chain. Recheck bid/ask after regular options trading opens.";
+
+  async function optionsTrace(fixture: unknown, finalText: string) {
+    const result = await optionChainToolResult(fixture);
+    return toEvalTrace(
+      planningTrace({
+        prompt: "Which AAPL call should I buy for next month?",
+        taskFamily: "options_strategy",
+        commitmentMode: "decision",
+        answerContractId: "options_strategy",
+        evidencePlanId: "placeholder_options_strategy",
+        structuredCheckIds: [
+          "required_evidence_present",
+          "freshness_disclosed",
+          "data_gap_disclosed",
+        ],
+        toolCalls: [
+          {
+            name: "get_option_chain",
+            args: { symbol: "AAPL" },
+            result,
+            isError: false,
+            durationMs: 5,
+          },
+        ],
+        finalText,
+      }),
+    );
+  }
+
+  it("fails data_gap_disclosed when a stale-chain answer omits the last-session disclosure", async () => {
+    const trace = await optionsTrace(afterHoursFixture, undisclosed);
+    expect(failureIds(trace)).toContain("data_gap_disclosed");
+    expect(trace.planning?.retryEligibility.eligible).toBe(true);
+  });
+
+  it("passes data_gap_disclosed when the stale-chain answer discloses non-live quotes", async () => {
+    const trace = await optionsTrace(afterHoursFixture, disclosed);
+    expect(failureIds(trace)).not.toContain("data_gap_disclosed");
+  });
+
+  it("leaves a live regular-session trace unaffected", async () => {
+    const trace = await optionsTrace(regularFixture, undisclosed);
+    expect(failureIds(trace)).not.toContain("data_gap_disclosed");
+    const chainRecord = trace.planning?.evidenceRecords.find(
+      (record) => record.source.toolName === "get_option_chain",
+    );
+    expect(chainRecord?.gaps).toEqual([]);
   });
 });

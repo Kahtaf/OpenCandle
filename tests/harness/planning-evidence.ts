@@ -8,6 +8,10 @@ import type { ParsedTag } from "../../src/onboarding/tool-tags.js";
 import { parseToolTag } from "../../src/onboarding/tool-tags.js";
 import type { CapabilityGapId, EvidencePlanId, TaskFamily } from "../../src/routing/planning.js";
 import type { ProviderResult } from "../../src/runtime/evidence.js";
+import {
+  extractQuoteStatusSummary,
+  nonLiveQuoteReason,
+} from "../../src/runtime/quote-freshness.js";
 
 export type PlanningEvidenceType =
   | "market_status"
@@ -43,7 +47,7 @@ export interface RawTracePointer {
 }
 
 export interface EvidenceGap {
-  kind: "provider_status" | "capability_gap" | "roadmap_placeholder";
+  kind: "provider_status" | "capability_gap" | "roadmap_placeholder" | "quote_freshness";
   providerStatus?: Exclude<PlanningProviderStatus, "available">;
   provider?: string;
   capabilityGapId?: CapabilityGapId;
@@ -380,6 +384,11 @@ export function captureEvidenceFromToolCall(
       reason: "Tool call returned an error.",
     });
   }
+  const quoteStatus = toolCall.isError ? undefined : extractQuoteStatusSummary(toolCall.result);
+  const quoteFreshnessReason = toolCall.isError ? undefined : nonLiveQuoteReason(toolCall.result);
+  if (quoteFreshnessReason) {
+    gaps.push({ kind: "quote_freshness", reason: quoteFreshnessReason });
+  }
 
   return {
     id: `tool_result:${toolCall.name}`,
@@ -389,13 +398,14 @@ export function captureEvidenceFromToolCall(
       provider: providerGap?.provider,
     },
     entityScope: symbolsFromArgs(toolCall.args),
-    observedAt: new Date(0).toISOString(),
+    observedAt: toolObservedAt(toolCall.result) ?? new Date(0).toISOString(),
     providerStatus,
     normalizedFacts: {
       toolName: toolCall.name,
       args: { ...toolCall.args },
       isError: toolCall.isError === true,
       providerStatus,
+      ...(quoteStatus ? { quoteStatus } : {}),
     },
     rawTracePointer: {
       ...options,
@@ -495,6 +505,21 @@ function remediationFromTag(tag: Exclude<ParsedTag, { kind: "connected" }>): str
   if (tag.kind === "soft_degraded") return tag.remediation;
   if (tag.kind === "skipped") return tag.remediation;
   return "run /connect";
+}
+
+/**
+ * The tool's own fetch time: `details.freshness.fetchedAt`, else a top-level
+ * `details.fetchedAt`. Undefined when the result carries neither, so callers
+ * fall back to a sentinel instead of inventing a wall-clock time.
+ */
+function toolObservedAt(result: unknown): string | undefined {
+  if (!isRecord(result)) return undefined;
+  const details = isRecord(result.details) ? result.details : result;
+  const freshness = isRecord(details.freshness) ? details.freshness : undefined;
+  const candidate = freshness?.fetchedAt ?? details.fetchedAt;
+  if (typeof candidate !== "string") return undefined;
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
 function toolResultText(result: unknown): string | undefined {
