@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Stopping a run while a DCF valuation is still fetching no longer crashes the local GUI server and ends every other running chat.
+
 - Starting a new chat while another chat is still answering now opens a separate session that runs at the same time, instead of being rejected or dropping the message.
 
 - Options answers built on after-hours, closed-market, or stale option quotes now end with a short notice that the prices shown are not live or executable now.

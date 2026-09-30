@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetConfigCache } from "../../../src/config.js";
+import { runWithAbortSignal } from "../../../src/infra/abort-context.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
@@ -545,6 +546,51 @@ describe("compute_dcf tool (real providers over fixture HTTP)", () => {
     expect(textContent(result)).toMatch(/terminal growth.*discount rate|Gordon Growth/i);
     expect(textContent(result)).not.toContain("Intrinsic Value:");
     expect(toolDetails(result)).toBeNull();
+  });
+
+  it("leaves no unhandled rejection when Stop lands while financials and the quote are in flight", async () => {
+    // Requests that carry the run's signal wait until Stop, then fail with its
+    // abort reason, as a real fetch does. The LSE financials request carries
+    // no signal, so it is still pending when the quote request fails.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal;
+        if (!signal) {
+          return new Promise<Response>((resolve) => setTimeout(resolve, 100)).then(() =>
+            handleFetch(input),
+          );
+        }
+        state.calls.push(String(input));
+        return new Promise<Response>((_resolve, reject) => {
+          if (signal.aborted) return reject(signal.reason);
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      }),
+    );
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const run = new AbortController();
+      const execution = runWithAbortSignal(run.signal, () =>
+        dcfTool.execute("t", { symbol: "AAPL" }),
+      );
+      const outcome = execution.then(
+        () => "resolved",
+        (error: Error) => error.name,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      run.abort();
+
+      expect(await outcome).toBe("AbortError");
+      // Unhandled rejections are reported after the microtask queue drains.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(unhandled).toEqual([]);
+      expect(state.calls.some((url) => url.includes("/v8/finance/chart/"))).toBe(true);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 });
 
