@@ -3898,6 +3898,15 @@ describe("router cost-basis context guard", () => {
     expect(result.entities.costBasis).toBe(150);
   });
 
+  it("does not ground a stock basis in a trailing option-leg label", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I own AAPL and bought a $2 put; suggest covered calls too" },
+      outputFor({ symbols: ["AAPL"], costBasis: 2 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
   it("scopes basis clauses to lowercase tickers", async () => {
     const result = await route(
       {

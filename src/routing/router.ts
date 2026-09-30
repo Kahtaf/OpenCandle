@@ -1645,7 +1645,7 @@ const TOTAL_SUFFIX = /^\s*(?:(?:total\s+|in\s+total\s+)?for|worth)\b/i;
 const NON_BASIS_PREFIX =
   /\b(?:(?:premium|credit|strike(?:\s+price)?|target(?:\s+price)?|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?)(?:\s+(?:of|was|is|were|are))?|max(?:imum)?|min(?:imum)?|at\s+least|at\s+most|up\s+to|above|below|under|over)\s*$/i;
 const NON_BASIS_SUFFIX =
-  /^(?:\s*(?:per|a|\/)\s*share(?:\s+(?:in|of))?)?\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?|distributions?|income)\b/i;
+  /^(?:\s*(?:per|a|\/)\s*share(?:\s+(?:in|of))?)?\s*(?:premium|credit|strike|target|stop|limit|budget|commissions?|fees?|tax(?:es)?|dividends?|distributions?|income|puts?|calls?|options?|contracts?|leaps|spreads?|straddles?|strangles?|collars?)\b/i;
 // A direct amount is basis-linked when its clause carries acquisition or basis
 // wording ("bought at $150", "cost basis is $51"), or when its sentence states a
 // holding and the amount is per-share ("I own 100 AAPL at $150"), and its
