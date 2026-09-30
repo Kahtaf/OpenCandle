@@ -1,4 +1,5 @@
 import {
+  CURRENCY_CODES,
   extractEntities,
   isAmbiguousConceptUsage,
   isCurrencyCodeUsage,
@@ -1418,6 +1419,7 @@ const COST_BASIS_CONTEXT =
 interface BasisGrounding {
   texts: string[];
   savedBases: number[];
+  symbols: string[];
 }
 
 // Collects the user turns that carry a basis role, plus saved-position bases.
@@ -1456,7 +1458,7 @@ function basisGrounding(
     .map((symbol) => readPortfolioPosition(inputContext?.portfolioPositions, symbol)?.costBasis)
     .filter((basis): basis is number => basis !== undefined);
   if (texts.length === 0 && savedBases.length === 0) return undefined;
-  return { texts, savedBases };
+  return { texts, savedBases, symbols };
 }
 
 const DERIVED_BASIS_TOLERANCE = 0.005;
@@ -1468,42 +1470,75 @@ function isGroundedBasis(basis: number, grounding: BasisGrounding): boolean {
     return true;
   }
   return grounding.texts.some((turnText) => {
-    const { amounts, quantities } = parseStatedNumbers(turnText);
-    if (amounts.some((amount) => near(amount, 0.005))) return true;
-    return amounts.some((total) =>
+    const tickers = new Set([...grounding.symbols, ...extractEntities(turnText).symbols]);
+    const { amounts, quantities } = parseStatedNumbers(turnText, tickers);
+    if (amounts.some((amount) => !amount.isTotal && near(amount.value, 0.005))) return true;
+    return amounts.some((amount) =>
       quantities.some(
-        (quantity) => quantity > 0 && near(total / quantity, basis * DERIVED_BASIS_TOLERANCE),
+        (quantity) =>
+          quantity > 0 && near(amount.value / quantity, basis * DERIVED_BASIS_TOLERANCE),
       ),
     );
   });
 }
 
 // A number is a quantity when it counts shares/contracts ("100 shares",
-// "100-share") or directly precedes a ticker ("300 AAPL"); a dollar-prefixed
-// number is always an amount. Durations and percentages are neither. k/m
-// suffixes scale amounts.
+// "100-share") or directly precedes a known ticker ("300 AAPL"; a currency code
+// such as "150 USD" is not a ticker); a dollar-prefixed number is always an
+// amount. Durations and percentages are neither. k/m suffixes scale amounts.
+// When a quantity is stated, an amount phrased as the purchase total ("paid
+// $15,000 for 100 shares") grounds a basis only through division, never
+// directly, unless it carries a per-share marker ("at $150", "$150 per share").
 const STATED_NUMBER =
   /(?<![\w.$])(\$\s*)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s*([kKmM])(?![A-Za-z]))?/g;
-const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b|^\s*[A-Z]{1,5}\b(?![a-z])/;
+const QUANTITY_SUFFIX = /^(?:\s*|-)(?:shares?|contracts?|lots?)\b/;
+const TICKER_SUFFIX = /^\s*([A-Z]{1,5})\b(?![a-z])/;
+const PER_SHARE_PREFIX = /(?:\bat|@)\s*$/i;
+const PER_SHARE_SUFFIX = /^\s*(?:(?:per|a|\/)\s*share\b|each\b|apiece\b)/i;
+const TOTAL_PREFIX = /\b(?:paid|spent|invested|total(?:\s+of)?|cost\s+me|for)\s*$/i;
+const TOTAL_SUFFIX = /^\s*(?:total\s+|in\s+total\s+)?for\b/i;
 const NON_AMOUNT_SUFFIX =
   /^\s*(?:%|percent\b|x\b|(?:dte|days?|weeks?|wks?|months?|mos?|years?|yrs?)\b)/i;
 
-function parseStatedNumbers(text: string): { amounts: number[]; quantities: number[] } {
-  const amounts: number[] = [];
+interface StatedAmount {
+  value: number;
+  isTotal: boolean;
+}
+
+function parseStatedNumbers(
+  text: string,
+  tickers: ReadonlySet<string>,
+): { amounts: StatedAmount[]; quantities: number[] } {
+  const candidates: Array<{ value: number; before: string; rest: string }> = [];
   const quantities: number[] = [];
   for (const match of text.matchAll(STATED_NUMBER)) {
     const [whole, dollar, integer, fraction, scale] = match;
     const base = Number.parseFloat(`${integer.replace(/,/g, "")}${fraction ?? ""}`);
     if (!Number.isFinite(base)) continue;
-    const rest = text.slice((match.index ?? 0) + whole.length);
-    if (!dollar && !scale && QUANTITY_SUFFIX.test(rest)) {
+    const start = match.index ?? 0;
+    const rest = text.slice(start + whole.length);
+    const ticker = rest.match(TICKER_SUFFIX)?.[1];
+    if (
+      !dollar &&
+      !scale &&
+      (QUANTITY_SUFFIX.test(rest) ||
+        (ticker !== undefined && tickers.has(ticker) && !CURRENCY_CODES.has(ticker)))
+    ) {
       quantities.push(base);
       continue;
     }
     if (!dollar && NON_AMOUNT_SUFFIX.test(rest)) continue;
     const multiplier = scale ? (scale.toLowerCase() === "k" ? 1_000 : 1_000_000) : 1;
-    amounts.push(base * multiplier);
+    candidates.push({ value: base * multiplier, before: text.slice(0, start), rest });
   }
+  const amounts = candidates.map(({ value, before, rest }) => ({
+    value,
+    isTotal:
+      quantities.length > 0 &&
+      !PER_SHARE_PREFIX.test(before) &&
+      !PER_SHARE_SUFFIX.test(rest) &&
+      (TOTAL_PREFIX.test(before) || TOTAL_SUFFIX.test(rest)),
+  }));
   return { amounts, quantities };
 }
 

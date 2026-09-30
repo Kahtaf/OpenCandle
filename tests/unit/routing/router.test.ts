@@ -3075,6 +3075,33 @@ describe("router cost-basis context guard", () => {
     expect(shareCount.entities.costBasis).toBeUndefined();
   });
 
+  it("never takes a stated purchase total as the per-share basis", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 15000 }),
+    );
+
+    expect(result.entities.costBasis).toBeUndefined();
+  });
+
+  it("keeps a per-share basis stated alongside a share count", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I paid $150 per share for 100 shares of AAPL. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
+  it("does not treat a currency code after an amount as a share count", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "I bought AAPL at 150 USD. Covered call ideas?" },
+      outputFor({ symbols: ["AAPL"], costBasis: 150 }),
+    );
+
+    expect(result.entities.costBasis).toBe(150);
+  });
+
   it("drops a derived basis that misses the stated total over quantity by more than 0.5%", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "I paid $15,000 for 100 shares of AAPL. Covered call ideas?" },

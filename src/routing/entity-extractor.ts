@@ -162,7 +162,7 @@ const COMMON_WORDS = new Set([
 ]);
 
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI", "MA"]);
-const CURRENCY_CODES = new Set(["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "CHF"]);
+export const CURRENCY_CODES = new Set(["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "CHF"]);
 const LOWERCASE_FINANCE_TERMS = new Set([
   "bond",
   "bonds",
