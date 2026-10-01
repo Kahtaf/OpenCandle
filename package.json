@@ -88,6 +88,8 @@
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
     "gui:hosted:build": "npm --workspace @opencandle/gui-hosted run build",
     "gui:hosted:dev": "npm --workspace @opencandle/gui-hosted run dev",
+    "gui:hosted:deploy": "npm --workspace @opencandle/gui-hosted run deploy",
+    "gui:hosted:deploy:dry-run": "npm --workspace @opencandle/gui-hosted run deploy:dry-run",
     "generate:pi-model-catalog": "tsx scripts/generate-pi-model-catalog.ts && biome format --write src/pi/model-catalog.generated.ts",
     "relay:dev": "npm --workspace @opencandle/provider-relay run dev",
     "relay:test": "npm --workspace @opencandle/provider-relay test",

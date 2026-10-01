@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.
+
 - Stopping a run while a DCF valuation is still fetching no longer crashes the local GUI server and ends every other running chat.
 
 - Each chat now keeps its own model and reasoning level: a reopened chat runs on the model its picker shows, and picking a model changes only the open chat, while new chats start on the saved default.

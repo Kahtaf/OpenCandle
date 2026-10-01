@@ -26,6 +26,7 @@ npx tsx tests/screenshots/capture.ts <phase> [--viewport=...]  # screenshot harn
 | Browser layout/components | `gui/web/src/features/`, `gui/web/src/components/` | Reusable primitives live in `gui/web/src/components/ui/`; preserve existing visual language unless the user asks for redesign |
 | GUI browser smoke coverage | `tests/e2e/gui-browser.test.ts` | Uses a live server at `OPENCANDLE_GUI_URL` |
 | Screenshot capture flow | `tests/screenshots/capture.ts` | Requires a fresh `gui/web/dist` build |
+| Hosted web app deploy/rollback | `gui/hosted/README.md` | `npm run gui:hosted:deploy:dry-run`; never deploy without maintainer approval |
 
 ## CONVENTIONS
 - Treat `gui/shared/` as the contract layer. If you change event shape or reducer behavior, update both server producers and browser consumers.
