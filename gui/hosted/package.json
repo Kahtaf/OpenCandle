@@ -24,6 +24,6 @@
   "devDependencies": {
     "esbuild": "0.28.2",
     "vite": "8.3.1",
-    "wrangler": "4.140.0"
+    "wrangler": "4.144.0"
   }
 }
