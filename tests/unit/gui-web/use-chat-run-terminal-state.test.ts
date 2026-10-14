@@ -35,6 +35,55 @@ afterEach(async () => {
 });
 
 describe("useChatRun terminal state", () => {
+  it("accepts a completed response after an SSE keepalive comment", async () => {
+    const transport = {
+      startChatRun: vi.fn(
+        async () =>
+          new Response(': keepalive\n\ndata: {"type":"run.completed"}\n\n', {
+            headers: { "content-type": "text/event-stream" },
+          }),
+      ),
+    };
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe, { onRunError: vi.fn() }),
+        ),
+      ),
+    );
+    await act(async () => latestRun?.startChatRun("Research AAPL"));
+    expect(latestRun?.runState).toBe("ready");
+  });
+
+  it.each([null, 'data: {"type":"run.started"}\n\n'])(
+    "does not report completion when the stream ends without a terminal event (%s)",
+    async (body) => {
+      const onRunError = vi.fn();
+      const transport = {
+        startChatRun: vi.fn(
+          async () =>
+            new Response(body, {
+              headers: { "content-type": "text/event-stream" },
+            }),
+        ),
+      };
+      await act(async () =>
+        root.render(
+          React.createElement(
+            RuntimeTransportContext.Provider,
+            { value: transport },
+            React.createElement(Probe, { onRunError }),
+          ),
+        ),
+      );
+      await act(async () => latestRun?.startChatRun("Research AAPL"));
+      expect(latestRun?.runState).toBe("failed");
+      expect(onRunError).toHaveBeenCalledWith("session-1");
+    },
+  );
+
   it("clears the optimistic queued projection when SSE reports a terminal failure", async () => {
     const onRunError = vi.fn();
     const transport = {

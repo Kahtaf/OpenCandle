@@ -378,7 +378,7 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
               },
               { type: "run.completed", sessionId: "mock-session", runId: "cashtag-run", seq: 3 },
             ]) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\\n\\n`));
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             }
             controller.close();
           },

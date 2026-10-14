@@ -328,10 +328,15 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
 }
 
 async function drainSse(response, onEvent) {
+  const disconnected = () =>
+    new Error(
+      "Connection ended before the response finished. Reopen this chat to check its status.",
+    );
   const reader = response.body?.getReader();
-  if (!reader) return;
+  if (!reader) throw disconnected();
   const decoder = new TextDecoder();
   let buffer = "";
+  let terminal = false;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -340,18 +345,23 @@ async function drainSse(response, onEvent) {
     while (index !== -1) {
       const block = buffer.slice(0, index);
       buffer = buffer.slice(index + 2);
+      index = buffer.indexOf("\n\n");
       const data = block
         .split("\n")
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trim())
         .join("\n");
       if (!data) continue;
+      let event;
       try {
-        onEvent(JSON.parse(data));
+        event = JSON.parse(data);
       } catch {
         // Ignore malformed SSE blocks.
+        continue;
       }
-      index = buffer.indexOf("\n\n");
+      if (event.type === "run.completed" || event.type === "run.failed") terminal = true;
+      onEvent(event);
     }
   }
+  if (!terminal) throw disconnected();
 }
