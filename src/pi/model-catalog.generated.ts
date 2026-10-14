@@ -284,6 +284,21 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
+    id: "gpt-6.1-sol",
+    label: "openai/gpt-6.1-sol",
+  },
+  {
+    provider: "openai",
+    id: "gpt-daybreak-blue-latest",
+    label: "openai/gpt-daybreak-blue-latest",
+  },
+  {
+    provider: "openai",
+    id: "gpt-daybreak-red-latest",
+    label: "openai/gpt-daybreak-red-latest",
+  },
+  {
+    provider: "openai",
     id: "gpt-realtime-2.1",
     label: "openai/gpt-realtime-2.1",
   },
@@ -339,6 +354,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "anthropic",
+    id: "claude-haiku-5-5",
+    label: "anthropic/claude-haiku-5-5",
+  },
+  {
+    provider: "anthropic",
     id: "claude-opus-4-5",
     label: "anthropic/claude-opus-4-5",
   },
@@ -391,5 +411,10 @@ export const firstClassModelCatalog = [
     provider: "anthropic",
     id: "claude-sonnet-5",
     label: "anthropic/claude-sonnet-5",
+  },
+  {
+    provider: "anthropic",
+    id: "claude-sonnet-5-5",
+    label: "anthropic/claude-sonnet-5-5",
   },
 ] as const satisfies readonly ModelCatalogEntry[];

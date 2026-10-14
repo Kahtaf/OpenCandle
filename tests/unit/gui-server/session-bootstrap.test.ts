@@ -88,9 +88,9 @@ describe("session-addressed GUI bootstrap", () => {
       );
 
       expect(payload.sessionId).toBe(requested.getSessionId());
-      // Pi intentionally does not create the JSONL file until a real assistant
-      // response exists. The UI must not rotate away from this transient session.
-      expect(payload.sessionPersisted).toBe(false);
+      // Pi persists the first user message so an interrupted first turn remains
+      // reopenable before any assistant response exists.
+      expect(payload.sessionPersisted).toBe(true);
       const snapshot = payload.snapshot as {
         sessionId: string;
         events: Array<{ sessionId: string; type: string }>;

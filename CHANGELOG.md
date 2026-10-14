@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Hosted clarification questions and answers stay visible when an older background refresh arrives late.
+
+- The model chooser now includes the latest models supported by Pi 1.2.0.
+
 - Reopening a chat keeps completed runs ready for the next message when an older session load arrives late.
 
 - On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.

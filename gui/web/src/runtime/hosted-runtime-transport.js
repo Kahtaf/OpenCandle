@@ -142,6 +142,8 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
           message?.type === "ask_user.resolved" ||
           message?.type === "error"
         ) {
+          // Live clarification state supersedes any refresh captured before it.
+          if (message.type !== "error") refreshGeneration += 1;
           publish(message);
           return;
         }

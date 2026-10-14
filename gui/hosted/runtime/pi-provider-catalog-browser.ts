@@ -13,3 +13,8 @@ export function getBuiltinModelDataGeneratedAt(): number | undefined {
 export function radiusProvider(): never {
   throw new Error("Radius providers are unavailable in browser-hosted OpenCandle");
 }
+
+/** OpenRouter is outside the hosted provider allowlist. */
+export function personalizeOpenRouterCatalog(): never {
+  throw new Error("OpenRouter is unavailable in browser-hosted OpenCandle");
+}

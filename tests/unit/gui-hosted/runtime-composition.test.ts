@@ -18,6 +18,8 @@ describe("auditRuntimeComposition", () => {
       audit([
         "node_modules/@earendil-works/pi-ai/dist/providers/anthropic.js",
         "node_modules/@earendil-works/pi-ai/dist/providers/radius-config.js",
+        "node_modules/@earendil-works/pi-ai/dist/providers/compat-schema.js",
+        "node_modules/@earendil-works/pi-ai/dist/providers/model-schema.js",
       ]).piProviders,
     ).toEqual(["anthropic"]);
   });

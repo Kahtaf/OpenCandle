@@ -9,6 +9,7 @@ import {
 } from "../../../gui/web/src/features/chat/tool-drawer-context.jsx";
 import { useChatRun } from "../../../gui/web/src/hooks/useChatRun.jsx";
 import { useGuiConnection } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
+import { createHostedRuntimeTransport } from "../../../gui/web/src/runtime/hosted-runtime-transport.js";
 import { RuntimeTransportContext } from "../../../gui/web/src/runtime/runtime-transport-context.js";
 
 let root: Root;
@@ -90,6 +91,69 @@ describe("restored run ownership", () => {
 });
 
 describe("connection recovery", () => {
+  it.each(["pending", "answered"])(
+    "keeps a live hosted clarification %s when an older bootstrap resolves",
+    async (status) => {
+      let latest: ReturnType<typeof useGuiConnection>;
+      let emit!: (event: Record<string, unknown>) => void;
+      let completeRefresh!: (payload: Record<string, unknown>) => void;
+      let holdRefresh = false;
+      const prompt = {
+        id: "live-question",
+        sessionId: "session-1",
+        question: "Which horizon?",
+        status,
+      };
+      const bootstrap = {
+        role: "writer",
+        sessionId: "session-1",
+        sessions: [],
+        catalog: { tools: [], workflows: [], providers: [] },
+        snapshot: { sessionId: "session-1", entries: [], events: [] },
+        askUserPrompts: status === "answered" ? [{ ...prompt, status: "pending" }] : [],
+      };
+      const host = {
+        getRole: () => "writer",
+        request: async (_operation: string, payload: { action: string }) => {
+          if (payload.action !== "bootstrap") return {};
+          if (!holdRefresh) return bootstrap;
+          return new Promise<Record<string, unknown>>((resolve) => {
+            completeRefresh = resolve;
+          });
+        },
+        streamRequest: vi.fn(),
+        subscribe: (listener: typeof emit) => {
+          emit = listener;
+          return () => {};
+        },
+      };
+      const transport = createHostedRuntimeTransport({ host });
+      function Probe() {
+        latest = useGuiConnection();
+        return null;
+      }
+      await act(async () =>
+        root.render(
+          React.createElement(
+            RuntimeTransportContext.Provider,
+            { value: transport },
+            React.createElement(Probe),
+          ),
+        ),
+      );
+      holdRefresh = true;
+      await act(async () => emit({ type: "invalidate" }));
+      expect(completeRefresh).toBeDefined();
+      await act(async () => {
+        // A runtime response and its subsequent live event can arrive in one
+        // message task, before the refresh promise publishes its old projection.
+        completeRefresh(bootstrap);
+        emit({ type: status === "pending" ? "ask_user.prompt" : "ask_user.resolved", prompt });
+      });
+      expect(latest!.askUserPrompts).toEqual([prompt]);
+    },
+  );
+
   it("keeps newer run ownership when an ordinary session load finishes late", async () => {
     let latest: ReturnType<typeof useGuiConnection>;
     let onMessage!: (message: string) => void;
