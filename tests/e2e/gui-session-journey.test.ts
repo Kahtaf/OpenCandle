@@ -561,6 +561,81 @@ describe("GUI session journey", () => {
     expect(sessionIdFromUrl(page)).toBe(sessionId);
   }, 120_000);
 
+  it.each([1280, 390])(
+    "discards a superseded ordinary session load at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await startNewSession(page);
+      await submitPrompt(page, QUOTE_PROMPT);
+      await expectVisible(page.getByText("$189.42").first(), 30_000);
+      await waitForRunIdle(page);
+      const sessionId = sessionIdFromUrl(page);
+      await page.reload({ waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await startNewSession(page);
+      await submitPrompt(page, SECOND_PROMPT);
+      await expectVisible(page.getByText("$512.34").first(), 30_000);
+      await waitForRunIdle(page);
+      await page.reload({ waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await openSession(page, "AAPL quote journey");
+      await submitPrompt(page, STREAM_HOLD_PROMPT);
+      await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await openSession(page, "MSFT quote journey");
+      // B remains the server's current chat while A runs in the background.
+      // After reload, reopening A requires an ordinary session read.
+      await page.reload({ waitUntil: "networkidle" });
+      let releaseRead!: () => void;
+      let readStarted = false;
+      let staleBody = "";
+      const heldRead = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      const url = `${harness.baseUrl}/api/sessions/${sessionId}/bootstrap`;
+      await page.route(url, async (route) => {
+        const response = await route.fetch();
+        staleBody = await response.text();
+        readStarted = true;
+        await heldRead;
+        await route.fulfill({ response, body: staleBody });
+      });
+      try {
+        if (width === 390)
+          await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "AAPL quote journey", exact: true }).click();
+        await waitForCondition(() => readStarted, 15_000);
+        expect(JSON.parse(staleBody).snapshot.activeRun).not.toBeNull();
+        answerHold.release();
+        await expectVisible(
+          page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+          15_000,
+        );
+        await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+        const responseDelivered = page.waitForResponse(url);
+        releaseRead();
+        await (await responseDelivered).finished();
+        await page.evaluate(async () => {
+          await new Promise(requestAnimationFrame);
+          await new Promise(requestAnimationFrame);
+        });
+        await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+        expect(await page.getByRole("button", { name: "Stop response" }).count()).toBe(0);
+        expect(sessionIdFromUrl(page)).toBe(sessionId);
+      } finally {
+        releaseRead();
+      }
+    },
+    120_000,
+  );
+
   it("passive reload does not cancel; the held run completes normally", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Reopening a chat keeps completed runs ready for the next message when an older session load arrives late.
+
 - On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
 
 - A model provider timeout now shows one retryable error instead of repeated failure cards that suggest repairing a working key.
