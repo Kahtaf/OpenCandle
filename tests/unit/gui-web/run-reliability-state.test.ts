@@ -90,6 +90,74 @@ describe("restored run ownership", () => {
 });
 
 describe("connection recovery", () => {
+  it("keeps newer run ownership when an ordinary session load finishes late", async () => {
+    let latest: ReturnType<typeof useGuiConnection>;
+    let onMessage!: (message: string) => void;
+    let completeRead!: (data: Record<string, unknown>) => void;
+    const transport = {
+      kind: "loopback",
+      loadSession: vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            completeRead = resolve;
+          }),
+      ),
+      openEventChannel: (callbacks: { onMessage: (message: string) => void }) => {
+        onMessage = callbacks.onMessage;
+        return { readyState: 1, close: vi.fn() };
+      },
+    };
+    function Probe() {
+      latest = useGuiConnection();
+      return null;
+    }
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe),
+        ),
+      ),
+    );
+    await act(async () =>
+      onMessage(
+        JSON.stringify({
+          type: "boot",
+          role: "writer",
+          sessionId: "current",
+          catalog: { tools: [], workflows: [], providers: [] },
+        }),
+      ),
+    );
+    let read!: Promise<boolean>;
+    await act(async () => {
+      read = latest!.loadSession("background");
+    });
+    await act(async () => {
+      onMessage(
+        JSON.stringify({
+          type: "session.snapshot",
+          sessionId: "background",
+          activeRun: null,
+          entries: [{ type: "message", message: { role: "assistant", content: "Completed" } }],
+        }),
+      );
+      completeRead({
+        sessionId: "background",
+        snapshot: {
+          sessionId: "background",
+          activeRun: { actionId: "finished-run" },
+          entries: [],
+        },
+      });
+      expect(await read).toBe(true);
+    });
+    expect(latest!.sessionSnapshots.background.activeRun).toBeNull();
+    expect(latest!.sessionSnapshots.background.entries).toHaveLength(1);
+    expect(latest!.currentSessionId).toBe("current");
+  });
+
   it.each(["loopback", "hosted"])(
     "reconnects a nominally open %s channel without selecting background chats",
     async (kind) => {

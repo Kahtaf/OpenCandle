@@ -294,6 +294,7 @@ export function useGuiConnection() {
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [sessionSnapshots, setSessionSnapshots] = useState({});
+  const sessionRevisionsRef = useRef(new Map());
   const sessionSnapshotsRef = useRef(sessionSnapshots);
   sessionSnapshotsRef.current = sessionSnapshots;
   const [askUserPrompts, setAskUserPrompts] = useState([]);
@@ -334,48 +335,69 @@ export function useGuiConnection() {
     settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
 
-  const applyBootstrap = useCallback((data, expectedSessionId = "", options = {}) => {
-    const snapshot = data.snapshot || {};
-    const nextSnapshot = sessionSnapshotFromPayload(data);
-    const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
-    if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
-    const updateVisibleState = options.updateVisibleState !== false;
-    setRole((currentRole) => resolveBootstrapRole(currentRole, data, options.updateRole !== false));
-    setCoordination(data.coordination || null);
-    setCurrentSessionId((currentSessionId) =>
-      resolveBootstrapSessionId(
-        currentSessionId,
-        responseSessionId,
-        options.updateCurrentSessionId !== false,
-      ),
-    );
-    if (options.updateCurrentSessionId !== false) {
-      setCurrentSessionPersisted(data.sessionPersisted === true);
-    }
-    setAskUserPrompts(data.askUserPrompts || []);
-    if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
-    // Bootstraps (session loads, HTTP fallback commands) also report which
-    // models have keys; a change invalidates other sessions' cached models.
-    const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
-    if (nextSnapshot || availabilityChanged) {
-      setSessionSnapshots((current) => {
-        const marked = availabilityChanged ? markSessionModelsStale(current) : current;
-        return nextSnapshot ? mergeSessionSnapshotMap(marked, data) : marked;
-      });
-    }
-    startTransition(() => {
-      setSessions(data.sessions || []);
-      if (updateVisibleState) {
-        setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
-        setEvents(nextSnapshot?.events || []);
-      }
-      setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
-      setModelSetup(
-        data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
-      );
-    });
+  // Advance on authoritative snapshots immediately, before React renders.
+  // Cosmetic model invalidation does not supersede an ownership read.
+  const mergeAuthoritativeSnapshot = useCallback((payload, expectedRevision) => {
+    const snapshot = sessionSnapshotFromPayload(payload);
+    if (!snapshot) return false;
+    const revisions = sessionRevisionsRef.current;
+    const revision = revisions.get(snapshot.sessionId) || 0;
+    if (expectedRevision !== undefined && revision !== expectedRevision) return false;
+    revisions.set(snapshot.sessionId, revision + 1);
+    setSessionSnapshots((current) => mergeSessionSnapshotMap(current, payload));
     return true;
   }, []);
+
+  const applyBootstrap = useCallback(
+    (data, expectedSessionId = "", options = {}) => {
+      const snapshot = data.snapshot || {};
+      const nextSnapshot = sessionSnapshotFromPayload(data);
+      const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
+      if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
+      if (
+        options.expectedRevision !== undefined &&
+        (sessionRevisionsRef.current.get(responseSessionId) || 0) !== options.expectedRevision
+      ) {
+        // The requested chat is already cached from a newer authoritative event.
+        return true;
+      }
+      const updateVisibleState = options.updateVisibleState !== false;
+      setRole((currentRole) =>
+        resolveBootstrapRole(currentRole, data, options.updateRole !== false),
+      );
+      setCoordination(data.coordination || null);
+      setCurrentSessionId((currentSessionId) =>
+        resolveBootstrapSessionId(
+          currentSessionId,
+          responseSessionId,
+          options.updateCurrentSessionId !== false,
+        ),
+      );
+      if (options.updateCurrentSessionId !== false) {
+        setCurrentSessionPersisted(data.sessionPersisted === true);
+      }
+      setAskUserPrompts(data.askUserPrompts || []);
+      if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
+      // Bootstraps (session loads, HTTP fallback commands) also report which
+      // models have keys; a change invalidates other sessions' cached models.
+      const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
+      if (availabilityChanged) setSessionSnapshots((current) => markSessionModelsStale(current));
+      if (nextSnapshot) mergeAuthoritativeSnapshot(data);
+      startTransition(() => {
+        setSessions(data.sessions || []);
+        if (updateVisibleState) {
+          setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+          setEvents(nextSnapshot?.events || []);
+        }
+        setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
+        setModelSetup(
+          data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
+        );
+      });
+      return true;
+    },
+    [mergeAuthoritativeSnapshot],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -419,15 +441,13 @@ export function useGuiConnection() {
               // provides a read-only loadSession; hosted loadSession selects a chat.
               for (const [sessionId, snapshot] of Object.entries(sessionSnapshotsRef.current)) {
                 if (transport.kind !== "loopback" || !snapshot.activeRun?.actionId) continue;
+                const revision = sessionRevisionsRef.current.get(sessionId) || 0;
                 void transport
                   .loadSession(sessionId)
                   .then((data) => {
                     if (disposed || wsRef.current !== ws) return;
-                    setSessionSnapshots((current) =>
-                      current[sessionId] === snapshot
-                        ? mergeSessionSnapshotMap(current, data)
-                        : current,
-                    );
+                    if (sessionSnapshotFromPayload(data)?.sessionId !== sessionId) return;
+                    mergeAuthoritativeSnapshot(data, revision);
                   })
                   .catch(() => {
                     // Keep the known running state when ownership cannot be refreshed.
@@ -518,7 +538,7 @@ export function useGuiConnection() {
                 resolveSnapshotCoordination(current, message.coordination),
               );
               if (nextSnapshot) {
-                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+                mergeAuthoritativeSnapshot(message);
               }
               startTransition(() => {
                 setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
@@ -527,7 +547,7 @@ export function useGuiConnection() {
             } else if (message.type === "session.snapshot") {
               const nextSnapshot = sessionSnapshotFromPayload(message);
               if (nextSnapshot) {
-                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+                mergeAuthoritativeSnapshot(message);
               }
             } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
               setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
@@ -630,7 +650,14 @@ export function useGuiConnection() {
       document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
-  }, [applyBootstrap, setModelSetupError, setToast, settleToolInvoke, transport]);
+  }, [
+    applyBootstrap,
+    mergeAuthoritativeSnapshot,
+    setModelSetupError,
+    setToast,
+    settleToolInvoke,
+    transport,
+  ]);
 
   const sendHttpFallbackMessage = useCallback(
     async (request) => {
@@ -770,12 +797,14 @@ export function useGuiConnection() {
     async (sessionId) => {
       const targetSessionId = String(sessionId ?? "").trim();
       if (!targetSessionId) return false;
+      const revision = sessionRevisionsRef.current.get(targetSessionId) || 0;
       try {
         const data = await transport.loadSession(targetSessionId);
         setSupportsSessionActions(
           resolveSupportsSessionActions(data.supportsSessionActions, data.role, data.coordination),
         );
         return applyBootstrap(data, targetSessionId, {
+          expectedRevision: revision,
           updateRole: false,
           updateVisibleState: false,
         });
