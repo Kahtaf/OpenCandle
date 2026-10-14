@@ -366,32 +366,38 @@ export class BrowserHostedGuiRuntime {
     const guardedActionId = requireActionId(actionId);
     const actionKey = `${guardedSessionId}:${guardedActionId}`;
     const fingerprint = fingerprintChatInput(input);
+    // A successful duplicate does not replay transcript events or paid work,
+    // but its stream still needs a terminal acknowledgement for this caller.
+    const acknowledgeRetry = async (result: CompletedChatResult): Promise<CompletedChatResult> => {
+      await onEvent?.({ type: "run.completed", sessionId: guardedSessionId, runId: guardedActionId, seq: 1 });
+      return result;
+    };
     const completed = this.completedChatResults.get(actionKey);
     if (completed) {
       requireMatchingChatInput(completed.fingerprint, fingerprint);
-      return {
+      return acknowledgeRetry({
         ...(await this.buildBootstrap(await this.resolveManager(completed.sessionId), false)),
         events: [],
-      };
+      });
     }
     const inFlight = this.inFlightChatResults.get(actionKey);
     if (inFlight) {
       requireMatchingChatInput(inFlight.fingerprint, fingerprint);
-      return inFlight.operation;
+      return acknowledgeRetry(await inFlight.operation);
     }
     const manager = await this.resolveManager(guardedSessionId);
     const completedAfterLookup = this.completedChatResults.get(actionKey);
     if (completedAfterLookup) {
       requireMatchingChatInput(completedAfterLookup.fingerprint, fingerprint);
-      return { ...(await this.buildBootstrap(manager, false)), events: [] };
+      return acknowledgeRetry({ ...(await this.buildBootstrap(manager, false)), events: [] });
     }
     const inFlightAfterLookup = this.inFlightChatResults.get(actionKey);
     if (inFlightAfterLookup) {
       requireMatchingChatInput(inFlightAfterLookup.fingerprint, fingerprint);
-      return inFlightAfterLookup.operation;
+      return acknowledgeRetry(await inFlightAfterLookup.operation);
     }
     if (hasAcceptedSessionAction(manager, guardedActionId, fingerprint)) {
-      return { ...(await this.buildBootstrap(manager, false)), events: [] };
+      return acknowledgeRetry({ ...(await this.buildBootstrap(manager, false)), events: [] });
     }
     if (hasPendingSessionAction(manager, guardedActionId, fingerprint)) {
       throw new Error(

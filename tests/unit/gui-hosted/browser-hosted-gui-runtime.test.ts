@@ -420,8 +420,15 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     });
 
     const first = await runtime.chatRun("session-1", chatInput("First"), "run-1");
-    const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1");
+    const acknowledged = vi.fn();
+    const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1", acknowledged);
 
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-1",
+      seq: 1,
+    });
     expect(retry).toEqual({ ...first, events: [] });
     expect(prompt).toHaveBeenCalledTimes(1);
   });
@@ -731,9 +738,16 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     });
     (second as any).resolveManager = vi.fn(async () => manager);
 
-    await expect(second.chatRun("session-1", chatInput("First"), "run-restart")).resolves.toEqual(
-      expect.objectContaining({ events: [] }),
-    );
+    const acknowledged = vi.fn();
+    await expect(
+      second.chatRun("session-1", chatInput("First"), "run-restart", acknowledged),
+    ).resolves.toEqual(expect.objectContaining({ events: [] }));
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-restart",
+      seq: 1,
+    });
     expect(secondPrompt).not.toHaveBeenCalled();
     await expect(second.chatRun("session-1", chatInput("Changed"), "run-restart")).rejects.toThrow(
       "different input",
@@ -914,11 +928,18 @@ describe("BrowserHostedGuiRuntime action safety", () => {
 
     const first = runtime.chatRun("session-1", chatInput("First"), "run-1");
     await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
-    const retry = runtime.chatRun("session-1", chatInput("First"), "run-1");
+    const acknowledged = vi.fn();
+    const retry = runtime.chatRun("session-1", chatInput("First"), "run-1", acknowledged);
 
     finishPrompt();
     const [firstResult, retryResult] = await Promise.all([first, retry]);
     expect(retryResult).toBe(firstResult);
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-1",
+      seq: 1,
+    });
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
