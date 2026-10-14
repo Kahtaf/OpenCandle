@@ -21,7 +21,7 @@ export function sessionEntriesToChatEvents(
   const seenToolCalls = new Set<string>();
   const resolvedToolCalls = new Set<string>();
   const pendingToolCalls = new Map<string, { name: string }>();
-  const assistantErrorsWithExplicitFailure = pairedAssistantFailureIds(entries);
+  const assistantErrorsWithExplicitFailure = supersededAssistantFailureIds(entries);
   // Abort-shaped error replies from runs the user stopped (durable marker).
   const userStoppedAssistants = userStoppedAssistantEntries(entries);
   // Set by an opencandle-user-input marker: the user's words before a workflow
@@ -338,10 +338,19 @@ export function sessionEntriesToChatEvents(
   return events;
 }
 
-function pairedAssistantFailureIds(entries: SessionEntry[]): Set<string> {
+function supersededAssistantFailureIds(entries: SessionEntry[]): Set<string> {
   const paired = new Set<string>();
+  let previousFailureId: string | undefined;
   entries.forEach((entry, index) => {
-    if (entry.type !== "message" || !assistantFailure(entry.message as Message)) return;
+    if (entry.type !== "message") return;
+    if (!assistantFailure(entry.message as Message)) {
+      previousFailureId = undefined;
+      return;
+    }
+    // Pi persists each automatic provider retry. Show only its last failure,
+    // while preserving separate failures across user turns and tool work.
+    if (previousFailureId) paired.add(previousFailureId);
+    previousFailureId = entry.id;
     const next = entries[index + 1];
     if (
       next?.type === "custom_message" &&

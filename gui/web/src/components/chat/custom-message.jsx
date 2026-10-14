@@ -21,11 +21,17 @@ export function CustomMessage({
         <div className="mb-1 font-medium text-destructive">Model connection failed</div>
         <p className="m-0 text-foreground">{textContent(content)}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" variant="bordered" size="sm" onClick={onRetry}>
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            onClick={onRetry}
+            disabled={retryDisabled}
+          >
             Retry
           </Button>
           <Button type="button" variant="brand" size="sm" onClick={onFixModelKey}>
-            Fix model key
+            {details?.reason === "model_auth" ? "Fix model key" : "Model settings"}
           </Button>
         </div>
       </div>

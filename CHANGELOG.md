@@ -4,6 +4,8 @@
 
 - On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
 
+- A model provider timeout now shows one retryable error instead of repeated failure cards that suggest repairing a working key.
+
 - Active hosted chats appear in the sidebar immediately and preserve their prompt with recovery guidance after an interrupted reload.
 
 - Hosted chats now show the agent's clarification questions immediately so research can continue after an answer.

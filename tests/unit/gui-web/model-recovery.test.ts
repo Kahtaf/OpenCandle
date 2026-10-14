@@ -44,6 +44,7 @@ describe("model recovery controls", () => {
       React.createElement(CustomMessage, {
         customType: "opencandle-model-run-failed",
         content: [{ type: "text", text: "OpenAI rejected the configured key." }],
+        details: { reason: "model_auth" },
         onRetry: vi.fn(),
         onFixModelKey: vi.fn(),
       }),
@@ -52,6 +53,22 @@ describe("model recovery controls", () => {
     expect(html).toContain("OpenAI rejected the configured key.");
     expect(html).toContain(">Retry</button>");
     expect(html).toContain(">Fix model key</button>");
+  });
+
+  it("offers model settings for a timeout and disables retry during another run", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(CustomMessage, {
+        customType: "opencandle-model-run-failed",
+        content: [{ type: "text", text: "The provider timed out." }],
+        details: { reason: "model_error" },
+        onRetry: vi.fn(),
+        onFixModelKey: vi.fn(),
+        retryDisabled: true,
+      }),
+    );
+    expect(html).toContain(">Model settings</button>");
+    expect(html).not.toContain(">Fix model key</button>");
+    expect(html).toMatch(/<button[^>]* disabled=""[^>]*>Retry<\/button>/);
   });
 
   it("renders model-key validation errors inline in setup", () => {

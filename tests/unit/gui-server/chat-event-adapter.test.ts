@@ -1404,3 +1404,34 @@ describe("custom message details", () => {
     });
   });
 });
+
+describe("provider retry failures", () => {
+  it("shows one terminal failure after automatic provider retries in a user turn", () => {
+    const entries = [
+      messageEntry("user", {
+        role: "user",
+        content: "Research this",
+        timestamp: Date.now(),
+      } as Message),
+      ...[1, 2, 3, 4].map((attempt) =>
+        messageEntry(`error-${attempt}`, {
+          ...assistantMessage(""),
+          stopReason: "error",
+          errorMessage: "Provider timed out",
+        } as Message),
+      ),
+    ];
+    const events = sessionEntriesToChatEvents(entries, { sessionId: "retry-session" });
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "custom.message" && event.customType === "opencandle-model-run-failed",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        messageId: "model-error-error-4",
+        details: expect.objectContaining({ prompt: "Research this" }),
+      }),
+    ]);
+  });
+});
