@@ -154,7 +154,7 @@
     "@earendil-works/pi-coding-agent": "1.2.0",
     "better-sqlite3": "^13.0.3",
     "ddg-kit": "0.1.1",
-    "sql.js": "^1.14.2",
+    "sql.js": "^1.15.0",
     "yahoo-finance2": "^4.0.3"
   },
   "peerDependencies": {
@@ -163,7 +163,10 @@
   "overrides": {
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "ddg-kit": {
+      "undici": "^6.29.0"
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
