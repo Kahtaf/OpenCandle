@@ -19,7 +19,7 @@
     "@webcontainer/api": "1.6.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sql.js": "^1.14.2"
+    "sql.js": "^1.15.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
