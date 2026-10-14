@@ -4,6 +4,8 @@
 
 - On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
 
+- Hosted chats now show the agent's clarification questions immediately so research can continue after an answer.
+
 - Reloading a running local chat preserves its Stop control, and chats become usable again when an offline connection returns.
 
 - An interrupted response connection now shows a recovery message instead of silently appearing finished.

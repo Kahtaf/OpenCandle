@@ -74,6 +74,42 @@ async function settle() {
 }
 
 describe("browser runtime coordinator", () => {
+  it("delivers live clarification events from its writer and unsubscribes when disposed", async () => {
+    FakeBroadcastChannel.channels.clear();
+    const listeners = new Set<(event: unknown) => void>();
+    const coordinator = createBrowserRuntimeCoordinator({
+      createHost: () => ({
+        subscribe: (listener: (event: unknown) => void) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        dispose: vi.fn(),
+      }),
+      lockManager: new FakeLockManager(),
+      channelFactory: (name: string) => new FakeBroadcastChannel(name),
+      storage: createStorage(),
+    });
+    const received: unknown[] = [];
+    coordinator.subscribe((event: unknown) => received.push(event));
+    try {
+      await coordinator.ready();
+      const prompt = { id: "question-1", sessionId: "session-1", question: "Which ticker?" };
+      const events = [
+        { type: "ask_user.prompt", prompt },
+        { type: "ask_user.resolved", prompt: { ...prompt, status: "answered", answer: "AAPL" } },
+      ];
+      for (const event of events) for (const listener of listeners) listener(event);
+      expect(
+        received.filter((event) =>
+          String((event as { type: string }).type).startsWith("ask_user."),
+        ),
+      ).toEqual(events);
+    } finally {
+      await coordinator.dispose();
+    }
+    expect(listeners.size).toBe(0);
+  });
+
   it("elects one writer and gives a follower mutation to its initiating tab", async () => {
     FakeBroadcastChannel.channels.clear();
     const locks = new FakeLockManager();
