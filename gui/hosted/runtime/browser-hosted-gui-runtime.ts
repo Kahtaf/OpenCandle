@@ -64,6 +64,8 @@ import {
 } from "../../../src/runtime/sqljs-state-database-node.js";
 import {
   BrowserPiSession,
+  HOSTED_RUN_PENDING,
+  recoverInterruptedHostedRun,
   type BrowserPiThinkingState,
 } from "./browser-pi-session.js";
 import type { StatefulToolOptions } from "../../../src/tools/portfolio/stateful-tool-options.js";
@@ -248,6 +250,10 @@ export class BrowserHostedGuiRuntime {
     mkdirSync(options.sessionDir, { recursive: true });
     mkdirSync(dirname(options.stateFile), { recursive: true });
     removeLegacyCurrentAlias(options.sessionDir);
+    for (const filename of readdirSync(options.sessionDir)) {
+      if (!filename.endsWith(".jsonl")) continue;
+      recoverInterruptedHostedRun(SessionManager.open(join(options.sessionDir, filename), options.sessionDir, options.cwd));
+    }
     const stateDatabase = await createSqlJsStateDatabase(
       existsSync(options.stateFile) ? readFileSync(options.stateFile) : undefined,
     );
@@ -483,13 +489,6 @@ export class BrowserHostedGuiRuntime {
         await this.buildBootstrap(manager),
         nextInputBytes + SESSION_COMPLETION_RESERVE_BYTES,
       );
-      recordPendingSessionAction(manager, guardedActionId, fingerprint, { durable: true });
-      await persistCheckpoint?.({
-        sessionId: guardedSessionId,
-        marketState: this.marketState(),
-        checkpoint: this.checkpoint(),
-      });
-      emit({ type: "run.started" });
       const attachmentLabels = [
         ...input.images.map((image, index) => ({
           kind: "image",
@@ -507,6 +506,22 @@ export class BrowserHostedGuiRuntime {
         this.options.modelId,
         this.options.modelCredentials,
       );
+      session.markRunStarted?.(guardedActionId, input.prompt, attachmentLabels);
+      try {
+        recordPendingSessionAction(manager, guardedActionId, fingerprint, { durable: true });
+        emit({ type: "run.started" });
+        await persistCheckpoint?.({
+          sessionId: this.currentSessionId ?? guardedSessionId,
+          marketState: this.marketState(),
+          checkpoint: this.checkpoint(),
+        });
+      } catch (error) {
+        // Startup can be cancelled before Pi writes a user message or enters
+        // the prompt's finalizer. Settle it before the failure checkpoint.
+        if (signal?.aborted) session.markStoppedRun?.(guardedActionId, input.prompt);
+        session.markRunFinished?.(guardedActionId);
+        throw error;
+      }
       const liveStartSeq = seq;
       const liveAdapter = createLiveChatEventAdapter({
         runId,
@@ -530,11 +545,11 @@ export class BrowserHostedGuiRuntime {
         originalAttachments: attachmentLabels,
       });
       nextLiveSeq = liveAdapter.nextSeq;
-      const acceptAction = () => {
+      const acceptAction = (checkpoint = true) => {
         if (actionAccepted) return;
         recordAcceptedSessionAction(manager, guardedActionId, fingerprint);
         actionAccepted = true;
-        if (persistCheckpoint) {
+        if (persistCheckpoint && checkpoint) {
           trackPersistenceWrite(
             pendingCheckpointWrites,
             Promise.resolve().then(() =>
@@ -574,13 +589,16 @@ export class BrowserHostedGuiRuntime {
           // reporting an ambiguous action after restart.
           actionStartAmbiguous = true;
         }
-        if (persistedUserMessage) {
-          acceptAction();
-          await Promise.all(pendingCheckpointWrites);
-        }
+        if (persistedUserMessage) acceptAction(false);
         throw error;
       } finally {
         unsubscribeLive?.();
+        // Only the caller's cancellation is a user Stop. An internal abort
+        // caused by failed checkpoint persistence must remain an error.
+        if (signal?.aborted) {
+          session.markStoppedRun?.(guardedActionId, input.prompt);
+        }
+        session.markRunFinished?.(guardedActionId);
       }
       seq = Math.max(seq, liveAdapter.nextSeq());
       if (seq === liveStartSeq && result.turnEvents) {
@@ -612,7 +630,8 @@ export class BrowserHostedGuiRuntime {
       let reportedError = error;
       if (!actionAccepted && !actionStartAmbiguous) {
         clearPendingSessionAction(manager, guardedActionId);
-        if (persistCheckpoint) {
+      }
+      if (persistCheckpoint) {
           try {
             await persistCheckpoint({
               sessionId: this.currentSessionId ?? guardedSessionId,
@@ -622,7 +641,6 @@ export class BrowserHostedGuiRuntime {
           } catch (checkpointError) {
             reportedError = checkpointError;
           }
-        }
       }
       seq = Math.max(seq, nextLiveSeq?.() ?? seq);
       const message =
@@ -1106,6 +1124,15 @@ export class BrowserHostedGuiRuntime {
     return [
       ...new Map(
         sessions
+          .map((session) => {
+            if (session.firstMessage !== "(no messages)") return session;
+            const entries = SessionManager.open(session.path, this.options.sessionDir, this.options.cwd).getEntries();
+            const pending = entries.find((entry) => entry.type === "custom" && entry.customType === HOSTED_RUN_PENDING);
+            const prompt = pending?.type === "custom" ? (pending.data as { prompt?: unknown })?.prompt : undefined;
+            return typeof prompt === "string" && prompt.trim()
+              ? { ...session, firstMessage: prompt, messageCount: Math.max(1, session.messageCount) }
+              : session;
+          })
           .filter(
             (session) =>
               Boolean(session.name?.trim()) ||

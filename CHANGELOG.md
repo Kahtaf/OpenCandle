@@ -4,7 +4,11 @@
 
 - On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
 
+- Active hosted chats appear in the sidebar immediately and preserve their prompt with recovery guidance after an interrupted reload.
+
 - Hosted chats now show the agent's clarification questions immediately so research can continue after an answer.
+
+- Stopping a hosted response preserves the prompt and stopped status when the chat is reopened.
 
 - Reloading a running local chat preserves its Stop control, and chats become usable again when an offline connection returns.
 

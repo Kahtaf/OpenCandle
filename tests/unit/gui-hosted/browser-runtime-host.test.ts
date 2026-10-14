@@ -355,6 +355,25 @@ describe("browser runtime host", () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes the hosted session list when a new run starts", () => {
+    const host = createBrowserRuntimeHost({
+      storage: memoryStorage(),
+      sessionStorage: memoryStorage(),
+      dataStore: {},
+    });
+    host.runtimeEpoch = "runtime-epoch";
+    host.pendingRequests.set("stream-1", { streamController: {}, sseGate: { push: vi.fn() } });
+    const notify = vi.fn();
+    host.subscribe(notify);
+    host.handleRuntimeMessage({
+      type: "stream-event",
+      requestId: "stream-1",
+      runtimeEpoch: "runtime-epoch",
+      event: { type: "run.started" },
+    });
+    expect(notify).toHaveBeenCalledWith({ type: "invalidate" });
+  });
+
   it("persists runtime checkpoints before acknowledging streamed work", async () => {
     vi.stubGlobal("addEventListener", vi.fn());
     vi.stubGlobal("removeEventListener", vi.fn());
@@ -434,6 +453,56 @@ describe("browser runtime host", () => {
     await expect(reader.read()).rejects.toThrow("timed out");
     expect(write).toHaveBeenLastCalledWith(expect.stringContaining('"type":"cancel"'));
   });
+
+  it.each([false, true])(
+    "preserves newer data when a stopped run settles (checkpoint failure: %s)",
+    async (checkpointFailure) => {
+      vi.stubGlobal("addEventListener", vi.fn());
+      vi.stubGlobal("removeEventListener", vi.fn());
+      vi.stubGlobal("navigator", { onLine: true });
+      const host = createBrowserRuntimeHost({
+        storage: memoryStorage(),
+        sessionStorage: memoryStorage(),
+        dataStore: {},
+      });
+      host.processWriter = { write: vi.fn(async () => {}) };
+      host.runtimeEpoch = "0123456789abcdef0123456789abcdef";
+      host.bootPromise = Promise.resolve();
+      const stopped = { checkpoint: { sessions: [{ content: "durable stopped turn" }] } };
+      const newer = { checkpoint: { sessions: [{ content: "newer saved mutation" }] } };
+      let durable = newer;
+      host.request = vi.fn(async () => stopped);
+      host.persistCheckpoint = vi.fn(async (snapshot) => {
+        if (checkpointFailure && snapshot === stopped) throw new Error("Storage write failed");
+        durable = snapshot;
+        return true;
+      });
+      const notify = vi.fn();
+      host.subscribe(notify);
+      const controller = new AbortController();
+      const response = await host.streamRequest(
+        "gui",
+        { action: "chat_run" },
+        { signal: controller.signal },
+      );
+      const requestId = [...host.pendingRequests.keys()][0];
+      const read = response.body.getReader().read();
+      controller.abort();
+      await expect(read).rejects.toMatchObject({ name: "AbortError" });
+      await host.acknowledgeRuntimeCheckpoint({
+        requestId,
+        checkpointId: "stop-final",
+        value: stopped,
+      });
+      await host.persistCheckpoint(newer);
+      await host.finishStreamRequest(requestId, { ok: false, error: "This operation was aborted" });
+      expect(durable).toBe(newer);
+      if (checkpointFailure)
+        expect(notify).toHaveBeenCalledWith({ type: "error", message: "Storage write failed" });
+      else expect(notify).toHaveBeenCalledWith({ type: "invalidate" });
+      expect(host.pendingRequests.size).toBe(0);
+    },
+  );
 
   it("cancels and unregisters a Pi stream when its browser consumer closes", async () => {
     vi.stubGlobal("addEventListener", vi.fn());

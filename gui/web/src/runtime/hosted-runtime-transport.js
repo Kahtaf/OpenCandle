@@ -137,7 +137,11 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
       globalThis.addEventListener?.("offline", publishOffline);
       const unsubscribeHost = host.subscribe?.((message) => {
         if (channelClosed) return;
-        if (message?.type === "ask_user.prompt" || message?.type === "ask_user.resolved") {
+        if (
+          message?.type === "ask_user.prompt" ||
+          message?.type === "ask_user.resolved" ||
+          message?.type === "error"
+        ) {
           publish(message);
           return;
         }

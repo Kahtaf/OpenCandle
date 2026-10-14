@@ -11,6 +11,24 @@ import {
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
 describe("model recovery controls", () => {
+  it("requires reattachment instead of offering a text-only retry after an interrupted upload", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(CustomMessage, {
+        customType: "opencandle-run-cancelled",
+        content: [
+          {
+            type: "text",
+            text: "Reattach your files or saved context, then send the prompt again.",
+          },
+        ],
+        details: { reason: "interrupted", requiresReattachment: true },
+        onRetry: vi.fn(),
+      }),
+    );
+    expect(html).toContain("Reattach your files or saved context");
+    expect(html).not.toContain(">Retry</button>");
+  });
+
   it("labels the composer selector when no model is connected", () => {
     const html = renderToStaticMarkup(
       React.createElement(ModelSelector, {

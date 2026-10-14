@@ -78,14 +78,17 @@ class BrowserDataStore {
       } else {
         throw new Error("State checkpoint is invalid");
       }
+      const bootstrap = isBootstrapResponse(value)
+        ? value
+        : mergeCheckpointMarketState(previous?.bootstrap, value.marketState);
       const archive = createHostedArchive({
         sessions,
         stateBytes,
-        currentSessionId:
-          typeof value.sessionId === "string" ? value.sessionId : previous?.currentSessionId,
-        bootstrap: isBootstrapResponse(value)
-          ? value
-          : mergeCheckpointMarketState(previous?.bootstrap, value.marketState),
+        // A partial checkpoint updates data, but carries no replacement offline
+        // transcript. Keep its session identity paired with that projection.
+        currentSessionId: bootstrap?.sessionId ??
+          (typeof value.sessionId === "string" ? value.sessionId : previous?.currentSessionId),
+        bootstrap,
         now: this.now(),
       });
       await this.writeArchive(archive);

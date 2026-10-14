@@ -467,14 +467,27 @@ class BrowserRuntimeHost {
     const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
     const onTimeout = () => {
       options.signal?.removeEventListener("abort", abort);
+      const cancelled = this.pendingRequests.get(requestId)?.cancelled;
       this.pendingRequests.delete(requestId);
-      streamController.error(new Error("Hosted runtime stream timed out"));
+      if (!cancelled) streamController.error(new Error("Hosted runtime stream timed out"));
+      else for (const subscriber of this.subscribers) subscriber({
+        type: "error",
+        message: "Could not confirm the stopped response was saved. Reopen this chat to check its status.",
+      });
       void this.writeProcessMessage({ type: "cancel", requestId });
     };
     let timer = globalThis.setTimeout(onTimeout, timeoutMs);
     const abort = (reportToConsumer = true) => {
-      globalThis.clearTimeout(this.pendingRequests.get(requestId)?.timer ?? timer);
-      this.pendingRequests.delete(requestId);
+      const pending = this.pendingRequests.get(requestId);
+      if (pending?.cancelled) return;
+      if (reportToConsumer && pending) {
+        // Keep the request registered until the runtime settles its Stop so
+        // its final checkpoint can still be acknowledged and saved.
+        pending.cancelled = true;
+      } else {
+        globalThis.clearTimeout(pending?.timer ?? timer);
+        this.pendingRequests.delete(requestId);
+      }
       void this.writeProcessMessage({ type: "cancel", requestId });
       if (reportToConsumer) {
         try {
@@ -852,6 +865,10 @@ class BrowserRuntimeHost {
       ) {
         for (const subscriber of this.subscribers) subscriber(message.event);
       }
+      if (pending.cancelled) return;
+      if (message.event.type === "run.started") {
+        for (const subscriber of this.subscribers) subscriber({ type: "invalidate" });
+      }
       pending.sseGate.push(
         new TextEncoder().encode(`data: ${JSON.stringify(message.event)}\n\n`),
       );
@@ -860,7 +877,7 @@ class BrowserRuntimeHost {
     }
     if (message.type === "stream-chunk" && typeof message.requestId === "string") {
       const pending = this.pendingRequests.get(message.requestId);
-      if (!pending?.streamController || !isByteArray(message.value)) return;
+      if (!pending?.streamController || pending.cancelled || !isByteArray(message.value)) return;
       pending.sseGate.push(Uint8Array.from(message.value));
       refreshStreamInactivityTimer(pending);
       return;
@@ -1045,6 +1062,7 @@ class BrowserRuntimeHost {
     try {
       const persisted = await this.persistCheckpoint(message.value);
       if (persisted === false) throw new Error("Hosted runtime checkpoint is invalid");
+      pending.checkpointError = null;
       if (
         this.runtimeEpoch !== runtimeEpoch ||
         this.pendingRequests.get(message.requestId) !== pending
@@ -1057,6 +1075,7 @@ class BrowserRuntimeHost {
         ok: true,
       });
     } catch (error) {
+      pending.checkpointError = error;
       if (
         this.runtimeEpoch !== runtimeEpoch ||
         this.pendingRequests.get(message.requestId) !== pending
@@ -1078,19 +1097,33 @@ class BrowserRuntimeHost {
     clearStreamStartupTimer(pending);
     pending.signal?.removeEventListener("abort", pending.abort);
     this.pendingRequests.delete(requestId);
-    if (!message.ok) {
-      pending.sseGate.discardCompletion();
-      pending.streamController.error(
-        new Error(String(message.error || "Hosted runtime stream failed").slice(0, 500)),
-      );
-      return;
-    }
     try {
+      if (pending.cancelled) {
+        // The runtime's final checkpoint was acknowledged before stream-end.
+        // Saving a bootstrap read here could overwrite a newer mutation.
+        if (pending.checkpointError) throw pending.checkpointError;
+        for (const subscriber of this.subscribers) subscriber({ type: "invalidate" });
+        return;
+      }
+      if (!message.ok) {
+        pending.sseGate.discardCompletion();
+        pending.streamController.error(
+          new Error(String(message.error || "Hosted runtime stream failed").slice(0, 500)),
+        );
+        return;
+      }
       pending.sseGate.finishInput();
       await this.request("gui", { action: "bootstrap" });
       pending.sseGate.releaseCompletion();
       pending.streamController.close();
     } catch (error) {
+      if (pending.cancelled) {
+        for (const subscriber of this.subscribers) subscriber({
+          type: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
       pending.sseGate.discardCompletion();
       pending.streamController.error(error);
     }

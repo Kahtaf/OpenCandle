@@ -40,7 +40,7 @@ export function CustomMessage({
       <div className="flex max-w-[760px] flex-wrap items-center gap-2 text-sm">
         <Badge variant="secondary">Stopped</Badge>
         <span className="text-foreground">{textContent(content)}</span>
-        {onRetry ? (
+        {onRetry && !details?.requiresReattachment ? (
           <Button
             type="button"
             variant="bordered"
