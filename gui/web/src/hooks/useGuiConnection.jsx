@@ -294,7 +294,8 @@ export function useGuiConnection() {
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [sessionSnapshots, setSessionSnapshots] = useState({});
-  const sessionRevisionsRef = useRef(new Map());
+  const sessionRevisionsRef = useRef(null);
+  sessionRevisionsRef.current ??= new Map();
   const sessionSnapshotsRef = useRef(sessionSnapshots);
   sessionSnapshotsRef.current = sessionSnapshots;
   const [askUserPrompts, setAskUserPrompts] = useState([]);
