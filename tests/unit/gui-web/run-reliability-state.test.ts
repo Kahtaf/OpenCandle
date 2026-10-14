@@ -3,6 +3,10 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ToolDrawerProvider,
+  useToolDrawer,
+} from "../../../gui/web/src/features/chat/tool-drawer-context.jsx";
 import { useChatRun } from "../../../gui/web/src/hooks/useChatRun.jsx";
 import { useGuiConnection } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 import { RuntimeTransportContext } from "../../../gui/web/src/runtime/runtime-transport-context.js";
@@ -178,4 +182,37 @@ describe("connection recovery", () => {
       expect(latest!.sessionSnapshots["session-1"].activeRun).toEqual(activeRun);
     }
   });
+});
+
+describe("tool details during research", () => {
+  it.each([true, false])(
+    "keeps mobile controls accessible while allowing manual tool details (mobile: %s)",
+    async (mobile) => {
+      vi.stubGlobal("matchMedia", () => ({ matches: mobile }));
+      let drawer: ReturnType<typeof useToolDrawer>;
+      function Probe() {
+        drawer = useToolDrawer();
+        return null;
+      }
+      await act(async () =>
+        root.render(
+          React.createElement(
+            ToolDrawerProvider,
+            { activeSessionId: "session-1" },
+            React.createElement(Probe),
+          ),
+        ),
+      );
+      const run = { id: "tool-1", sessionId: "session-1", status: "pending" };
+      await act(async () => drawer!.requestAutoOpen({ ...run, sessionId: "background-session" }));
+      expect(drawer!.run).toBeNull();
+      await act(async () => drawer!.requestAutoOpen(run));
+      expect(drawer!.run).toEqual(mobile ? null : run);
+      await act(async () => drawer!.open(run));
+      expect(drawer!.run).toEqual(run);
+      await act(async () => drawer!.close());
+      await act(async () => drawer!.requestAutoOpen(run));
+      expect(drawer!.run).toBeNull();
+    },
+  );
 });

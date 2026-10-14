@@ -43,6 +43,9 @@ export function ToolDrawerProvider({ activeSessionId = "", children }) {
   const requestAutoOpen = useCallback(
     (nextRun) => {
       if (nextRun?.status !== "pending") return;
+      // The mobile drawer is modal and would hide clarification and Stop controls.
+      // Keep it available through the tool card without opening it automatically.
+      if (globalThis.matchMedia?.("(max-width: 819px)").matches) return;
       if (activeSessionId && nextRun.sessionId && nextRun.sessionId !== activeSessionId) return;
       const key = runKey(nextRun);
       if (seenAutoOpenRef.current.has(key)) return;

@@ -219,24 +219,30 @@ describe("GUI session journey", () => {
     expect(harness.unexpectedServerRequests()).toEqual([]);
   }, 90_000);
 
-  it("continues an ask_user clarification in the real composer", async () => {
-    const page = harness.page;
-    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
-    await submitPrompt(page, ASK_USER_PROMPT);
-    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
-    await page.getByRole("button", { name: "1 year" }).click();
-    await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
-    await waitForRunIdle(page);
+  it.each([1280, 390])(
+    "continues an ask_user clarification in the real composer at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      await submitPrompt(page, ASK_USER_PROMPT);
+      await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+      await page.getByRole("button", { name: "1 year" }).click();
+      await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
+      await waitForRunIdle(page);
 
-    // The ask_user answer reached the model as a tool result.
-    expect(
-      harness.modelServer.requests.some((request) =>
-        request.messages.some(
-          (message) => message.role === "tool" && JSON.stringify(message).includes("User answered"),
+      // The ask_user answer reached the model as a tool result.
+      expect(
+        harness.modelServer.requests.some((request) =>
+          request.messages.some(
+            (message) =>
+              message.role === "tool" && JSON.stringify(message).includes("User answered"),
+          ),
         ),
-      ),
-    ).toBe(true);
-  }, 90_000);
+      ).toBe(true);
+    },
+    90_000,
+  );
 
   it("answers an ask_user question in a reopened session that is not the server's current one", async () => {
     const page = harness.page;

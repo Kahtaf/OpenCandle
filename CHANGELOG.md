@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
+
 - Reloading a running local chat preserves its Stop control, and chats become usable again when an offline connection returns.
 
 - An interrupted response connection now shows a recovery message instead of silently appearing finished.
