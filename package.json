@@ -149,41 +149,41 @@
     "node": "^22.22.2 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.99.1",
-    "@earendil-works/pi-ai": "^0.99.1",
-    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-agent-core": "^1.2.0",
+    "@earendil-works/pi-ai": "^1.2.0",
+    "@earendil-works/pi-coding-agent": "1.2.0",
     "better-sqlite3": "^13.0.3",
     "ddg-kit": "0.1.1",
     "sql.js": "^1.14.2",
-    "yahoo-finance2": "^4.0.2"
+    "yahoo-finance2": "^4.0.3"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
   },
   "overrides": {
-    "@hono/node-server": "^2.0.12",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "qs": "^6.16.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
+    "@biomejs/biome": "^2.5.15",
     "@sinclair/typebox": "^0.34.52",
-    "@tanstack/react-router": "^1.170.38",
+    "@tanstack/react-router": "^1.170.44",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.5",
     "@types/semver": "^7.8.0",
     "@types/sql.js": "^1.4.11",
-    "@vitest/coverage-v8": "^5.0.1",
-    "jsdom": "^30.1.0",
+    "@vitest/coverage-v8": "^5.0.4",
+    "jsdom": "^30.1.2",
     "lightweight-charts": "^5.2.1",
-    "playwright-core": "^1.63.0",
+    "playwright-core": "^1.64.1",
     "semver": "^7.8.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "vitest": "^5.0.1",
-    "@vitest/istanbul-lib-coverage": "^1.0.1",
-    "@vitest/istanbul-lib-report": "^1.0.1",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4",
+    "@vitest/istanbul-lib-coverage": "^1.0.2",
+    "@vitest/istanbul-lib-report": "^1.0.2",
     "ast-v8-to-istanbul": "^1.0.7"
   }
 }
