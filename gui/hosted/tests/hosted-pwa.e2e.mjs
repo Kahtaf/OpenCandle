@@ -180,7 +180,10 @@ const browserErrors = [];
 const failedRequests = [];
 try {
   await waitForServer(origin, 30_000);
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+  });
   const context = await browser.newContext({ serviceWorkers: "allow" });
   // Route installation must finish before any page request is issued.
   if (!live) await installDeterministicNetwork(context);

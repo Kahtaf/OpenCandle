@@ -86,29 +86,33 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     await expect(response.json()).resolves.toMatchObject({ ok: true });
   });
 
-  it("renders the home route and first-run model setup in a real browser", async () => {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+  it.each([1280, 390])(
+    "renders the home route and first-run model setup at width %i",
+    async (width) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-    await expectVisible(page.getByText("OpenCandle").first());
-    // First-run setup auto-opens as a modal dialog over the home surface.
-    const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
-    await expectVisible(setupDialog);
-    await expectVisible(page.getByText("Market research, on your machine"));
+      // First-run setup auto-opens as a modal dialog over the home surface.
+      const setupDialog = page.getByRole("dialog", { name: "Welcome to OpenCandle" });
+      await expectVisible(setupDialog);
+      await expectVisible(page.getByText("Market research, on your machine"));
 
-    const bootstrap = await page.evaluate(async () => {
-      const response = await fetch("/api/bootstrap");
-      return response.json();
-    });
-    expect(releaseStatusValues.has(bootstrap.modelSetup.requirement)).toBe(true);
-    expect(bootstrap.modelSetup.requirement).toBe("connect_auth");
-    expect(JSON.stringify(bootstrap.modelSetup)).not.toContain("needs_api_key");
+      const bootstrap = await page.evaluate(async () => {
+        const response = await fetch("/api/bootstrap");
+        return response.json();
+      });
+      expect(releaseStatusValues.has(bootstrap.modelSetup.requirement)).toBe(true);
+      expect(bootstrap.modelSetup.requirement).toBe("connect_auth");
+      expect(JSON.stringify(bootstrap.modelSetup)).not.toContain("needs_api_key");
 
-    const screenshot = await page.screenshot({ fullPage: true });
-    writeEvidence("first-run-home.png", screenshot);
+      const screenshot = await page.screenshot({ fullPage: true });
+      writeEvidence(width === 390 ? "first-run-home-mobile.png" : "first-run-home.png", screenshot);
 
-    await page.getByRole("button", { name: "Skip" }).click();
-    await expectVisible(page.getByRole("heading", { name: "Connect an AI model" }));
-  });
+      await page.getByRole("button", { name: "Skip" }).click();
+      await expectVisible(page.getByRole("heading", { name: "Connect an AI model" }));
+      await page.setViewportSize({ width: 1280, height: 900 });
+    },
+  );
 
   // The invariant: first-run setup must not strand the user. It is dismissible
   // by Escape AND by the close control, and once dismissed the composer is
