@@ -415,8 +415,10 @@ export function useGuiConnection() {
               window.clearTimeout(bootTimeout);
               // Boot only includes the server's current chat. Runs in other
               // cached chats may have finished while this channel was absent.
+              // Only loopback publishes server-owned activeRun snapshots and
+              // provides a read-only loadSession; hosted loadSession selects a chat.
               for (const [sessionId, snapshot] of Object.entries(sessionSnapshotsRef.current)) {
-                if (!snapshot.activeRun?.actionId) continue;
+                if (transport.kind !== "loopback" || !snapshot.activeRun?.actionId) continue;
                 void transport
                   .loadSession(sessionId)
                   .then((data) => {

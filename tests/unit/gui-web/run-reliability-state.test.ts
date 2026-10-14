@@ -90,98 +90,106 @@ describe("restored run ownership", () => {
 });
 
 describe("connection recovery", () => {
-  it("reconnects a nominally open channel after offline and waits for a new boot before enabling actions", async () => {
-    let latest: ReturnType<typeof useGuiConnection>;
-    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-    const channels: Array<{
-      readyState: number;
-      close: ReturnType<typeof vi.fn>;
-      onMessage: (message: string) => void;
-    }> = [];
-    const transport = {
-      kind: "loopback",
-      loadSession: vi.fn(async (sessionId: string) => {
-        if (sessionId === "unavailable") throw new Error("Channel is still recovering");
-        return { sessionId, snapshot: { sessionId, activeRun: null, events: [], entries: [] } };
-      }),
-      openEventChannel: vi.fn(
-        (callbacks: { onMessage: (message: string) => void; onClose: () => void }) => {
-          const channel = {
-            readyState: 1,
-            onMessage: callbacks.onMessage,
-            close: vi.fn(() => callbacks.onClose()),
-          };
-          channels.push(channel);
-          return channel;
-        },
-      ),
-    };
-    function Probe() {
-      latest = useGuiConnection();
-      return null;
-    }
-    await act(async () =>
-      root.render(
-        React.createElement(
-          RuntimeTransportContext.Provider,
-          { value: transport },
-          React.createElement(Probe),
+  it.each(["loopback", "hosted"])(
+    "reconnects a nominally open %s channel without selecting background chats",
+    async (kind) => {
+      let latest: ReturnType<typeof useGuiConnection>;
+      const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+      const channels: Array<{
+        readyState: number;
+        close: ReturnType<typeof vi.fn>;
+        onMessage: (message: string) => void;
+      }> = [];
+      const transport = {
+        kind,
+        loadSession: vi.fn(async (sessionId: string) => {
+          if (sessionId === "unavailable") throw new Error("Channel is still recovering");
+          return { sessionId, snapshot: { sessionId, activeRun: null, events: [], entries: [] } };
+        }),
+        openEventChannel: vi.fn(
+          (callbacks: { onMessage: (message: string) => void; onClose: () => void }) => {
+            const channel = {
+              readyState: 1,
+              onMessage: callbacks.onMessage,
+              close: vi.fn(() => callbacks.onClose()),
+            };
+            channels.push(channel);
+            return channel;
+          },
         ),
-      ),
-    );
-    const boot = JSON.stringify({
-      type: "boot",
-      role: "writer",
-      supportsSessionActions: true,
-      sessionId: "session-1",
-      catalog: { tools: [], workflows: [], providers: [] },
-    });
-    await act(async () => channels[0].onMessage(boot));
-    expect(latest!.supportsSessionActions).toBe(true);
-    await act(async () => {
-      for (const sessionId of ["background", "unavailable"]) {
-        channels[0].onMessage(
-          JSON.stringify({
-            type: "session.snapshot",
-            sessionId,
-            activeRun: { actionId: "restored-run" },
-          }),
-        );
+      };
+      function Probe() {
+        latest = useGuiConnection();
+        return null;
       }
-    });
-    online.mockReturnValue(false);
-    await act(async () => {
-      window.dispatchEvent(new Event("offline"));
-      window.dispatchEvent(new Event("focus"));
-    });
-    expect(latest!.role).toBe("offline");
-    expect(latest!.supportsSessionActions).toBe(false);
-    expect(channels).toHaveLength(1);
-    online.mockReturnValue(true);
-    await act(async () => window.dispatchEvent(new Event("online")));
-    expect(channels[0].close).toHaveBeenCalledOnce();
-    expect(channels).toHaveLength(2);
-    expect(latest!.supportsSessionActions).toBe(false);
-    await act(async () => {
-      channels[1].onMessage(boot);
-      window.dispatchEvent(new Event("focus"));
-    });
-    expect(latest!.role).toBe("writer");
-    expect(latest!.supportsSessionActions).toBe(true);
-    expect(transport.loadSession).toHaveBeenCalledWith("background");
-    expect(latest!.sessionSnapshots.background.activeRun).toBeNull();
-    expect(latest!.sessionSnapshots.unavailable.activeRun).toEqual({ actionId: "restored-run" });
-    expect(latest!.currentSessionId).toBe("session-1");
-    expect(channels).toHaveLength(2);
-    for (const activeRun of [{ actionId: "remote-run" }, null]) {
       await act(async () =>
-        channels[1].onMessage(
-          JSON.stringify({ type: "session.snapshot", sessionId: "session-1", activeRun }),
+        root.render(
+          React.createElement(
+            RuntimeTransportContext.Provider,
+            { value: transport },
+            React.createElement(Probe),
+          ),
         ),
       );
-      expect(latest!.sessionSnapshots["session-1"].activeRun).toEqual(activeRun);
-    }
-  });
+      const boot = JSON.stringify({
+        type: "boot",
+        role: "writer",
+        supportsSessionActions: true,
+        sessionId: "session-1",
+        catalog: { tools: [], workflows: [], providers: [] },
+      });
+      await act(async () => channels[0].onMessage(boot));
+      expect(latest!.supportsSessionActions).toBe(true);
+      await act(async () => {
+        for (const sessionId of ["background", "unavailable"]) {
+          channels[0].onMessage(
+            JSON.stringify({
+              type: "session.snapshot",
+              sessionId,
+              activeRun: { actionId: "restored-run" },
+            }),
+          );
+        }
+      });
+      online.mockReturnValue(false);
+      await act(async () => {
+        window.dispatchEvent(new Event("offline"));
+        window.dispatchEvent(new Event("focus"));
+      });
+      expect(latest!.role).toBe("offline");
+      expect(latest!.supportsSessionActions).toBe(false);
+      expect(channels).toHaveLength(1);
+      online.mockReturnValue(true);
+      await act(async () => window.dispatchEvent(new Event("online")));
+      expect(channels[0].close).toHaveBeenCalledOnce();
+      expect(channels).toHaveLength(2);
+      expect(latest!.supportsSessionActions).toBe(false);
+      await act(async () => {
+        channels[1].onMessage(boot);
+        window.dispatchEvent(new Event("focus"));
+      });
+      expect(latest!.role).toBe("writer");
+      expect(latest!.supportsSessionActions).toBe(true);
+      if (kind === "loopback") {
+        expect(transport.loadSession).toHaveBeenCalledWith("background");
+        expect(latest!.sessionSnapshots.background.activeRun).toBeNull();
+      } else {
+        expect(transport.loadSession).not.toHaveBeenCalled();
+        expect(latest!.sessionSnapshots.background.activeRun).toEqual({ actionId: "restored-run" });
+      }
+      expect(latest!.sessionSnapshots.unavailable.activeRun).toEqual({ actionId: "restored-run" });
+      expect(latest!.currentSessionId).toBe("session-1");
+      expect(channels).toHaveLength(2);
+      for (const activeRun of [{ actionId: "remote-run" }, null]) {
+        await act(async () =>
+          channels[1].onMessage(
+            JSON.stringify({ type: "session.snapshot", sessionId: "session-1", activeRun }),
+          ),
+        );
+        expect(latest!.sessionSnapshots["session-1"].activeRun).toEqual(activeRun);
+      }
+    },
+  );
 });
 
 describe("tool details during research", () => {
