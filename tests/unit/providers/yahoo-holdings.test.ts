@@ -58,6 +58,19 @@ describe("Yahoo fund holdings provider", () => {
     await expect(getFundHoldings("MISSING")).rejects.toThrow("No fundamentals data found");
   });
 
+  it("preserves a non-authentication HTTP error without starting a crumb handshake", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("Missing fund", { status: 404, statusText: "Not Found" }));
+
+    await expect(getFundHoldings("MISSING")).rejects.toMatchObject({ status: 404 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/quoteSummary/MISSING?modules=price%2CtopHoldings"),
+      expect.any(Object),
+    );
+  });
+
   it("filters malformed holding weights and normalizes sector weights", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

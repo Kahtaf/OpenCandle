@@ -251,6 +251,21 @@ describe("quoteNoticeForTurn", () => {
     );
   });
 
+  it("revalidates carried live quotes during the after-hours session", async () => {
+    const entries = [
+      userEntry("u1"),
+      ...chainEntries(await optionChainToolResult(regularFixture)),
+      routeEntry("r2", ["AAPL"]),
+      systemEntry("s2"),
+      userEntry("u2"),
+      assistantText("a2"),
+    ];
+
+    expect(quoteNoticeForTurn(entries, new Date("2026-05-20T20:15:00.000Z"))).toBe(
+      "Options market is after hours. Option prices shown are from the last regular session and are not executable now.",
+    );
+  });
+
   it("does not carry a chain into a follow-up about other symbols or no symbol", async () => {
     const chain = chainEntries(await optionChainToolResult(afterHoursFixture));
     const other = [userEntry("u1"), ...chain, routeEntry("r2", ["MSFT"]), userEntry("u2")];
