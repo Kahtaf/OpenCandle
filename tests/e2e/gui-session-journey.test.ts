@@ -481,6 +481,86 @@ describe("GUI session journey", () => {
     expect(sessionIdFromUrl(page)).toBe(sessionB);
   }, 120_000);
 
+  it("discards a superseded reconnect read after a background run finishes", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionId = sessionIdFromUrl(page);
+    await waitForCondition(() => answerHold.waitCount > 1, 15_000);
+    let ownershipReleased = false;
+    page.on("websocket", (socket) => {
+      socket.on("framereceived", ({ payload }) => {
+        const message = JSON.parse(String(payload)) as {
+          type?: string;
+          sessionId?: string;
+          activeRun?: unknown;
+        };
+        if (
+          message.type === "session.snapshot" &&
+          message.sessionId === sessionId &&
+          message.activeRun === null
+        )
+          ownershipReleased = true;
+      });
+    });
+    await page.addInitScript(() => {
+      const sockets: WebSocket[] = [];
+      Object.assign(window, { auditSockets: sockets });
+      window.WebSocket = new Proxy(window.WebSocket, {
+        construct(Target, args) {
+          const socket = new Target(args[0], args[1]);
+          sockets.push(socket);
+          return socket;
+        },
+      });
+    });
+    await page.reload({ waitUntil: "networkidle" });
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 10_000);
+    await page.context().setOffline(true);
+    await page.evaluate(() => {
+      for (const socket of (window as unknown as { auditSockets: WebSocket[] }).auditSockets)
+        socket.close();
+    });
+    let releaseRead!: () => void;
+    let readStarted = false;
+    let staleBody = "";
+    const heldRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const url = `${harness.baseUrl}/api/sessions/${sessionId}/bootstrap`;
+    await page.route(url, async (route) => {
+      const response = await route.fetch();
+      staleBody = await response.text();
+      readStarted = true;
+      await heldRead;
+      await route.fulfill({ response, body: staleBody });
+    });
+    await page.context().setOffline(false);
+    await waitForCondition(() => readStarted, 15_000);
+    expect(JSON.parse(staleBody).snapshot.activeRun).not.toBeNull();
+    answerHold.release();
+    await waitForCondition(() => ownershipReleased, 15_000);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    const responseDelivered = page.waitForResponse(url);
+    releaseRead();
+    await (await responseDelivered).finished();
+    await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    expect(await page.getByRole("button", { name: "Stop response" }).count()).toBe(0);
+    await expectVisible(
+      page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+      15_000,
+    );
+    expect(sessionIdFromUrl(page)).toBe(sessionId);
+  }, 120_000);
+
   it("passive reload does not cancel; the held run completes normally", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
