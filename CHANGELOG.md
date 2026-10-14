@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Reloading a running local chat preserves its Stop control, and chats become usable again when an offline connection returns.
+
 - An interrupted response connection now shows a recovery message instead of silently appearing finished.
 
 - Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.

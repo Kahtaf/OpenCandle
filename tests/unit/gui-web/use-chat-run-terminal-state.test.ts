@@ -122,6 +122,48 @@ describe("useChatRun terminal state", () => {
     expect(latestRun?.runState).toBe("failed");
   });
 
+  it("keeps a new run active when the previous Stop acknowledgement arrives late", async () => {
+    let confirmStop!: (result: { ok: boolean; cancelled: boolean }) => void;
+    const stopped = new Promise<{ ok: boolean; cancelled: boolean }>((resolve) => {
+      confirmStop = resolve;
+    });
+    const transport = {
+      startChatRun: vi.fn(
+        (_id: string, _body: unknown, signal: AbortSignal) =>
+          new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener("abort", () =>
+              reject(new DOMException("Stopped", "AbortError")),
+            );
+          }),
+      ),
+      cancelChatRun: vi.fn(() => stopped),
+    };
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe, { onRunError: vi.fn() }),
+        ),
+      ),
+    );
+    let first: Promise<unknown> | undefined;
+    await act(async () => {
+      first = latestRun?.startChatRun("First request");
+    });
+    await act(async () => latestRun?.stopRun());
+    await act(async () => first);
+    let second: Promise<unknown> | undefined;
+    await act(async () => {
+      second = latestRun?.startChatRun("Next request");
+    });
+    expect(latestRun?.runState).toBe("connecting");
+    await act(async () => confirmStop({ ok: true, cancelled: true }));
+    expect(latestRun?.runState).toBe("connecting");
+    await act(async () => latestRun?.stopRun());
+    await act(async () => second);
+  });
+
   it("retries a stopped run with a fresh action id instead of replaying the stopped one", async () => {
     const startBodies: Array<{ actionId: string }> = [];
     const cancelBodies: Array<{ targetActionId: string }> = [];

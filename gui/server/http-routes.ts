@@ -142,7 +142,8 @@ interface GuiHttpRouteOptions {
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
   const activeRunSessionIds = options.activeRunSessionIds ?? new Set<string>();
-  const activeGuiRuns = options.runRegistry ?? createGuiRunRegistry();
+  options.runRegistry ??= createGuiRunRegistry();
+  const activeGuiRuns = options.runRegistry;
 
   return async function handleHttpRequest(
     req: IncomingMessage,
@@ -996,6 +997,10 @@ async function streamAcceptedSseChatRun({
     if (runCancellationState && runToken) finishSessionRun(runCancellationState, runToken);
     if (lockHeartbeat) clearInterval(lockHeartbeat);
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    // Reloaded clients have no request stream. Publish ownership release even
+    // when there is no further transcript event to clear their Stop control.
+    if (useCurrentSession) options.wsHub.broadcastState();
+    else options.wsHub.broadcastSessionSnapshot(runSessionManager);
   };
 
   let dispatchedPrompt = "";
@@ -1437,7 +1442,13 @@ function buildSnapshotPayload(sessionManager: SessionManager): Record<string, un
 export async function buildSessionBootstrapPayload(
   options: Pick<
     GuiHttpRouteOptions,
-    "cwd" | "sessionDir" | "role" | "modelSetupController" | "getSessionManager" | "wsHub"
+    | "cwd"
+    | "sessionDir"
+    | "role"
+    | "modelSetupController"
+    | "getSessionManager"
+    | "wsHub"
+    | "runRegistry"
   >,
   sessionManager: SessionManager,
 ): Promise<Record<string, unknown>> {
@@ -1468,6 +1479,9 @@ export async function buildSessionBootstrapPayload(
     sessions: await listDisplaySessions(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
+      activeRun: options.runRegistry?.activeActionId(sessionId)
+        ? { actionId: options.runRegistry.activeActionId(sessionId) }
+        : null,
       state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),
       sessionModel: options.modelSetupController.buildSessionModelState?.(sessionManager),
       entries,

@@ -155,6 +155,7 @@ export function sessionSnapshotFromPayload(payload) {
     sessionId,
     entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
+    ...(Object.hasOwn(snapshot, "activeRun") ? { activeRun: snapshot.activeRun } : {}),
     dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
     ...(sessionModel && typeof sessionModel === "object" ? { sessionModel } : {}),
   };
@@ -293,6 +294,8 @@ export function useGuiConnection() {
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [sessionSnapshots, setSessionSnapshots] = useState({});
+  const sessionSnapshotsRef = useRef(sessionSnapshots);
+  sessionSnapshotsRef.current = sessionSnapshots;
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
@@ -410,6 +413,20 @@ export function useGuiConnection() {
             if (message.type === "boot") {
               receivedBoot = true;
               window.clearTimeout(bootTimeout);
+              // Boot only includes the server's current chat. Runs in other
+              // cached chats may have finished while this channel was absent.
+              for (const [sessionId, snapshot] of Object.entries(sessionSnapshotsRef.current)) {
+                if (!snapshot.activeRun?.actionId) continue;
+                void transport
+                  .loadSession(sessionId)
+                  .then((data) => {
+                    if (disposed || wsRef.current !== ws) return;
+                    setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
+                  })
+                  .catch(() => {
+                    // Keep the known running state when ownership cannot be refreshed.
+                  });
+              }
               setSupportsSessionActions(
                 resolveSupportsSessionActions(
                   message.supportsSessionActions,
@@ -559,11 +576,12 @@ export function useGuiConnection() {
       wsRef.current = ws;
     };
 
-    const reconnectOnForeground = () => {
-      if (disposed) return;
+    const reconnectOnForeground = ({ force = false } = {}) => {
+      if (disposed || navigator.onLine === false) return;
       const documentVisibility =
         typeof document === "undefined" ? "visible" : document.visibilityState;
       if (
+        !force &&
         !shouldReconnectOnForeground({
           documentVisibility,
           readyState: wsRef.current?.readyState,
@@ -574,7 +592,9 @@ export function useGuiConnection() {
       window.clearTimeout(reconnect);
       setSupportsSessionActions(false);
       setRole("connecting");
-      wsRef.current?.close?.();
+      const previousChannel = wsRef.current;
+      wsRef.current = null;
+      previousChannel?.close?.();
       connect();
     };
 
@@ -587,7 +607,9 @@ export function useGuiConnection() {
       setSupportsSessionActions(false);
       setRole("offline");
     };
-    const handleOnline = () => reconnectOnForeground();
+    // Browser offline mode can leave a WebSocket (or the hosted channel)
+    // nominally open. A fresh boot is still required to restore writability.
+    const handleOnline = () => reconnectOnForeground({ force: true });
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
     if (navigator.onLine === false) handleOffline();

@@ -52,6 +52,7 @@ export function AppShell() {
   const [liveBaseEventCountBySession, setLiveBaseEventCountBySession] = useState({});
   const chatRun = useChatRun({
     activeSessionId,
+    sessionSnapshots: gui.sessionSnapshots,
     setToast: gui.setToast,
     onRunStart: useCallback(
       (prompt, baseEventCount, sessionId, optimistic = {}) => {
@@ -160,8 +161,8 @@ export function AppShell() {
     gui.role === "writer" &&
     gui.supportsSessionActions &&
     !search?.messageId &&
-    chatRun.runState !== "connecting" &&
-    chatRun.runState !== "streaming";
+    chatRun.localRunState !== "connecting" &&
+    chatRun.localRunState !== "streaming";
   const shouldPrepareFreshHomeSession = shouldStartFreshHomeSession({
     pathname,
     currentSessionId: gui.currentSessionId,
@@ -174,7 +175,8 @@ export function AppShell() {
     currentSessionId:
       routeSessionId && visibleSessionSnapshot ? routeSessionId : gui.currentSessionId,
     events: visibleEvents,
-    runState: chatRun.runState,
+    // Only a stream owned by this tab replaces snapshot events with live events.
+    runState: chatRun.localRunState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
     canStartFreshHomeSession: canPrepareFreshHomeSession,
     pendingFreshHomeSession: shouldPrepareFreshHomeSession || homeSessionPreparing,

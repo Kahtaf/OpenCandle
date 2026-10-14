@@ -63,6 +63,7 @@ export interface WsHubOptions {
   sessionDir: string;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
+  getActiveRunActionId?: (sessionId: string) => string | undefined;
   backgroundQuoteRefreshes: BackgroundQuoteRefreshes;
   askUserBridge: AskUserBridge;
   modelSetupController: ModelSetupController;
@@ -80,6 +81,7 @@ export function createWsHub({
   sessionDir,
   getSession,
   getSessionManager,
+  getActiveRunActionId = () => undefined,
   backgroundQuoteRefreshes,
   askUserBridge,
   modelSetupController,
@@ -353,6 +355,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      activeRun: activeRunForSession(sessionId),
       sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
@@ -373,6 +376,7 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
+      activeRun: activeRunForSession(sessionId),
       sessionPersisted: isSessionPersisted(sessionManager),
       state: projectDashboard(
         backgroundQuoteRefreshes.withEntries(entries),
@@ -388,6 +392,11 @@ export function createWsHub({
         title: sessionManager.getSessionName(),
       }),
     };
+  }
+
+  function activeRunForSession(sessionId: string) {
+    const actionId = getActiveRunActionId(sessionId);
+    return actionId ? { actionId } : null;
   }
 
   function currentChatEvents(entries = getSessionManager().getEntries()): ChatEvent[] {
