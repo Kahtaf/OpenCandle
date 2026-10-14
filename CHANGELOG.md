@@ -18,6 +18,8 @@
 
 - Hosted retry acknowledgements preserve successful run status without repeating model work.
 
+- Reconnecting chats keep their latest run status when an older refresh arrives late.
+
 - Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.
 
 - Stopping a run while a DCF valuation is still fetching no longer crashes the local GUI server and ends every other running chat.

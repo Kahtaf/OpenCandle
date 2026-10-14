@@ -423,7 +423,11 @@ export function useGuiConnection() {
                   .loadSession(sessionId)
                   .then((data) => {
                     if (disposed || wsRef.current !== ws) return;
-                    setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
+                    setSessionSnapshots((current) =>
+                      current[sessionId] === snapshot
+                        ? mergeSessionSnapshotMap(current, data)
+                        : current,
+                    );
                   })
                   .catch(() => {
                     // Keep the known running state when ownership cannot be refreshed.

@@ -100,10 +100,15 @@ describe("connection recovery", () => {
         close: ReturnType<typeof vi.fn>;
         onMessage: (message: string) => void;
       }> = [];
+      let completeStaleRead: ((data: Record<string, unknown>) => void) | undefined;
       const transport = {
         kind,
         loadSession: vi.fn(async (sessionId: string) => {
           if (sessionId === "unavailable") throw new Error("Channel is still recovering");
+          if (sessionId === "racing")
+            return new Promise<Record<string, unknown>>((resolve) => {
+              completeStaleRead = resolve;
+            });
           return { sessionId, snapshot: { sessionId, activeRun: null, events: [], entries: [] } };
         }),
         openEventChannel: vi.fn(
@@ -141,7 +146,7 @@ describe("connection recovery", () => {
       await act(async () => channels[0].onMessage(boot));
       expect(latest!.supportsSessionActions).toBe(true);
       await act(async () => {
-        for (const sessionId of ["background", "unavailable"]) {
+        for (const sessionId of ["background", "unavailable", "racing"]) {
           channels[0].onMessage(
             JSON.stringify({
               type: "session.snapshot",
@@ -173,6 +178,24 @@ describe("connection recovery", () => {
       if (kind === "loopback") {
         expect(transport.loadSession).toHaveBeenCalledWith("background");
         expect(latest!.sessionSnapshots.background.activeRun).toBeNull();
+        await act(async () =>
+          channels[1].onMessage(
+            JSON.stringify({ type: "session.snapshot", sessionId: "racing", activeRun: null }),
+          ),
+        );
+        expect(completeStaleRead).toBeDefined();
+        await act(async () =>
+          completeStaleRead!({
+            sessionId: "racing",
+            snapshot: {
+              sessionId: "racing",
+              activeRun: { actionId: "restored-run" },
+              events: [],
+              entries: [],
+            },
+          }),
+        );
+        expect(latest!.sessionSnapshots.racing.activeRun).toBeNull();
       } else {
         expect(transport.loadSession).not.toHaveBeenCalled();
         expect(latest!.sessionSnapshots.background.activeRun).toEqual({ actionId: "restored-run" });
