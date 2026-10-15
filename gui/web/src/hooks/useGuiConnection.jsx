@@ -404,6 +404,17 @@ export function useGuiConnection() {
     let disposed = false;
     let reconnect = 0;
 
+    const rejectChannelRequests = () => {
+      pendingModelKeySaveRef.current = "";
+      for (const requestId of pendingToolInvokesRef.current.keys()) {
+        settleToolInvoke(
+          requestId,
+          "reject",
+          new Error("GUI connection closed before the tool finished."),
+        );
+      }
+    };
+
     const connectHttpFallback = async () => {
       try {
         wsRef.current = null;
@@ -574,12 +585,7 @@ export function useGuiConnection() {
           onClose: () => {
             window.clearTimeout(bootTimeout);
             if (wsRef.current !== ws) return;
-            pendingModelKeySaveRef.current = "";
-            for (const [requestId, pending] of pendingToolInvokesRef.current) {
-              window.clearTimeout(pending.timeout);
-              pending.reject(new Error("GUI connection closed before the tool finished."));
-              pendingToolInvokesRef.current.delete(requestId);
-            }
+            rejectChannelRequests();
             if (usingHttpFallback) return;
             setSupportsSessionActions(false);
             setRole("disconnected");
@@ -620,6 +626,9 @@ export function useGuiConnection() {
       setSupportsSessionActions(false);
       setRole("connecting");
       const previousChannel = wsRef.current;
+      // Replacing the channel intentionally ignores its eventual onClose. Clear
+      // its request ownership now so callers do not wait for a lost reply.
+      rejectChannelRequests();
       wsRef.current = null;
       previousChannel?.close?.();
       connect();

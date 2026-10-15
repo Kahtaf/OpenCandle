@@ -91,6 +91,86 @@ describe("restored run ownership", () => {
 });
 
 describe("connection recovery", () => {
+  it("settles an interrupted tool request immediately when online recovery replaces its channel", async () => {
+    let latest: ReturnType<typeof useGuiConnection>;
+    const channels: Array<{
+      readyState: number;
+      send: ReturnType<typeof vi.fn>;
+      close: ReturnType<typeof vi.fn>;
+      onMessage: (message: string) => void;
+    }> = [];
+    const outcomes: string[] = [];
+    const transport = {
+      kind: "loopback",
+      openEventChannel: (callbacks: {
+        onMessage: (message: string) => void;
+        onClose: () => void;
+      }) => {
+        const channel = {
+          readyState: 1,
+          send: vi.fn(),
+          close: vi.fn(() => callbacks.onClose()),
+          onMessage: callbacks.onMessage,
+        };
+        channels.push(channel);
+        return channel;
+      },
+    };
+    function Probe() {
+      latest = useGuiConnection();
+      return null;
+    }
+    await act(async () =>
+      root.render(
+        React.createElement(
+          RuntimeTransportContext.Provider,
+          { value: transport },
+          React.createElement(Probe),
+        ),
+      ),
+    );
+    const boot = JSON.stringify({
+      type: "boot",
+      role: "writer",
+      sessionId: "session-1",
+      catalog: { tools: [], workflows: [], providers: [] },
+    });
+    await act(async () => channels[0].onMessage(boot));
+    await act(async () => {
+      void latest!.invokeTool("add_watchlist", {}, "session-1").then(
+        () => outcomes.push("completed"),
+        (error: Error) => outcomes.push(error.message),
+      );
+    });
+    const oldRequest = JSON.parse(channels[0].send.mock.calls[0][0]);
+    await act(async () => window.dispatchEvent(new Event("online")));
+    expect(channels[0].close).toHaveBeenCalledOnce();
+    expect(outcomes).toEqual(["GUI connection closed before the tool finished."]);
+    await act(async () => channels[1].onMessage(boot));
+    let nextResult: unknown;
+    await act(async () => {
+      void latest!.invokeTool("get_watchlist", {}, "session-1").then((result: unknown) => {
+        nextResult = result;
+      });
+    });
+    const nextRequest = JSON.parse(channels[1].send.mock.calls[0][0]);
+    await act(async () => {
+      channels[0].onMessage(
+        JSON.stringify({ type: "tool.invoke.result", requestId: oldRequest.requestId, ok: true }),
+      );
+      channels[1].onMessage(
+        JSON.stringify({
+          type: "tool.invoke.result",
+          requestId: nextRequest.requestId,
+          ok: true,
+          result: { saved: true },
+        }),
+      );
+    });
+    expect(outcomes).toHaveLength(1);
+    expect(nextResult).toMatchObject({ result: { saved: true } });
+  });
+
   it.each(["pending", "answered"])(
     "preserves a live hosted clarification %s while initializing a delayed channel",
     async (status) => {

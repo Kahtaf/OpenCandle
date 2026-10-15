@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Reconnecting the GUI immediately releases interrupted tool requests so saved-state controls do not hang.
+
 - Hosted clarification questions and answers stay visible when an older initial load, session action, or background refresh arrives late.
 
 - The model chooser now includes the latest models supported by Pi 1.2.0.
