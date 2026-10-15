@@ -5,7 +5,7 @@ const FORBIDDEN_DEPENDENCY_MARKERS = [
   "rdt-cli",
 ];
 const APPROVED_PI_PROVIDERS = new Set(["anthropic", "google", "openai"]);
-const PI_PROVIDER_SUPPORT_MODULES = new Set(["radius-config"]);
+const PI_PROVIDER_SUPPORT_MODULES = new Set(["radius-config", "compat-schema", "model-schema"]);
 const PI_PROVIDER_PATH =
   /@earendil-works\/pi-ai\/dist\/providers\/(?:data\/)?([^/.]+?)(?:\.models)?\.(?:js|json)$/;
 

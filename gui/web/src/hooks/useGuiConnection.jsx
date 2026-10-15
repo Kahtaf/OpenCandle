@@ -155,6 +155,7 @@ export function sessionSnapshotFromPayload(payload) {
     sessionId,
     entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
     events: Array.isArray(snapshot.events) ? snapshot.events : [],
+    ...(Object.hasOwn(snapshot, "activeRun") ? { activeRun: snapshot.activeRun } : {}),
     dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
     ...(sessionModel && typeof sessionModel === "object" ? { sessionModel } : {}),
   };
@@ -293,6 +294,10 @@ export function useGuiConnection() {
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [sessionSnapshots, setSessionSnapshots] = useState({});
+  const sessionRevisionsRef = useRef(null);
+  sessionRevisionsRef.current ??= new Map();
+  const sessionSnapshotsRef = useRef(sessionSnapshots);
+  sessionSnapshotsRef.current = sessionSnapshots;
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
@@ -331,52 +336,84 @@ export function useGuiConnection() {
     settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
 
-  const applyBootstrap = useCallback((data, expectedSessionId = "", options = {}) => {
-    const snapshot = data.snapshot || {};
-    const nextSnapshot = sessionSnapshotFromPayload(data);
-    const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
-    if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
-    const updateVisibleState = options.updateVisibleState !== false;
-    setRole((currentRole) => resolveBootstrapRole(currentRole, data, options.updateRole !== false));
-    setCoordination(data.coordination || null);
-    setCurrentSessionId((currentSessionId) =>
-      resolveBootstrapSessionId(
-        currentSessionId,
-        responseSessionId,
-        options.updateCurrentSessionId !== false,
-      ),
-    );
-    if (options.updateCurrentSessionId !== false) {
-      setCurrentSessionPersisted(data.sessionPersisted === true);
-    }
-    setAskUserPrompts(data.askUserPrompts || []);
-    if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
-    // Bootstraps (session loads, HTTP fallback commands) also report which
-    // models have keys; a change invalidates other sessions' cached models.
-    const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
-    if (nextSnapshot || availabilityChanged) {
-      setSessionSnapshots((current) => {
-        const marked = availabilityChanged ? markSessionModelsStale(current) : current;
-        return nextSnapshot ? mergeSessionSnapshotMap(marked, data) : marked;
-      });
-    }
-    startTransition(() => {
-      setSessions(data.sessions || []);
-      if (updateVisibleState) {
-        setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
-        setEvents(nextSnapshot?.events || []);
-      }
-      setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
-      setModelSetup(
-        data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
-      );
-    });
+  // Advance on authoritative snapshots immediately, before React renders.
+  // Cosmetic model invalidation does not supersede an ownership read.
+  const mergeAuthoritativeSnapshot = useCallback((payload, expectedRevision) => {
+    const snapshot = sessionSnapshotFromPayload(payload);
+    if (!snapshot) return false;
+    const revisions = sessionRevisionsRef.current;
+    const revision = revisions.get(snapshot.sessionId) || 0;
+    if (expectedRevision !== undefined && revision !== expectedRevision) return false;
+    revisions.set(snapshot.sessionId, revision + 1);
+    setSessionSnapshots((current) => mergeSessionSnapshotMap(current, payload));
     return true;
   }, []);
+
+  const applyBootstrap = useCallback(
+    (data, expectedSessionId = "", options = {}) => {
+      const snapshot = data.snapshot || {};
+      const nextSnapshot = sessionSnapshotFromPayload(data);
+      const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
+      if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
+      if (
+        options.expectedRevision !== undefined &&
+        (sessionRevisionsRef.current.get(responseSessionId) || 0) !== options.expectedRevision
+      ) {
+        // The requested chat is already cached from a newer authoritative event.
+        return true;
+      }
+      const updateVisibleState = options.updateVisibleState !== false;
+      setRole((currentRole) =>
+        resolveBootstrapRole(currentRole, data, options.updateRole !== false),
+      );
+      setCoordination(data.coordination || null);
+      setCurrentSessionId((currentSessionId) =>
+        resolveBootstrapSessionId(
+          currentSessionId,
+          responseSessionId,
+          options.updateCurrentSessionId !== false,
+        ),
+      );
+      if (options.updateCurrentSessionId !== false) {
+        setCurrentSessionPersisted(data.sessionPersisted === true);
+      }
+      setAskUserPrompts(data.askUserPrompts || []);
+      if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
+      // Bootstraps (session loads, HTTP fallback commands) also report which
+      // models have keys; a change invalidates other sessions' cached models.
+      const availabilityChanged = trackModelAvailability(modelAvailabilityRef, data.modelSetup);
+      if (availabilityChanged) setSessionSnapshots((current) => markSessionModelsStale(current));
+      if (nextSnapshot) mergeAuthoritativeSnapshot(data);
+      startTransition(() => {
+        setSessions(data.sessions || []);
+        if (updateVisibleState) {
+          setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+          setEvents(nextSnapshot?.events || []);
+        }
+        setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
+        setModelSetup(
+          data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
+        );
+      });
+      return true;
+    },
+    [mergeAuthoritativeSnapshot],
+  );
 
   useEffect(() => {
     let disposed = false;
     let reconnect = 0;
+
+    const rejectChannelRequests = () => {
+      pendingModelKeySaveRef.current = "";
+      for (const requestId of pendingToolInvokesRef.current.keys()) {
+        settleToolInvoke(
+          requestId,
+          "reject",
+          new Error("GUI connection closed before the tool finished."),
+        );
+      }
+    };
 
     const connectHttpFallback = async () => {
       try {
@@ -410,6 +447,24 @@ export function useGuiConnection() {
             if (message.type === "boot") {
               receivedBoot = true;
               window.clearTimeout(bootTimeout);
+              // Boot only includes the server's current chat. Runs in other
+              // cached chats may have finished while this channel was absent.
+              // Only loopback publishes server-owned activeRun snapshots and
+              // provides a read-only loadSession; hosted loadSession selects a chat.
+              for (const [sessionId, snapshot] of Object.entries(sessionSnapshotsRef.current)) {
+                if (transport.kind !== "loopback" || !snapshot.activeRun?.actionId) continue;
+                const revision = sessionRevisionsRef.current.get(sessionId) || 0;
+                void transport
+                  .loadSession(sessionId)
+                  .then((data) => {
+                    if (disposed || wsRef.current !== ws) return;
+                    if (sessionSnapshotFromPayload(data)?.sessionId !== sessionId) return;
+                    mergeAuthoritativeSnapshot(data, revision);
+                  })
+                  .catch(() => {
+                    // Keep the known running state when ownership cannot be refreshed.
+                  });
+              }
               setSupportsSessionActions(
                 resolveSupportsSessionActions(
                   message.supportsSessionActions,
@@ -495,7 +550,7 @@ export function useGuiConnection() {
                 resolveSnapshotCoordination(current, message.coordination),
               );
               if (nextSnapshot) {
-                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+                mergeAuthoritativeSnapshot(message);
               }
               startTransition(() => {
                 setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
@@ -504,7 +559,7 @@ export function useGuiConnection() {
             } else if (message.type === "session.snapshot") {
               const nextSnapshot = sessionSnapshotFromPayload(message);
               if (nextSnapshot) {
-                setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+                mergeAuthoritativeSnapshot(message);
               }
             } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
               setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
@@ -530,12 +585,7 @@ export function useGuiConnection() {
           onClose: () => {
             window.clearTimeout(bootTimeout);
             if (wsRef.current !== ws) return;
-            pendingModelKeySaveRef.current = "";
-            for (const [requestId, pending] of pendingToolInvokesRef.current) {
-              window.clearTimeout(pending.timeout);
-              pending.reject(new Error("GUI connection closed before the tool finished."));
-              pendingToolInvokesRef.current.delete(requestId);
-            }
+            rejectChannelRequests();
             if (usingHttpFallback) return;
             setSupportsSessionActions(false);
             setRole("disconnected");
@@ -559,11 +609,12 @@ export function useGuiConnection() {
       wsRef.current = ws;
     };
 
-    const reconnectOnForeground = () => {
-      if (disposed) return;
+    const reconnectOnForeground = ({ force = false } = {}) => {
+      if (disposed || navigator.onLine === false) return;
       const documentVisibility =
         typeof document === "undefined" ? "visible" : document.visibilityState;
       if (
+        !force &&
         !shouldReconnectOnForeground({
           documentVisibility,
           readyState: wsRef.current?.readyState,
@@ -574,7 +625,12 @@ export function useGuiConnection() {
       window.clearTimeout(reconnect);
       setSupportsSessionActions(false);
       setRole("connecting");
-      wsRef.current?.close?.();
+      const previousChannel = wsRef.current;
+      // Replacing the channel intentionally ignores its eventual onClose. Clear
+      // its request ownership now so callers do not wait for a lost reply.
+      rejectChannelRequests();
+      wsRef.current = null;
+      previousChannel?.close?.();
       connect();
     };
 
@@ -587,7 +643,9 @@ export function useGuiConnection() {
       setSupportsSessionActions(false);
       setRole("offline");
     };
-    const handleOnline = () => reconnectOnForeground();
+    // Browser offline mode can leave a WebSocket (or the hosted channel)
+    // nominally open. A fresh boot is still required to restore writability.
+    const handleOnline = () => reconnectOnForeground({ force: true });
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
     if (navigator.onLine === false) handleOffline();
@@ -602,7 +660,14 @@ export function useGuiConnection() {
       document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
-  }, [applyBootstrap, setModelSetupError, setToast, settleToolInvoke, transport]);
+  }, [
+    applyBootstrap,
+    mergeAuthoritativeSnapshot,
+    setModelSetupError,
+    setToast,
+    settleToolInvoke,
+    transport,
+  ]);
 
   const sendHttpFallbackMessage = useCallback(
     async (request) => {
@@ -742,12 +807,14 @@ export function useGuiConnection() {
     async (sessionId) => {
       const targetSessionId = String(sessionId ?? "").trim();
       if (!targetSessionId) return false;
+      const revision = sessionRevisionsRef.current.get(targetSessionId) || 0;
       try {
         const data = await transport.loadSession(targetSessionId);
         setSupportsSessionActions(
           resolveSupportsSessionActions(data.supportsSessionActions, data.role, data.coordination),
         );
         return applyBootstrap(data, targetSessionId, {
+          expectedRevision: revision,
           updateRole: false,
           updateVisibleState: false,
         });

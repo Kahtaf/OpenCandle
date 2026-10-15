@@ -378,7 +378,7 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
               },
               { type: "run.completed", sessionId: "mock-session", runId: "cashtag-run", seq: 3 },
             ]) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\\n\\n`));
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             }
             controller.close();
           },
@@ -420,6 +420,30 @@ describe.skipIf(!runGuiIntegration)("GUI browser integration (mocked transports)
     await mocked.getByText("Reconnecting to the GUI session.").waitFor({ state: "detached" });
     await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
   });
+
+  it.each([1024, 390])(
+    "releases pending tool controls when online recovery replaces a channel at %ipx",
+    async (width) => {
+      const mocked = await newPage({ viewport: { width, height: 844 } });
+      await installMockSocket(mocked);
+      await installMockMarketState(mocked);
+      await mocked.goto(`${guiUrl}/reports`, { waitUntil: "networkidle" });
+      const generate = mocked.getByRole("button", { name: "Generate today", exact: true });
+      await generate.click();
+      const saving = mocked.getByText(/Saving market-state change/);
+      await expectVisible(saving);
+      await mocked.waitForFunction(() =>
+        window.__wsMessages?.some((message) => message.type === "tool.invoke"),
+      );
+      await mocked.evaluate(() => window.dispatchEvent(new Event("online")));
+      await mocked.waitForFunction(() => window.__mockWebSocketInstances.length === 2);
+      await saving.waitFor({ state: "detached", timeout: 3_000 });
+      await expectVisible(
+        mocked.getByText("GUI connection closed before the tool finished.", { exact: true }),
+      );
+      await expect(generate.isEnabled()).resolves.toBe(true);
+    },
+  );
 
   it("collapses and restores the desktop sidebar", async () => {
     const mocked = await newPage({ viewport: { width: 1024, height: 720 } });

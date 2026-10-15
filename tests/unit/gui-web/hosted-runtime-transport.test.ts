@@ -109,6 +109,24 @@ function createHost() {
 }
 
 describe("hosted runtime transport", () => {
+  it("orders prompt snapshots across overlapping reads and accepts later removal", async () => {
+    const host = createHost();
+    const pending: Array<(value: Record<string, unknown>) => void> = [];
+    host.request.mockImplementation(async () => new Promise((resolve) => pending.push(resolve)));
+    const transport = createHostedRuntimeTransport({ host });
+    const oldRead = transport.bootstrap();
+    const newRead = transport.loadSession("session-1");
+    const prompt = { id: "question", sessionId: "session-1", status: "answered" };
+    pending[1]({ sessionId: "session-1", askUserPrompts: [prompt] });
+    expect((await newRead).askUserPrompts).toEqual([prompt]);
+    pending[0]({ sessionId: "session-1", askUserPrompts: [{ ...prompt, status: "pending" }] });
+    expect((await oldRead).askUserPrompts).toEqual([prompt]);
+    const removal = transport.createSession();
+    pending[2]({ sessionId: "session-2", askUserPrompts: [] });
+    expect((await removal).askUserPrompts).toEqual([]);
+    transport.dispose();
+  });
+
   it("carries the hosted data actions so Settings can run them", () => {
     const hostedData = { exportData: vi.fn() };
 

@@ -7,6 +7,7 @@ import {
   assertTerminalAssistantSucceeded,
   BrowserPiSession,
 } from "../../../gui/hosted/runtime/browser-pi-session.js";
+import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 describe("BrowserPiSession model history", () => {
@@ -15,6 +16,68 @@ describe("BrowserPiSession model history", () => {
   afterEach(() => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
+
+  it.each([false, true])(
+    "reopens a user-stopped provider error with a retry prompt (manual tool history: %s)",
+    (manualToolHistory) => {
+      const root = mkdtempSync(join(tmpdir(), "opencandle-browser-pi-stop-"));
+      roots.push(root);
+      const sessionDir = join(root, "sessions");
+      const manager = SessionManager.create(root, sessionDir);
+      BrowserPiSession.prototype.markRunStarted.call(
+        { sessionManager: manager },
+        "run-stop",
+        "Research this",
+        [],
+      );
+      const otherManager = SessionManager.open(manager.getSessionFile()!, sessionDir, root);
+      if (manualToolHistory) {
+        for (let index = 0; index < 8; index += 1) {
+          otherManager.appendCustomMessageEntry("tool-result", `Manual tool result ${index}`, true);
+        }
+      }
+      if (manualToolHistory)
+        expect(otherManager.getEntries().length).toBeGreaterThan(manager.getEntries().length);
+      manager.appendMessage({ role: "user", content: "Research this" });
+      manager.appendMessage({
+        role: "assistant",
+        content: [],
+        api: "openai-responses",
+        provider: "openai",
+        model: "test-model",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "error",
+        errorMessage: "This operation was aborted",
+        timestamp: Date.now(),
+      });
+      BrowserPiSession.prototype.markStoppedRun?.call(
+        { sessionManager: manager },
+        "run-stop",
+        "Research this",
+      );
+      const reopened = SessionManager.open(manager.getSessionFile()!, sessionDir, root);
+      const events = sessionEntriesToChatEvents(reopened.getEntries(), {
+        sessionId: manager.getSessionId(),
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "custom.message",
+          customType: "opencandle-run-cancelled",
+          details: expect.objectContaining({ prompt: "Research this" }),
+        }),
+      );
+      expect(events).not.toContainEqual(
+        expect.objectContaining({ customType: "opencandle-model-run-failed" }),
+      );
+    },
+  );
 
   it("records a Pi model change when an existing hosted session switches providers", async () => {
     const root = mkdtempSync(join(tmpdir(), "opencandle-browser-pi-"));

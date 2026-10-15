@@ -35,6 +35,7 @@ import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
+import { createGuiRunRegistry } from "./run-cancellation.js";
 import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { installUnhandledRejectionGuard } from "./unhandled-rejection-guard.js";
@@ -147,6 +148,7 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
 // Sessions a chat run currently owns in this process; shared by the run routes
 // and session-addressed model changes, which must not race a running reply.
 const activeRunSessionIds = new Set<string>();
+const runRegistry = createGuiRunRegistry();
 const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
@@ -202,6 +204,7 @@ const sessionActionsController = createSessionActionsController({
   detachedSessions,
 });
 wsHub = createWsHub({
+  getActiveRunActionId: runRegistry.activeActionId,
   role: lockResult.role,
   lock: lockResult.lock,
   cwd,
@@ -274,6 +277,7 @@ const httpRequestHandler = createHttpRequestHandler({
   detachedSessions,
   cancelAskUserPromptsForSession: (sessionId) => askUserBridge.cancelForSession(sessionId),
   activeRunSessionIds,
+  runRegistry,
 });
 
 const server = createServer((req, res) => {

@@ -11,10 +11,53 @@ import {
   resolveSessionManagerById,
   sessionIdFromRoute,
 } from "../../../gui/server/http-routes.js";
+import { createGuiRunRegistry } from "../../../gui/server/run-cancellation.js";
 import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 import type { WsHub } from "../../../gui/server/ws-hub.js";
 
 describe("session-addressed GUI bootstrap", () => {
+  it("restores only the requested session's active run and clears it when ownership is released", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-run-bootstrap-"));
+    const sessionDir = join(cwd, "sessions");
+    try {
+      const requested = SessionManager.create(cwd, sessionDir);
+      const other = SessionManager.create(cwd, sessionDir);
+      const runRegistry = createGuiRunRegistry();
+      const running = runRegistry.start({
+        sessionId: requested.getSessionId(),
+        actionId: "requested-run",
+      })!;
+      runRegistry.start({ sessionId: other.getSessionId(), actionId: "other-run" });
+      const options = {
+        cwd,
+        sessionDir,
+        role: "writer" as const,
+        runRegistry,
+        getSessionManager: () => other,
+        wsHub: wsHubWithPrompts(),
+        modelSetupController: {
+          buildCurrentModelSetupState: () => ({
+            requirement: "ready",
+            providers: [],
+            availableModels: [],
+          }),
+        },
+      };
+      expect((await buildSessionBootstrapPayload(options, requested)).snapshot).toMatchObject({
+        activeRun: { actionId: "requested-run" },
+      });
+      runRegistry.finish(running);
+      expect((await buildSessionBootstrapPayload(options, requested)).snapshot).toMatchObject({
+        activeRun: null,
+      });
+      expect((await buildSessionBootstrapPayload(options, other)).snapshot).toMatchObject({
+        activeRun: { actionId: "other-run" },
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("builds a transcript snapshot for the requested session without using active state", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
@@ -45,9 +88,9 @@ describe("session-addressed GUI bootstrap", () => {
       );
 
       expect(payload.sessionId).toBe(requested.getSessionId());
-      // Pi intentionally does not create the JSONL file until a real assistant
-      // response exists. The UI must not rotate away from this transient session.
-      expect(payload.sessionPersisted).toBe(false);
+      // Pi persists the first user message so an interrupted first turn remains
+      // reopenable before any assistant response exists.
+      expect(payload.sessionPersisted).toBe(true);
       const snapshot = payload.snapshot as {
         sessionId: string;
         events: Array<{ sessionId: string; type: string }>;

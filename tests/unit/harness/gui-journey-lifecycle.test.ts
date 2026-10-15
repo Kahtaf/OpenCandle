@@ -69,6 +69,11 @@ describe("GUI journey lifecycle", () => {
   }, 8_000);
 
   it("closes fixture servers and removes the temp dir when browser startup fails", async () => {
+    // Other worktrees may run journeys concurrently; inspect only this test's
+    // temporary directory while still exercising real harness cleanup.
+    const fixtureTemp = mkdtempSync(join(tmpdir(), "oc-gui-lifecycle-"));
+    cleanupDirs.push(fixtureTemp);
+    vi.stubEnv("TMPDIR", fixtureTemp);
     const capture = captureListeningServers();
     const before = readdirSync(tmpdir()).filter((name) => name.startsWith("oc-gui-journey-"));
     try {

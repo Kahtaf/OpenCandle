@@ -33,6 +33,7 @@ class BrowserRuntimeCoordinator {
     this.epoch = 0;
     this.writerId = "";
     this.host = null;
+    this.unsubscribeHost = null;
     this.runtimeProgress = { phase: "booting", message: "Starting browser runtime…" };
     this.writerBootstrap = null;
     this.cachedModelSetup = null;
@@ -255,6 +256,10 @@ class BrowserRuntimeCoordinator {
     this.role = "writer";
     const host = this.createHost({ sessionCredential: this.sessionCredential });
     this.host = host;
+    this.unsubscribeHost = host.subscribe?.((message) => {
+      if (this.host !== host || this.role !== "writer" || this.disposed) return;
+      this.notify(message);
+    }) ?? null;
     // Overlap WebContainer startup with the UI's initial render while keeping
     // each writer's request surface behind one readiness barrier. A replacement
     // writer additionally restores its durable session before it accepts chat.
@@ -396,6 +401,8 @@ class BrowserRuntimeCoordinator {
     }
     const host = this.host;
     this.host = null;
+    this.unsubscribeHost?.();
+    this.unsubscribeHost = null;
     this.writerBootstrap = null;
     this.writerReadyPromise = null;
     this.releaseWriter = null;

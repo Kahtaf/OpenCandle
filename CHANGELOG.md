@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+- Reconnecting the GUI immediately releases interrupted tool requests so saved-state controls do not hang.
+
+- Hosted clarification questions and answers stay visible when an older initial load, session action, or background refresh arrives late.
+
+- The model chooser now includes the latest models supported by Pi 1.2.0; existing Azure configurations need the [provider-ID migration](docs/configuration.md#azure-provider-migration-for-pi-12).
+
+- Reopening a chat keeps completed runs ready for the next message when an older session load arrives late.
+
+- On mobile, tool details stay collapsed until opened so clarification questions and Stop remain accessible.
+
+- A model provider timeout now shows one retryable error instead of repeated failure cards that suggest repairing a working key.
+
+- Active hosted chats appear in the sidebar immediately and preserve their prompt with recovery guidance after an interrupted reload.
+
+- Hosted chats now show the agent's clarification questions immediately so research can continue after an answer.
+
+- Stopping a hosted response preserves the prompt and stopped status when the chat is reopened.
+
+- Reloading a running local chat preserves its Stop control, and chats become usable again when an offline connection returns.
+
+- An interrupted response connection now shows a recovery message instead of silently appearing finished.
+
+- Hosted retry acknowledgements preserve successful run status without repeating model work.
+
+- Reconnecting chats keep their latest run status when an older refresh arrives late.
+
 - Contributors can dry-run, deploy, and roll back the hosted web app with `npm run gui:hosted:deploy:dry-run` and `npm run gui:hosted:deploy`, following the runbook in `gui/hosted/README.md`.
 
 - Stopping a run while a DCF valuation is still fetching no longer crashes the local GUI server and ends every other running chat.

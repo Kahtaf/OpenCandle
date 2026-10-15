@@ -1,6 +1,8 @@
 export { InMemoryCredentialStore } from "../../../node_modules/@earendil-works/pi-ai/dist/auth/credential-store.js";
 export {
   createModels,
+  getModelType,
+  isModelType,
   ModelsError,
   clampThinkingLevel,
   getSupportedThinkingLevels,
@@ -14,7 +16,7 @@ export {
   isRetryableAssistantError,
   retryDelayMs,
 } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/retry.js";
-export { EventStream } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/event-stream.js";
+export { EventStream, createAssistantMessageEventStream } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/event-stream.js";
 export { parseStreamingJson } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/json-parse.js";
 export {
   contentText,

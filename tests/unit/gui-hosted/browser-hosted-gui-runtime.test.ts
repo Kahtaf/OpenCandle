@@ -11,6 +11,9 @@ import {
   selectSessionCheckpoints,
   serializeHostedBlockedProvider,
 } from "../../../gui/hosted/runtime/browser-hosted-gui-runtime.js";
+import { BrowserPiSession } from "../../../gui/hosted/runtime/browser-pi-session.js";
+import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
+import { persistUnflushedSession } from "../../../gui/server/durable-session-persist.js";
 import { SessionManager } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js";
 import { resolveHostedBrowserCapabilityReport } from "../../../src/onboarding/providers.js";
 import {
@@ -20,6 +23,209 @@ import {
 import { createSqlJsStateDatabase } from "../../../src/runtime/sqljs-state-database-node.js";
 
 describe("BrowserHostedGuiRuntime action safety", () => {
+  it.each([false, true])(
+    "preserves a stopped prompt when cancellation interrupts the startup checkpoint (image: %s)",
+    async (withImage) => {
+      const root = mkdtempSync(join(tmpdir(), "opencandle-hosted-startup-stop-"));
+      const sessionDir = join(root, "sessions");
+      const manager = SessionManager.create(root, sessionDir);
+      const owner = { sessionManager: manager };
+      const prompt = vi.fn();
+      const controller = new AbortController();
+      const runtime = createRuntime({
+        cwd: root,
+        sessionDir,
+        createPiSession: async () => ({
+          prompt,
+          dispose: vi.fn(),
+          markRunStarted: BrowserPiSession.prototype.markRunStarted.bind(owner),
+          markStoppedRun: BrowserPiSession.prototype.markStoppedRun.bind(owner),
+          markRunFinished: BrowserPiSession.prototype.markRunFinished.bind(owner),
+        }),
+      });
+      runtime.resolveManager = vi.fn(async () => manager);
+      const persistCheckpoint = vi
+        .fn(async () => undefined)
+        .mockImplementationOnce(async () => {
+          controller.abort();
+          throw new DOMException("Stopped during checkpoint", "AbortError");
+        });
+      await expect(
+        runtime.chatRun(
+          manager.getSessionId(),
+          {
+            prompt: "Keep my stopped question",
+            images: withImage ? [{ mimeType: "image/png", data: "aW1hZ2U=" }] : [],
+            attachments: [],
+          },
+          "startup-stop",
+          undefined,
+          controller.signal,
+          persistCheckpoint,
+        ),
+      ).rejects.toThrow("Stopped during checkpoint");
+      expect(prompt).not.toHaveBeenCalled();
+      const events = sessionEntriesToChatEvents(manager.getEntries(), {
+        sessionId: manager.getSessionId(),
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: "message.created", role: "user" }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "message.completed",
+          content: [{ type: "text", text: "Keep my stopped question" }],
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          customType: "opencandle-run-cancelled",
+          details: expect.objectContaining({
+            prompt: "Keep my stopped question",
+            requiresReattachment: withImage,
+          }),
+        }),
+      );
+      const finalCheckpoint = persistCheckpoint.mock.calls.at(-1)?.[0];
+      expect(JSON.stringify(finalCheckpoint)).toContain("opencandle-hosted-run-finished");
+      expect(JSON.stringify(finalCheckpoint)).toContain("opencandle-run-cancelled");
+      runtime.dispose();
+    },
+  );
+
+  it("lists a newly admitted hosted run before Pi flushes its first user message", async () => {
+    const root = mkdtempSync(join(tmpdir(), "opencandle-hosted-pending-list-"));
+    const sessionDir = join(root, "sessions");
+    const runtime = await BrowserHostedGuiRuntime.create({
+      cwd: root,
+      sessionDir,
+      stateFile: join(root, "state.sqlite3"),
+    });
+    const initial = await runtime.bootstrap();
+    const saved = (await SessionManager.list(root, sessionDir)).find(
+      (session) => session.id === initial.sessionId,
+    )!;
+    const manager = SessionManager.open(saved.path, sessionDir, root);
+    manager.appendCustomEntry("opencandle-hosted-run-pending", {
+      actionId: "pending-list",
+      prompt: "A new research question",
+      attachments: [],
+    });
+    expect((await runtime.bootstrap()).sessions).toContainEqual(
+      expect.objectContaining({ id: initial.sessionId, firstMessage: "A new research question" }),
+    );
+    runtime.dispose();
+  });
+
+  it.each([
+    { userPersisted: false, attachments: [] },
+    { userPersisted: true, attachments: [] },
+    { userPersisted: false, attachments: [{ kind: "image", label: "image/png #1" }] },
+    { userPersisted: true, attachments: [{ kind: "portfolio", label: "My portfolio" }] },
+  ])(
+    "recovers an interrupted hosted prompt after runtime restart (%j)",
+    async ({ userPersisted, attachments }) => {
+      const root = mkdtempSync(join(tmpdir(), "opencandle-hosted-interrupted-"));
+      const sessionDir = join(root, "sessions");
+      const manager = SessionManager.create(root, sessionDir);
+      BrowserPiSession.prototype.markRunStarted.call(
+        { sessionManager: manager },
+        "interrupted-run",
+        "Research this after a reload",
+        attachments,
+      );
+      if (userPersisted)
+        manager.appendMessage({
+          role: "user",
+          content: "Research this after a reload",
+          timestamp: Date.now(),
+        });
+      persistUnflushedSession(manager);
+      for (let restart = 0; restart < 2; restart += 1) {
+        const runtime = await BrowserHostedGuiRuntime.create({
+          cwd: root,
+          sessionDir,
+          stateFile: join(root, "state.sqlite3"),
+          currentSessionId: manager.getSessionId(),
+        });
+        const snapshot = (await runtime.bootstrap()).snapshot;
+        const userEvents = snapshot.events.filter(
+          (event) =>
+            event.type === "message.completed" &&
+            JSON.stringify(event.content).includes("Research this after a reload"),
+        );
+        expect(userEvents).toHaveLength(1);
+        expect(
+          snapshot.events.filter(
+            (event) =>
+              event.type === "custom.message" && event.customType === "opencandle-run-cancelled",
+          ),
+        ).toEqual([
+          expect.objectContaining({
+            details: expect.objectContaining({
+              prompt: "Research this after a reload",
+              requiresReattachment: attachments.length > 0,
+            }),
+          }),
+        ]);
+        if (attachments.length > 0) expect(JSON.stringify(snapshot.events)).toContain("Reattach");
+        runtime.dispose();
+      }
+    },
+  );
+
+  it("does not mark a settled hosted turn as interrupted after restart", async () => {
+    const root = mkdtempSync(join(tmpdir(), "opencandle-hosted-settled-"));
+    const sessionDir = join(root, "sessions");
+    const manager = SessionManager.create(root, sessionDir);
+    const owner = { sessionManager: manager };
+    BrowserPiSession.prototype.markRunStarted.call(owner, "finished-run", "Finished research", []);
+    manager.appendMessage({ role: "user", content: "Finished research", timestamp: Date.now() });
+    manager.appendCustomMessageEntry("research-summary", "Saved research answer", true);
+    BrowserPiSession.prototype.markRunFinished.call(owner, "finished-run");
+    const runtime = await BrowserHostedGuiRuntime.create({
+      cwd: root,
+      sessionDir,
+      stateFile: join(root, "state.sqlite3"),
+      currentSessionId: manager.getSessionId(),
+    });
+    const events = (await runtime.bootstrap()).snapshot.events;
+    expect(JSON.stringify(events)).toContain("Saved research answer");
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ customType: "opencandle-run-cancelled" }),
+    );
+    runtime.dispose();
+  });
+
+  it.each([true, false])(
+    "records explicit Stop separately from provider aborts (user Stop: %s)",
+    async (userStopped) => {
+      const controller = new AbortController();
+      const markStoppedRun = vi.fn();
+      const runtime = createRuntime({
+        createPiSession: vi.fn(async () => ({
+          prompt: vi.fn(async () => {
+            if (userStopped) controller.abort();
+            throw new Error("This operation was aborted");
+          }),
+          markStoppedRun,
+          dispose: vi.fn(),
+        })),
+      });
+      await expect(
+        runtime.chatRun(
+          "session-1",
+          chatInput("Research this"),
+          "run-stop",
+          undefined,
+          controller.signal,
+        ),
+      ).rejects.toThrow("aborted");
+      if (userStopped) expect(markStoppedRun).toHaveBeenCalledWith("run-stop", "Research this");
+      else expect(markStoppedRun).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects deleting a session while its chat run is active", async () => {
     let finishPrompt!: () => void;
     const prompt = vi.fn(
@@ -214,45 +420,65 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     });
 
     const first = await runtime.chatRun("session-1", chatInput("First"), "run-1");
-    const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1");
+    const acknowledged = vi.fn();
+    const retry = await runtime.chatRun("session-1", chatInput("First"), "run-1", acknowledged);
 
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-1",
+      seq: 1,
+    });
     expect(retry).toEqual({ ...first, events: [] });
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for a durable pending-action checkpoint before starting paid work", async () => {
-    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-checkpoint-"));
-    writeFileSync(
-      join(sessionDir, "session-1.jsonl"),
-      `${JSON.stringify({ type: "session", id: "session-1" })}\n`,
-    );
-    let releaseCheckpoint!: () => void;
-    const checkpointPersisted = new Promise<void>((resolve) => {
-      releaseCheckpoint = resolve;
-    });
-    const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
-    const persistCheckpoint = vi.fn(async () => checkpointPersisted);
-    const runtime = createRuntime({
-      sessionDir,
-      createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
-    });
+  it.each([null, "session-2"])(
+    "waits for a durable pending-action checkpoint before starting paid work (selected: %s)",
+    async (selectedSessionId) => {
+      const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-checkpoint-"));
+      writeFileSync(
+        join(sessionDir, "session-1.jsonl"),
+        `${JSON.stringify({ type: "session", id: "session-1" })}\n`,
+      );
+      let releaseCheckpoint!: () => void;
+      const checkpointPersisted = new Promise<void>((resolve) => {
+        releaseCheckpoint = resolve;
+      });
+      const prompt = vi.fn(async () => ({ sessionId: "session-1" }));
+      const persistCheckpoint = vi.fn(async () => checkpointPersisted);
+      const onEvent = vi.fn();
+      const runtime = createRuntime({
+        sessionDir,
+        createPiSession: vi.fn(async () => ({ prompt, dispose: vi.fn() })),
+      });
+      if (selectedSessionId) {
+        writeFileSync(
+          join(sessionDir, `${selectedSessionId}.jsonl`),
+          `${JSON.stringify({ type: "session", id: selectedSessionId })}\n`,
+        );
+        runtime.currentSessionId = selectedSessionId;
+      }
 
-    const run = runtime.chatRun(
-      "session-1",
-      chatInput("First"),
-      "run-durable",
-      undefined,
-      undefined,
-      persistCheckpoint,
-    );
-    await vi.waitFor(() => expect(persistCheckpoint).toHaveBeenCalledOnce());
-    expect(prompt).not.toHaveBeenCalled();
-    expect(JSON.stringify(persistCheckpoint.mock.calls[0]?.[0])).toContain("run-durable");
+      const run = runtime.chatRun(
+        "session-1",
+        chatInput("First"),
+        "run-durable",
+        onEvent,
+        undefined,
+        persistCheckpoint,
+      );
+      await vi.waitFor(() => expect(persistCheckpoint).toHaveBeenCalledOnce());
+      expect(prompt).not.toHaveBeenCalled();
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "run.started" }));
+      expect(JSON.stringify(persistCheckpoint.mock.calls[0]?.[0])).toContain("run-durable");
+      expect(persistCheckpoint.mock.calls[0]?.[0].sessionId).toBe(selectedSessionId ?? "session-1");
 
-    releaseCheckpoint();
-    await run;
-    expect(prompt).toHaveBeenCalledOnce();
-  });
+      releaseCheckpoint();
+      await run;
+      expect(prompt).toHaveBeenCalledOnce();
+    },
+  );
 
   it("does not checkpoint acceptance until Pi finishes the durable user message", async () => {
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-hosted-accepted-checkpoint-"));
@@ -512,9 +738,16 @@ describe("BrowserHostedGuiRuntime action safety", () => {
     });
     (second as any).resolveManager = vi.fn(async () => manager);
 
-    await expect(second.chatRun("session-1", chatInput("First"), "run-restart")).resolves.toEqual(
-      expect.objectContaining({ events: [] }),
-    );
+    const acknowledged = vi.fn();
+    await expect(
+      second.chatRun("session-1", chatInput("First"), "run-restart", acknowledged),
+    ).resolves.toEqual(expect.objectContaining({ events: [] }));
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-restart",
+      seq: 1,
+    });
     expect(secondPrompt).not.toHaveBeenCalled();
     await expect(second.chatRun("session-1", chatInput("Changed"), "run-restart")).rejects.toThrow(
       "different input",
@@ -695,11 +928,18 @@ describe("BrowserHostedGuiRuntime action safety", () => {
 
     const first = runtime.chatRun("session-1", chatInput("First"), "run-1");
     await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
-    const retry = runtime.chatRun("session-1", chatInput("First"), "run-1");
+    const acknowledged = vi.fn();
+    const retry = runtime.chatRun("session-1", chatInput("First"), "run-1", acknowledged);
 
     finishPrompt();
     const [firstResult, retryResult] = await Promise.all([first, retry]);
     expect(retryResult).toBe(firstResult);
+    expect(acknowledged).toHaveBeenCalledExactlyOnceWith({
+      type: "run.completed",
+      sessionId: "session-1",
+      runId: "run-1",
+      seq: 1,
+    });
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 

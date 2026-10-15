@@ -110,7 +110,14 @@ export function isDuplicateChatRunAck(body) {
   return body?.ok === true && body?.duplicate === true;
 }
 
-export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart, onRunError }) {
+export function useChatRun({
+  activeSessionId = "",
+  sessionSnapshots = {},
+  setToast,
+  onEvent,
+  onRunStart,
+  onRunError,
+}) {
   const transport = useRuntimeTransport();
   const abortsRef = useRef(new Map());
   // The run this tab last stopped, per session key: { actionId, at,
@@ -251,7 +258,11 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
     (sessionId = activeSessionId) => {
       const targetSessionId = normalizeSessionId(sessionId) || normalizeSessionId(activeSessionId);
       const key = runStateKey(targetSessionId);
-      const targetActionId = normalizeSessionId(lastRuns[key]?.actionId);
+      const targetActionId = normalizeSessionId(
+        abortsRef.current.has(key)
+          ? lastRuns[key]?.actionId
+          : sessionSnapshots[targetSessionId]?.activeRun?.actionId,
+      );
       const cancel = transport.cancelChatRun;
       const stoppedRun = targetActionId
         ? { actionId: targetActionId, at: Date.now(), confirmed: false }
@@ -277,6 +288,8 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           .then((result) => {
             if (stoppedRun && result?.ok !== false && result?.cancelled === true) {
               stoppedRun.confirmed = true;
+              // A late acknowledgement belongs to the stopped run, not a new stream.
+              if (!abortsRef.current.has(key)) setRunStateFor(key, "ready");
             }
             // Never leave the user believing the server stopped when the
             // cancellation was refused (e.g. hosted has no server stop).
@@ -297,7 +310,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       }
       abortsRef.current.get(key)?.abort();
     },
-    [activeSessionId, lastRuns, transport, setToast],
+    [activeSessionId, lastRuns, sessionSnapshots, transport, setToast, setRunStateFor],
   );
 
   const retryRun = useCallback(
@@ -310,28 +323,46 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
   );
 
   const activeKey = runStateKey(activeSessionId);
-  const runState = runStates[activeKey] || "ready";
+  const visibleRunStates = useMemo(() => {
+    const states = { ...runStates };
+    for (const [sessionId, snapshot] of Object.entries(sessionSnapshots)) {
+      const actionId = snapshot.activeRun?.actionId;
+      const stopped = stoppedRunsRef.current.get(sessionId);
+      if (actionId && !(stopped?.actionId === actionId && stopped.confirmed)) {
+        states[sessionId] = "streaming";
+      }
+    }
+    return states;
+  }, [runStates, sessionSnapshots]);
+  const localRunState = runStates[activeKey] || "ready";
+  const runState = visibleRunStates[activeKey] || "ready";
   const lastRun = lastRuns[activeKey] || null;
   const lastPrompt = lastRun?.prompt ?? "";
 
   return useMemo(
     () => ({
       runState,
-      runStates,
+      localRunState,
+      runStates: visibleRunStates,
       lastPrompt,
       startChatRun,
       stopRun,
       retryRun,
     }),
-    [runState, runStates, lastPrompt, startChatRun, stopRun, retryRun],
+    [runState, localRunState, visibleRunStates, lastPrompt, startChatRun, stopRun, retryRun],
   );
 }
 
 async function drainSse(response, onEvent) {
+  const disconnected = () =>
+    new Error(
+      "Connection ended before the response finished. Reopen this chat to check its status.",
+    );
   const reader = response.body?.getReader();
-  if (!reader) return;
+  if (!reader) throw disconnected();
   const decoder = new TextDecoder();
   let buffer = "";
+  let terminal = false;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -340,18 +371,23 @@ async function drainSse(response, onEvent) {
     while (index !== -1) {
       const block = buffer.slice(0, index);
       buffer = buffer.slice(index + 2);
+      index = buffer.indexOf("\n\n");
       const data = block
         .split("\n")
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trim())
         .join("\n");
       if (!data) continue;
+      let event;
       try {
-        onEvent(JSON.parse(data));
+        event = JSON.parse(data);
       } catch {
         // Ignore malformed SSE blocks.
+        continue;
       }
-      index = buffer.indexOf("\n\n");
+      if (event.type === "run.completed" || event.type === "run.failed") terminal = true;
+      onEvent(event);
     }
   }
+  if (!terminal) throw disconnected();
 }

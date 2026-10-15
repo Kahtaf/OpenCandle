@@ -219,24 +219,30 @@ describe("GUI session journey", () => {
     expect(harness.unexpectedServerRequests()).toEqual([]);
   }, 90_000);
 
-  it("continues an ask_user clarification in the real composer", async () => {
-    const page = harness.page;
-    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
-    await submitPrompt(page, ASK_USER_PROMPT);
-    await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
-    await page.getByRole("button", { name: "1 year" }).click();
-    await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
-    await waitForRunIdle(page);
+  it.each([1280, 390])(
+    "continues an ask_user clarification in the real composer at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      await submitPrompt(page, ASK_USER_PROMPT);
+      await expectVisible(page.getByText("Which horizon should the plan target?").first(), 30_000);
+      await page.getByRole("button", { name: "1 year" }).click();
+      await expectVisible(page.getByText(/Plan for a 1 year horizon/).first(), 30_000);
+      await waitForRunIdle(page);
 
-    // The ask_user answer reached the model as a tool result.
-    expect(
-      harness.modelServer.requests.some((request) =>
-        request.messages.some(
-          (message) => message.role === "tool" && JSON.stringify(message).includes("User answered"),
+      // The ask_user answer reached the model as a tool result.
+      expect(
+        harness.modelServer.requests.some((request) =>
+          request.messages.some(
+            (message) =>
+              message.role === "tool" && JSON.stringify(message).includes("User answered"),
+          ),
         ),
-      ),
-    ).toBe(true);
-  }, 90_000);
+      ).toBe(true);
+    },
+    90_000,
+  );
 
   it("answers an ask_user question in a reopened session that is not the server's current one", async () => {
     const page = harness.page;
@@ -347,6 +353,288 @@ describe("GUI session journey", () => {
     await page.reload({ waitUntil: "networkidle" });
     await expectStoppedTurn(page);
   }, 120_000);
+
+  it.each([1280, 390])(
+    "reload keeps an active run stoppable at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      await submitPrompt(page, QUOTE_PROMPT);
+      await expectVisible(
+        page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+        30_000,
+      );
+      await waitForRunIdle(page);
+      const actionId = await submitPromptAndCaptureRunActionId(page, STREAM_HOLD_PROMPT);
+      await page.waitForURL(/\/sessions\/[^/]+$/);
+      const sessionId = sessionIdFromUrl(page);
+      await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+      const held = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+      expect(held).toBeDefined();
+
+      await page.reload({ waitUntil: "networkidle" });
+      await expectVisible(page.getByRole("button", { name: "Stop response" }), 10_000);
+      await expectVisible(
+        page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+        10_000,
+      );
+      await expectVisible(page.getByText(STREAM_HOLD_PROMPT, { exact: true }), 10_000);
+      expect(sessionIdFromUrl(page)).toBe(sessionId);
+      await stopAndAwaitCancelAccepted(page, { sessionId, targetActionId: actionId });
+      await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+      answerHold.release();
+      expect(await settlesWithin(held!.aborted, 10_000)).toBe(true);
+      await waitForSessionEntries(
+        page,
+        sessionId,
+        (entries) => findRunCancelledMarker(entries, STREAM_HOLD_PROMPT) !== undefined,
+      );
+      expect(userMessageCount(harness, sessionId)).toBe(2);
+      expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionId))).toBe(false);
+    },
+    120_000,
+  );
+
+  it("re-enables the chat after an offline connection returns", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await submitPrompt(page, QUOTE_PROMPT);
+    await expectVisible(
+      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+    await waitForRunIdle(page);
+    await page.context().setOffline(true);
+    await page
+      .getByRole("textbox", { name: "Message OpenCandle" })
+      .and(page.locator(":disabled"))
+      .waitFor();
+    await page.context().setOffline(false);
+    await page
+      .getByRole("textbox", { name: "Message OpenCandle" })
+      .and(page.locator(":enabled"))
+      .waitFor({ timeout: 10_000 });
+    await submitPrompt(page, SECOND_PROMPT);
+    await expectVisible(
+      page.getByText("MSFT is trading at $512.34 as of 2026-07-15T20:00:00.000Z.").first(),
+      30_000,
+    );
+  }, 90_000);
+
+  it("refreshes a restored background run that finishes while disconnected", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionA = sessionIdFromUrl(page);
+    await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionB = sessionIdFromUrl(page);
+    expect(sessionB).not.toBe(sessionA);
+    await waitForCondition(() => answerHold.waitCount > 1, 15_000);
+    await page.addInitScript(() => {
+      const sockets: WebSocket[] = [];
+      Object.assign(window, { auditSockets: sockets });
+      window.WebSocket = new Proxy(window.WebSocket, {
+        construct(Target, args) {
+          const socket = new Target(args[0], args[1]);
+          sockets.push(socket);
+          return socket;
+        },
+      });
+    });
+    await page.reload({ waitUntil: "networkidle" });
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 10_000);
+    await page.context().setOffline(true);
+    await page.evaluate(() => {
+      for (const socket of (window as unknown as { auditSockets: WebSocket[] }).auditSockets)
+        socket.close();
+    });
+    answerHold.release();
+    await waitForCondition(
+      () => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionB)),
+      15_000,
+    );
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get(
+            `${harness.baseUrl}/api/sessions/${sessionB}/bootstrap`,
+            {
+              headers: { Origin: harness.baseUrl },
+            },
+          );
+          expect(response.ok()).toBe(true);
+          return (await response.json()).snapshot.activeRun;
+        },
+        { timeout: 15_000 },
+      )
+      .toBeNull();
+    await page.context().setOffline(false);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    await expectVisible(
+      page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+      15_000,
+    );
+    expect(sessionIdFromUrl(page)).toBe(sessionB);
+  }, 120_000);
+
+  it("discards a superseded reconnect read after a background run finishes", async () => {
+    const page = harness.page;
+    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+    await startNewSession(page);
+    await submitPrompt(page, STREAM_HOLD_PROMPT);
+    const sessionId = sessionIdFromUrl(page);
+    await waitForCondition(() => answerHold.waitCount > 1, 15_000);
+    let ownershipReleased = false;
+    page.on("websocket", (socket) => {
+      socket.on("framereceived", ({ payload }) => {
+        const message = JSON.parse(String(payload)) as {
+          type?: string;
+          sessionId?: string;
+          activeRun?: unknown;
+        };
+        if (
+          message.type === "session.snapshot" &&
+          message.sessionId === sessionId &&
+          message.activeRun === null
+        )
+          ownershipReleased = true;
+      });
+    });
+    await page.addInitScript(() => {
+      const sockets: WebSocket[] = [];
+      Object.assign(window, { auditSockets: sockets });
+      window.WebSocket = new Proxy(window.WebSocket, {
+        construct(Target, args) {
+          const socket = new Target(args[0], args[1]);
+          sockets.push(socket);
+          return socket;
+        },
+      });
+    });
+    await page.reload({ waitUntil: "networkidle" });
+    await expectVisible(page.getByRole("button", { name: "Stop response" }), 10_000);
+    await page.context().setOffline(true);
+    await page.evaluate(() => {
+      for (const socket of (window as unknown as { auditSockets: WebSocket[] }).auditSockets)
+        socket.close();
+    });
+    let releaseRead!: () => void;
+    let readStarted = false;
+    let staleBody = "";
+    const heldRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const url = `${harness.baseUrl}/api/sessions/${sessionId}/bootstrap`;
+    await page.route(url, async (route) => {
+      const response = await route.fetch();
+      staleBody = await response.text();
+      readStarted = true;
+      await heldRead;
+      await route.fulfill({ response, body: staleBody });
+    });
+    await page.context().setOffline(false);
+    await waitForCondition(() => readStarted, 15_000);
+    expect(JSON.parse(staleBody).snapshot.activeRun).not.toBeNull();
+    answerHold.release();
+    await waitForCondition(() => ownershipReleased, 15_000);
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    const responseDelivered = page.waitForResponse(url);
+    releaseRead();
+    await (await responseDelivered).finished();
+    await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+    expect(await page.getByRole("button", { name: "Stop response" }).count()).toBe(0);
+    await expectVisible(
+      page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+      15_000,
+    );
+    expect(sessionIdFromUrl(page)).toBe(sessionId);
+  }, 120_000);
+
+  it.each([1280, 390])(
+    "discards a superseded ordinary session load at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await startNewSession(page);
+      await submitPrompt(page, QUOTE_PROMPT);
+      await expectVisible(page.getByText("$189.42").first(), 30_000);
+      await waitForRunIdle(page);
+      const sessionId = sessionIdFromUrl(page);
+      await page.reload({ waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await startNewSession(page);
+      await submitPrompt(page, SECOND_PROMPT);
+      await expectVisible(page.getByText("$512.34").first(), 30_000);
+      await waitForRunIdle(page);
+      await page.reload({ waitUntil: "networkidle" });
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await openSession(page, "AAPL quote journey");
+      await submitPrompt(page, STREAM_HOLD_PROMPT);
+      await waitForCondition(() => answerHold.waitCount > 0, 15_000);
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await openSession(page, "MSFT quote journey");
+      // B remains the server's current chat while A runs in the background.
+      // After reload, reopening A requires an ordinary session read.
+      await page.reload({ waitUntil: "networkidle" });
+      let releaseRead!: () => void;
+      let readStarted = false;
+      let staleBody = "";
+      const heldRead = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      const url = `${harness.baseUrl}/api/sessions/${sessionId}/bootstrap`;
+      await page.route(url, async (route) => {
+        const response = await route.fetch();
+        staleBody = await response.text();
+        readStarted = true;
+        await heldRead;
+        await route.fulfill({ response, body: staleBody });
+      });
+      try {
+        if (width === 390)
+          await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+        await page.getByRole("button", { name: "AAPL quote journey", exact: true }).click();
+        await waitForCondition(() => readStarted, 15_000);
+        expect(JSON.parse(staleBody).snapshot.activeRun).not.toBeNull();
+        answerHold.release();
+        await expectVisible(
+          page.getByText("NVDA is trading at $185.25 as of 2026-07-15T20:00:00.000Z.").first(),
+          15_000,
+        );
+        await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+        const responseDelivered = page.waitForResponse(url);
+        releaseRead();
+        await (await responseDelivered).finished();
+        await page.evaluate(async () => {
+          await new Promise(requestAnimationFrame);
+          await new Promise(requestAnimationFrame);
+        });
+        await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+        expect(await page.getByRole("button", { name: "Stop response" }).count()).toBe(0);
+        expect(sessionIdFromUrl(page)).toBe(sessionId);
+      } finally {
+        releaseRead();
+      }
+    },
+    120_000,
+  );
 
   it("passive reload does not cancel; the held run completes normally", async () => {
     const page = harness.page;
@@ -470,47 +758,58 @@ describe("GUI session journey", () => {
     expect(harness.unexpectedServerRequests()).toEqual([]);
   }, 120_000);
 
-  it("a reloaded home during a held run starts its new chat beside the running session", async () => {
-    const page = harness.page;
-    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+  it.each([1280, 390])(
+    "a reloaded home during a held run starts its new chat beside the running session at width %i",
+    async (width) => {
+      const page = harness.page;
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
 
-    await startNewSession(page);
-    const waitCountBefore = answerHold.waitCount;
-    await submitPrompt(page, STREAM_HOLD_PROMPT);
-    const sessionA = sessionIdFromUrl(page);
-    await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
-    await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
-    const heldSettlement = heldModelSettlement(harness, "Stream the NVDA answer", "native_answer");
+      if (width === 390)
+        await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await startNewSession(page);
+      const waitCountBefore = answerHold.waitCount;
+      await submitPrompt(page, STREAM_HOLD_PROMPT);
+      const sessionA = sessionIdFromUrl(page);
+      await expectVisible(page.getByRole("button", { name: "Stop response" }), 30_000);
+      await waitForCondition(() => answerHold.waitCount > waitCountBefore, 10_000);
+      const heldSettlement = heldModelSettlement(
+        harness,
+        "Stream the NVDA answer",
+        "native_answer",
+      );
 
-    // A fresh page load knows nothing about A's run in this browser; the
-    // server still owns it as its current session. Home must still open a new
-    // chat rather than binding to A.
-    await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
-    await waitForCondition(() => {
-      const current = sessionIdFromUrl(page);
-      return current !== "" && current !== sessionA;
-    }, 15_000);
-    const sessionB = sessionIdFromUrl(page);
-    await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
+      // A fresh page load knows nothing about A's run in this browser; the
+      // server still owns it as its current session. Home must still open a new
+      // chat rather than binding to A.
+      await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
+      await waitForCondition(() => {
+        const current = sessionIdFromUrl(page);
+        return current !== "" && current !== sessionA;
+      }, 15_000);
+      const sessionB = sessionIdFromUrl(page);
+      await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
 
-    await submitPrompt(page, QUOTE_PROMPT);
-    await expectVisible(
-      page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
-      30_000,
-    );
-    await waitForRunIdle(page);
-    expect(sessionIdFromUrl(page)).toBe(sessionB);
-    expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
+      await submitPrompt(page, QUOTE_PROMPT);
+      await expectVisible(
+        page.getByText("AAPL is trading at $189.42 as of 2026-07-15T20:00:00.000Z.").first(),
+        30_000,
+      );
+      await waitForRunIdle(page);
+      expect(sessionIdFromUrl(page)).toBe(sessionB);
+      expect(hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA))).toBe(false);
 
-    answerHold.release();
-    expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
-    expect(
-      await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
-    ).toBe(true);
-    expect(userMessageCount(harness, sessionA)).toBe(1);
-    expect(userMessageCount(harness, sessionB)).toBe(1);
-    expect(harness.unexpectedServerRequests()).toEqual([]);
-  }, 120_000);
+      answerHold.release();
+      expect(await settlesWithin(heldSettlement!.completed, 10_000)).toBe(true);
+      expect(
+        await waitFor(() => hasCompletedNvdaAnswer(harness.readSessionEntries(sessionA)), 15_000),
+      ).toBe(true);
+      expect(userMessageCount(harness, sessionA)).toBe(1);
+      expect(userMessageCount(harness, sessionB)).toBe(1);
+      expect(harness.unexpectedServerRequests()).toEqual([]);
+    },
+    120_000,
+  );
 
   it("explicit Stop cancels the run while the router is held", async () => {
     const page = harness.page;
@@ -1237,9 +1536,13 @@ function heldModelSettlement(harness: GuiJourneyHarness, needle: string, kind: H
     const text = JSON.stringify(messages);
     if (!text.includes(needle)) return false;
     if (text.includes("routing agent")) return kind === "router";
-    // The native answer request is the one that already carries the real tool
-    // result; the earlier main-agent tool-call request does not.
-    return kind === "native_answer" && messages.some((message) => message.role === "tool");
+    // Only this turn's tool result identifies the held answer request. Earlier
+    // turns can also contain tools, before the new tool-call request is issued.
+    const currentUserIndex = messages.findLastIndex((message) => message.role === "user");
+    return (
+      kind === "native_answer" &&
+      messages.slice(currentUserIndex + 1).some((message) => message.role === "tool")
+    );
   });
 }
 

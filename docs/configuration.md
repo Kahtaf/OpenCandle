@@ -28,6 +28,24 @@ Effective precedence:
 
 For provider API keys, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API`, `OPENCANDLE_NOTIFICATION_WEBHOOK_URL`, and developer diagnostic switches are env-only.
 
+## Azure provider migration for Pi 1.2
+
+OpenCandle now bundles Pi 1.2. Pi 1.0.3 renamed the Azure model provider from `azure-openai-responses` to `azure`. If your local Pi configuration still uses the old provider ID, update it before continuing Azure research.
+
+Stop running OpenCandle/Pi processes and back up the affected configuration files. Use your Pi agent directory, normally `~/.pi/agent`, or the directory selected by `PI_CODING_AGENT_DIR`:
+
+| File | Migration |
+| --- | --- |
+| `auth.json` | Rename the top-level provider key `azure-openai-responses` to `azure`, preserving the credential contents. Alternatively, run `/login` in the terminal and authenticate with Azure again. |
+| `models.json` | Rename `providers.azure-openai-responses` to `providers.azure`, preserving your model IDs, deployment settings, and API configuration. |
+| `settings.json` | Change `defaultProvider` to `azure` when it names the old provider; replace the old provider prefix in `enabledModels` patterns and `modelThinkingLevels` keys. Apply the same changes to project `.pi/settings.json` if it contains these settings. |
+
+The `AZURE_OPENAI_*` environment-variable names are unchanged. The provider ID and API type are different fields: an existing custom model's `api: "azure-openai-responses"` remains valid and must not be renamed to `azure`.
+
+Restart OpenCandle and select the Azure model with `/model`. A saved chat recorded under the old provider ID can fall back to another available model when resumed, and its old prompt cache is not reused. Check the selected model and explicitly choose Azure before continuing that chat. An installation with credentials stored only under the old provider ID needs the credential migration or a new login before Azure access works.
+
+See Pi's [Azure provider guide](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md#azure-openai) for endpoint and deployment configuration.
+
 ## Environment Variables
 
 Most users only need model credentials, optional data-provider keys, the OpenCandle home directory, and GUI host/port settings.

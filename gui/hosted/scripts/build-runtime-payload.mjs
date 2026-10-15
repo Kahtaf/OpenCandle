@@ -67,6 +67,10 @@ const result = await build({
       hostedRoot,
       "runtime/pi-coding-agent-browser.ts",
     ),
+    "@earendil-works/pi-ai/providers/openrouter": resolve(
+      hostedRoot,
+      "runtime/pi-provider-catalog-browser.ts",
+    ),
     "@earendil-works/pi-ai/compat": resolve(
       hostedRoot,
       "runtime/pi-ai-compat-browser.ts",
