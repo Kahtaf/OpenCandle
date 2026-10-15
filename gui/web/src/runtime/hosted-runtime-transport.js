@@ -19,10 +19,39 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
   let closed = false;
   let selectedSessionId = "";
   let refreshGeneration = 0;
+  let promptRevision = 0;
+  let promptSnapshotRevision = -1;
+  let askUserPrompts = [];
+  const livePrompts = new Map();
+
+  // Every bootstrap uses its request-start revision. An older read cannot
+  // reopen an answered question or erase one that arrived while it was in
+  // flight. A later authoritative snapshot may remove prompts normally.
+  const projectPrompts = (payload, revision) => {
+    if (revision >= promptSnapshotRevision) {
+      const prompts = new Map((payload?.askUserPrompts || []).map((prompt) => [prompt.id, prompt]));
+      for (const [id, live] of livePrompts) {
+        if (live.revision > revision) prompts.set(id, live.prompt);
+        else livePrompts.delete(id);
+      }
+      askUserPrompts = [...prompts.values()];
+      promptSnapshotRevision = revision;
+    }
+    return { ...payload, askUserPrompts };
+  };
+
+  const requestBootstrap = async (payload) => {
+    const revision = ++promptRevision;
+    return projectPrompts(await requestGui(payload), revision);
+  };
 
   const publish = (message) => {
     if (closed) return;
-    const serialized = JSON.stringify(message);
+    const serialized = JSON.stringify(
+      message.type === "runtime.status" || message.type === "boot"
+        ? { ...message, askUserPrompts }
+        : message,
+    );
     for (const subscriber of subscribers) subscriber(serialized);
   };
 
@@ -47,6 +76,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     };
     return {
       ...payload,
+      askUserPrompts,
       role,
       coordination,
       supportsSessionActions:
@@ -88,7 +118,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
 
   const refresh = async () => {
     const generation = ++refreshGeneration;
-    const bootstrap = await requestGui({ action: "bootstrap" });
+    const bootstrap = await requestBootstrap({ action: "bootstrap" });
     // Network and ownership changes can overlap ordinary market-state polls.
     // A late online bootstrap must not overwrite a newer offline (or
     // replacement-writer) projection and make saved-state controls writable.
@@ -116,7 +146,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     hostedData,
 
     async bootstrap() {
-      const bootstrap = withBrowserState(await requestGui({ action: "bootstrap" }));
+      const bootstrap = withBrowserState(await requestBootstrap({ action: "bootstrap" }));
       selectedSessionId ||= bootstrap.sessionId || "";
       return bootstrap;
     },
@@ -142,8 +172,15 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
           message?.type === "ask_user.resolved" ||
           message?.type === "error"
         ) {
-          // Live clarification state supersedes any refresh captured before it.
-          if (message.type !== "error") refreshGeneration += 1;
+          if (message.type !== "error" && message.prompt?.id) {
+            livePrompts.set(message.prompt.id, {
+              revision: ++promptRevision,
+              prompt: message.prompt,
+            });
+            const prompts = new Map(askUserPrompts.map((prompt) => [prompt.id, prompt]));
+            prompts.set(message.prompt.id, message.prompt);
+            askUserPrompts = [...prompts.values()];
+          }
           publish(message);
           return;
         }
@@ -179,7 +216,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
         if (message?.type === "restored-bootstrap") {
           refreshGeneration += 1;
           selectedSessionId = message.bootstrap?.sessionId || selectedSessionId;
-          publishBootstrap(message.bootstrap);
+          publishBootstrap(projectPrompts(message.bootstrap, ++promptRevision));
           return;
         }
         if (message?.type !== "invalidate") return;
@@ -329,7 +366,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
       // updated this transport's selection. Keep the returned durable snapshot
       // scoped to the actual tool target instead of the previous home session.
       selectedSessionId = body?.sessionId || selectedSessionId;
-      const bootstrap = await requestGui({ action: "tool_invoke", ...body });
+      const bootstrap = await requestBootstrap({ action: "tool_invoke", ...body });
       // A direct catalog run persists an actual Pi assistant/tool-result pair.
       // Project that returned durable snapshot immediately: relying only on a
       // later cross-tab invalidation can leave the originating tab without its
@@ -345,7 +382,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     },
 
     async createSession() {
-      const bootstrap = withBrowserState(await requestGui({ action: "new_session" }));
+      const bootstrap = withBrowserState(await requestBootstrap({ action: "new_session" }));
       selectedSessionId = bootstrap.sessionId || selectedSessionId;
       return bootstrap;
     },
@@ -353,7 +390,7 @@ export function createHostedRuntimeTransport({ host, hostedData = null }) {
     async loadSession(sessionId) {
       const targetSessionId = requireSessionId(sessionId);
       const bootstrap = withBrowserState(
-        await requestGui({
+        await requestBootstrap({
           action: "load_session",
           sessionId: targetSessionId,
         }),

@@ -92,6 +92,63 @@ describe("restored run ownership", () => {
 
 describe("connection recovery", () => {
   it.each(["pending", "answered"])(
+    "preserves a live hosted clarification %s while initializing a delayed channel",
+    async (status) => {
+      let latest: ReturnType<typeof useGuiConnection>;
+      let emit!: (event: Record<string, unknown>) => void;
+      let completeBoot!: (payload: Record<string, unknown>) => void;
+      const prompt = {
+        id: "initial-question",
+        sessionId: "session-1",
+        question: "Which horizon?",
+        status,
+      };
+      const host = {
+        getRole: () => "writer",
+        request: async () =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            completeBoot = resolve;
+          }),
+        streamRequest: vi.fn(),
+        subscribe: (listener: typeof emit) => {
+          emit = listener;
+          return () => {};
+        },
+      };
+      const transport = createHostedRuntimeTransport({ host });
+      function Probe() {
+        latest = useGuiConnection();
+        return null;
+      }
+      await act(async () =>
+        root.render(
+          React.createElement(
+            RuntimeTransportContext.Provider,
+            { value: transport },
+            React.createElement(Probe),
+          ),
+        ),
+      );
+      await act(async () => {
+        emit({ type: status === "pending" ? "ask_user.prompt" : "ask_user.resolved", prompt });
+        completeBoot({
+          role: "writer",
+          sessionId: "session-1",
+          sessions: [],
+          catalog: { tools: [], workflows: [], providers: [] },
+          snapshot: { sessionId: "session-1", entries: [], events: [] },
+          askUserPrompts: status === "answered" ? [{ ...prompt, status: "pending" }] : [],
+        });
+      });
+      expect(latest!.role).toBe("writer");
+      expect(latest!.supportsSessionActions).toBe(true);
+      expect(latest!.askUserPrompts).toEqual([prompt]);
+      await act(async () => emit({ type: "coordination" }));
+      expect(latest!.askUserPrompts).toEqual([prompt]);
+    },
+  );
+
+  it.each(["pending", "answered"])(
     "keeps a live hosted clarification %s when an older bootstrap resolves",
     async (status) => {
       let latest: ReturnType<typeof useGuiConnection>;
