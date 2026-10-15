@@ -6,7 +6,7 @@
 
 - Hosted clarification questions and answers stay visible when an older initial load, session action, or background refresh arrives late.
 
-- The model chooser now includes the latest models supported by Pi 1.2.0.
+- The model chooser now includes the latest models supported by Pi 1.2.0; existing Azure configurations need the [provider-ID migration](docs/configuration.md#azure-provider-migration-for-pi-12).
 
 - Reopening a chat keeps completed runs ready for the next message when an older session load arrives late.
 
