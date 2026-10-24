@@ -185,8 +185,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4",
-    "@vitest/istanbul-lib-coverage": "^1.0.2",
-    "@vitest/istanbul-lib-report": "^1.0.2",
+    "@vitest/istanbul-lib-coverage": "^2.0.0",
+    "@vitest/istanbul-lib-report": "^2.0.0",
     "ast-v8-to-istanbul": "^1.0.7"
   }
 }
