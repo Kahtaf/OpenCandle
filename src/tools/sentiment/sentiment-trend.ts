@@ -1,10 +1,10 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getSentimentStore } from "../../sentiment/index.js";
 import type { SentimentStore } from "../../sentiment/store.js";
 import { computeTrend } from "../../sentiment/trends.js";
 import type { SentimentSource, TrendBucket, TrendResult } from "../../sentiment/types.js";
 import { SENTIMENT_SOURCES } from "../../sentiment/types.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic to look up sentiment history" }),
@@ -26,7 +26,7 @@ const params = Type.Object({
   ),
 });
 
-interface TrendToolResult {
+export interface TrendToolResult {
   content: Array<{ type: "text"; text: string }>;
   details: { trend: TrendResult; series: TrendBucket[] } | null;
 }

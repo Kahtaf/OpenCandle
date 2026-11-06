@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import {
   ALERT_CONDITION_VERSION,
@@ -18,6 +17,7 @@ import {
 } from "../../market-state/resolve-for-mutation.js";
 import { type AlertRuleRecord, MarketStateService } from "../../market-state/service.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import { resolveStatefulInstrument, type StatefulToolOptions } from "./stateful-tool-options.js";
 
 const ACTION_DESCRIPTION = [

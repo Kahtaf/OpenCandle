@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
@@ -8,6 +7,7 @@ import { getLseFinancials } from "../../providers/lse.js";
 import { ProviderCredentialError } from "../../providers/provider-credential-error.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { ProviderResult } from "../../runtime/evidence.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 const params = Type.Object({

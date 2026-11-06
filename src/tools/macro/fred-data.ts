@@ -1,9 +1,9 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getSeries } from "../../providers/fred.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { FredSeries } from "../../types/macro.js";
 import { FRED_SERIES } from "../../types/macro.js";
 

@@ -1,8 +1,8 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { getCryptoPrice } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { CryptoPrice } from "../../types/market.js";
 import { formatLargeNumber } from "../formatting.js";
 

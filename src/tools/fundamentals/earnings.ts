@@ -1,9 +1,9 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getEarnings } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { EarningsData } from "../../types/fundamentals.js";
 
 const params = Type.Object({

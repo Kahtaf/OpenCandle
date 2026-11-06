@@ -1,8 +1,8 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { searchWeb } from "../../providers/web-search.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import { formatInsightSection } from "./insight-format.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 

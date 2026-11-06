@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { OHLCV } from "../../types/market.js";
 import { RISK_LOOKBACK_PERIODS } from "../../types/portfolio.js";
 import { computeDailyReturns } from "./risk-analysis.js";

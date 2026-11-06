@@ -1,9 +1,9 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { localDateTimeParts } from "../../infra/market-calendar.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getOptionsChain } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { OptionContract, OptionsChain, OptionsQuoteStatus } from "../../types/options.js";
 
 const params = Type.Object({

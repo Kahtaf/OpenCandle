@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import { runWithAbortSignal } from "../infra/abort-context.js";
+import type { AgentTool } from "../types/agent-tool.js";
 
 /**
  * How long a read-only tool may take to settle on its own after Stop before

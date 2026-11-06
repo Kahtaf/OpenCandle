@@ -1,8 +1,8 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { hasCredential } from "../../onboarding/providers.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
 import { searchWeb } from "../../providers/web-search.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
 import {
   renderUntrustedText,

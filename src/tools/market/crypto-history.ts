@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getCryptoHistory } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { OHLCV } from "../../types/market.js";
 import { computeRiskMetrics } from "../portfolio/risk-analysis.js";
 

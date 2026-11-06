@@ -1,10 +1,10 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { getGlobalQuote } from "../../providers/alpha-vantage.js";
 import { withFallback } from "../../providers/with-fallback.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { StockQuote } from "../../types/market.js";
 import { formatLargeNumber } from "../formatting.js";
 

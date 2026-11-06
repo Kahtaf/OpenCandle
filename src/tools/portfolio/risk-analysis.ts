@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import { RISK_LOOKBACK_PERIODS, type RiskMetrics } from "../../types/portfolio.js";
 
 const params = Type.Object({
