@@ -94,6 +94,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "google",
+    id: "gemini-4-argon",
+    label: "google/gemini-4-argon",
+  },
+  {
+    provider: "google",
     id: "gemini-flash-latest",
     label: "google/gemini-flash-latest",
   },
@@ -101,6 +106,11 @@ export const firstClassModelCatalog = [
     provider: "google",
     id: "gemini-flash-lite-latest",
     label: "google/gemini-flash-lite-latest",
+  },
+  {
+    provider: "google",
+    id: "gemini-pro-latest",
+    label: "google/gemini-pro-latest",
   },
   {
     provider: "google",
@@ -199,18 +209,8 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
-    id: "gpt-5.2-chat-latest",
-    label: "openai/gpt-5.2-chat-latest",
-  },
-  {
-    provider: "openai",
     id: "gpt-5.2-pro",
     label: "openai/gpt-5.2-pro",
-  },
-  {
-    provider: "openai",
-    id: "gpt-5.3-chat-latest",
-    label: "openai/gpt-5.3-chat-latest",
   },
   {
     provider: "openai",

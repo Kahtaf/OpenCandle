@@ -8,9 +8,9 @@
   },
   "dependencies": {
     "@opencandle/ui": "file:../packages/ui",
-    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-react": "^6.2.1",
     "gray-matter": "^4.0.3",
-    "lucide-react": "^1.57.0",
+    "lucide-react": "^1.69.0",
     "mdast-util-to-string": "^4.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -21,14 +21,14 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.2.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.4",
     "@tailwindcss/typography": "^0.5.20",
-    "autoprefixer": "^10.6.1",
-    "postcss": "^8.5.30",
-    "tailwindcss": "^4.3.3",
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.4",
     "tailwindcss-animate": "^1.0.7"
   }
 }
