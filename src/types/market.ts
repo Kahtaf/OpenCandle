@@ -16,6 +16,8 @@ export interface StockQuote {
   timestamp: number;
   asOf?: string;
   currency?: string | null;
+  /** Original provider price unit, before major-unit normalization. */
+  rawCurrency?: string | null;
   marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
   extendedPrice?: number;
   extendedChange?: number;

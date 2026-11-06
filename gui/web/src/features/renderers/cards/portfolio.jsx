@@ -2,13 +2,7 @@ import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
 import { formatQuantity } from "../../../lib/financial-format.js";
 import { DeltaChip, MoneyTile, PlainOutput, ToolCard } from "./_shared.jsx";
-import {
-  extractDetails,
-  formatLargeNumber,
-  formatPercent,
-  formatPrice,
-  relativeTime,
-} from "./card-format.js";
+import { extractDetails, formatLargeNumber, formatPercent, relativeTime } from "./card-format.js";
 
 export function PortfolioCard({ message, header, text }) {
   const d = extractDetails(message);
@@ -27,13 +21,29 @@ export function PortfolioCard({ message, header, text }) {
       <div>
         <div className="flex flex-wrap items-baseline gap-3">
           <span className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">
-            ${formatLargeNumber(d.totalValue)}
+            {Number.isFinite(d.totalValue)
+              ? `${d.baseCurrency ?? "USD"} ${formatLargeNumber(d.totalValue)}`
+              : "Unavailable"}
           </span>
-          <DeltaChip value={d.totalPnl} percent={d.totalPnlPercent} size="lg" />
+          {Number.isFinite(d.totalPnl) ? (
+            <DeltaChip
+              value={d.totalPnl}
+              percent={d.totalPnlPercent}
+              prefix={`${d.baseCurrency ?? "USD"} `}
+              size="lg"
+            />
+          ) : (
+            <span>P&amp;L unavailable</span>
+          )}
         </div>
         <div className="mt-1.5 text-xs text-muted-foreground">
-          {positions.length} position{positions.length === 1 ? "" : "s"} · cost basis $
-          {formatLargeNumber(d.totalCost)}
+          {positions.length} position{positions.length === 1 ? "" : "s"} · cost basis{" "}
+          {Number.isFinite(d.totalCost)
+            ? `${d.baseCurrency ?? "USD"} ${formatLargeNumber(d.totalCost)}`
+            : "unavailable"}
+          {d.totalsStatus === "partial"
+            ? ` · Valued subtotal: ${d.baseCurrency} ${formatLargeNumber(d.valuedSubtotal)}`
+            : ""}
         </div>
       </div>
       <div className="rounded-md border border-border">
@@ -45,26 +55,33 @@ export function PortfolioCard({ message, header, text }) {
         </div>
         <ul>
           {positions.map((p) => {
-            const weight = d.totalValue ? (p.marketValue / d.totalValue) * 100 : 0;
+            const weight = p.allocationPercent ?? null;
             return (
               <li
-                key={p.symbol}
+                key={p.lotId ?? p.symbol}
                 className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
               >
                 <div className="grid">
                   <span className="font-mono text-sm font-medium text-foreground">{p.symbol}</span>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {formatQuantity(p.shares)} @ {formatPrice(p.avgCost)}
+                    {formatQuantity(p.shares)} @ {p.currency}{" "}
+                    {Number.isFinite(p.avgCost) ? p.avgCost.toFixed(2) : "—"}
                   </span>
                 </div>
                 <span className="text-right text-sm tabular-nums text-foreground">
-                  ${formatLargeNumber(p.marketValue)}
+                  {Number.isFinite(p.marketValue)
+                    ? `${d.baseCurrency ?? "USD"} ${formatLargeNumber(p.marketValue)}`
+                    : "Unavailable"}
                 </span>
                 <span className="text-right text-xs tabular-nums text-muted-foreground">
-                  {weight.toFixed(1)}%
+                  {weight === null ? "—" : `${weight.toFixed(1)}%`}
                 </span>
                 <span className="text-right">
-                  <DeltaChip percent={p.pnlPercent} prefix="" />
+                  {Number.isFinite(p.pnlPercent) ? (
+                    <DeltaChip percent={p.pnlPercent} prefix="" />
+                  ) : (
+                    "Unavailable"
+                  )}
                 </span>
               </li>
             );

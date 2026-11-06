@@ -29,7 +29,16 @@ export function derivePortfolioDayMove(lots = []) {
   let total = 0;
   let qualifyingLots = 0;
   for (const lot of lots) {
-    if (!Number.isFinite(lot?.marketValue) || !Number.isFinite(lot?.changePercent)) continue;
+    // Current FX cannot establish a reporting-currency daily return.
+    if (
+      lot?.excludedFromTotals ||
+      (lot?.fx?.status === "ok" && lot.fx.method !== "identity") ||
+      (lot?.quoteCurrency &&
+        (lot.reportingCurrency ?? lot.currency) &&
+        lot.quoteCurrency !== (lot.reportingCurrency ?? lot.currency))
+    )
+      return null;
+    if (!Number.isFinite(lot?.marketValue) || !Number.isFinite(lot?.changePercent)) return null;
     const denominator = 1 + lot.changePercent / 100;
     if (!Number.isFinite(denominator) || denominator <= 0) continue;
     const move = lot.marketValue - lot.marketValue / denominator;
@@ -42,114 +51,72 @@ export function derivePortfolioDayMove(lots = []) {
 }
 
 export function buildHoldingRows(lots = [], portfolioQuotes = []) {
-  const quotesByLotId = new Map(portfolioQuotes.map((quote) => [quote.lotId, quote]));
-  const rowsBySymbol = new Map();
-
+  const quotesById = new Map(portfolioQuotes.map((q) => [q.lotId, q]));
+  const groups = new Map();
   for (const lot of lots) {
-    const quote = quotesByLotId.get(lot.id) ?? null;
-    let row = rowsBySymbol.get(lot.symbol);
-    if (!row) {
-      row = {
-        symbol: lot.symbol,
-        assetType: lot.assetType ?? quote?.assetType ?? "unknown",
-        name: lot.name ?? null,
-        instrumentId: lot.instrumentId,
-        currency: lot.currency,
-        totalQuantity: 0,
-        totalCost: 0,
-        marketValue: null,
-        currentPrice: null,
-        pnl: null,
-        pnlPercent: null,
-        changePercent: null,
-        allocationPercent: null,
-        fetchedAt: null,
-        marketState: null,
-        extendedPrice: null,
-        extendedChange: null,
-        extendedChangePercent: null,
-        extendedAsOf: null,
-        excludedLotCount: 0,
-        excludedFromTotals: false,
-        exclusionReason: null,
-        nativeMarketValue: null,
-        nativePnl: null,
-        lots: [],
-      };
-      rowsBySymbol.set(lot.symbol, row);
-    }
-
-    row.totalQuantity += lot.quantity;
-    row.lots.push({ ...lot, quote });
-    row.name = quote?.name ?? row.name;
-    row.assetType = quote?.assetType ?? row.assetType;
-
-    if (quote?.status === "ok") {
-      // A quote priced in the lot's own currency is real data even when the
-      // portfolio cannot convert it into its base currency. The price, the day
-      // change and the value stay on the row in that currency; only the base
-      // currency totals and the allocation share leave it out.
-      //
-      // Grouping by symbol cannot mix currencies here: the snapshot builder only
-      // reports `ok` when the quote currency equals the lot currency, so every
-      // `ok` lot of one symbol shares that currency and the same
-      // `includedInTotals` verdict. A lot in any other currency arrives as
-      // `unavailable` and takes the branch below.
-      row.totalCost += quote.totalCost;
-      row.currentPrice = quote.currentPrice ?? row.currentPrice;
-      row.changePercent = quote.changePercent ?? row.changePercent;
-      row.fetchedAt = quote.fetchedAt ?? row.fetchedAt;
-      row.marketState = quote.marketState ?? row.marketState;
-      row.extendedPrice = quote.extendedPrice ?? row.extendedPrice;
-      row.extendedChange = quote.extendedChange ?? row.extendedChange;
-      row.extendedChangePercent = quote.extendedChangePercent ?? row.extendedChangePercent;
-      row.extendedAsOf = quote.extendedAsOf ?? row.extendedAsOf;
-      if (quote.includedInTotals) {
-        row.marketValue = (row.marketValue ?? 0) + (quote.marketValue ?? 0);
-        row.pnl = (row.pnl ?? 0) + (quote.pnl ?? 0);
-        row.allocationPercent = (row.allocationPercent ?? 0) + (quote.allocationPercent ?? 0);
-      } else {
-        row.nativeMarketValue = (row.nativeMarketValue ?? 0) + (quote.marketValue ?? 0);
-        row.nativePnl = (row.nativePnl ?? 0) + (quote.pnl ?? 0);
-        row.exclusionReason = row.exclusionReason ?? quote.reason ?? null;
-        row.excludedLotCount += 1;
-      }
-    } else {
-      // No usable quote: still count cost from lot fields so blended cost stays meaningful.
-      row.totalCost += lot.avgCost * lot.quantity;
-      if (quote != null) row.excludedLotCount += 1;
-    }
+    const key = lot.symbol;
+    const group = groups.get(key) ?? [];
+    group.push({ ...lot, quote: quotesById.get(lot.id) ?? null });
+    groups.set(key, group);
   }
-
-  const rows = [...rowsBySymbol.values()].map((row) => {
-    // A row whose only value is unconvertible shows that value in its own
-    // currency and says so. A row with any base-currency value keeps the base
-    // currency figures, so the two are never added together.
-    const nativeOnly = row.marketValue == null && row.nativeMarketValue != null;
-    const marketValue = nativeOnly ? row.nativeMarketValue : row.marketValue;
-    const pnl = nativeOnly ? row.nativePnl : row.pnl;
-    return {
-      ...row,
-      marketValue,
-      pnl,
-      excludedFromTotals: nativeOnly,
-      exclusionReason: nativeOnly ? row.exclusionReason : null,
-      blendedCost: row.totalQuantity > 0 ? row.totalCost / row.totalQuantity : null,
-      pnlPercent:
-        pnl != null && marketValue != null && marketValue - pnl > 0
-          ? (pnl / (marketValue - pnl)) * 100
-          : null,
-      // Today's move in currency, so the holdings table can pair the day percent
-      // with the dollars it actually moved.
-      dayMove: derivePortfolioDayMove([{ marketValue, changePercent: row.changePercent }]),
-    };
-  });
-
-  // Values in another currency are not comparable with the base-currency ones,
-  // so they rank among themselves below the holdings the totals are built from.
-  return rows.sort(
-    (a, b) =>
-      Number(a.excludedFromTotals) - Number(b.excludedFromTotals) ||
-      (b.marketValue ?? -1) - (a.marketValue ?? -1),
-  );
+  const sum = (items, get) =>
+    items.every((item) => Number.isFinite(get(item)))
+      ? items.reduce((total, item) => total + get(item), 0)
+      : null;
+  return [...groups.entries()]
+    .map(([, entries]) => {
+      const symbol = entries[0].symbol;
+      const first = entries[0];
+      const quote = entries.find((l) => l.quote?.status === "ok")?.quote;
+      const sameCostCurrency = entries.every((l) => l.currency === first.currency);
+      const totalQuantity = entries.reduce((sum, l) => sum + l.quantity, 0);
+      const cost = sameCostCurrency ? sum(entries, (l) => l.avgCost * l.quantity) : null;
+      const sameReportingCurrency = entries.every(
+        (l) => l.quote?.reportingCurrency === quote?.reportingCurrency,
+      );
+      const marketValue = sameReportingCurrency ? sum(entries, (l) => l.quote?.marketValue) : null;
+      const pnl = sameReportingCurrency ? sum(entries, (l) => l.quote?.pnl) : null;
+      const reportingCost = sum(entries, (l) => l.quote?.totalCost);
+      const excludedLotCount = entries.filter((l) => !l.quote?.includedInTotals).length;
+      const nativeValue = sum(entries, (l) => l.quote?.nativeValue?.amount);
+      const nativeOnly = marketValue === null && nativeValue !== null;
+      const changePercent = quote?.changePercent ?? null;
+      return {
+        symbol,
+        name: quote?.name ?? first.name,
+        assetType: first.assetType,
+        instrumentId: first.instrumentId,
+        currency: nativeOnly ? quote?.quoteCurrency : (quote?.reportingCurrency ?? first.currency),
+        quoteCurrency: quote?.quoteCurrency ?? first.currency,
+        costCurrency: sameCostCurrency ? first.currency : null,
+        totalQuantity,
+        totalCost: cost,
+        blendedCost: cost !== null && totalQuantity > 0 ? cost / totalQuantity : null,
+        currentPrice: quote?.currentPrice ?? null,
+        marketValue: nativeOnly ? nativeValue : marketValue,
+        pnl: nativeOnly ? sum(entries, (l) => l.quote?.nativePnl?.amount) : pnl,
+        pnlPercent: pnl !== null && reportingCost > 0 ? (pnl / reportingCost) * 100 : null,
+        changePercent,
+        dayMove: sameReportingCurrency ? derivePortfolioDayMove(entries.map((l) => l.quote)) : null,
+        allocationPercent: sum(entries, (l) => l.quote?.allocationPercent),
+        valuedAllocationPercent: sum(entries, (l) => l.quote?.valuedAllocationPercent),
+        fetchedAt: quote?.fetchedAt,
+        dataAsOf: quote?.dataAsOf,
+        marketState: quote?.marketState,
+        extendedPrice: quote?.extendedPrice,
+        extendedChange: quote?.extendedChange,
+        extendedChangePercent: quote?.extendedChangePercent,
+        extendedAsOf: quote?.extendedAsOf,
+        excludedLotCount,
+        excludedFromTotals: excludedLotCount > 0,
+        exclusionReason: entries.find((l) => l.quote?.reason)?.quote.reason,
+        nativeMarketValue: nativeValue,
+        lots: entries,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(a.excludedFromTotals) - Number(b.excludedFromTotals) ||
+        (b.marketValue ?? -1) - (a.marketValue ?? -1),
+    );
 }

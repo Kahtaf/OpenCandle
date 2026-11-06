@@ -1,153 +1,121 @@
-import type { PortfolioLotRecord } from "../../market-state/service.js";
-import type { PortfolioSummary, Position } from "../../types/portfolio.js";
+import {
+  acquirePortfolioValuation,
+  type SecurityObservation,
+} from "../../portfolio/acquisition.js";
+import type { FxResult } from "../../portfolio/fx.js";
+import type { valuePortfolio } from "../../portfolio/valuation.js";
+import { createFxResolver } from "../../providers/yahoo-fx.js";
 
-export type PortfolioPriceResult =
-  | { status: "ok"; price: number; currency: string | null }
-  | { status: "unavailable"; reason: string };
-
+export type PortfolioPriceResult = SecurityObservation;
 export type PortfolioPriceResolver = (symbol: string) => Promise<PortfolioPriceResult>;
-
-export type PortfolioPositionSummary = Position & {
-  lotId: number;
-  currentPrice: number | null;
-  marketValue: number | null;
-  totalCost: number;
-  pnl: number | null;
-  pnlPercent: number | null;
-  includedInTotals: boolean;
-  quoteStatus: "ok" | "unavailable";
-  exclusionReason?: string;
+export interface PortfolioValuationDependencies {
+  now?: () => number;
+  resolveFx?: (source: string, target: string) => Promise<FxResult> | FxResult;
+}
+type Lot = {
+  id: number;
+  symbol: string;
+  quantity: number;
+  avgCost: number;
+  currency: string;
+  createdAt?: string;
 };
-
-export type ResolvedPortfolioSummary = Omit<
-  PortfolioSummary,
-  "positions" | "totalValue" | "totalCost" | "totalPnl" | "totalPnlPercent"
-> & {
-  positions: PortfolioPositionSummary[];
-  totalValue: number | null;
-  totalCost: number;
-  totalPnl: number | null;
-  totalPnlPercent: number | null;
-  totalsStatus: "empty" | "ok" | "unavailable";
-};
-
-export async function buildPortfolioView(
-  lots: PortfolioLotRecord[],
+export function presentPortfolioValuation(
+  lots: readonly Lot[],
   baseCurrency: string,
-  getCurrentPrice: PortfolioPriceResolver,
-): Promise<ResolvedPortfolioSummary> {
-  const positions = await Promise.all(
-    lots.map(async (lot) => {
-      const quote = await getCurrentPrice(lot.symbol);
-      const totalCost = lot.avgCost * lot.quantity;
-      const lotCurrency = lot.currency || baseCurrency;
-      const quoteCurrency =
-        quote.status === "ok"
-          ? (quote.currency ?? lot.instrumentCurrency ?? null)
-          : (lot.instrumentCurrency ?? null);
-      const canValueRow =
-        quote.status === "ok" && quoteCurrency != null && quoteCurrency === lotCurrency;
-      const currentPrice = canValueRow ? quote.price : null;
-      const marketValue = currentPrice == null ? null : currentPrice * lot.quantity;
-      const includedInTotals = canValueRow && lotCurrency === baseCurrency;
-      const exclusionReason =
-        quote.status === "unavailable"
-          ? `Quote unavailable: ${quote.reason}`
-          : includedInTotals
-            ? undefined
-            : quoteCurrency == null
-              ? "Quote currency unavailable"
-              : canValueRow
-                ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
-                : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
-      return {
-        symbol: lot.symbol,
-        shares: lot.quantity,
-        avgCost: lot.avgCost,
-        currency: lotCurrency,
-        addedAt: lot.createdAt,
-        lotId: lot.id,
-        currentPrice,
-        marketValue,
-        totalCost,
-        pnl: marketValue == null ? null : marketValue - totalCost,
-        pnlPercent:
-          marketValue == null || totalCost <= 0
-            ? null
-            : ((marketValue - totalCost) / totalCost) * 100,
-        includedInTotals,
-        quoteStatus: quote.status,
-        ...(exclusionReason ? { exclusionReason } : {}),
-      } satisfies PortfolioPositionSummary;
-    }),
-  );
-
-  const included = positions.filter((position) => position.includedInTotals);
-  const excludedFromTotals = positions
-    .filter((position) => !position.includedInTotals)
-    .map((position) => ({
-      symbol: position.symbol,
-      currency: position.currency,
-      reason:
-        position.exclusionReason ?? `No FX conversion from ${position.currency} to ${baseCurrency}`,
-    }));
-  const hasUnavailableBaseCurrencyPosition = positions.some(
-    (position) => position.currency === baseCurrency && !position.includedInTotals,
-  );
-  const totalsStatus =
-    lots.length === 0
-      ? "empty"
-      : hasUnavailableBaseCurrencyPosition || included.length === 0
-        ? "unavailable"
-        : "ok";
-  const totalValue =
-    totalsStatus === "unavailable"
-      ? null
-      : included.reduce((sum, position) => sum + (position.marketValue ?? 0), 0);
-  const totalCost = positions
-    .filter((position) => position.currency === baseCurrency)
-    .reduce((sum, position) => sum + position.totalCost, 0);
+  valuation: ReturnType<typeof valuePortfolio>,
+) {
+  const positions = lots.map((lot, index) => {
+    const row = valuation.rows[index];
+    const cost = row.reportingCost?.amount ?? null;
+    const pnl = row.reportingPnl?.amount ?? null;
+    return {
+      ...row,
+      symbol: lot.symbol,
+      shares: lot.quantity,
+      avgCost: lot.avgCost,
+      currency: lot.currency,
+      addedAt: lot.createdAt ?? "",
+      lotId: lot.id,
+      currentPrice:
+        row.nativeValue && lot.quantity > 0 ? row.nativeValue.amount / lot.quantity : null,
+      quoteCurrency: row.nativeValue?.currency ?? null,
+      reportingCurrency: baseCurrency,
+      marketValue: row.reportingValue?.amount ?? null,
+      totalCost: cost,
+      pnl,
+      pnlPercent: pnl !== null && cost !== null && cost > 0 ? (pnl / cost) * 100 : null,
+      includedInTotals: row.reportingValue !== null,
+      quoteStatus: row.nativeValue ? ("ok" as const) : ("unavailable" as const),
+      exclusionReason: row.reason ?? undefined,
+    };
+  });
+  const totalCost = valuation.totalCost?.amount ?? null;
+  const totalPnl = valuation.totalPnl?.amount ?? null;
   return {
     positions,
     baseCurrency,
-    totalValue,
+    totalsStatus: valuation.status,
+    totalValue: valuation.totalValue?.amount ?? null,
+    valuedSubtotal: valuation.valuedSubtotal?.amount ?? null,
     totalCost,
-    totalPnl: totalValue == null ? null : totalValue - totalCost,
+    totalPnl,
     totalPnlPercent:
-      totalValue == null ? null : totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
-    totalsStatus,
-    excludedFromTotals,
+      totalPnl !== null && totalCost !== null
+        ? totalCost > 0
+          ? (totalPnl / totalCost) * 100
+          : 0
+        : null,
+    costSubtotals: valuation.costSubtotals,
+    includedLotIds: valuation.includedLotIds,
+    excludedLotIds: valuation.excludedLotIds,
+    excludedFromTotals: positions
+      .filter((p) => !p.includedInTotals)
+      .map((p) => ({
+        lotId: p.lotId,
+        symbol: p.symbol,
+        currency: p.currency,
+        reason: p.exclusionReason ?? "unavailable",
+      })),
   };
 }
-
-export function renderPortfolioView(
-  displayPortfolioName: string,
-  summary: ResolvedPortfolioSummary,
-): string {
-  const header =
-    summary.totalsStatus === "unavailable"
-      ? `**${displayPortfolioName}** — ${summary.positions.length} positions | Value: unavailable | P&L: unavailable`
-      : `**${displayPortfolioName}** — ${summary.positions.length} positions | Value: ${formatMoney(summary.totalValue ?? 0, summary.baseCurrency)} | P&L: ${formatMoney(summary.totalPnl ?? 0, summary.baseCurrency)} (${(summary.totalPnlPercent ?? 0) >= 0 ? "+" : ""}${(summary.totalPnlPercent ?? 0).toFixed(2)}%)`;
-  const rows = summary.positions.map((position) => {
-    const excluded = position.includedInTotals
-      ? ""
-      : ` [excluded from ${summary.baseCurrency} totals: ${position.exclusionReason}]`;
-    if (position.currentPrice == null || position.pnl == null || position.pnlPercent == null) {
-      return `  ${position.symbol} [lot ${position.lotId}]: ${position.shares} @ ${formatMoney(position.avgCost, position.currency)} → unavailable | P&L: unavailable${excluded}`;
-    }
-    const sign = position.pnlPercent >= 0 ? "+" : "";
-    return `  ${position.symbol} [lot ${position.lotId}]: ${position.shares} @ ${formatMoney(position.avgCost, position.currency)} → ${formatMoney(position.currentPrice, position.currency)} | P&L: ${formatMoney(position.pnl, position.currency)} (${sign}${position.pnlPercent.toFixed(2)}%)${excluded}`;
+export type ResolvedPortfolioSummary = ReturnType<typeof presentPortfolioValuation>;
+export type PortfolioPositionSummary = ResolvedPortfolioSummary["positions"][number];
+export async function buildPortfolioView(
+  lots: readonly Lot[],
+  baseCurrency: string,
+  getCurrentPrice: PortfolioPriceResolver,
+  dependencies: PortfolioValuationDependencies = {},
+): Promise<ResolvedPortfolioSummary> {
+  const now = (dependencies.now ?? Date.now)();
+  const { valuation } = await acquirePortfolioValuation({
+    lots: lots.map((l) => ({ ...l, id: String(l.id), costCurrency: l.currency })),
+    reportingCurrency: baseCurrency,
+    now,
+    resolveSecurity: getCurrentPrice,
+    resolveFx: dependencies.resolveFx ?? createFxResolver(now),
   });
-  const exclusions =
-    summary.excludedFromTotals.length === 0
-      ? []
-      : [
-          `Excluded from ${summary.baseCurrency} totals: ${summary.excludedFromTotals.map((position) => `${position.symbol} (${position.currency})`).join(", ")}`,
-        ];
-  return [header, ...rows, ...exclusions].join("\n");
+  return presentPortfolioValuation(lots, baseCurrency, valuation);
 }
-
+export function renderPortfolioView(name: string, summary: ResolvedPortfolioSummary): string {
+  const money = (value: number | null, currency = summary.baseCurrency) =>
+    value === null ? "unavailable" : formatMoney(value, currency);
+  const header = `**${name}** — ${summary.positions.length} positions | Value: ${money(summary.totalValue)} | P&L: ${money(summary.totalPnl)}`;
+  const subtotal =
+    summary.totalsStatus === "partial"
+      ? [
+          `Valued subtotal: ${money(summary.valuedSubtotal)} (partial; excludes unavailable holdings)`,
+        ]
+      : [];
+  return [
+    header,
+    ...subtotal,
+    ...summary.positions.map(
+      (p) =>
+        `  ${p.symbol} [lot ${p.lotId}]: ${p.shares} @ ${money(p.avgCost, p.currency)} → ${money(p.currentPrice, p.quoteCurrency ?? p.currency)} | Value: ${money(p.marketValue)} | P&L: ${money(p.pnl)}${p.exclusionReason ? ` [excluded: ${p.exclusionReason}]` : ""} | Native value: ${money(p.nativeValue?.amount ?? null, p.nativeValue?.currency)} | Native price P&L: ${money(p.nativePnl?.amount ?? null, p.nativePnl?.currency)} | Security: ${p.securityObservedAt === null ? "timestamp unavailable" : new Date(p.securityObservedAt).toISOString()}${p.fx?.status === "ok" && p.fx.method !== "identity" ? ` | FX ${p.fx.source}→${p.fx.target}: ${p.fx.rate} (${p.fx.lastSession ? "last session" : "observed"} ${p.fx.observedAt === null ? "unknown" : new Date(p.fx.observedAt).toISOString()}; ${p.fx.legs.map((leg) => `${leg.provider} ${leg.requestedSymbol}`).join(", ")})` : ""}`,
+    ),
+  ].join("\n");
+}
 export function formatMoney(value: number, currency: string): string {
-  if (currency === "USD") return `$${value.toFixed(2)}`;
-  return `${currency} ${value.toFixed(2)}`;
+  return currency === "USD" ? `$${value.toFixed(2)}` : `${currency} ${value.toFixed(2)}`;
 }

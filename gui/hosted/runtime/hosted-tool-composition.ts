@@ -19,7 +19,7 @@ import { createWatchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 export function getBrowserHostedToolDefinitions(options: {
   stateDatabase: StateDatabase;
   relayProviders?: readonly string[];
-  marketStateDependencies?: Pick<StatefulToolOptions, "resolveInstrument" | "getCurrentPrice">;
+  marketStateDependencies?: Pick<StatefulToolOptions, "resolveInstrument" | "getCurrentPrice" | "resolveFx" | "now">;
 }): ToolDefinition[] {
   const statefulOptions: StatefulToolOptions = {
     stateDatabaseFactory: () => options.stateDatabase,

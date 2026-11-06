@@ -116,6 +116,8 @@ function mergeQuoteRows(currentRows = [], refreshedRows = [], identityKey, refre
   const currentById = new Map(currentRows.map((quote) => [quote?.[identityKey], quote]));
   return refreshedRows.map((quote) => {
     const current = currentById.get(quote?.[identityKey]);
+    // Valuation snapshots are authoritative; stale prices must never restore totals.
+    if (identityKey === "lotId") return quote;
     if (
       quote?.status !== "unavailable" ||
       current?.status !== "ok" ||
@@ -168,44 +170,10 @@ function mergePortfolioSummary(
   return retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFailedAt);
 }
 
-function retainPortfolioSummary(current, refreshed, portfolioQuotes, refreshFailedAt) {
+function retainPortfolioSummary(current, refreshed, _portfolioQuotes, refreshFailedAt) {
   if (!current || current.status === "unavailable") return refreshed;
-  const rows = portfolioQuotes.filter((quote) => quote?.portfolioId === refreshed.portfolioId);
-  const includedRows = rows.filter((quote) => quote?.includedInTotals !== false);
-  const hasUnavailableBaseCurrencyRow = rows.some(
-    (quote) =>
-      quote?.status === "unavailable" &&
-      (!quote.currency || quote.currency === refreshed.baseCurrency),
-  );
-  const canRecompute =
-    !hasUnavailableBaseCurrencyRow &&
-    includedRows.length > 0 &&
-    includedRows.every(
-      (quote) =>
-        quote?.status === "ok" &&
-        Number.isFinite(quote.marketValue) &&
-        Number.isFinite(quote.totalCost) &&
-        Number.isFinite(quote.pnl),
-    );
-  if (!canRecompute) {
-    return {
-      ...refreshed,
-      stale: true,
-      refreshStatus: "unavailable",
-      refreshReason: refreshed?.reason || "Quote refresh unavailable",
-      refreshFailedAt,
-    };
-  }
-  const totalValue = includedRows.reduce((sum, quote) => sum + quote.marketValue, 0);
-  const totalCost = includedRows.reduce((sum, quote) => sum + quote.totalCost, 0);
-  const totalPnl = includedRows.reduce((sum, quote) => sum + quote.pnl, 0);
   return {
-    ...current,
-    status: "ok",
-    totalValue,
-    totalCost,
-    totalPnl,
-    totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
+    ...refreshed,
     stale: true,
     refreshStatus: "unavailable",
     refreshReason: refreshed?.reason || "Quote refresh unavailable",

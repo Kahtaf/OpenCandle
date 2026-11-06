@@ -6,30 +6,8 @@ export interface Position {
   addedAt: string;
 }
 
-export interface PortfolioSummary {
-  positions: Array<
-    Position & {
-      currentPrice: number | null;
-      marketValue: number | null;
-      totalCost: number;
-      pnl: number | null;
-      pnlPercent: number | null;
-      includedInTotals: boolean;
-      quoteStatus?: "ok" | "unavailable";
-      exclusionReason?: string;
-    }
-  >;
-  baseCurrency: string;
-  totalValue: number;
-  totalCost: number;
-  totalPnl: number;
-  totalPnlPercent: number;
-  excludedFromTotals: Array<{
-    symbol: string;
-    currency: string;
-    reason: string;
-  }>;
-}
+export type PortfolioSummary =
+  import("../tools/portfolio/portfolio-view.js").ResolvedPortfolioSummary;
 
 export interface RiskMetrics {
   symbol: string;

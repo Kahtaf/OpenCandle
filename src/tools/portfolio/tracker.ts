@@ -2,25 +2,28 @@ import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { MarketStateService } from "../../market-state/service.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { securityFromProvider } from "../../portfolio/acquisition.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import type { AgentTool } from "../../types/agent-tool.js";
+import type { PortfolioPriceResult } from "./portfolio-view.js";
 import { buildPortfolioView, formatMoney, renderPortfolioView } from "./portfolio-view.js";
 import { resolveStatefulInstrument, type StatefulToolOptions } from "./stateful-tool-options.js";
 
-export async function getCurrentPrice(
-  symbol: string,
-): Promise<
-  | { status: "ok"; price: number; currency: string | null }
-  | { status: "unavailable"; reason: string }
-> {
+export async function getCurrentPrice(symbol: string): Promise<PortfolioPriceResult> {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
   if (result.status === "unavailable") return { status: "unavailable", reason: result.reason };
-  if (result.stale) return { status: "unavailable", reason: "provider returned stale market data" };
+  if (result.stale)
+    return {
+      status: "unavailable",
+      reason: "provider returned stale market data",
+      asOf: result.data.asOf,
+      fetchedAt: result.timestamp,
+    };
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }
-  return { status: "ok", price: result.data.price, currency: result.data.currency ?? null };
+  return securityFromProvider(result);
 }
 
 const params = Type.Object({
@@ -50,7 +53,7 @@ const params = Type.Object({
   base_currency: Type.Optional(
     Type.String({
       description:
-        "Reporting currency for create/add (defaults to USD for new portfolios), or required for set_base_currency. No FX conversion; lot currency is separate.",
+        "Reporting currency for create/add (defaults to USD for new portfolios), or required for set_base_currency. Current USD/EUR/GBP FX valuation; historical FX cost is not inferred.",
     }),
   ),
   lot_id: Type.Optional(
@@ -109,7 +112,7 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
             content: [
               {
                 type: "text",
-                text: `${portfolio.name} reporting currency: ${portfolio.baseCurrency}. No FX conversion; lot costs and instrument currencies are unchanged.`,
+                text: `${portfolio.name} reporting currency: ${portfolio.baseCurrency}. Current USD/EUR/GBP values are converted; historical reporting cost and P&L may be unavailable.`,
               },
             ],
             details: portfolio,
@@ -192,7 +195,7 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
               },
             };
           }
-          const currency = resolvedCurrency.toUpperCase();
+          const currency = resolvedCurrency;
           const lot = service.addPortfolioLot({
             instrument: instrument.instrument,
             portfolioId: portfolio.id,
@@ -204,7 +207,7 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
             content: [
               {
                 type: "text",
-                text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(args.avg_cost, lot.currency)}`,
+                text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(lot.avgCost, lot.currency)}`,
               },
             ],
             details: lot,
@@ -286,7 +289,10 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
           }
           return {
             content: [
-              { type: "text", text: `Updated ${updated.symbol} portfolio lot ${updated.id}` },
+              {
+                type: "text",
+                text: `Updated ${updated.symbol} portfolio lot ${updated.id}: quantity ${updated.quantity}, average cost ${updated.currency} ${updated.avgCost}`,
+              },
             ],
             details: updated,
           };
@@ -311,6 +317,7 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
           lots,
           baseCurrency,
           options.getCurrentPrice ?? getCurrentPrice,
+          options,
         );
         const text = renderPortfolioView(displayPortfolioName, summary);
         return { content: [{ type: "text", text }], details: summary };

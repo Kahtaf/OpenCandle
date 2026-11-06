@@ -209,7 +209,7 @@ describe("mergeMarketStateSnapshot", () => {
 });
 
 describe("mergeQuoteRefreshSnapshot", () => {
-  it("keeps last valid hosted values when a transient refresh is unavailable", () => {
+  it("retains watchlist display but invalidates portfolio valuation when refresh is unavailable", () => {
     const current = {
       generatedAt: "2026-08-01T12:00:00.000Z",
       watchlistQuotes: [
@@ -294,23 +294,13 @@ describe("mergeQuoteRefreshSnapshot", () => {
       refreshReason: "relay timeout",
       refreshFailedAt: "2026-08-01T12:05:00.000Z",
     });
-    expect(merged.portfolioQuotes[0]).toMatchObject({
-      status: "ok",
-      marketValue: 600,
-      stale: true,
-      refreshStatus: "unavailable",
-    });
-    expect(merged.portfolioSummary).toMatchObject({
-      totalValue: 600,
-      totalPnl: 100,
-      stale: true,
-      refreshStatus: "unavailable",
-    });
+    expect(merged.portfolioQuotes[0]).toEqual(refreshed.portfolioQuotes[0]);
+    expect(merged.portfolioSummary).toMatchObject({ totalValue: null, totalPnl: null });
     expect(merged.generatedAt).toBe("2026-08-01T12:05:00.000Z");
     expect(merged.lastSuccessfulGeneratedAt).toBe("2026-08-01T12:00:00.000Z");
   });
 
-  it("recomputes portfolio totals from fresh and retained quote rows", () => {
+  it("keeps server totals authoritative when one refresh fails", () => {
     const current = {
       generatedAt: "2026-08-01T12:00:00.000Z",
       watchlistQuotes: [],
@@ -382,17 +372,17 @@ describe("mergeQuoteRefreshSnapshot", () => {
     const merged = mergeQuoteRefreshSnapshot(current, refreshed);
 
     expect(merged.portfolioSummary).toMatchObject({
-      totalValue: 850,
+      totalValue: null,
       totalCost: 650,
-      totalPnl: 200,
+      totalPnl: null,
       stale: true,
       refreshStatus: "unavailable",
     });
-    expect(merged.portfolioSummary.totalPnlPercent).toBeCloseTo(30.77, 2);
+    expect(merged.portfolioSummary.totalPnlPercent).toBeNull();
     expect(merged.portfolioSummaries[0]).toMatchObject(merged.portfolioSummary);
   });
 
-  it("recomputes base-currency totals while preserving excluded-currency rows", () => {
+  it("does not restore totals from stale or excluded rows", () => {
     const current = {
       generatedAt: "2026-08-01T12:00:00.000Z",
       watchlistQuotes: [],
@@ -450,10 +440,10 @@ describe("mergeQuoteRefreshSnapshot", () => {
     const merged = mergeQuoteRefreshSnapshot(current, refreshed);
 
     expect(merged.portfolioSummary).toMatchObject({
-      status: "ok",
-      totalValue: 600,
+      status: "unavailable",
+      totalValue: null,
       totalCost: 500,
-      totalPnl: 100,
+      totalPnl: null,
       excludedFromTotals: [{ symbol: "SHOP.TO", currency: "CAD" }],
       stale: true,
     });
@@ -561,4 +551,30 @@ describe("mergeQuoteRefreshSnapshot", () => {
     expect(merged.portfolioQuotes[0]).toMatchObject({ status: "unavailable", currency: "CAD" });
     expect(merged.portfolioQuotes[0]).not.toHaveProperty("marketValue");
   });
+});
+
+it("keeps the first failed valuation authoritative without inventing a previous successful summary", () => {
+  const failure = {
+    portfolioId: 7,
+    baseCurrency: "GBP",
+    status: "unavailable",
+    totalValue: null,
+    totalCost: null,
+    totalPnl: null,
+    reason: "fx_timeout",
+  };
+  const refreshed = {
+    generatedAt: "2026-11-06T20:00:00Z",
+    portfolioQuotes: [{ lotId: 1, portfolioId: 7, status: "unavailable", reason: "fx_timeout" }],
+    portfolioSummary: failure,
+    portfolioSummaries: [failure],
+  };
+  const result = mergeQuoteRefreshSnapshot(
+    { portfolioQuotes: [], portfolioSummaries: [] },
+    refreshed,
+  );
+  expect(result.portfolioSummary).toEqual(failure);
+  expect(result.portfolioSummaries).toEqual([failure]);
+  expect(result.portfolioQuotes).toEqual(refreshed.portfolioQuotes);
+  expect(result.portfolioSummary).not.toHaveProperty("stale");
 });
