@@ -523,11 +523,18 @@ export class MarketStateService {
     return rows.map((row) => ({ ...mapCollection(row), baseCurrency: row.base_currency }));
   }
 
-  createPortfolio(name: string, baseCurrency = "USD"): CollectionRecord {
+  createPortfolio(name: string, baseCurrency?: string): CollectionRecord {
     const normalized = normalizeCollectionName(name);
     const existing = this.getPortfolioByName(normalized);
-    if (existing != null) return existing;
-    const normalizedCurrency = baseCurrency.trim().toUpperCase() || "USD";
+    const normalizedCurrency = normalizePortfolioCurrency(baseCurrency ?? "USD");
+    if (existing != null) {
+      if (baseCurrency != null && existing.baseCurrency !== normalizedCurrency) {
+        throw new Error(
+          `Portfolio ${normalized} already uses ${existing.baseCurrency}. Use set_base_currency to change reporting currency.`,
+        );
+      }
+      return existing;
+    }
     const now = new Date().toISOString();
     this.db
       .prepare(
@@ -539,6 +546,17 @@ export class MarketStateService {
       .prepare("SELECT * FROM portfolios WHERE name = ? LIMIT 1")
       .get(normalized) as PortfolioRow;
     return { ...mapCollection(row), baseCurrency: row.base_currency };
+  }
+
+  setPortfolioBaseCurrency(name: string, baseCurrency: string): CollectionRecord {
+    const currency = normalizePortfolioCurrency(baseCurrency);
+    const current = this.getPortfolioByName(name);
+    if (current == null) throw new Error(`portfolio ${name.trim()} not found.`);
+    const updatedAt = new Date().toISOString();
+    this.db
+      .prepare("UPDATE portfolios SET base_currency = ?, updated_at = ? WHERE id = ?")
+      .run(currency, updatedAt, current.id);
+    return { ...current, baseCurrency: currency, updatedAt };
   }
 
   getPortfolioByName(name: string): CollectionRecord | null {
@@ -568,10 +586,9 @@ export class MarketStateService {
     return { ...mapCollection(row), baseCurrency: row.base_currency };
   }
 
-  getOrCreatePortfolio(name?: string | null): CollectionRecord {
-    const normalized = normalizeNullable(name);
-    if (normalized == null) return this.getDefaultPortfolio();
-    return this.getPortfolioByName(normalized) ?? this.createPortfolio(normalized);
+  getOrCreatePortfolio(name?: string | null, baseCurrency?: string): CollectionRecord {
+    const target = normalizeNullable(name) ?? this.getDefaultPortfolio().name;
+    return this.createPortfolio(target, baseCurrency);
   }
 
   findInstrumentByAlias(lookup: InstrumentAliasLookup): InstrumentRecord | null {
@@ -2205,4 +2222,12 @@ function normalizeExchange(value: string | null | undefined): string | null {
 
 function normalizeAssetType(value: string | null | undefined): string | null {
   return normalizeNullable(value)?.toLowerCase() ?? null;
+}
+
+function normalizePortfolioCurrency(value: string): string {
+  const currency = value.trim().toUpperCase();
+  if (!Intl.supportedValuesOf("currency").includes(currency)) {
+    throw new Error(`Unsupported reporting currency: ${value}. Use a supported ISO currency code.`);
+  }
+  return currency;
 }

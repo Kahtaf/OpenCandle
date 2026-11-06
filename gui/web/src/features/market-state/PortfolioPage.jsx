@@ -183,7 +183,7 @@ export function PortfolioPage({
           activeItem={activePortfolio}
           counts={portfolioCounts}
           readOnly={readOnly}
-          renameLabel="Rename portfolio"
+          renameLabel="Portfolio settings"
           onSelect={setActivePortfolioId}
           onRename={(portfolio) => openPanel("portfolio-rename", { portfolio })}
         />,
