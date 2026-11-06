@@ -44,18 +44,8 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "google",
-    id: "gemini-3.1-flash-lite-image",
-    label: "google/gemini-3.1-flash-lite-image",
-  },
-  {
-    provider: "google",
     id: "gemini-3.1-flash-lite-preview",
     label: "google/gemini-3.1-flash-lite-preview",
-  },
-  {
-    provider: "google",
-    id: "gemini-3.1-flash-live-preview",
-    label: "google/gemini-3.1-flash-live-preview",
   },
   {
     provider: "google",
@@ -114,6 +104,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "google",
+    id: "gemini-robotics-er-2-preview",
+    label: "google/gemini-robotics-er-2-preview",
+  },
+  {
+    provider: "google",
     id: "gemma-4-26b-a4b-it",
     label: "google/gemma-4-26b-a4b-it",
   },
@@ -121,6 +116,11 @@ export const firstClassModelCatalog = [
     provider: "google",
     id: "gemma-4-31b-it",
     label: "google/gemma-4-31b-it",
+  },
+  {
+    provider: "openai",
+    id: "chat-latest",
+    label: "openai/chat-latest",
   },
   {
     provider: "openai",
@@ -254,6 +254,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
+    id: "gpt-5.6-cyber",
+    label: "openai/gpt-5.6-cyber",
+  },
+  {
+    provider: "openai",
     id: "gpt-5.6-luna",
     label: "openai/gpt-5.6-luna",
   },
@@ -289,6 +294,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "openai",
+    id: "gpt-6.1-terra",
+    label: "openai/gpt-6.1-terra",
+  },
+  {
+    provider: "openai",
     id: "gpt-daybreak-blue-latest",
     label: "openai/gpt-daybreak-blue-latest",
   },
@@ -296,11 +306,6 @@ export const firstClassModelCatalog = [
     provider: "openai",
     id: "gpt-daybreak-red-latest",
     label: "openai/gpt-daybreak-red-latest",
-  },
-  {
-    provider: "openai",
-    id: "gpt-realtime-2.1",
-    label: "openai/gpt-realtime-2.1",
   },
   {
     provider: "openai",

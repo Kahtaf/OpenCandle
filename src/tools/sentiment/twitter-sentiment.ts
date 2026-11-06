@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { promptUser } from "../../onboarding/prompt-user.js";
@@ -13,6 +12,7 @@ import { getTwitterSentiment } from "../../providers/twitter.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { AskUserHandler } from "../../types/index.js";
 import type { TwitterSentimentResult } from "../../types/sentiment.js";
 import { formatInsightSection } from "./insight-format.js";

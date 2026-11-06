@@ -20,6 +20,7 @@ describe("auditRuntimeComposition", () => {
         "node_modules/@earendil-works/pi-ai/dist/providers/radius-config.js",
         "node_modules/@earendil-works/pi-ai/dist/providers/compat-schema.js",
         "node_modules/@earendil-works/pi-ai/dist/providers/model-schema.js",
+        "node_modules/@earendil-works/pi-ai/dist/providers/schema-builders.js",
       ]).piProviders,
     ).toEqual(["anthropic"]);
   });

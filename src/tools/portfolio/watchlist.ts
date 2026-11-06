@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import {
@@ -10,6 +9,7 @@ import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { getQuotes, type TradingViewQuote } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import { resolveStatefulInstrument, type StatefulToolOptions } from "./stateful-tool-options.js";
 
 interface WatchlistCheck extends WatchlistItemRecord {

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- The model chooser includes the models supported by Pi 1.4.0.
+- The model chooser includes the models supported by Pi 1.5.0.
 
 - Reconnecting the GUI immediately releases interrupted tool requests so saved-state controls do not hang.
 

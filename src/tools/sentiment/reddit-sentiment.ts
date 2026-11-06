@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
@@ -14,6 +13,7 @@ import { getPostComments, getSubredditPosts } from "../../providers/reddit.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { AskUserHandler } from "../../types/index.js";
 import type { RedditSentimentResult } from "../../types/sentiment.js";
 import { formatInsightSection } from "./insight-format.js";

@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { httpGet, httpPost } from "../../infra/http-client.js";
 import { rateLimiter } from "../../infra/rate-limiter.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 
 const params = Type.Object({
   query: Type.String({

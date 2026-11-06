@@ -1,6 +1,6 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { OHLCV } from "../../types/market.js";
 import { fetchHistoryWithFallback, HISTORY_INTERVALS, HISTORY_RANGES } from "./stock-history.js";
 

@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
@@ -10,6 +9,7 @@ import { withFallback } from "../../providers/with-fallback.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import type { ProviderResult } from "../../runtime/evidence.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { OHLCV } from "../../types/market.js";
 
 const DAILY_INTERVALS = new Set(["1d", "1wk", "1mo"]);

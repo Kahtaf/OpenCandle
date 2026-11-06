@@ -24,6 +24,7 @@ export {
 } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/retry.js";
 export { EventStream, createAssistantMessageEventStream } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/event-stream.js";
 export { parseStreamingJson } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/json-parse.js";
+export { ToolCallArgumentsStream } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/streaming-json.js";
 export {
   contentText,
   getSystemMessageText,

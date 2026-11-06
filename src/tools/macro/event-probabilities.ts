@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { searchPredictionMarkets } from "../../providers/polymarket.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { PredictionMarketQuote } from "../../types/prediction-markets.js";
 import { renderUntrustedText, untrustedContentHeader } from "../sentiment/untrusted-text.js";
 

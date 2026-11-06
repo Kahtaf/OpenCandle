@@ -1,10 +1,10 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getOverview } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getYahooCompanyOverview } from "../../providers/yahoo-finance.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
 export interface CompsMetric {

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "@sinclair/typebox";
+import type { AgentTool } from "../types/agent-tool.js";
 
 export function wrapWithDefaults<TParams extends TSchema, TDetails>(
   tool: AgentTool<TParams, TDetails>,

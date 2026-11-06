@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { isOverSoftThreshold } from "../../infra/lse-byte-budget.js";
@@ -8,6 +7,7 @@ import { ProviderCredentialError } from "../../providers/provider-credential-err
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote, getYahooFinancials } from "../../providers/yahoo-finance.js";
 import type { ProviderResult } from "../../runtime/evidence.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {

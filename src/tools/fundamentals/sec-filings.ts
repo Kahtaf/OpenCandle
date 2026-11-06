@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { searchFilings } from "../../providers/sec-edgar.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import type { AgentTool } from "../../types/agent-tool.js";
 import { renderUntrustedText, untrustedContentHeader } from "../sentiment/untrusted-text.js";
 
 const params = Type.Object({
