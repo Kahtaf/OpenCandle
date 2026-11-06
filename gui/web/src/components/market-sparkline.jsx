@@ -130,7 +130,7 @@ function TickerLineSparkline({
           loading="lazy"
           decoding="async"
           onError={() => setFailureCount((count) => count + 1)}
-          className="block h-[29px] w-24 object-contain sm:h-9 sm:w-[120px]"
+          className="block h-[29px] w-24 max-w-full object-contain sm:h-9 sm:w-[120px]"
         />
       </div>
     );
@@ -139,7 +139,7 @@ function TickerLineSparkline({
     <div
       ref={sparklineRef}
       data-slot="market-sparkline-visibility"
-      className={`w-24 sm:w-[120px] ${className}`.trim()}
+      className={`w-24 max-w-full sm:w-[120px] ${className}`.trim()}
     >
       {content}
     </div>
@@ -151,11 +151,11 @@ function PendingSparkline({ className = "", contained = false }) {
     <div
       data-slot="market-sparkline"
       data-state="loading"
-      className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
+      className={`${contained ? "w-full" : "w-24 max-w-full sm:w-[120px]"} ${className}`.trim()}
       role="status"
       aria-label="Loading price chart"
     >
-      <Skeleton className="h-[29px] w-24 sm:h-9 sm:w-[120px]" />
+      <Skeleton className="h-[29px] w-24 max-w-full sm:h-9 sm:w-[120px]" />
     </div>
   );
 }
@@ -166,7 +166,7 @@ function UnavailableSparkline({ className = "", contained = false, kind }) {
     <div
       data-slot="market-sparkline"
       data-state="unavailable"
-      className={`${contained ? "w-full" : "w-24 sm:w-[120px]"} ${className}`.trim()}
+      className={`${contained ? "w-full" : "w-24 max-w-full sm:w-[120px]"} ${className}`.trim()}
       title={
         providerFailure
           ? "Price chart is temporarily unavailable"

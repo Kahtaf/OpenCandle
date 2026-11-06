@@ -233,7 +233,7 @@ describe("buildHoldingRows", () => {
     expect(nvda.currentPrice).toBeNull();
     expect(nvda.marketValue).toBeNull();
     expect(nvda.pnl).toBeNull();
-    expect(nvda.excludedFromTotals).toBe(false);
+    expect(nvda.excludedFromTotals).toBe(true);
   });
 
   it("excludes currency-mismatched lots from rollup math but keeps them listed", () => {
@@ -252,7 +252,7 @@ describe("buildHoldingRows", () => {
     ];
     const rows = buildHoldingRows(LOTS, quotes);
     const aapl = rows.find((row) => row.symbol === "AAPL");
-    expect(aapl.marketValue).toBeCloseTo(14573, 2);
+    expect(aapl.marketValue).toBeNull();
     expect(aapl.excludedLotCount).toBe(1);
     expect(aapl.lots).toHaveLength(2);
   });
@@ -304,7 +304,7 @@ describe("topAllocationSegments", () => {
 });
 
 describe("derivePortfolioDayMove", () => {
-  it("sums only lots with finite market values and change percentages", () => {
+  it("does not present an incomplete daily move as the total", () => {
     const lots = [
       { marketValue: 1010, changePercent: 1 },
       { marketValue: 1960, changePercent: -2 },
@@ -314,7 +314,7 @@ describe("derivePortfolioDayMove", () => {
       { marketValue: 200, changePercent: Number.NaN },
     ];
 
-    expect(derivePortfolioDayMove(lots)).toBeCloseTo(1010 - 1010 / 1.01 + (1960 - 1960 / 0.98));
+    expect(derivePortfolioDayMove(lots)).toBeNull();
   });
 
   it("returns null when no lot has usable day-move data", () => {

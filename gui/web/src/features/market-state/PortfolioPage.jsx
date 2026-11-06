@@ -363,12 +363,12 @@ function HoldingsTable({
                   </TableCell>
                   <TableCell className="whitespace-nowrap py-2.5 text-right align-top tabular-nums">
                     <div className="flex flex-col items-end">
-                      <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
+                      <span>{moneyOrDash(row.currentPrice, row.quoteCurrency)}</span>
                       <ExtendedHoursQuote
                         chip
                         showChange={false}
                         quote={row}
-                        currency={row.currency}
+                        currency={row.quoteCurrency}
                       />
                     </div>
                   </TableCell>
@@ -388,6 +388,11 @@ function HoldingsTable({
                       <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
                         {formatPercent(row.allocationPercent, { decimals: 1 })} of portfolio
                       </span>
+                    ) : Number.isFinite(row.valuedAllocationPercent) ? (
+                      <span>
+                        {formatPercent(row.valuedAllocationPercent, { decimals: 1 })} of valued
+                        holdings
+                      </span>
                     ) : row.excludedFromTotals ? (
                       <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
                         Kept out of the total
@@ -406,7 +411,7 @@ function HoldingsTable({
                     data-slot="avg-cost-basis"
                     className={cn("py-2.5 text-right align-top tabular-nums", BASIS_COLUMN_CLASS)}
                   >
-                    {moneyOrDash(row.blendedCost, row.currency)}
+                    {moneyOrDash(row.blendedCost, row.costCurrency)}
                   </TableCell>
                   <TableCell className="px-1 py-2.5" />
                 </TableRow>
@@ -424,6 +429,7 @@ function HoldingsTable({
                       <div>
                         Lot · {shortDateLabel(lot.openedAt) || "—"}
                         {lot.notes ? ` · ${lot.notes}` : ""}
+                        <ValuationEvidence quote={lot.quote} />
                       </div>
                       <div className="mt-1 tabular-nums min-[1400px]:hidden">
                         {formatQuantity(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
@@ -433,14 +439,14 @@ function HoldingsTable({
                     <TableCell />
                     <TableCell />
                     <TableCell className="py-2.5 text-right tabular-nums">
-                      {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                      {moneyOrDash(lot.quote?.marketValue, lot.quote?.reportingCurrency)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap py-2.5 text-right">
                       {lot.quote?.status === "ok" ? (
                         <SignedMoney
                           value={lot.quote.pnl}
                           percent={lot.quote.pnlPercent}
-                          currency={lot.currency}
+                          currency={lot.quote?.reportingCurrency}
                         />
                       ) : (
                         <span className="text-xs text-muted-foreground">
@@ -513,7 +519,7 @@ function MobileHoldingRows({
         const isExpanded = expanded.has(row.symbol);
         return (
           <div key={row.symbol} data-slot="mobile-portfolio-holding">
-            <div className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_4.5rem_6rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60">
+            <div className="grid min-h-[58px] w-full grid-cols-[1rem_minmax(0,1fr)_4rem_6rem] items-center gap-2 px-3 py-2 text-left transition-[background-color] duration-150 ease-out hover:bg-secondary/60">
               <button
                 type="button"
                 className="-m-3 flex size-10 items-center justify-center rounded-md transition-transform duration-150 ease-out active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -537,7 +543,7 @@ function MobileHoldingRows({
               <ExtendedHoursQuote
                 chip
                 quote={row}
-                currency={row.currency}
+                currency={row.quoteCurrency}
                 className="col-span-4 mt-0"
               />
             </div>
@@ -549,7 +555,10 @@ function MobileHoldingRows({
             >
               <div className="min-h-0 overflow-hidden">
                 <dl className="grid grid-cols-2 gap-x-5 gap-y-3 border-t border-border bg-secondary/40 px-4 py-3 text-xs">
-                  <MobileMetric label="Price" value={moneyOrDash(row.currentPrice, row.currency)} />
+                  <MobileMetric
+                    label="Price"
+                    value={moneyOrDash(row.currentPrice, row.quoteCurrency)}
+                  />
                   <MobileMetric
                     label="Today"
                     value={
@@ -576,15 +585,17 @@ function MobileHoldingRows({
                     value={
                       typeof row.allocationPercent === "number"
                         ? formatPercent(row.allocationPercent, { decimals: 1 })
-                        : row.excludedFromTotals
-                          ? "Kept out of the total"
-                          : "—"
+                        : Number.isFinite(row.valuedAllocationPercent)
+                          ? `${formatPercent(row.valuedAllocationPercent, { decimals: 1 })} of valued holdings`
+                          : row.excludedFromTotals
+                            ? "Kept out of the total"
+                            : "—"
                     }
                   />
                   <MobileMetric label="Quantity" value={formatQuantity(row.totalQuantity)} />
                   <MobileMetric
                     label="Avg cost"
-                    value={moneyOrDash(row.blendedCost, row.currency)}
+                    value={moneyOrDash(row.blendedCost, row.costCurrency)}
                   />
                 </dl>
                 <div className="divide-y divide-border/70 border-t border-border bg-secondary/60">
@@ -592,13 +603,14 @@ function MobileHoldingRows({
                     <div key={lot.id} className="flex items-center justify-between gap-3 px-4 py-3">
                       <div className="min-w-0 text-xs text-muted-foreground">
                         <div>Lot · {shortDateLabel(lot.openedAt) || "—"}</div>
+                        <ValuationEvidence quote={lot.quote} />
                         <div className="mt-1 tabular-nums">
                           {formatQuantity(lot.quantity)} @ {money(lot.avgCost, lot.currency)}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <span className="text-xs tabular-nums">
-                          {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                          {moneyOrDash(lot.quote?.marketValue, lot.quote?.reportingCurrency)}
                         </span>
                         <LotActions
                           lot={lot}
@@ -657,7 +669,7 @@ function PortfolioSkeleton() {
         {["first", "second", "third", "fourth"].map((key) => (
           <div
             key={key}
-            className="grid min-h-[58px] grid-cols-[1rem_minmax(0,1fr)_4.5rem_6rem] items-center gap-2 px-3 py-2"
+            className="grid min-h-[58px] grid-cols-[1rem_minmax(0,1fr)_4rem_6rem] items-center gap-2 px-3 py-2"
           >
             <span />
             <Skeleton className="h-8 w-24" />
@@ -774,10 +786,7 @@ function LotActions({ lot, portfolio, readOnly, openPanel, onRemoveLot }) {
 function PortfolioSummary({ loading, summary, holdings, quoteBadge }) {
   // Only holdings the totals are built from can move the base-currency day
   // figure. A holding priced in another currency states its own move on its row.
-  const dayMove = useMemo(
-    () => derivePortfolioDayMove(holdings.filter((row) => !row.excludedFromTotals)),
-    [holdings],
-  );
+  const dayMove = useMemo(() => derivePortfolioDayMove(holdings), [holdings]);
   const segments = useMemo(() => topAllocationSegments(holdings), [holdings]);
   const pending = loading || !summary;
   const currency = summary?.baseCurrency ?? "USD";
@@ -797,14 +806,17 @@ function PortfolioSummary({ loading, summary, holdings, quoteBadge }) {
           className="grid min-w-0 flex-1 grid-cols-2 sm:grid-cols-3"
         >
           <Stat
-            label="Market value"
+            label={summary?.status === "partial" ? "Valued subtotal (partial)" : "Market value"}
             className="col-span-2 border-b border-border sm:col-span-1 sm:border-b-0 sm:border-r"
           >
             {pending ? (
               <Skeleton className="h-7 w-40" />
             ) : (
               <span className="block text-[28px] font-semibold leading-none tabular-nums text-foreground">
-                {money(summary.totalValue, currency)}
+                {moneyOrDash(
+                  summary.status === "partial" ? summary.valuedSubtotal : summary.totalValue,
+                  currency,
+                )}
               </span>
             )}
             {quoteBadge ? (
@@ -834,7 +846,7 @@ function PortfolioSummary({ loading, summary, holdings, quoteBadge }) {
         </dl>
         <div className="border-t border-border p-4 sm:p-5 xl:w-[352px] xl:shrink-0 xl:border-l xl:border-t-0 min-[1400px]:w-[400px]">
           {pending || segments.length === 0 ? (
-            <AllocationPlaceholder pending={pending} />
+            <AllocationPlaceholder pending={pending} partial={summary?.status === "partial"} />
           ) : (
             <Suspense fallback={<AllocationPlaceholder pending />}>
               <AllocationDonut
@@ -890,11 +902,13 @@ function StatDelta({ value, percent, currency }) {
   );
 }
 
-function AllocationPlaceholder({ pending }) {
+function AllocationPlaceholder({ pending, partial = false }) {
   if (!pending) {
     return (
       <p className="text-xs text-muted-foreground">
-        Allocation appears once a holding has a priced position.
+        {partial
+          ? "Full allocation is unavailable because some holdings could not be valued. Row weights are shares of valued holdings."
+          : "Allocation appears once a holding has a priced position."}
       </p>
     );
   }
@@ -913,6 +927,38 @@ function AllocationPlaceholder({ pending }) {
           <Skeleton key={key} className="h-3.5 w-full" />
         ))}
       </div>
+    </div>
+  );
+}
+
+function ValuationEvidence({ quote }) {
+  if (!quote) return null;
+  return (
+    <div className="mt-1 text-xs text-muted-foreground">
+      Native value: {moneyOrDash(quote.nativeValue?.amount, quote.nativeValue?.currency)} · Native
+      price P&amp;L: {moneyOrDash(quote.nativePnl?.amount, quote.nativePnl?.currency)}
+      <div>
+        Native daily change:{" "}
+        {Number.isFinite(quote.nativeChangePercent)
+          ? `${quote.nativeChangePercent.toFixed(2)}%`
+          : "unavailable"}
+      </div>
+      <div>
+        Security:{" "}
+        {quote.securityObservedAt
+          ? new Date(quote.securityObservedAt).toISOString()
+          : "timestamp unavailable"}
+      </div>
+      {quote.fx?.status === "ok" && quote.fx.method !== "identity" ? (
+        <div>
+          FX {quote.fx.source} → {quote.fx.target}: {quote.fx.rate} ·{" "}
+          {quote.fx.lastSession ? "last session" : "observed"}{" "}
+          {quote.fx.observedAt ? new Date(quote.fx.observedAt).toISOString() : ""} ·{" "}
+          {quote.fx.legs.map((leg) => `${leg.provider} ${leg.requestedSymbol}`).join(", ")}
+        </div>
+      ) : quote.reason ? (
+        <div>{quote.reason}</div>
+      ) : null}
     </div>
   );
 }

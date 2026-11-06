@@ -3,9 +3,9 @@ import {
   resolveInstrumentForMutation,
 } from "../../market-state/resolve-for-mutation.js";
 import type { StateDatabase } from "../../runtime/state-database.js";
-import type { PortfolioPriceResolver } from "./portfolio-view.js";
+import type { PortfolioPriceResolver, PortfolioValuationDependencies } from "./portfolio-view.js";
 
-export interface StatefulToolOptions {
+export interface StatefulToolOptions extends PortfolioValuationDependencies {
   stateDatabaseFactory: () => StateDatabase;
   closeDatabaseAfterExecute?: boolean;
   resolveInstrument?: (

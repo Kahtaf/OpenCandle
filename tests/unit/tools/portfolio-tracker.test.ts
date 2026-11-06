@@ -43,6 +43,23 @@ describe("portfolioTrackerTool", () => {
     vi.clearAllMocks();
   });
 
+  it.each(["explicit", "implicit"])("preserves pence acquisition units on %s add", async (mode) => {
+    vi.mocked(getQuote).mockResolvedValue({
+      ...quote("UK.L", 1.5),
+      currency: "GBP",
+      rawCurrency: "GBp",
+    });
+    const result = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "UK.L",
+      shares: 2,
+      avg_cost: 150,
+      ...(mode === "explicit" ? { currency: "GBp" } : {}),
+    });
+    expect(result.details).toMatchObject({ avgCost: 1.5, currency: "GBP" });
+    expect(result.content[0]).toMatchObject({ text: expect.stringContaining("GBP 1.50") });
+  });
+
   it("rejects missing or misplaced reporting currency instead of silently ignoring it", async () => {
     await expect(
       portfolioTrackerTool.execute("test", { action: "set_base_currency" }),
@@ -111,7 +128,7 @@ describe("portfolioTrackerTool", () => {
       action: "view",
       portfolio_name: "Europe",
     });
-    expect(view.content[0].text).toContain("No FX conversion");
+    expect(view.content[0].text).toContain("unavailable");
     await expect(
       portfolioTrackerTool.execute("test", {
         action: "add",
@@ -371,7 +388,7 @@ describe("portfolioTrackerTool", () => {
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
     expect(result.content[0].text).not.toMatch(/NaN/);
-    expect(result.content[0].text).toContain("P&L: unavailable");
+    expect(result.content[0].text).toContain("P&L: $600.00");
     expect(result.details?.positions[0]).toMatchObject({
       symbol: "VTI",
       totalCost: 0,
@@ -396,12 +413,10 @@ describe("portfolioTrackerTool", () => {
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
-    expect(result.content[0].text).toContain(
-      "Quote unavailable: Yahoo returned no valid market data.",
-    );
+    expect(result.content[0].text).toContain("Yahoo returned no valid market data.");
     expect(result.details).toMatchObject({
       totalValue: null,
-      totalCost: 500,
+      totalCost: null,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -414,7 +429,7 @@ describe("portfolioTrackerTool", () => {
       excludedFromTotals: [
         expect.objectContaining({
           symbol: "VTI",
-          reason: "Quote unavailable: Yahoo returned no valid market data.",
+          reason: "Yahoo returned no valid market data.",
         }),
       ],
     });
@@ -435,12 +450,10 @@ describe("portfolioTrackerTool", () => {
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
-    expect(result.content[0].text).toContain(
-      "Quote unavailable: provider returned stale market data",
-    );
+    expect(result.content[0].text).toContain("provider returned stale market data");
     expect(result.details).toMatchObject({
       totalValue: null,
-      totalCost: 500,
+      totalCost: null,
       positions: [
         expect.objectContaining({
           symbol: "VTI",
@@ -453,7 +466,7 @@ describe("portfolioTrackerTool", () => {
       excludedFromTotals: [
         expect.objectContaining({
           symbol: "VTI",
-          reason: "Quote unavailable: provider returned stale market data",
+          reason: "provider returned stale market data",
         }),
       ],
     });
@@ -483,9 +496,10 @@ describe("portfolioTrackerTool", () => {
     expect(result.content[0].text).toContain("Value: unavailable | P&L: unavailable");
     expect(result.details).toMatchObject({
       totalValue: null,
-      totalCost: 680,
+      totalCost: null,
+      valuedSubtotal: 600,
       totalPnl: null,
-      totalsStatus: "unavailable",
+      totalsStatus: "partial",
     });
   });
 
@@ -527,9 +541,10 @@ describe("portfolioTrackerTool", () => {
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
-    expect(result.content[0].text).toContain("Value: $600.00");
-    expect(result.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
-    expect(result.details?.totalValue).toBe(600);
+    expect(result.content[0].text).toContain("Valued subtotal: $600.00");
+    expect(result.content[0].text).toContain("unsupported_currency");
+    expect(result.details?.totalValue).toBeNull();
+    expect(result.details?.valuedSubtotal).toBe(600);
     expect(result.details?.positions).toEqual([
       expect.objectContaining({
         symbol: "VTI",
@@ -541,7 +556,8 @@ describe("portfolioTrackerTool", () => {
         symbol: "SHOP.TO",
         currency: "CAD",
         includedInTotals: false,
-        marketValue: 360,
+        marketValue: null,
+        nativeValue: { amount: 360, currency: "CAD" },
       }),
     ]);
   });
@@ -572,7 +588,7 @@ describe("portfolioTrackerTool", () => {
       expect.objectContaining({
         symbol: "SHOP.TO",
         currency: "USD",
-        currentPrice: null,
+        currentPrice: 120,
         marketValue: null,
         pnl: null,
         pnlPercent: null,
@@ -582,7 +598,7 @@ describe("portfolioTrackerTool", () => {
     expect(result.details?.excludedFromTotals).toEqual([
       expect.objectContaining({
         symbol: "SHOP.TO",
-        reason: "No FX conversion from CAD to USD",
+        reason: "unsupported_currency",
       }),
     ]);
   });
@@ -604,7 +620,7 @@ describe("portfolioTrackerTool", () => {
     });
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
-    expect(view.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
+    expect(view.content[0].text).toContain("unsupported_currency");
     expect(view.details).toMatchObject({
       totalValue: null,
       positions: [
@@ -635,6 +651,25 @@ describe("portfolioTrackerTool", () => {
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(view.content[0].text.toLowerCase()).toContain("empty");
+  });
+
+  it("reports persisted major-unit cost after a currency-only pence update", async () => {
+    const add = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VOD.L",
+      shares: 10,
+      avg_cost: 0.8,
+      currency: "GBP",
+    });
+    const update = await portfolioTrackerTool.execute("test", {
+      action: "update",
+      lot_id: (add.details as { id: number }).id,
+      currency: "GBX",
+    });
+    expect(update.details).toMatchObject({ quantity: 10, avgCost: 0.8, currency: "GBP" });
+    expect(update.content[0].text).toContain("quantity 10");
+    expect(update.content[0].text).toContain("average cost GBP 0.8");
+    expect(update.content[0].text).not.toContain("GBX");
   });
 
   it("updates an existing portfolio lot through an explicit update action", async () => {
@@ -870,6 +905,7 @@ function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    asOf: new Date().toISOString(),
     currency: "USD",
     ...overrides,
   };

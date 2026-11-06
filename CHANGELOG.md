@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- USD/EUR/GBP portfolio valuation separates converted market values from unavailable historical reporting-currency P&L.
+
 - Choose and edit portfolio reporting currency in chat and the GUI while preserving lot costs and excluding other currencies without FX conversion.
 
 - The model chooser includes the models supported by Pi 1.5.0.

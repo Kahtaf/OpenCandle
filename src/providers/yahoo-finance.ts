@@ -5,6 +5,7 @@ import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { classifyMarketStatusAt } from "../infra/market-calendar.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { normalizeCurrencyUnit } from "../portfolio/currency-unit.js";
 import { computeGreeks } from "../tools/options/greeks.js";
 import type { CompanyOverview, FinancialStatement } from "../types/fundamentals.js";
 import type { OHLCV, StockQuote } from "../types/market.js";
@@ -235,6 +236,28 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     }
 
     const enrichedQuote = await enrichQuoteWithExtendedHours(symbol, quote);
+    const rawCurrency = typeof meta.currency === "string" ? meta.currency.trim() : null;
+    const unit = normalizeCurrencyUnit(rawCurrency);
+    if (rawCurrency && !unit) throw new Error(`Unsupported quote currency unit: ${rawCurrency}`);
+    enrichedQuote.rawCurrency = rawCurrency;
+    enrichedQuote.currency = unit?.currency ?? null;
+    if (unit && unit.scale !== 1) {
+      for (const field of [
+        "price",
+        "change",
+        "open",
+        "high",
+        "low",
+        "previousClose",
+        "week52High",
+        "week52Low",
+        "extendedPrice",
+        "extendedChange",
+      ] as const) {
+        const value = enrichedQuote[field];
+        if (value !== undefined) enrichedQuote[field] = value * unit.scale;
+      }
+    }
     cache.set(cacheKey, enrichedQuote, TTL.QUOTE);
     return enrichedQuote;
   } catch (error) {
@@ -525,6 +548,10 @@ export async function getHistory(
     }
 
     const result = data.chart.result[0];
+    const rawUnit = result.meta.currency?.trim();
+    const unit = normalizeCurrencyUnit(rawUnit);
+    if (rawUnit && !unit) throw new Error(`Unsupported quote currency unit: ${rawUnit}`);
+    const scale = unit?.scale ?? 1;
     const timestamps = result.timestamp;
     const quotes = result.indicators.quote[0];
 
@@ -538,7 +565,14 @@ export async function getHistory(
         close: quotes.close[i],
         volume: quotes.volume[i],
       }))
-      .filter((bar) => bar.open != null && bar.close != null);
+      .filter((bar) => bar.open != null && bar.close != null)
+      .map((bar) => ({
+        ...bar,
+        open: bar.open * scale,
+        high: bar.high * scale,
+        low: bar.low * scale,
+        close: bar.close * scale,
+      }));
 
     cache.set(cacheKey, ohlcv, TTL.HISTORY);
     return ohlcv;

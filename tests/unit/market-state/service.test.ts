@@ -19,6 +19,45 @@ describe("MarketStateService", () => {
     db.close();
   });
 
+  it("canonicalizes new explicit pence costs without rewriting existing pounds", () => {
+    const instrument = {
+      symbol: "UK.L",
+      provider: "yahoo",
+      assetType: "stock" as const,
+      currency: "GBp",
+    };
+    const pence = service.addPortfolioLot({
+      instrument,
+      quantity: 2,
+      avgCost: 150,
+      currency: "GBp",
+    });
+    const pounds = service.addPortfolioLot({
+      instrument,
+      quantity: 2,
+      avgCost: 150,
+      currency: "GBP",
+    });
+    expect(pence).toMatchObject({ avgCost: 1.5, currency: "GBP" });
+    expect(pounds).toMatchObject({ avgCost: 150, currency: "GBP" });
+    expect(service.updatePortfolioLot(pence.id, { avgCost: 250, currency: "GBX" })).toMatchObject({
+      avgCost: 2.5,
+      currency: "GBP",
+    });
+    expect(service.updatePortfolioLot(pence.id, { quantity: 3 })).toMatchObject({
+      avgCost: 2.5,
+      currency: "GBP",
+    });
+    expect(service.updatePortfolioLot(pence.id, { currency: "GBX" })).toMatchObject({
+      avgCost: 2.5,
+      currency: "GBP",
+    });
+    expect(service.listPortfolioLots().find((lot) => lot.id === pounds.id)).toMatchObject({
+      avgCost: 150,
+      currency: "GBP",
+    });
+  });
+
   it("validates reporting currency and rejects conflicting repeated creation", () => {
     expect(service.createPortfolio("Europe", " eur ").baseCurrency).toBe("EUR");
     expect(service.createPortfolio("Europe").baseCurrency).toBe("EUR");

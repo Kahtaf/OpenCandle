@@ -1,3 +1,4 @@
+import type { MarketQuoteSnapshotDependencies } from "../../shared/market-quote-snapshot.js";
 import { buildFreshnessStamp } from "../../../src/infra/freshness.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
@@ -122,9 +123,10 @@ export async function buildHostedMarketIndicesSnapshot() {
   });
 }
 
-export function buildHostedMarketQuoteSnapshot(state: MarketQuoteState) {
+export function buildHostedMarketQuoteSnapshot(state: MarketQuoteState, dependencies: Partial<MarketQuoteSnapshotDependencies> = {}) {
   return buildMarketQuoteSnapshot(state, {
     fetchQuote: fetchHostedQuoteSnapshot,
+    ...dependencies,
   });
 }
 
@@ -144,7 +146,7 @@ async function fetchHostedQuoteSnapshot(symbol: string) {
     result.data.price <= 0 ||
     isZeroFilledQuote(result.data)
   ) {
-    return { status: "unavailable" as const, reason: "provider returned stale or invalid market data" };
+    return { status: "unavailable" as const, reason: "provider returned stale or invalid market data", dataAsOf: result.data.asOf, fetchedAt: result.timestamp };
   }
   const freshness = buildFreshnessStamp({
     asOf: result.data.asOf,
@@ -153,7 +155,7 @@ async function fetchHostedQuoteSnapshot(symbol: string) {
     cachedAt: result.timestamp,
   });
   if (freshness.isStaleForSession) {
-    return { status: "unavailable" as const, reason: "provider returned stale market data" };
+    return { status: "unavailable" as const, reason: "provider returned stale market data", dataAsOf: result.data.asOf, fetchedAt: result.timestamp };
   }
   return {
     status: "ok" as const,
@@ -176,6 +178,7 @@ async function fetchHostedQuoteSnapshot(symbol: string) {
     extendedAsOf: result.data.extendedAsOf,
     stale: false as const,
     currency: result.data.currency ?? null,
+    rawCurrency: result.data.rawCurrency,
   };
 }
 

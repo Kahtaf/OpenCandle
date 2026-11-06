@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-30T20:32:59.443Z",
+  "generatedAt": "2026-11-06T21:37:09.418Z",
   "command": "npm run test:coverage",
   "metricOrder": ["lines", "functions", "branches", "statements"],
   "surfaces": {
     "core": {
       "measured": true,
-      "expectedFileCount": 209,
+      "expectedFileCount": 215,
       "missingFiles": [],
       "totals": {
-        "lines": [9618, 10645],
-        "functions": [2047, 2173],
-        "branches": [8007, 10177],
-        "statements": [10536, 11965]
+        "lines": [9806, 10835],
+        "functions": [2092, 2218],
+        "branches": [8271, 10450],
+        "statements": [10753, 12190]
       },
       "files": {
         "src/analysts/contracts.ts": [65, 65, 13, 13, 49, 51, 71, 71],
@@ -43,8 +43,8 @@
         "src/market-state/local-automation-service.ts": [42, 43, 5, 5, 34, 44, 43, 47],
         "src/market-state/notification-delivery.ts": [62, 65, 8, 8, 53, 59, 71, 74],
         "src/market-state/resolve-for-mutation.ts": [7, 7, 1, 1, 2, 2, 7, 7],
-        "src/market-state/resolve.ts": [32, 35, 7, 7, 31, 47, 36, 46],
-        "src/market-state/service.ts": [329, 345, 97, 101, 301, 386, 338, 374],
+        "src/market-state/resolve.ts": [32, 35, 7, 7, 33, 49, 36, 46],
+        "src/market-state/service.ts": [346, 362, 99, 103, 312, 399, 355, 392],
         "src/market-state/summaries.ts": [29, 31, 7, 7, 28, 38, 33, 40],
         "src/memory/index.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/memory/manager.ts": [58, 67, 7, 8, 44, 56, 62, 72],
@@ -76,7 +76,7 @@
         "src/pi/model-provider-metadata.ts": [3, 3, 1, 1, 2, 2, 3, 3],
         "src/pi/opencandle-extension-core.ts": [350, 435, 42, 51, 278, 402, 383, 486],
         "src/pi/opencandle-extension.ts": [2, 2, 2, 2, 12, 12, 2, 2],
-        "src/pi/session-action-dedupe.ts": [96, 101, 27, 28, 75, 93, 109, 127],
+        "src/pi/session-action-dedupe.ts": [96, 101, 27, 28, 76, 93, 110, 127],
         "src/pi/session-cancellation.ts": [13, 13, 8, 8, 6, 6, 15, 15],
         "src/pi/session-core.ts": [30, 30, 5, 5, 32, 35, 32, 33],
         "src/pi/session-storage.ts": [1, 1, 1, 1, 0, 0, 1, 1],
@@ -86,6 +86,10 @@
         "src/pi/tool-adapter-core.ts": [23, 23, 10, 10, 9, 9, 27, 27],
         "src/pi/tool-adapter.ts": [8, 9, 5, 5, 1, 1, 8, 9],
         "src/pi/tui-session-coordinator.ts": [136, 158, 22, 26, 71, 116, 142, 176],
+        "src/portfolio/acquisition.ts": [25, 26, 9, 9, 40, 44, 28, 30],
+        "src/portfolio/currency-unit.ts": [4, 4, 1, 1, 8, 8, 6, 6],
+        "src/portfolio/fx.ts": [35, 35, 8, 8, 54, 55, 43, 44],
+        "src/portfolio/valuation.ts": [51, 52, 12, 12, 94, 101, 58, 61],
         "src/prompts/context-builder.ts": [74, 77, 15, 17, 49, 59, 77, 80],
         "src/prompts/disclaimer.ts": [1, 1, 0, 0, 0, 0, 1, 1],
         "src/prompts/policy-cards.ts": [19, 21, 4, 4, 15, 18, 21, 23],
@@ -116,7 +120,8 @@
         "src/providers/web-search.ts": [91, 98, 18, 20, 60, 72, 101, 109],
         "src/providers/with-fallback.ts": [11, 11, 2, 2, 7, 8, 13, 13],
         "src/providers/wrap-provider.ts": [22, 22, 2, 2, 38, 38, 25, 25],
-        "src/providers/yahoo-finance.ts": [300, 349, 58, 63, 314, 455, 330, 393],
+        "src/providers/yahoo-finance.ts": [314, 363, 59, 64, 334, 475, 346, 410],
+        "src/providers/yahoo-fx.ts": [48, 48, 14, 14, 26, 32, 56, 57],
         "src/routing/defaults.ts": [10, 10, 1, 1, 4, 4, 10, 10],
         "src/routing/entity-extractor.ts": [178, 180, 25, 25, 197, 215, 205, 212],
         "src/routing/fund-symbols.ts": [4, 4, 3, 3, 4, 4, 4, 4],
@@ -193,10 +198,10 @@
         "src/tools/portfolio/daily-report.ts": [29, 30, 3, 3, 19, 22, 30, 31],
         "src/tools/portfolio/holdings-overlap.ts": [44, 48, 16, 17, 14, 20, 51, 57],
         "src/tools/portfolio/notifications.ts": [17, 18, 2, 2, 6, 8, 18, 20],
-        "src/tools/portfolio/portfolio-view.ts": [36, 36, 13, 13, 67, 79, 38, 38],
+        "src/tools/portfolio/portfolio-view.ts": [21, 21, 11, 11, 66, 69, 22, 22],
         "src/tools/portfolio/risk-analysis.ts": [59, 65, 15, 15, 32, 46, 72, 84],
         "src/tools/portfolio/stateful-tool-options.ts": [5, 6, 1, 1, 11, 13, 5, 6],
-        "src/tools/portfolio/tracker.ts": [73, 81, 6, 6, 71, 83, 78, 87],
+        "src/tools/portfolio/tracker.ts": [82, 90, 6, 6, 80, 91, 86, 95],
         "src/tools/portfolio/watchlist.ts": [84, 90, 15, 15, 65, 74, 88, 94],
         "src/tools/sentiment/hosted-sentiment-summary.ts": [69, 71, 10, 11, 81, 88, 76, 79],
         "src/tools/sentiment/insight-format.ts": [22, 22, 4, 4, 10, 12, 23, 23],
@@ -210,6 +215,7 @@
         "src/tools/sentiment/web-sentiment.ts": [31, 39, 4, 4, 17, 31, 33, 44],
         "src/tools/technical/backtest.ts": [82, 98, 12, 15, 70, 97, 93, 110],
         "src/tools/technical/indicators.ts": [82, 128, 13, 17, 36, 118, 100, 158],
+        "src/types/agent-tool.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/types/fundamentals.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/types/index.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/types/macro.ts": [1, 1, 0, 0, 0, 0, 1, 1],
@@ -231,34 +237,34 @@
       "expectedFileCount": 33,
       "missingFiles": [],
       "totals": {
-        "lines": [1876, 2455],
-        "functions": [375, 483],
-        "branches": [1494, 2146],
-        "statements": [2062, 2763]
+        "lines": [1888, 2468],
+        "functions": [377, 485],
+        "branches": [1502, 2154],
+        "statements": [2075, 2777]
       },
       "files": {
         "gui/server/ask-user-bridge.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "gui/server/automation-heartbeat.ts": [29, 30, 8, 9, 17, 21, 32, 34],
         "gui/server/background-quotes.ts": [25, 30, 7, 10, 17, 23, 28, 35],
-        "gui/server/chat-event-adapter.ts": [223, 233, 27, 28, 187, 237, 235, 254],
+        "gui/server/chat-event-adapter.ts": [228, 238, 27, 28, 189, 239, 241, 260],
         "gui/server/durable-session-persist.ts": [12, 18, 2, 2, 7, 8, 16, 22],
         "gui/server/gui-session-manager.ts": [18, 18, 4, 4, 11, 11, 20, 20],
         "gui/server/history-snapshot-store.ts": [20, 21, 5, 5, 11, 12, 22, 23],
-        "gui/server/http-routes.ts": [432, 654, 57, 80, 375, 641, 464, 719],
+        "gui/server/http-routes.ts": [435, 657, 57, 80, 377, 643, 468, 723],
         "gui/server/invoke-tool.ts": [118, 131, 23, 23, 123, 158, 130, 149],
         "gui/server/local-session-coordinator.ts": [39, 39, 8, 8, 20, 21, 42, 42],
         "gui/server/market-indices-api.ts": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/server/market-indices-snapshot-store.ts": [30, 30, 11, 11, 18, 20, 36, 36],
-        "gui/server/market-state-api.ts": [132, 135, 34, 35, 85, 102, 147, 158],
+        "gui/server/market-state-api.ts": [133, 136, 34, 35, 86, 103, 147, 158],
         "gui/server/model-setup.ts": [105, 127, 22, 24, 74, 111, 114, 145],
         "gui/server/preferences-api.ts": [21, 21, 8, 8, 9, 10, 23, 23],
         "gui/server/private-api-access.ts": [23, 25, 5, 5, 30, 34, 29, 31],
-        "gui/server/projector.ts": [143, 154, 22, 27, 123, 151, 152, 171],
+        "gui/server/projector.ts": [143, 154, 22, 27, 124, 151, 152, 171],
         "gui/server/prompt-observation.ts": [19, 21, 7, 7, 17, 24, 20, 24],
         "gui/server/quote-snapshot-store.ts": [26, 26, 7, 7, 12, 12, 28, 28],
         "gui/server/run-cancellation.ts": [49, 49, 13, 14, 25, 25, 54, 54],
         "gui/server/run-stop-marker.ts": [23, 23, 5, 5, 26, 30, 29, 29],
-        "gui/server/server.ts": [0, 128, 0, 48, 0, 36, 0, 137],
+        "gui/server/server.ts": [0, 129, 0, 48, 0, 36, 0, 138],
         "gui/server/session-actions.ts": [98, 115, 32, 36, 75, 102, 118, 150],
         "gui/server/session-entry-wait.ts": [104, 109, 20, 21, 105, 120, 122, 132],
         "gui/server/session-list.ts": [4, 4, 2, 2, 3, 3, 4, 4],
@@ -269,7 +275,7 @@
         "gui/server/unhandled-rejection-guard.ts": [13, 13, 6, 7, 14, 22, 16, 17],
         "gui/server/websocket.ts": [0, 71, 0, 10, 0, 34, 0, 81],
         "gui/server/writer-lock.ts": [0, 0, 0, 0, 0, 0, 0, 0],
-        "gui/server/ws-hub.ts": [96, 149, 24, 29, 70, 130, 100, 156]
+        "gui/server/ws-hub.ts": [99, 152, 26, 31, 72, 133, 103, 159]
       }
     },
     "gui-shared": {
@@ -277,10 +283,10 @@
       "expectedFileCount": 12,
       "missingFiles": [],
       "totals": {
-        "lines": [487, 526],
-        "functions": [107, 111],
-        "branches": [407, 513],
-        "statements": [536, 590]
+        "lines": [463, 502],
+        "functions": [99, 103],
+        "branches": [377, 461],
+        "statements": [511, 565]
       },
       "files": {
         "gui/shared/ask-user-bridge.ts": [39, 39, 14, 14, 16, 18, 47, 47],
@@ -291,7 +297,7 @@
         "gui/shared/hosted-gui-protocol.ts": [4, 4, 1, 1, 2, 2, 4, 4],
         "gui/shared/invoke-tool-from-ui.ts": [15, 17, 2, 2, 8, 10, 15, 17],
         "gui/shared/live-chat-event-adapter.ts": [75, 82, 13, 13, 68, 81, 82, 92],
-        "gui/shared/market-quote-snapshot.ts": [84, 84, 36, 36, 78, 104, 94, 94],
+        "gui/shared/market-quote-snapshot.ts": [60, 60, 28, 28, 48, 52, 69, 69],
         "gui/shared/ticker-line.ts": [68, 84, 8, 11, 55, 75, 74, 94],
         "gui/shared/tool-argument-validation.ts": [4, 4, 2, 2, 4, 6, 5, 5],
         "gui/shared/tool-output.ts": [8, 8, 3, 3, 21, 26, 8, 8]
@@ -302,10 +308,10 @@
       "expectedFileCount": 176,
       "missingFiles": [],
       "totals": {
-        "lines": [4538, 6621],
-        "functions": [1355, 2050],
-        "branches": [4809, 8229],
-        "statements": [5035, 7643]
+        "lines": [4868, 6755],
+        "functions": [1439, 2098],
+        "branches": [5077, 8378],
+        "statements": [5410, 7812]
       },
       "files": {
         "gui/web/src/App.jsx": [101, 262, 18, 75, 74, 209, 110, 302],
@@ -313,7 +319,7 @@
         "gui/web/src/components/brand/opencandle-logo.jsx": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/web/src/components/chat/assistant-message.jsx": [2, 2, 1, 1, 1, 1, 2, 2],
         "gui/web/src/components/chat/chat-composer.jsx": [10, 39, 4, 10, 25, 54, 12, 45],
-        "gui/web/src/components/chat/custom-message.jsx": [6, 7, 1, 1, 8, 9, 6, 7],
+        "gui/web/src/components/chat/custom-message.jsx": [6, 7, 1, 1, 12, 13, 6, 7],
         "gui/web/src/components/chat/history-item.jsx": [18, 60, 2, 19, 6, 33, 18, 67],
         "gui/web/src/components/chat/home-prompts.js": [14, 14, 5, 5, 21, 25, 15, 15],
         "gui/web/src/components/chat/prompt-suggestions.jsx": [3, 5, 3, 5, 5, 8, 3, 6],
@@ -383,7 +389,7 @@
         "gui/web/src/features/chat/session-market-facts.js": [51, 74, 11, 14, 54, 97, 56, 93],
         "gui/web/src/features/chat/steps-card.jsx": [17, 28, 5, 10, 29, 69, 20, 37],
         "gui/web/src/features/chat/thinking-text.js": [9, 9, 2, 2, 3, 4, 10, 10],
-        "gui/web/src/features/chat/tool-drawer-context.jsx": [14, 26, 4, 8, 4, 31, 15, 34],
+        "gui/web/src/features/chat/tool-drawer-context.jsx": [27, 27, 8, 8, 26, 33, 31, 36],
         "gui/web/src/features/chat/tool-drawer.jsx": [23, 32, 11, 16, 20, 34, 28, 42],
         "gui/web/src/features/chat/tool-run-grouper.js": [73, 80, 15, 16, 68, 96, 85, 94],
         "gui/web/src/features/chat/use-symbol-resolution.js": [8, 20, 2, 6, 1, 12, 8, 22],
@@ -393,7 +399,7 @@
         "gui/web/src/features/home/HomeDashboard.jsx": [12, 13, 3, 4, 26, 28, 12, 13],
         "gui/web/src/features/home/IndicesStrip.jsx": [16, 16, 8, 8, 18, 21, 20, 21],
         "gui/web/src/features/home/MarketStateAffordanceCard.jsx": [5, 5, 1, 1, 1, 2, 5, 6],
-        "gui/web/src/features/home/PortfolioSummaryStrip.jsx": [49, 49, 8, 8, 78, 84, 49, 49],
+        "gui/web/src/features/home/PortfolioSummaryStrip.jsx": [52, 52, 11, 11, 84, 90, 55, 55],
         "gui/web/src/features/home/WatchlistMovers.jsx": [17, 17, 7, 7, 18, 18, 19, 19],
         "gui/web/src/features/home/home-view-model.js": [6, 6, 2, 2, 10, 11, 7, 8],
         "gui/web/src/features/instruments/exchange-labels.js": [7, 7, 4, 4, 5, 7, 7, 8],
@@ -408,9 +414,9 @@
         "gui/web/src/features/layout/AppShellChrome.jsx": [5, 6, 3, 4, 2, 2, 6, 7],
         "gui/web/src/features/market-state/AlertsPage.jsx": [23, 31, 12, 19, 38, 49, 25, 33],
         "gui/web/src/features/market-state/MarketStatePage.jsx": [
-          249, 439, 56, 113, 354, 580, 266, 493
+          262, 455, 60, 119, 363, 590, 279, 510
         ],
-        "gui/web/src/features/market-state/PortfolioPage.jsx": [69, 95, 39, 55, 110, 140, 76, 107],
+        "gui/web/src/features/market-state/PortfolioPage.jsx": [73, 97, 40, 56, 140, 167, 81, 110],
         "gui/web/src/features/market-state/ReportsPage.jsx": [10, 12, 4, 7, 26, 39, 11, 14],
         "gui/web/src/features/market-state/WatchlistPage.jsx": [70, 114, 36, 62, 105, 167, 79, 136],
         "gui/web/src/features/market-state/alert-view-model.js": [
@@ -418,12 +424,12 @@
         ],
         "gui/web/src/features/market-state/format.js": [76, 76, 14, 14, 84, 87, 93, 94],
         "gui/web/src/features/market-state/portfolio-view-model.js": [
-          64, 64, 13, 13, 94, 105, 73, 74
+          60, 60, 31, 31, 79, 85, 78, 79
         ],
         "gui/web/src/features/market-state/report-format.js": [12, 13, 5, 5, 8, 20, 14, 17],
         "gui/web/src/features/market-state/report-rich-text.jsx": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/web/src/features/market-state/report-schedule-form.jsx": [10, 11, 2, 3, 5, 6, 11, 12],
-        "gui/web/src/features/market-state/shared.jsx": [56, 83, 22, 36, 117, 169, 60, 97],
+        "gui/web/src/features/market-state/shared.jsx": [56, 83, 22, 36, 118, 169, 60, 97],
         "gui/web/src/features/onboarding/ConnectModelPanel.jsx": [32, 32, 10, 10, 53, 57, 33, 35],
         "gui/web/src/features/onboarding/ModelSetupCard.jsx": [10, 10, 3, 3, 9, 10, 11, 12],
         "gui/web/src/features/onboarding/OnboardingCarousel.jsx": [35, 35, 10, 10, 35, 36, 39, 39],
@@ -433,14 +439,14 @@
         "gui/web/src/features/renderers/ToolDrawerStep.jsx": [21, 28, 7, 7, 29, 58, 26, 37],
         "gui/web/src/features/renderers/ToolResultCard.jsx": [18, 19, 3, 3, 13, 22, 18, 22],
         "gui/web/src/features/renderers/cards/_shared.jsx": [31, 53, 10, 15, 47, 90, 32, 59],
-        "gui/web/src/features/renderers/cards/card-format.js": [11, 35, 4, 8, 14, 48, 14, 52],
+        "gui/web/src/features/renderers/cards/card-format.js": [12, 35, 4, 8, 15, 48, 15, 52],
         "gui/web/src/features/renderers/cards/fundamentals.jsx": [0, 29, 0, 6, 0, 125, 0, 29],
         "gui/web/src/features/renderers/cards/index.jsx": [3, 5, 2, 4, 1, 2, 3, 5],
         "gui/web/src/features/renderers/cards/macro.jsx": [0, 27, 0, 6, 0, 47, 0, 32],
         "gui/web/src/features/renderers/cards/market.jsx": [32, 38, 13, 14, 33, 73, 37, 43],
         "gui/web/src/features/renderers/cards/news.jsx": [29, 62, 8, 21, 55, 244, 31, 72],
         "gui/web/src/features/renderers/cards/options.jsx": [0, 16, 0, 9, 0, 32, 0, 20],
-        "gui/web/src/features/renderers/cards/portfolio.jsx": [12, 48, 5, 13, 14, 131, 13, 49],
+        "gui/web/src/features/renderers/cards/portfolio.jsx": [18, 48, 7, 13, 38, 157, 19, 49],
         "gui/web/src/features/renderers/cards/price-comparison-format.js": [1, 1, 1, 1, 0, 0, 1, 1],
         "gui/web/src/features/renderers/cards/price-comparison.jsx": [
           40, 76, 14, 25, 30, 93, 44, 93
@@ -495,11 +501,11 @@
         "gui/web/src/features/symbol/symbol-view-model.js": [141, 142, 35, 35, 156, 168, 174, 180],
         "gui/web/src/features/symbol/use-symbol-data.js": [68, 68, 20, 20, 49, 66, 71, 71],
         "gui/web/src/hooks/use-waiting-service-worker.js": [27, 27, 10, 10, 16, 17, 30, 30],
-        "gui/web/src/hooks/useChatRun.jsx": [149, 160, 32, 36, 119, 147, 163, 181],
-        "gui/web/src/hooks/useGuiConnection.jsx": [76, 358, 23, 77, 141, 368, 87, 405],
+        "gui/web/src/hooks/useChatRun.jsx": [165, 177, 34, 38, 141, 166, 184, 201],
+        "gui/web/src/hooks/useGuiConnection.jsx": [272, 383, 56, 80, 251, 400, 296, 436],
         "gui/web/src/hooks/useInstrumentHistory.jsx": [19, 19, 4, 4, 6, 8, 19, 19],
         "gui/web/src/hooks/useMarketIndices.jsx": [65, 65, 19, 19, 27, 32, 74, 77],
-        "gui/web/src/hooks/useMarketState.jsx": [154, 155, 55, 55, 116, 133, 184, 188],
+        "gui/web/src/hooks/useMarketState.jsx": [144, 145, 48, 48, 104, 119, 170, 174],
         "gui/web/src/lib/financial-format.js": [39, 39, 15, 15, 48, 56, 43, 48],
         "gui/web/src/lib/instrument-display.js": [2, 2, 1, 1, 2, 5, 2, 2],
         "gui/web/src/lib/series-colors.js": [1, 1, 0, 0, 0, 0, 1, 1],
@@ -512,7 +518,7 @@
         "gui/web/src/router.jsx": [28, 28, 13, 13, 17, 20, 28, 28],
         "gui/web/src/runtime/app-status-slot-context.js": [2, 2, 1, 1, 0, 0, 2, 2],
         "gui/web/src/runtime/app-status-slot.jsx": [1, 1, 1, 1, 1, 1, 1, 1],
-        "gui/web/src/runtime/hosted-runtime-transport.js": [143, 172, 33, 45, 89, 154, 150, 189],
+        "gui/web/src/runtime/hosted-runtime-transport.js": [172, 193, 38, 49, 112, 169, 182, 213],
         "gui/web/src/runtime/runtime-transport-context.js": [3, 3, 1, 1, 0, 0, 3, 3],
         "gui/web/src/runtime/runtime-transport-provider.jsx": [1, 1, 1, 1, 1, 2, 1, 1],
         "gui/web/src/runtime/runtime-transport.js": [47, 52, 25, 31, 32, 48, 53, 63]
@@ -523,16 +529,16 @@
       "expectedFileCount": 26,
       "missingFiles": [],
       "totals": {
-        "lines": [1991, 2862],
-        "functions": [391, 547],
-        "branches": [1430, 2411],
-        "statements": [2107, 3151]
+        "lines": [2136, 2943],
+        "functions": [425, 563],
+        "branches": [1556, 2517],
+        "statements": [2273, 3254]
       },
       "files": {
-        "gui/hosted/runtime/browser-hosted-gui-runtime.ts": [390, 486, 80, 108, 154, 266, 403, 527],
+        "gui/hosted/runtime/browser-hosted-gui-runtime.ts": [450, 503, 98, 111, 202, 287, 472, 549],
         "gui/hosted/runtime/browser-model-runtime.ts": [6, 6, 2, 2, 2, 2, 8, 8],
-        "gui/hosted/runtime/browser-pi-session.ts": [55, 74, 10, 15, 31, 57, 57, 80],
-        "gui/hosted/runtime/hosted-market-data-api.ts": [33, 52, 10, 14, 40, 61, 37, 62],
+        "gui/hosted/runtime/browser-pi-session.ts": [89, 108, 19, 24, 69, 101, 96, 121],
+        "gui/hosted/runtime/hosted-market-data-api.ts": [33, 52, 10, 14, 41, 62, 37, 62],
         "gui/hosted/runtime/hosted-tool-composition.ts": [4, 4, 2, 2, 0, 0, 4, 4],
         "gui/hosted/runtime/node-child-process-browser.ts": [0, 7, 0, 1, 0, 0, 0, 7],
         "gui/hosted/runtime/open-url-browser.ts": [0, 1, 0, 1, 0, 0, 0, 1],
@@ -540,7 +546,7 @@
         "gui/hosted/runtime/pi-ai-compat-browser.ts": [0, 12, 0, 8, 0, 6, 0, 15],
         "gui/hosted/runtime/pi-child-process-browser.ts": [0, 4, 0, 1, 0, 0, 0, 4],
         "gui/hosted/runtime/pi-coding-agent-browser.ts": [0, 0, 0, 0, 0, 0, 0, 0],
-        "gui/hosted/runtime/pi-provider-catalog-browser.ts": [0, 3, 0, 3, 0, 0, 0, 3],
+        "gui/hosted/runtime/pi-provider-catalog-browser.ts": [0, 4, 0, 4, 0, 0, 0, 4],
         "gui/hosted/runtime/provider-relay-fetch.ts": [193, 223, 32, 35, 156, 203, 206, 241],
         "gui/hosted/runtime/request-contract.ts": [38, 74, 4, 6, 48, 114, 41, 84],
         "gui/hosted/runtime/safer-buffer-browser.ts": [0, 0, 0, 0, 0, 0, 0, 0],
@@ -551,11 +557,11 @@
         "gui/hosted/src/hosted-runtime-status.js": [15, 15, 2, 2, 31, 34, 20, 21],
         "gui/hosted/src/hosted-status-pill.jsx": [32, 33, 9, 10, 22, 32, 35, 38],
         "gui/hosted/src/main.jsx": [0, 8, 0, 1, 0, 6, 0, 9],
-        "gui/hosted/src/runtime/browser-data-store.js": [271, 315, 61, 67, 293, 347, 287, 347],
+        "gui/hosted/src/runtime/browser-data-store.js": [272, 316, 61, 67, 296, 349, 288, 348],
         "gui/hosted/src/runtime/browser-runtime-coordinator.js": [
-          382, 499, 74, 91, 271, 404, 407, 555
+          388, 505, 75, 92, 277, 411, 413, 562
         ],
-        "gui/hosted/src/runtime/browser-runtime-host.js": [546, 755, 99, 125, 367, 645, 572, 828],
+        "gui/hosted/src/runtime/browser-runtime-host.js": [575, 773, 101, 125, 386, 666, 606, 854],
         "gui/hosted/src/service-worker-registration.js": [15, 17, 4, 6, 11, 14, 17, 20]
       }
     },

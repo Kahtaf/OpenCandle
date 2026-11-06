@@ -683,7 +683,7 @@ describe("market-state API helpers", () => {
     expect(snapshot.portfolioSummary).toMatchObject({
       status: "unavailable",
       totalValue: null,
-      totalCost: 300,
+      totalCost: null,
       excludedFromTotals: [
         expect.objectContaining({ symbol: "AAPL", reason: "provider returned stale market data" }),
       ],
@@ -743,7 +743,7 @@ describe("market-state API helpers", () => {
     expect(snapshot.portfolioSummary).toMatchObject({
       status: "unavailable",
       totalValue: null,
-      totalCost: 300,
+      totalCost: null,
     });
     db.close();
   });
@@ -828,8 +828,8 @@ describe("market-state API helpers", () => {
       expect.objectContaining({
         lotId: lot.id,
         symbol: "SHOP.TO",
-        status: "unavailable",
-        reason: "No FX conversion from CAD to USD",
+        status: "ok",
+        reason: "unsupported_currency",
         includedInTotals: false,
         marketValue: null,
         pnl: null,
@@ -839,7 +839,7 @@ describe("market-state API helpers", () => {
     expect(snapshot.portfolioSummary).toMatchObject({
       status: "unavailable",
       totalValue: null,
-      totalCost: 300,
+      totalCost: null,
     });
     db.close();
   });
@@ -862,6 +862,7 @@ function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    asOf: new Date().toISOString(),
     currency: "USD",
     ...overrides,
   };

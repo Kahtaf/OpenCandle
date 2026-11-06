@@ -1,3 +1,4 @@
+import { normalizeCurrencyUnit } from "../portfolio/currency-unit.js";
 import type { StateDatabase } from "../runtime/state-database.js";
 
 export type AssetType = "equity" | "etf" | "fund" | "crypto" | "index" | "option" | "unknown";
@@ -741,6 +742,10 @@ export class MarketStateService {
   }): PortfolioLotRecord {
     assertPositiveFinitePortfolioLotNumber(params.quantity, "quantity");
     assertPositiveFinitePortfolioLotNumber(params.avgCost, "average cost");
+    const costUnit =
+      normalizeCurrencyUnit(params.currency.trim()) ??
+      normalizeCurrencyUnit(params.currency.trim().toUpperCase());
+    if (!costUnit) throw new Error("Unsupported acquisition currency unit");
     const tx = this.db.transaction(() => {
       const portfolioId = params.portfolioId ?? this.getDefaultPortfolio().id;
       const instrument = this.upsertInstrument(params.instrument);
@@ -758,8 +763,8 @@ export class MarketStateService {
           portfolioId,
           instrument.id,
           params.quantity,
-          params.avgCost,
-          params.currency.toUpperCase(),
+          params.avgCost * costUnit.scale,
+          costUnit.currency,
           params.openedAt ?? now,
           params.notes ?? null,
           normalizeNullable(params.source),
@@ -831,6 +836,9 @@ export class MarketStateService {
       | undefined;
     if (existing == null) return null;
 
+    const rawUnit = params.currency?.trim() ?? existing.currency;
+    const costUnit = normalizeCurrencyUnit(rawUnit) ?? normalizeCurrencyUnit(rawUnit.toUpperCase());
+    if (!costUnit) throw new Error("Unsupported acquisition currency unit");
     const now = new Date().toISOString();
     this.db
       .prepare(
@@ -840,8 +848,8 @@ export class MarketStateService {
       )
       .run(
         params.quantity ?? existing.quantity,
-        params.avgCost ?? existing.avg_cost,
-        params.currency == null ? existing.currency : params.currency.toUpperCase(),
+        params.avgCost == null ? existing.avg_cost : params.avgCost * costUnit.scale,
+        costUnit.currency,
         params.openedAt ?? existing.opened_at,
         params.notes ?? existing.notes,
         now,

@@ -1,7 +1,16 @@
+import { securityFromSnapshot } from "../../src/portfolio/acquisition.js";
+import type { FxResult } from "../../src/portfolio/fx.js";
+import { valuePortfolio } from "../../src/portfolio/valuation.js";
+import { createFxResolver } from "../../src/providers/yahoo-fx.js";
+import {
+  buildPortfolioView,
+  presentPortfolioValuation,
+} from "../../src/tools/portfolio/portfolio-view.js";
 export type MarketQuoteResult =
   | {
       status: "ok";
       name?: string;
+      rawCurrency?: string;
       price: number;
       change: number;
       changePercent: number;
@@ -21,7 +30,7 @@ export type MarketQuoteResult =
       stale: boolean;
       currency: string | null;
     }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string; dataAsOf?: string; fetchedAt?: string };
 
 export interface MarketQuoteState {
   watchlists?: Array<{ id: number; isDefault?: boolean; name?: string }>;
@@ -48,6 +57,7 @@ export interface MarketQuoteState {
 export interface MarketQuoteSnapshotDependencies {
   fetchQuote(symbol: string): Promise<MarketQuoteResult>;
   now?: () => Date;
+  resolveFx?: (source: string, target: string) => Promise<FxResult> | FxResult;
 }
 
 export const MARKET_INDEX_SYMBOLS = ["^GSPC", "^NDX", "^DJI", "BTC-USD"] as const;
@@ -144,133 +154,24 @@ export async function buildMarketQuoteSnapshot(
     };
   });
 
-  const portfolioResults = portfolios.map((portfolio) => {
-    const baseCurrency = portfolio.baseCurrency ?? "USD";
-    const portfolioLots = lots.filter((lot) => lot.portfolioId === portfolio.id);
-    const quotes = portfolioLots.map((lot) => {
-      const quote = quoteMap.get(lot.symbol);
-      const totalCost = lot.avgCost * lot.quantity;
-      const quoteCurrency =
-        quote?.status === "ok" ? (quote.currency ?? lot.instrumentCurrency) : null;
-      const common = {
-        lotId: lot.id,
-        portfolioId: lot.portfolioId,
-        instrumentId: lot.instrumentId,
-        symbol: lot.symbol,
-        assetType: lot.assetType,
-        totalCost,
-        currency: lot.currency,
-      };
-      if (!quote || quote.status === "unavailable") {
-        return {
-          ...common,
-          status: "unavailable" as const,
-          includedInTotals: false,
-          reason: quote?.reason ?? "quote unavailable",
-        };
-      }
-      const quoteMetadata = {
-        fetchedAt: quote.fetchedAt,
-        dataAsOf: quote.dataAsOf,
-        marketState: quote.marketState,
-        extendedPrice: quote.extendedPrice,
-        extendedChange: quote.extendedChange,
-        extendedChangePercent: quote.extendedChangePercent,
-        extendedAsOf: quote.extendedAsOf,
-        stale: quote.stale,
-      };
-      if (!quoteCurrency) {
-        return {
-          ...common,
-          ...quoteMetadata,
-          status: "unavailable" as const,
-          currentPrice: null,
-          marketValue: null,
-          pnl: null,
-          pnlPercent: null,
-          includedInTotals: false,
-          reason: "Quote currency unavailable",
-        };
-      }
-      if (quoteCurrency !== lot.currency) {
-        return {
-          ...common,
-          ...quoteMetadata,
-          status: "unavailable" as const,
-          currentPrice: null,
-          marketValue: null,
-          pnl: null,
-          pnlPercent: null,
-          includedInTotals: false,
-          reason: `No FX conversion from ${quoteCurrency} to ${lot.currency}`,
-        };
-      }
-      const includedInTotals = lot.currency === baseCurrency;
-      const marketValue = quote.price * lot.quantity;
-      return {
-        ...common,
-        ...quoteMetadata,
-        name: quote.name,
-        status: "ok" as const,
-        currentPrice: quote.price,
-        changePercent: quote.changePercent,
-        marketValue,
-        pnl: marketValue - totalCost,
-        pnlPercent: totalCost > 0 ? ((marketValue - totalCost) / totalCost) * 100 : 0,
-        includedInTotals,
-        reason: includedInTotals
-          ? undefined
-          : `No FX conversion from ${lot.currency} to ${baseCurrency}`,
-      };
-    });
-    const included = quotes.filter((quote) => quote.status === "ok" && quote.includedInTotals);
-    const totalValue = included.reduce((sum, quote) => sum + (quote.marketValue ?? 0), 0);
-    const includedCost = included.reduce((sum, quote) => sum + quote.totalCost, 0);
-    const baseCurrencyCost = quotes
-      .filter((quote) => quote.currency === baseCurrency)
-      .reduce((sum, quote) => sum + quote.totalCost, 0);
-    const incompleteBaseCurrency = quotes.some(
-      (quote) =>
-        quote.currency === baseCurrency && !(quote.status === "ok" && quote.includedInTotals),
-    );
-    const status =
-      portfolioLots.length === 0
-        ? ("empty" as const)
-        : included.length === 0 || incompleteBaseCurrency
-          ? ("unavailable" as const)
-          : ("ok" as const);
-    const allocatedQuotes = quotes.map((quote) =>
-      status === "ok" && quote.status === "ok" && quote.includedInTotals && totalValue > 0
-        ? { ...quote, allocationPercent: ((quote.marketValue ?? 0) / totalValue) * 100 }
-        : quote,
-    );
-    const summaryTotalValue = status === "unavailable" ? null : totalValue;
-    const summaryTotalCost = status === "unavailable" ? baseCurrencyCost : includedCost;
-    return {
-      quotes: allocatedQuotes,
-      summary: {
-        portfolioId: portfolio.id,
+  const now = (dependencies.now ?? (() => new Date()))().getTime();
+  const resolveFx = dependencies.resolveFx ?? createFxResolver(now);
+  const portfolioResults = await Promise.all(
+    portfolios.map(async (portfolio) => {
+      const baseCurrency = portfolio.baseCurrency ?? "USD";
+      const portfolioLots = lots.filter((lot) => lot.portfolioId === portfolio.id);
+      const view = await buildPortfolioView(
+        portfolioLots,
         baseCurrency,
-        status,
-        totalValue: summaryTotalValue,
-        totalCost: summaryTotalCost,
-        totalPnl: summaryTotalValue == null ? null : summaryTotalValue - summaryTotalCost,
-        totalPnlPercent:
-          summaryTotalValue == null
-            ? null
-            : summaryTotalCost > 0
-              ? ((summaryTotalValue - summaryTotalCost) / summaryTotalCost) * 100
-              : 0,
-        excludedFromTotals: allocatedQuotes
-          .filter((quote) => quote.status !== "ok" || !quote.includedInTotals)
-          .map((quote) => ({
-            symbol: quote.symbol,
-            currency: quote.currency,
-            reason: quote.reason ?? "quote unavailable",
-          })),
-      },
-    };
-  });
+        async (symbol) =>
+          securityFromSnapshot(
+            quoteMap.get(symbol) ?? { status: "unavailable", reason: "quote unavailable" },
+          ),
+        { now: () => now, resolveFx },
+      );
+      return snapshotPortfolio(portfolio.id, portfolioLots, view, quoteMap);
+    }),
+  );
 
   const defaultPortfolio = portfolios.find((portfolio) => portfolio.isDefault) ?? portfolios[0];
   const defaultResult =
@@ -278,7 +179,7 @@ export async function buildMarketQuoteSnapshot(
     portfolioResults[0];
   const emptySummary = createEmptySummary(defaultPortfolio);
   return {
-    generatedAt: (dependencies.now ?? (() => new Date()))().toISOString(),
+    generatedAt: new Date(now).toISOString(),
     watchlistQuotes,
     portfolioQuotes: portfolioResults.flatMap((result) => result.quotes),
     portfolioSummary: defaultResult?.summary ?? emptySummary,
@@ -306,40 +207,27 @@ function buildMarketQuoteSnapshotFromUnavailableState(
   }));
   const portfolioResults = portfolios.map((portfolio) => {
     const baseCurrency = portfolio.baseCurrency ?? "USD";
-    const quotes = (state.portfolio ?? [])
-      .filter((lot) => lot.portfolioId === portfolio.id)
-      .map((lot) => ({
-        lotId: lot.id,
-        portfolioId: lot.portfolioId,
-        instrumentId: lot.instrumentId,
-        symbol: lot.symbol,
-        assetType: lot.assetType,
-        status: "unavailable" as const,
-        totalCost: lot.avgCost * lot.quantity,
-        currency: lot.currency,
-        includedInTotals: false,
-        reason,
-      }));
-    return {
-      quotes,
-      summary: {
-        portfolioId: portfolio.id,
-        baseCurrency,
-        status: quotes.length > 0 ? ("unavailable" as const) : ("empty" as const),
-        totalValue: quotes.length > 0 ? null : 0,
-        totalCost: quotes
-          .filter((quote) => quote.currency === baseCurrency)
-          .reduce((sum, quote) => sum + quote.totalCost, 0),
-        totalPnl: quotes.length > 0 ? null : 0,
-        totalPnlPercent: quotes.length > 0 ? null : 0,
-        excludedFromTotals: quotes.map((quote) => ({
-          symbol: quote.symbol,
-          currency: quote.currency,
-          reason,
-        })),
-      },
-    };
+    const lots = (state.portfolio ?? []).filter((lot) => lot.portfolioId === portfolio.id);
+    const valuation = valuePortfolio({
+      lots: lots.map((lot) => ({ ...lot, id: String(lot.id), costCurrency: lot.currency })),
+      reportingCurrency: baseCurrency,
+      quotes: Object.fromEntries(
+        lots.map((lot) => [
+          lot.symbol,
+          { price: NaN, currency: "", observedAt: null, eligible: false, reason },
+        ]),
+      ),
+      rates: [],
+      now: generatedAt.getTime(),
+    });
+    return snapshotPortfolio(
+      portfolio.id,
+      lots,
+      presentPortfolioValuation(lots, baseCurrency, valuation),
+      new Map(),
+    );
   });
+
   const defaultPortfolio = portfolios.find((portfolio) => portfolio.isDefault) ?? portfolios[0];
   const defaultResult =
     portfolioResults.find((result) => result.summary.portfolioId === defaultPortfolio?.id) ??
@@ -358,6 +246,10 @@ function createEmptySummary(portfolio?: { id: number; baseCurrency?: string | nu
     portfolioId: portfolio?.id ?? 0,
     baseCurrency: portfolio?.baseCurrency ?? "USD",
     status: "empty" as const,
+    valuedSubtotal: 0,
+    costSubtotals: [],
+    includedLotIds: [],
+    excludedLotIds: [],
     totalValue: 0,
     totalCost: 0,
     totalPnl: 0,
@@ -367,3 +259,42 @@ function createEmptySummary(portfolio?: { id: number; baseCurrency?: string | nu
 }
 
 export type MarketStateQuoteSnapshot = Awaited<ReturnType<typeof buildMarketQuoteSnapshot>>;
+
+function snapshotPortfolio(
+  portfolioId: number,
+  lots: NonNullable<MarketQuoteState["portfolio"]>,
+  view: Awaited<ReturnType<typeof buildPortfolioView>>,
+  quoteMap: Map<string, MarketQuoteResult>,
+) {
+  const { positions, totalsStatus, ...summary } = view;
+  return {
+    summary: { ...summary, portfolioId, status: totalsStatus },
+    quotes: positions.map((position, index) => {
+      const quote = quoteMap.get(position.symbol);
+      return {
+        ...position,
+        portfolioId,
+        instrumentId: lots[index].instrumentId,
+        assetType: lots[index].assetType,
+        status: position.quoteStatus,
+        reason: position.exclusionReason,
+        ...(quote?.status === "ok"
+          ? {
+              name: quote.name,
+              fetchedAt: quote.fetchedAt,
+              dataAsOf: quote.dataAsOf,
+              stale: quote.stale,
+              marketState: quote.marketState,
+              nativeChangePercent: quote.changePercent,
+              rawCurrency: quote.rawCurrency ?? quote.currency,
+              changePercent: quote.currency === view.baseCurrency ? quote.changePercent : null,
+              extendedPrice: quote.extendedPrice,
+              extendedChange: quote.extendedChange,
+              extendedChangePercent: quote.extendedChangePercent,
+              extendedAsOf: quote.extendedAsOf,
+            }
+          : {}),
+      };
+    }),
+  };
+}
