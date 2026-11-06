@@ -163,7 +163,7 @@
   "overrides": {
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "qs": "^6.16.0",
+    "qs": "^6.17.1",
     "ddg-kit": {
       "undici": "^6.29.0"
     }
