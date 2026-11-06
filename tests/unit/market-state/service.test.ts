@@ -19,6 +19,38 @@ describe("MarketStateService", () => {
     db.close();
   });
 
+  it("validates reporting currency and rejects conflicting repeated creation", () => {
+    expect(service.createPortfolio("Europe", " eur ").baseCurrency).toBe("EUR");
+    expect(service.createPortfolio("Europe").baseCurrency).toBe("EUR");
+    expect(() => service.createPortfolio("Europe", "USD")).toThrow(/already.*EUR/);
+    for (const code of ["", "EU", "ZZZ", "US D"]) {
+      expect(() => service.createPortfolio("Invalid", code)).toThrow(/currency/i);
+    }
+    const original = service.getDefaultPortfolio();
+    expect(service.setPortfolioBaseCurrency(original.name, "eur").baseCurrency).toBe("EUR");
+    expect(new MarketStateService(db).getDefaultPortfolio().baseCurrency).toBe("EUR");
+    expect(() => service.setPortfolioBaseCurrency("Missing", "EUR")).toThrow(/not found/);
+  });
+
+  it("honors currency during implicit creation and preserves saved/default currencies", () => {
+    expect(service.getOrCreatePortfolio("Implicit", "eur").baseCurrency).toBe("EUR");
+    expect(service.getOrCreatePortfolio("Implicit").baseCurrency).toBe("EUR");
+    expect(() => service.getOrCreatePortfolio("Implicit", "GBP")).toThrow(/already uses EUR/);
+    const original = service.getOrCreatePortfolio();
+    expect(original.baseCurrency).toBe("USD");
+    expect(() => service.getOrCreatePortfolio(undefined, "EUR")).toThrow(/already uses USD/);
+  });
+
+  it("returns the persisted reporting-currency edit timestamp", () => {
+    const portfolio = service.getDefaultPortfolio();
+    db.prepare("UPDATE portfolios SET updated_at = ? WHERE id = ?").run(
+      "2000-01-01T00:00:00.000Z",
+      portfolio.id,
+    );
+    const edited = service.setPortfolioBaseCurrency(portfolio.name, "EUR");
+    expect(edited.updatedAt).toBe(service.getPortfolioByName(portfolio.name)?.updatedAt);
+  });
+
   it("lazily creates one default watchlist and portfolio", () => {
     const watchlist = service.getDefaultWatchlist();
     const sameWatchlist = service.getDefaultWatchlist();

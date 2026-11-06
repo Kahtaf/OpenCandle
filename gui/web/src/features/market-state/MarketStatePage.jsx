@@ -460,6 +460,7 @@ export function PanelContent({ state, panel, readOnly, invokeTool, closePanel, n
           const saved = await invokeTool("track_portfolio", {
             action: "create",
             portfolio_name: values.name,
+            base_currency: values.base_currency,
           });
           if (saved) closePanel();
           return saved;
@@ -473,20 +474,36 @@ export function PanelContent({ state, panel, readOnly, invokeTool, closePanel, n
       return <p className="text-sm text-muted-foreground">Select a portfolio to rename.</p>;
     }
     return (
-      <PortfolioRenameForm
-        key={`${panel.type}:${portfolio.id}`}
-        disabled={readOnly}
-        portfolio={portfolio}
-        onSubmit={async (values) => {
-          const saved = await invokeTool("track_portfolio", {
-            action: "rename",
-            portfolio_name: portfolio.name,
-            new_portfolio_name: values.name,
-          });
-          if (saved) closePanel();
-          return saved;
-        }}
-      />
+      <div className="space-y-6">
+        <PortfolioRenameForm
+          key={`${panel.type}:${portfolio.id}`}
+          disabled={readOnly}
+          portfolio={portfolio}
+          onSubmit={async (values) => {
+            const saved = await invokeTool("track_portfolio", {
+              action: "rename",
+              portfolio_name: portfolio.name,
+              new_portfolio_name: values.name,
+            });
+            if (saved) closePanel();
+            return saved;
+          }}
+        />
+        <PortfolioCurrencyForm
+          key={`currency:${portfolio.id}:${portfolio.baseCurrency}`}
+          disabled={readOnly}
+          portfolio={portfolio}
+          onSubmit={async (values) => {
+            const saved = await invokeTool("track_portfolio", {
+              action: "set_base_currency",
+              portfolio_name: portfolio.name,
+              base_currency: values.base_currency,
+            });
+            if (saved) closePanel();
+            return saved;
+          }}
+        />
+      </div>
     );
   }
 
@@ -628,6 +645,7 @@ export function WatchlistCreateForm({ disabled, onSubmit }) {
 
 export function PortfolioCreateForm({ disabled, onSubmit }) {
   const nameId = useId();
+  const [currency, setCurrency] = useState("USD");
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const trimmed = name.trim();
@@ -637,7 +655,7 @@ export function PortfolioCreateForm({ disabled, onSubmit }) {
     if (!trimmed) return;
     setPending(true);
     try {
-      await onSubmit({ name: trimmed });
+      await onSubmit({ name: trimmed, base_currency: currency });
     } finally {
       setPending(false);
     }
@@ -657,6 +675,11 @@ export function PortfolioCreateForm({ disabled, onSubmit }) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
+      <ReportingCurrencySelect
+        value={currency}
+        onChange={setCurrency}
+        disabled={disabled || pending}
+      />
       <PendingSubmitButton pending={pending} disabled={disabled || !trimmed}>
         Create portfolio
       </PendingSubmitButton>
@@ -1632,7 +1655,7 @@ function panelTitle(type) {
     "watchlist-add": "Add Ticker",
     "watchlist-rename": "Rename Watchlist",
     "portfolio-create": "New Portfolio",
-    "portfolio-rename": "Rename Portfolio",
+    "portfolio-rename": "Portfolio Settings",
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",
@@ -1711,4 +1734,60 @@ function numberOrUndefined(value) {
   if (value === "" || value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function ReportingCurrencySelect({ value, onChange, disabled }) {
+  const id = useId();
+  return (
+    <label htmlFor={id} className="grid gap-1 text-xs font-medium text-muted-foreground">
+      Reporting currency
+      <Select
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {Intl.supportedValuesOf("currency").map((code) => (
+          <option key={code} value={code}>
+            {code}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+}
+
+export function PortfolioCurrencyForm({ disabled, portfolio, onSubmit }) {
+  const [currency, setCurrency] = useState(portfolio?.baseCurrency ?? "USD");
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        try {
+          await onSubmit({ base_currency: currency });
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <ReportingCurrencySelect
+        value={currency}
+        onChange={setCurrency}
+        disabled={disabled || pending}
+      />
+      <p className="text-xs text-muted-foreground">
+        No FX conversion. Holdings in other currencies remain excluded from totals. Lot costs and
+        instrument currencies stay unchanged.
+      </p>
+      <PendingSubmitButton
+        pending={pending}
+        disabled={disabled || currency === portfolio?.baseCurrency}
+      >
+        Save reporting currency
+      </PendingSubmitButton>
+    </form>
+  );
 }

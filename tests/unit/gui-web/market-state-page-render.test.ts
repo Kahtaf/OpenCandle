@@ -20,6 +20,8 @@ import {
   nextStateTabIndex,
   normalizeExactHostedSymbol,
   PendingSubmitButton,
+  PortfolioCreateForm,
+  PortfolioCurrencyForm,
   PortfolioRenameForm,
   StateTabs,
   SymbolActionPanel,
@@ -63,6 +65,23 @@ vi.mock("vaul", async () => {
 });
 
 describe("MarketStatePage rendering", () => {
+  it("offers reporting currency on creation and explicit existing portfolio editing", () => {
+    const create = renderToStaticMarkup(
+      React.createElement(PortfolioCreateForm, { onSubmit: () => {} }),
+    );
+    expect(create).toContain("Reporting currency");
+    expect(create).toContain('value="EUR"');
+    const edit = renderToStaticMarkup(
+      React.createElement(PortfolioCurrencyForm, {
+        portfolio: { name: "Default", baseCurrency: "EUR" },
+        onSubmit: () => {},
+      }),
+    );
+    expect(edit).toContain('value="EUR" selected=""');
+    expect(edit).toContain("Save reporting currency");
+    expect(edit).toContain("No FX conversion");
+  });
+
   it("links watchlist symbols to their encoded symbol pages while keeping the inspector", () => {
     const html = renderToStaticMarkup(
       React.createElement(WatchlistPage, {
@@ -839,7 +858,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Default");
     expect(html).toContain("Add holding");
     expect(html.match(/>Portfolios</g)).toHaveLength(1);
-    expect(html).toContain('aria-label="Rename portfolio Default"');
+    expect(html).toContain('aria-label="Portfolio settings Default"');
   });
 
   it("uses shared select chrome in the alert condition form", () => {

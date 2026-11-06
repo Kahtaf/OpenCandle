@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Choose and edit portfolio reporting currency in chat and the GUI while preserving lot costs and excluding other currencies without FX conversion.
+
 - The model chooser includes the models supported by Pi 1.5.0.
 
 - Reconnecting the GUI immediately releases interrupted tool requests so saved-state controls do not hang.

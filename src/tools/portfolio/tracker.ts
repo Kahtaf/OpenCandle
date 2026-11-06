@@ -28,6 +28,7 @@ const params = Type.Object({
     [
       Type.Literal("create"),
       Type.Literal("rename"),
+      Type.Literal("set_base_currency"),
       Type.Literal("add"),
       Type.Literal("update"),
       Type.Literal("remove"),
@@ -35,7 +36,7 @@ const params = Type.Object({
     ],
     {
       description:
-        "Action: create or rename a portfolio, add a position, update a lot, remove a position, or view portfolio",
+        "Action: create or rename a portfolio, set_base_currency to edit reporting currency, add a position, update a lot, remove a position, or view portfolio",
     },
   ),
   portfolio_name: Type.Optional(
@@ -45,6 +46,12 @@ const params = Type.Object({
   ),
   new_portfolio_name: Type.Optional(
     Type.String({ description: "New portfolio name (required for rename)." }),
+  ),
+  base_currency: Type.Optional(
+    Type.String({
+      description:
+        "Reporting currency for create/add (defaults to USD for new portfolios), or required for set_base_currency. No FX conversion; lot currency is separate.",
+    }),
   ),
   lot_id: Type.Optional(
     Type.Integer({
@@ -87,10 +94,31 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
       const service = new MarketStateService(db);
 
       try {
+        if (
+          args.base_currency !== undefined &&
+          !["create", "add", "set_base_currency"].includes(args.action)
+        ) {
+          throw new Error("base_currency requires create, add, or set_base_currency action.");
+        }
+        if (args.action === "set_base_currency") {
+          if (args.base_currency == null)
+            throw new Error("base_currency is required for set_base_currency.");
+          const name = args.portfolio_name ?? service.getDefaultPortfolio().name;
+          const portfolio = service.setPortfolioBaseCurrency(name, args.base_currency);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${portfolio.name} reporting currency: ${portfolio.baseCurrency}. No FX conversion; lot costs and instrument currencies are unchanged.`,
+              },
+            ],
+            details: portfolio,
+          };
+        }
         if (args.action === "create") {
           if (!args.portfolio_name)
             throw new Error("portfolio_name is required for create action.");
-          const portfolio = service.createPortfolio(args.portfolio_name);
+          const portfolio = service.createPortfolio(args.portfolio_name, args.base_currency);
           return {
             content: [{ type: "text", text: `Created portfolio ${portfolio.name}` }],
             details: portfolio,
@@ -116,11 +144,12 @@ export function createPortfolioTrackerTool(options: StatefulToolOptions): AgentT
         }
 
         const defaultPortfolio = service.getDefaultPortfolio();
-        const portfolio = !args.portfolio_name
-          ? defaultPortfolio
-          : args.action === "add"
-            ? service.getOrCreatePortfolio(args.portfolio_name)
-            : service.getPortfolioByName(args.portfolio_name);
+        const portfolio =
+          args.action === "add"
+            ? service.getOrCreatePortfolio(args.portfolio_name, args.base_currency)
+            : !args.portfolio_name
+              ? defaultPortfolio
+              : service.getPortfolioByName(args.portfolio_name);
         if (portfolio == null) {
           throw new Error(`portfolio ${args.portfolio_name?.trim()} not found.`);
         }

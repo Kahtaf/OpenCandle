@@ -50,6 +50,43 @@ describe("hosted canonical stateful tools", () => {
     expect(() => database.prepare("SELECT 1").get()).not.toThrow();
   });
 
+  it("uses reporting currency without converting lots in browser SQLite", async () => {
+    const tools = getBrowserHostedToolDefinitions({
+      stateDatabase: database,
+      marketStateDependencies: {
+        resolveInstrument: async (symbol) => ({
+          status: "resolved",
+          instrument: { symbol, assetType: "equity", currency: "USD", provider: "test" },
+        }),
+        getCurrentPrice: async () => ({ status: "ok", price: 200, currency: "USD" }),
+      },
+    });
+    await execute(tools, "track_portfolio", {
+      action: "add",
+      portfolio_name: "Europe",
+      base_currency: "eur",
+      symbol: "AAPL",
+      shares: 2,
+      avg_cost: 180,
+    });
+    const state = new MarketStateService(database);
+    const portfolio = state.getPortfolioByName("Europe")!;
+    expect(portfolio.baseCurrency).toBe("EUR");
+    const lots = state.listPortfolioLots(portfolio.id);
+    await execute(tools, "track_portfolio", {
+      action: "set_base_currency",
+      portfolio_name: "Europe",
+      base_currency: "GBP",
+    });
+    expect(state.listPortfolioLots(portfolio.id)).toEqual(lots);
+    const view = await execute(tools, "track_portfolio", {
+      action: "view",
+      portfolio_name: "Europe",
+    });
+    expect(view.details).toMatchObject({ baseCurrency: "GBP" });
+    expect(view.content[0]?.text).toContain("No FX conversion from USD to GBP");
+  });
+
   it("keeps foreground alerts and reports while background execution stays out of process", async () => {
     const tools = getBrowserHostedToolDefinitions({ stateDatabase: database });
 

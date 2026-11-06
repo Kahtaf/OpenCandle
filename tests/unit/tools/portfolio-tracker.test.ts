@@ -43,6 +43,98 @@ describe("portfolioTrackerTool", () => {
     vi.clearAllMocks();
   });
 
+  it("rejects missing or misplaced reporting currency instead of silently ignoring it", async () => {
+    await expect(
+      portfolioTrackerTool.execute("test", { action: "set_base_currency" }),
+    ).rejects.toThrow(/base_currency is required/);
+    await expect(
+      portfolioTrackerTool.execute("test", { action: "view", base_currency: "EUR" }),
+    ).rejects.toThrow(/base_currency requires/);
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "add",
+        base_currency: "EUR",
+        symbol: "VTI",
+        shares: 1,
+        avg_cost: 10,
+      }),
+    ).rejects.toThrow(/already uses USD/);
+    const edited = await portfolioTrackerTool.execute("test", {
+      action: "set_base_currency",
+      base_currency: "eur",
+    });
+    expect(edited.details).toMatchObject({ baseCurrency: "EUR", isDefault: true });
+    await expect(
+      portfolioTrackerTool.execute("test", { action: "set_base_currency", base_currency: "ZZZ" }),
+    ).rejects.toThrow(/currency/);
+    const db = initDefaultDatabase();
+    const state = new MarketStateService(db);
+    expect(state.getDefaultPortfolio().baseCurrency).toBe("EUR");
+    expect(state.listPortfolioLots()).toEqual([]);
+    db.close();
+  });
+
+  it("persists reporting currency across tool calls without rewriting lots", async () => {
+    const created = await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Europe",
+      base_currency: " eur ",
+    });
+    expect(created.details).toMatchObject({ baseCurrency: "EUR" });
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "create",
+        portfolio_name: "Europe",
+        base_currency: "USD",
+      }),
+    ).rejects.toThrow(/already.*EUR/);
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Europe",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const id = service.getPortfolioByName("Europe")!.id;
+    const before = service.listPortfolioLots(id);
+    await portfolioTrackerTool.execute("test", {
+      action: "set_base_currency",
+      portfolio_name: "Europe",
+      base_currency: "GBP",
+    });
+    expect(service.getPortfolioByName("Europe")?.baseCurrency).toBe("GBP");
+    expect(service.listPortfolioLots(id)).toEqual(before);
+    db.close();
+    const view = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Europe",
+    });
+    expect(view.content[0].text).toContain("No FX conversion");
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "add",
+        portfolio_name: "Europe",
+        base_currency: "EUR",
+        symbol: "VTI",
+        shares: 1,
+        avg_cost: 10,
+      }),
+    ).rejects.toThrow(/already.*GBP/);
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Implicit",
+      base_currency: "EUR",
+      symbol: "VTI",
+      shares: 1,
+      avg_cost: 10,
+    });
+    const reload = initDefaultDatabase();
+    expect(new MarketStateService(reload).getPortfolioByName("Implicit")?.baseCurrency).toBe("EUR");
+    reload.close();
+  });
+
   it("adds a resolved holding to SQLite without creating portfolio.json", async () => {
     const result = await portfolioTrackerTool.execute("test", {
       action: "add",
