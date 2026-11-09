@@ -556,7 +556,7 @@ export function PositionCard({ ticker, positionRows = [] }) {
             <dl className="divide-y divide-border/70 px-4 text-sm">
               <ContextMetric
                 label="Market value"
-                detail={`${formatQuantity(row.totalQuantity)} shares @ ${formatMoney(row.blendedCost, row.currency)}`}
+                detail={`${formatQuantity(row.totalQuantity)} shares @ ${moneyOrUnknown(row.blendedCost, row.costCurrency)}`}
                 value={moneyOrUnknown(row.marketValue, row.currency)}
               />
               <ContextMetric

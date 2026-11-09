@@ -128,7 +128,7 @@ export interface BrowserHostedGuiRuntimeOptions {
   relayProviders?: readonly string[];
   createPiSession?: typeof BrowserPiSession.create;
   maxArchiveBytes?: number;
-  marketStateDependencies?: Pick<StatefulToolOptions, "resolveInstrument" | "getCurrentPrice">;
+  marketStateDependencies?: Pick<StatefulToolOptions, "resolveInstrument" | "getCurrentPrice" | "resolveFx" | "now">;
 }
 
 interface HostedSessionCheckpoint {

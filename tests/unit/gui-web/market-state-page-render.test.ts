@@ -79,7 +79,8 @@ describe("MarketStatePage rendering", () => {
     );
     expect(edit).toContain('value="EUR" selected=""');
     expect(edit).toContain("Save reporting currency");
-    expect(edit).toContain("No FX conversion");
+    expect(edit).toContain("Current USD, EUR and GBP values use sourced FX");
+    expect(edit).toContain("Historical FX cost is not inferred");
   });
 
   it("links watchlist symbols to their encoded symbol pages while keeping the inspector", () => {
@@ -597,9 +598,13 @@ describe("MarketStatePage rendering", () => {
                 lotId: 2,
                 status: "ok",
                 includedInTotals: false,
-                totalCost: 1500,
-                marketValue: 1686.4,
-                pnl: 186.4,
+                totalCost: null,
+                marketValue: null,
+                pnl: null,
+                reportingCurrency: "USD",
+                quoteCurrency: "EUR",
+                nativeValue: { amount: 1686.4, currency: "EUR" },
+                nativePnl: { amount: 186.4, currency: "EUR" },
                 currentPrice: 168.64,
                 changePercent: 0.75,
                 currency: "EUR",
@@ -608,9 +613,11 @@ describe("MarketStatePage rendering", () => {
             ],
             portfolioSummary: {
               portfolioId: 1,
-              totalValue: 300,
-              totalPnl: 100,
-              totalPnlPercent: 50,
+              status: "partial",
+              totalValue: null,
+              valuedSubtotal: 300,
+              totalPnl: null,
+              totalPnlPercent: null,
               baseCurrency: "USD",
               excludedFromTotals: [
                 {
@@ -639,8 +646,8 @@ describe("MarketStatePage rendering", () => {
     // Its allocation is stated as excluded, never as a share of the USD total.
     expect(html).toContain("Kept out of the total");
     expect(html).toContain("Kept out of the USD total: SAP.DE (No FX conversion from EUR to USD)");
-    // Today's change stays the base-currency figure for AAPL alone.
-    expect(html).toContain("+$2.97");
+    // A partial portfolio must not advertise a complete daily return.
+    expect(html).not.toContain("+$15.52");
     expect(html).not.toContain("$1,686.40");
   });
 

@@ -1,0 +1,16 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "GBPUSD=X",
+          "currency": "USD",
+          "regularMarketPrice": 2,
+          "regularMarketTime": 1793966400,
+          "marketState": "REGULAR"
+        }
+      }
+    ],
+    "error": null
+  }
+}

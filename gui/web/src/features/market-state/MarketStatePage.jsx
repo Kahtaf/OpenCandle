@@ -1779,8 +1779,9 @@ export function PortfolioCurrencyForm({ disabled, portfolio, onSubmit }) {
         disabled={disabled || pending}
       />
       <p className="text-xs text-muted-foreground">
-        No FX conversion. Holdings in other currencies remain excluded from totals. Lot costs and
-        instrument currencies stay unchanged.
+        Current USD, EUR and GBP values use sourced FX. Unsupported or unavailable rates are
+        excluded. Historical FX cost is not inferred. Lot costs and instrument currencies stay
+        unchanged.
       </p>
       <PendingSubmitButton
         pending={pending}

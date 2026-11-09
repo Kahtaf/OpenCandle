@@ -79,7 +79,7 @@ export async function resolveYahooInstrument(symbol: string): Promise<Instrument
   return {
     symbol: quote.symbol?.toUpperCase() ?? normalized,
     assetType: inferAssetType(quote.symbol ?? normalized),
-    currency: quote.currency?.trim().toUpperCase() || null,
+    currency: (quote.rawCurrency ?? quote.currency)?.trim() || null,
     provider: "yahoo",
     providerMetadata: {
       price: quote.price,

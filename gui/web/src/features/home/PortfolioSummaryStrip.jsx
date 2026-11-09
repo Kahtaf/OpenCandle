@@ -164,6 +164,9 @@ function sumPortfolioSummaries(summaries, primaryCurrency) {
       hasPnl = true;
     }
   }
+  hasValue = hasValue && selected.every((s) => Number.isFinite(s.totalValue));
+  hasCost = hasCost && selected.every((s) => Number.isFinite(s.totalCost));
+  hasPnl = hasPnl && selected.every((s) => Number.isFinite(s.totalPnl));
   const basis = hasCost ? totalCost : hasValue && hasPnl ? totalValue - totalPnl : null;
   return {
     totalValue: hasValue ? totalValue : null,

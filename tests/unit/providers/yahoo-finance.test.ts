@@ -42,6 +42,44 @@ describe("yahoo-finance provider", () => {
   });
 
   describe("getQuote", () => {
+    it.each(["GBp", "GBX", "GBP"])(
+      "preserves %s units and scales price fields together",
+      async (currency) => {
+        const fixture = structuredClone(quoteFixture);
+        fixture.chart.result[0]!.meta.currency = currency;
+        globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture)));
+        const result = await getQuote("UK.L");
+        const scale = currency === "GBP" ? 1 : 0.01;
+        expect(result).toMatchObject({ currency: "GBP", rawCurrency: currency });
+        expect(result.price).toBeCloseTo(178.72 * scale);
+        expect(result.previousClose).toBeCloseTo(175.1 * scale);
+        expect(result.open).toBeCloseTo(176.15 * scale);
+        expect(result.high).toBeCloseTo(179.5 * scale);
+        expect(result.low).toBeCloseTo(175.82 * scale);
+        expect(result.week52High).toBeCloseTo(199.62 * scale);
+        expect(result.change).toBeCloseTo((178.72 - 175.1) * scale);
+        expect(result.volume).toBe(55123456);
+        expect(result.marketCap).toBe(2780000000000);
+      },
+    );
+
+    it("keeps history in the same pound units as normalized quotes", async () => {
+      const fixture = structuredClone(historyFixture);
+      fixture.chart.result[0]!.meta.currency = "GBp";
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture)));
+      const bars = await getHistory("UK.L");
+      const raw = fixture.chart.result[0]!.indicators.quote[0]!;
+      expect(bars[0]!.close).toBeCloseTo(raw.close[0]! / 100);
+      expect(bars[0]!.open).toBeCloseTo(raw.open[0]! / 100);
+      expect(bars[0]!.volume).toBe(raw.volume[0]);
+    });
+    it("rejects unsupported subunits rather than labeling them as major units", async () => {
+      const fixture = structuredClone(quoteFixture);
+      fixture.chart.result[0]!.meta.currency = "ZAc";
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture)));
+      await expect(getQuote("ZA")).rejects.toThrow("Unsupported quote currency unit");
+    });
+
     it("returns a StockQuote for a valid symbol", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,

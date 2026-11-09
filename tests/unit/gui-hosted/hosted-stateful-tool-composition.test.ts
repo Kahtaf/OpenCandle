@@ -29,7 +29,19 @@ describe("hosted canonical stateful tools", () => {
           status: "resolved",
           instrument: { symbol, assetType: "equity", currency: "USD", provider: "test" },
         }),
-        getCurrentPrice: async () => ({ status: "ok", price: 200, currency: "USD" }),
+        getCurrentPrice: async () => ({
+          status: "ok",
+          price: 200,
+          currency: "USD",
+          asOf: new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
+        }),
+        resolveFx: (source, target) => ({
+          status: "unavailable",
+          source,
+          target,
+          reason: "missing_fx",
+        }),
       },
     });
 
@@ -58,7 +70,19 @@ describe("hosted canonical stateful tools", () => {
           status: "resolved",
           instrument: { symbol, assetType: "equity", currency: "USD", provider: "test" },
         }),
-        getCurrentPrice: async () => ({ status: "ok", price: 200, currency: "USD" }),
+        getCurrentPrice: async () => ({
+          status: "ok",
+          price: 200,
+          currency: "USD",
+          asOf: new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
+        }),
+        resolveFx: (source, target) => ({
+          status: "unavailable",
+          source,
+          target,
+          reason: "missing_fx",
+        }),
       },
     });
     await execute(tools, "track_portfolio", {
@@ -84,7 +108,7 @@ describe("hosted canonical stateful tools", () => {
       portfolio_name: "Europe",
     });
     expect(view.details).toMatchObject({ baseCurrency: "GBP" });
-    expect(view.content[0]?.text).toContain("No FX conversion from USD to GBP");
+    expect(view.content[0]?.text).toContain("missing_fx");
   });
 
   it("keeps foreground alerts and reports while background execution stays out of process", async () => {

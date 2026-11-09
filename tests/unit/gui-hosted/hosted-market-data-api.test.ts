@@ -266,21 +266,21 @@ describe("hosted market data API", () => {
     });
 
     expect(snapshot.portfolioQuotes[0]).toMatchObject({
-      status: "unavailable",
-      currentPrice: null,
+      status: "ok",
+      currentPrice: 150,
       marketValue: null,
       totalCost: 200,
       pnl: null,
       pnlPercent: null,
       includedInTotals: false,
-      reason: "No FX conversion from CAD to USD",
+      reason: "unsupported_currency",
     });
     expect(snapshot.portfolioSummary).toMatchObject({
       portfolioId: 2,
       baseCurrency: "USD",
       status: "unavailable",
       totalValue: null,
-      totalCost: 200,
+      totalCost: null,
       totalPnl: null,
       totalPnlPercent: null,
     });
@@ -331,12 +331,12 @@ describe("hosted market data API", () => {
       totalCost: 360,
       pnl: null,
       includedInTotals: false,
-      reason: "Quote currency unavailable",
+      reason: "missing_quote_currency",
     });
     expect(snapshot.portfolioSummary).toMatchObject({
       status: "unavailable",
       totalValue: null,
-      totalCost: 360,
+      totalCost: null,
       totalPnl: null,
     });
   });
@@ -394,13 +394,14 @@ describe("hosted market data API", () => {
     });
 
     expect(snapshot.portfolioSummary).toMatchObject({
-      status: "unavailable",
+      status: "partial",
       totalValue: null,
-      totalCost: 1_000,
+      valuedSubtotal: 203,
+      totalCost: null,
       totalPnl: null,
       totalPnlPercent: null,
     });
-    expect(snapshot.portfolioQuotes[0]).not.toHaveProperty("allocationPercent");
+    expect(snapshot.portfolioQuotes[0].allocationPercent).toBeNull();
   });
 
   it("keeps truly empty portfolio totals at zero", async () => {
@@ -459,7 +460,7 @@ describe("hosted market data API", () => {
       baseCurrency: "CAD",
       status: "unavailable",
       totalValue: null,
-      totalCost: 360,
+      totalCost: null,
       totalPnl: null,
       totalPnlPercent: null,
       excludedFromTotals: [

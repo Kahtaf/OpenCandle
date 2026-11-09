@@ -11,6 +11,7 @@ import {
   HISTORY_INTERVALS,
   type HISTORY_RANGES,
 } from "../../src/tools/market/stock-history.js";
+import type { MarketQuoteSnapshotDependencies } from "../shared/market-quote-snapshot.js";
 import {
   buildMarketQuoteSnapshot as buildSharedMarketQuoteSnapshot,
   type MarketStateQuoteSnapshot as SharedMarketStateQuoteSnapshot,
@@ -319,11 +320,13 @@ function normalizeSymbols(symbols: string[]): string[] {
 
 export async function buildMarketStateQuoteSnapshot(
   db?: Database.Database,
+  dependencies: Partial<MarketQuoteSnapshotDependencies> = {},
 ): Promise<MarketStateQuoteSnapshot> {
   const ownedDb = db ?? initDefaultDatabase();
   try {
     return buildSharedMarketQuoteSnapshot(buildMarketStateSnapshot(ownedDb), {
       fetchQuote: fetchQuoteSnapshot,
+      ...dependencies,
     });
   } finally {
     if (!db) ownedDb.close();
@@ -356,6 +359,7 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
       symbol: string;
       status: "ok";
       name?: string;
+      rawCurrency?: string;
       price: number;
       change: number;
       changePercent: number;
@@ -521,6 +525,7 @@ export async function fetchQuoteSnapshot(symbol: string): Promise<
   | {
       status: "ok";
       name?: string;
+      rawCurrency?: string;
       price: number;
       change: number;
       changePercent: number;
@@ -540,11 +545,17 @@ export async function fetchQuoteSnapshot(symbol: string): Promise<
       stale: boolean;
       currency: string | null;
     }
-  | { status: "unavailable"; reason: string }
+  | { status: "unavailable"; reason: string; dataAsOf?: string; fetchedAt?: string }
 > {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
   if (result.status === "unavailable") return { status: "unavailable", reason: result.reason };
-  if (result.stale) return { status: "unavailable", reason: "provider returned stale market data" };
+  if (result.stale)
+    return {
+      status: "unavailable",
+      reason: "provider returned stale market data",
+      dataAsOf: result.data.asOf,
+      fetchedAt: result.timestamp,
+    };
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }
@@ -555,7 +566,12 @@ export async function fetchQuoteSnapshot(symbol: string): Promise<
     cachedAt: result.timestamp,
   });
   if (freshness.isStaleForSession) {
-    return { status: "unavailable", reason: "provider returned stale market data" };
+    return {
+      status: "unavailable",
+      reason: "provider returned stale market data",
+      dataAsOf: result.data.asOf,
+      fetchedAt: result.timestamp,
+    };
   }
   return {
     status: "ok",
@@ -578,5 +594,6 @@ export async function fetchQuoteSnapshot(symbol: string): Promise<
     extendedAsOf: result.data.extendedAsOf,
     stale: Boolean(result.stale),
     currency: result.data.currency ?? null,
+    rawCurrency: result.data.rawCurrency,
   };
 }
