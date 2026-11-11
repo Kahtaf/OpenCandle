@@ -98,6 +98,80 @@ describe("public site build contract", () => {
     await expect(access(join(root, "website/dist/docs/index.md"))).rejects.toThrow();
   });
 
+  it("advertises exactly one canonical URL per page and links only to those URLs", async () => {
+    // Search Console buckets every URL whose canonical points elsewhere as an
+    // alternate page, so the canonical, the sitemap, and internal links have to
+    // agree on one address per page. A self-link to a non-canonical address
+    // (/index.html) creates that bucket on its own.
+    const siteOrigin = "https://opencandle.app";
+    const distDir = join(root, "website/dist");
+    const sitemap = await readFile(join(distDir, "sitemap.xml"), "utf8");
+    const sitemapUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+
+    expect(new Set(sitemapUrls).size).toBe(sitemapUrls.length);
+
+    const htmlFiles = [
+      "index.html",
+      ...(await readdir(join(distDir, "docs")))
+        .filter((file) => file.endsWith(".html"))
+        .sort()
+        .map((file) => `docs/${file}`),
+    ];
+
+    const pages = new Map<string, { html: string; servedUrl: string; canonical: string | null }>();
+    for (const file of htmlFiles) {
+      const html = await readFile(join(distDir, file), "utf8");
+      const servedUrl = file === "index.html" ? `${siteOrigin}/` : `${siteOrigin}/${file}`;
+      const canonical =
+        new JSDOM(html).window.document
+          .querySelector('link[rel="canonical"]')
+          ?.getAttribute("href") ?? null;
+      pages.set(file, { html, servedUrl, canonical });
+    }
+
+    const redirectStubs = [...pages].filter(([, page]) =>
+      page.html.includes('http-equiv="refresh"'),
+    );
+    expect(redirectStubs.length).toBeGreaterThan(0);
+
+    for (const [file, page] of pages) {
+      if (redirectStubs.some(([stubFile]) => stubFile === file)) {
+        expect(page.canonical, `${file} should point its canonical at the new page`).not.toBe(
+          page.servedUrl,
+        );
+        continue;
+      }
+
+      expect(page.canonical, `${file} should canonicalize to its own served URL`).toBe(
+        page.servedUrl,
+      );
+      expect(sitemapUrls, `${file} should be listed once in the sitemap`).toContain(page.servedUrl);
+    }
+
+    const linkedNonCanonical = new Set<string>();
+    for (const [file, page] of pages) {
+      const pageUrl = new URL(page.servedUrl);
+      const anchors = [...new JSDOM(page.html).window.document.querySelectorAll("a[href]")].map(
+        (anchor) => anchor.getAttribute("href") ?? "",
+      );
+      for (const href of anchors) {
+        if (href.startsWith("#") || /^[a-z]+:/i.test(href)) continue;
+        const resolved = new URL(href, pageUrl);
+        resolved.hash = "";
+        const linked = resolved.href;
+        if (
+          sitemapUrls.includes(linked) ||
+          redirectStubs.some(([, stub]) => stub.servedUrl === linked)
+        ) {
+          continue;
+        }
+        linkedNonCanonical.add(`${file} links ${href}`);
+      }
+    }
+
+    expect([...linkedNonCanonical]).toEqual([]);
+  });
+
   it("publishes a readable social preview with concise landing metadata", async () => {
     const homeHtml = await readFile(join(root, "website/dist/index.html"), "utf8");
     const homeDocument = new JSDOM(homeHtml, { url: "https://opencandle.app/" }).window.document;

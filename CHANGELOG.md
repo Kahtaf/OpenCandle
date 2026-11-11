@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The public site gives the homepage one canonical address with a trailing slash and links back to it instead of `/index.html`, so search engines stop filing duplicate URLs as alternate pages.
+
 - USD/EUR/GBP portfolio valuation separates converted market values from unavailable historical reporting-currency P&L.
 
 - Choose and edit portfolio reporting currency in chat and the GUI while preserving lot costs and excluding other currencies without FX conversion.

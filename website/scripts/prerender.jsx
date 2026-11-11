@@ -56,6 +56,9 @@ globalThis.React = React;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const outDir = join(root, "website/dist");
 const siteUrl = "https://opencandle.app";
+// The homepage is served at the origin root, so its one canonical address ends
+// with a slash. Every other page is a file URL under the origin.
+const siteRoot = `${siteUrl}/`;
 const brandName = "OpenCandle";
 const landingTitle = "OpenCandle: Financial Research That Shows Its Work";
 const landingDescription =
@@ -148,7 +151,8 @@ let sitePages = sourcePages;
 let manifestEntry = null;
 
 function absoluteUrl(path) {
-  return `${siteUrl}/${path.replace(/^index\.html$/, "").replace(/^\//, "")}`;
+  const trimmed = path.replace(/^index\.html$/, "").replace(/^\//, "");
+  return trimmed === "" ? siteRoot : `${siteUrl}/${trimmed}`;
 }
 
 function relativeHref(targetOutput, fromOutput) {
@@ -160,6 +164,13 @@ function relativeHref(targetOutput, fromOutput) {
 
 function rootPrefix(output) {
   return output.startsWith("docs/") ? "../" : "";
+}
+
+// Links back to the homepage use its canonical URL (`/`), not `/index.html`,
+// so internal linking never points at an alternate page.
+function homeHref(output) {
+  const prefix = rootPrefix(output);
+  return prefix === "" ? "./" : prefix;
 }
 
 function resolveDocPath(rawPath, page) {
@@ -387,7 +398,7 @@ function SiteHeader({ output = "index.html" }) {
         </Button>
         <a
           className="flex items-center gap-2 rounded-md font-semibold text-sm tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          href={`${prefix}index.html`}
+          href={homeHref(output)}
         >
           <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-5 w-5" />
           <span>OpenCandle</span>
@@ -419,7 +430,7 @@ function SiteFooter({ output = "index.html" }) {
     {
       label: "Product",
       links: [
-        ["Overview", `${prefix}index.html`],
+        ["Overview", homeHref(output)],
         ["Getting started", `${prefix}docs/getting-started.html`],
         ["Data sources", `${prefix}docs/data-sources.html`],
         ["Comparisons", `${prefix}docs/comparisons.html`],
@@ -448,7 +459,7 @@ function SiteFooter({ output = "index.html" }) {
     <footer className="site-footer border-border border-t">
       <div className="mx-auto grid max-w-[1100px] gap-12 px-4 py-14 sm:grid-cols-[1.5fr_2fr] lg:px-6">
         <div className="max-w-[300px]">
-          <a className="flex items-center gap-2 font-semibold text-sm" href={`${prefix}index.html`}>
+          <a className="flex items-center gap-2 font-semibold text-sm" href={homeHref(output)}>
             <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-5 w-5" />
             <span>OpenCandle</span>
           </a>
@@ -1453,7 +1464,7 @@ function HomePage({ buildDate, version }) {
     <HtmlDocument
       title={landingTitle}
       description={landingDescription}
-      canonicalUrl={siteUrl}
+      canonicalUrl={siteRoot}
       markdownUrl={`${siteUrl}/llms-full.txt`}
       output="index.html"
       structuredData={{
@@ -1463,7 +1474,7 @@ function HomePage({ buildDate, version }) {
             "@type": "Organization",
             "@id": `${siteUrl}/#organization`,
             name: brandName,
-            url: siteUrl,
+            url: siteRoot,
             logo: `${siteUrl}/assets/logo.svg`,
             sameAs: [
               "https://github.com/Kahtaf/OpenCandle",
@@ -1473,7 +1484,7 @@ function HomePage({ buildDate, version }) {
           {
             "@type": "WebSite",
             name: brandName,
-            url: siteUrl,
+            url: siteRoot,
             publisher: { "@id": `${siteUrl}/#organization` },
             dateModified: buildDate,
           },
@@ -1483,7 +1494,7 @@ function HomePage({ buildDate, version }) {
             applicationCategory: "FinanceApplication",
             operatingSystem: "Web, macOS, Windows, Linux",
             softwareVersion: version,
-            url: siteUrl,
+            url: siteRoot,
             codeRepository: "https://github.com/Kahtaf/OpenCandle",
             downloadUrl: "https://www.npmjs.com/package/opencandle",
             license: "https://github.com/Kahtaf/OpenCandle/blob/main/LICENSE",
