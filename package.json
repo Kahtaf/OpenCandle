@@ -149,9 +149,9 @@
     "node": "^22.22.2 || >=24.0.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "1.5.0",
-    "@earendil-works/pi-ai": "1.5.0",
-    "@earendil-works/pi-coding-agent": "1.5.0",
+    "@earendil-works/pi-agent-core": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-coding-agent": "1.5.2",
     "better-sqlite3": "^13.0.3",
     "ddg-kit": "0.1.1",
     "sql.js": "^1.15.2",
