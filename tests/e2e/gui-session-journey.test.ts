@@ -333,7 +333,7 @@ describe("GUI session journey", () => {
     expect(sessionIdFromUrl(page)).toBe(stoppedSessionId);
   }, 120_000);
 
-  it("Stop during a tool call whose follow-up model request errors renders Stopped, live and after reload", async () => {
+  it("Stop during a tool call persists cancellation and renders Stopped, live and after reload", async () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
 
@@ -347,13 +347,13 @@ describe("GUI session journey", () => {
       targetActionId: runActionId,
     });
     await expectVisible(page.getByRole("button", { name: "Send message" }), 15_000);
-    // The persisted shape a real provider leaves: the tool settled, then the
-    // next model request failed with an abort-shaped error.
+    // Pi 1.5.2 normalizes the aborted follow-up request to its canonical
+    // cancellation reason rather than an abort-shaped provider error.
     const snapshot = await waitForSessionEntries(page, stoppedSessionId, (entries) =>
-      assistantMessages(entries).some((message) => message.stopReason === "error"),
+      assistantMessages(entries).some((message) => message.stopReason === "aborted"),
     );
     expect(
-      assistantMessages(snapshot.entries).some((message) => message.stopReason === "error"),
+      assistantMessages(snapshot.entries).some((message) => message.stopReason === "aborted"),
     ).toBe(true);
 
     await expectStoppedTurn(page);

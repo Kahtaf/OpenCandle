@@ -17,8 +17,8 @@ export const PREFERENCE_PROMPT = "I am an aggressive investor with a long time h
 export const ASK_USER_PROMPT = "Ask me which horizon I want and then give the plan.";
 /**
  * Opens an ask_user question; once Stop cancels it, the follow-up model
- * request fails with an abort-shaped error (persisted as stopReason "error"),
- * the shape a real provider leaves after a Stop during a tool call.
+ * request fails with an abort-shaped error. Pi normalizes the cancelled
+ * request to stopReason "aborted" after a Stop during a tool call.
  */
 export const ASK_USER_STOP_PROMPT = "Ask me which horizon I want, unless I press Stop first.";
 /** Holds the router model response so the run is active before the router settles. */
