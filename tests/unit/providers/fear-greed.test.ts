@@ -124,6 +124,7 @@ describe("fear-greed provider", () => {
 
   it("preserves the provider observation date independently of retrieval time", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-17T12:00:00Z"));
+    rateLimiter.configure("feargreed", 1000, 1000);
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(fixture),
