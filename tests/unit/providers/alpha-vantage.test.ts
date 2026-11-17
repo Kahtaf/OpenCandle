@@ -70,6 +70,43 @@ describe("alpha-vantage provider", () => {
       await expect(getEarnings("AAPL", "test-key")).rejects.toThrow(/schema/i);
     });
 
+    it("rejects earnings whose fiscal year does not match the financial statement", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.includes("EARNINGS")
+            ? {
+                annualEarnings: [{ fiscalDateEnding: "2023-09-30", reportedEPS: "6.13" }],
+                quarterlyEarnings: [],
+              }
+            : { annualReports: [{ fiscalDateEnding: "2024-09-30" }] },
+      }));
+      await expect(getFinancials("AAPL", "test-key")).rejects.toThrow(
+        "missing annual EPS for 2024-09-30",
+      );
+    });
+
+    it("rejects an earnings row with no fiscal date", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ annualEarnings: [], quarterlyEarnings: [{ reportedEPS: "6.08" }] }),
+      });
+      await expect(getEarnings("AAPL", "test-key")).rejects.toThrow(
+        "malformed quarterlyEarnings row",
+      );
+    });
+
+    it("does not hide a revoked key behind expired earnings", async () => {
+      cache.set("av:earnings:AAPL", { symbol: "AAPL", quarterly: [] }, -1);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ "Error Message": "Invalid API key" }),
+      });
+      await expect(getEarnings("AAPL", "revoked-key")).rejects.toThrow(
+        "credential_required:alpha_vantage:stale",
+      );
+    });
+
     it("shares the earnings transport between financials and quarterly earnings", async () => {
       mockThreeStatements();
       await getFinancials("AAPL", "test-key");
