@@ -155,7 +155,7 @@
     "better-sqlite3": "^13.0.3",
     "ddg-kit": "0.1.1",
     "sql.js": "^1.15.2",
-    "yahoo-finance2": "^4.0.5"
+    "yahoo-finance2": "^4.0.6"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"

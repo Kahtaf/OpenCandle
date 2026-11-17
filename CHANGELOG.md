@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Yahoo fund holdings use the updated library transport before the direct endpoint to improve availability.
+
 - Yahoo stock quotes keep open, high, and low values consistent with a complete session observation.
 
 - Finnhub news reports malformed upstream responses as unavailable instead of returning an empty successful result.

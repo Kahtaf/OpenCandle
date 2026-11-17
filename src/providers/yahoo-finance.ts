@@ -104,6 +104,7 @@ interface YahooQuoteSummaryResult {
       holdingName?: string;
       holdingPercent?: YahooNumber;
     }>;
+    sectorWeightings?: Array<Record<string, YahooNumber>>;
     equityHoldings?: {
       sectorWeightings?: Array<Record<string, YahooNumber>>;
     };
@@ -630,7 +631,9 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
           },
         ];
       }),
-      sectorWeights: normalizeSectorWeights(result.topHoldings.equityHoldings?.sectorWeightings),
+      sectorWeights: normalizeSectorWeights(
+        result.topHoldings.sectorWeightings ?? result.topHoldings.equityHoldings?.sectorWeightings,
+      ),
     };
     if (holdings.holdings.length === 0) {
       throw new Error(`Yahoo Finance: no weighted fund holdings returned for ${normalizedSymbol}`);
@@ -646,7 +649,19 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
 }
 
 async function getFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
-  return getYahooQuoteSummary(symbol, "price,topHoldings");
+  try {
+    const result = await getYahooFinance2Client().quoteSummary(
+      symbol,
+      { modules: ["price", "topHoldings"] },
+      { validateResult: false },
+    );
+    if (!(result as YahooQuoteSummaryResult).topHoldings?.holdings?.length) {
+      throw new Error("Yahoo Finance: no library fund holdings returned");
+    }
+    return { quoteSummary: { result: [result as YahooQuoteSummaryResult], error: null } };
+  } catch (_error) {
+    return getYahooQuoteSummary(symbol, "price,topHoldings");
+  }
 }
 
 async function getYahooCompanySummary(symbol: string): Promise<YahooQuoteSummaryResult> {
