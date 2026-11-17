@@ -52,6 +52,30 @@ describe("asset-linked choices", () => {
     });
   }
 
+  it("keeps stale option slots from adding incidental holdings back to the comparison", async () => {
+    const result = await route(
+      input("I own MSFT. Should I hold $HD or $TGT for 6 months? AAPL is a peer."),
+      {
+        async complete() {
+          return JSON.stringify({
+            routeKind: "workflow_dispatch",
+            workflow: "options_screener",
+            entities: { symbols: ["MSFT", "HD", "TGT", "AAPL"] },
+            slots: {
+              symbols: { value: ["MSFT", "HD", "TGT", "AAPL"], source: "user", confidence: "high" },
+            },
+            preference_updates: [],
+            missing_required: [],
+            reasoning: "fixed options misclassification",
+          });
+        },
+      },
+    );
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.symbols).toEqual(["HD", "TGT"]);
+    expect(result.slots.symbols?.value ?? result.entities.symbols).toEqual(["HD", "TGT"]);
+  });
+
   it("grounds cashtags without model-supplied assets", async () => {
     const result = await route(input("Should I use $BND or $SGOV?"), client("general_finance_qa"));
     expect(result.workflow).toBe("compare_assets");

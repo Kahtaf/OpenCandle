@@ -696,6 +696,7 @@ export function postProcessRouterOutput(
         dteHint: undefined,
         optionStrategy: undefined,
       },
+      slots: assetChoice ? removeSymbolSlots(next.slots) : next.slots,
       diagnostics,
     };
   }
