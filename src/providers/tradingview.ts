@@ -4,7 +4,7 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 
 const BASE_URL = "https://scanner.tradingview.com";
 const DATA_CAVEAT =
-  "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.";
+  "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint. Observation timestamps are unavailable; freshness is unverified.";
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 

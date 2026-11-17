@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- TradingView quotes and screens explicitly disclose that their freshness is unverified.
+
 - Prediction-market searches use supported upstream limits and bounded pagination while preserving the requested outcome-quote count.
 
 - FRED requests pace series metadata and observation calls individually.
