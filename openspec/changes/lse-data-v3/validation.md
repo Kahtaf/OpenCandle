@@ -2,9 +2,9 @@
 
 ## Current handoff status
 
-LSE Data 3.0 implementation is complete and live-verified with the replacement key. Final branch autoreview, including the charged-row correction, is clean in both batches (confidence 0.91). A fixed-HEAD full gate remains pending.
+LSE Data 3.0 implementation is complete and live-verified with the replacement key. Final branch autoreview, including the charged-row correction, is clean in both batches (confidence 0.91). The complete fixed-HEAD full gate passed on `c77edbd3`: 5,124 unit tests, 88 relay tests, all other functional lanes, the Node/relay coverage ratchet, and 58 browser coverage tests.
 
-PR preparation is in progress. The GUI quote-card journey now waits for completion and explicitly opens the result before inspecting it. All functional and coverage lanes passed on 2026-11-17, including 58 browser coverage cases, but the gate rejected that run because HEAD changed during execution. Its successor was stopped as superseded after additional live testing found a charged-row contract issue. Hosted deployment was not performed, and a deployed LSE-specific hosted GUI journey remains pending that deployment.
+The GUI quote-card journey now waits for completion and explicitly opens the result before inspecting it. Charged input rows are correctly distinguished from returned CSV records. Failed and superseded runs remain recorded below as historical evidence; the final successful run is recorded at the end. Hosted deployment was not performed, and a deployed LSE-specific hosted GUI journey remains pending that deployment.
 
 
 ## Sources
@@ -100,7 +100,7 @@ The round-2 parallel gate was stopped as superseded once the new regression test
 Autoreview round 3 is clean: no findings, “patch is correct” (0.86 confidence). It explicitly confirmed cancellation isolation, the earlier row-count/quota fixes, and the scoped coverage-baseline migration. Report: `/tmp/lse-autoreview-round3.json`; command: `.agents/skills/autoreview/scripts/autoreview --mode local --model codex=gpt-6.1-sol --prompt-file /tmp/lse-autoreview-round3.md --json-output /tmp/lse-autoreview-round3.json --parallel-tests 'npm run gates:full'`. The final full gate remains pending and is not claimed as passed yet. React Doctor is not applicable because no React UI source changed.
 
 
-## Final verification result
+## Pre-PR verification result
 
 - `npm run check`: passed after the final source fixes (typechecks and lint; existing warnings retained).
 - Final `npm run gates:full` via autoreview: unit 5,123/5,123, relay 88/88, agent tools 358/358, site 31/31, and GUI integration 29/29 passed. GUI journeys had 28 passes and one failure, so later gate steps were not reached on this candidate.
@@ -128,3 +128,9 @@ Captured the authenticated response schema in `v3-candles-AAPL-metered.json`. It
 The corrected live smoke returned four annual statements and five adjusted daily candles (`/tmp/lse-pr-live-fixed.log`). An initial ad hoc smoke omitted `loadEnv`; its corrected harness loaded the configured key before the real candle failure was diagnosed. Earlier failing attempts remain in `/tmp/lse-pr-live-smoke.log`, `/tmp/lse-pr-live-loaded-smoke.log`, and `/tmp/lse-pr-live-diagnostic.log`. The superseded branch gate was explicitly interrupted at release smoke (exit 130), not counted as a pass: `/tmp/lse-pr-branch-review.log`, report `validation-output/gates/2026-11-17T01-12-18-717Z-31700.json`.
 
 Final branch autoreview of the charged-row correction is clean: both batches reported no findings, confidence 0.91 (`/tmp/lse-pr-final-review.json`). Its parallel gate stopped at a formatting-only error in the changed condition; Biome formatted the condition, and the 104 focused tests passed again with unchanged measured transport coverage (`/tmp/lse-pr-final-formatted-coverage.log`). Failure retained: `/tmp/lse-pr-final-review.log`, report `validation-output/gates/2026-11-17T01-22-26-009Z-45529.json`. A standalone final full gate will verify the formatting correction on a clean, fixed commit; another model review is unnecessary for the formatter-only change.
+
+## Merge preparation result — 2026-11-17
+
+`npm run gates:full` passed with exit 0 on clean, fixed commit `c77edbd3` in 1,164.9 seconds. Every lane passed: check, 5,124 unit tests, 88 relay tests, 358 agent-tool tests, 31 site tests, 29 GUI integration tests, 29 GUI journeys, nine GUI release-smoke tests, hosted PWA smoke, 534-file package contents, Node/relay coverage ratchet, and 58 browser coverage tests. Log: `/tmp/lse-pr-clean-gates.log`; gate report: `validation-output/gates/2026-11-17T01-24-35-357Z-46174.json`. No source or commits changed during this run.
+
+Final branch autoreview is clean in both batches (`/tmp/lse-pr-final-review.json`); the subsequent change was formatter-only. React Doctor is inapplicable because no React production source changed. Packed-install smoke and 39 public documentation links also passed. A fresh live smoke of the corrected provider returned four annual statements and five adjusted daily candles. All 37 changed branch files were scanned and contained no copy of the configured LSE key. This final evidence update changes documentation only; GitHub CI will run against the PR head.

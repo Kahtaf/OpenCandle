@@ -1,6 +1,6 @@
 # Restore London Strategic Edge compatibility with LSE Data 3.0
 
-Status: approved by maintainer on 2026-11-16; implementation complete, PR validation in progress.
+Status: approved by maintainer on 2026-11-16; implementation, live proof, local full gate, and branch autoreview complete; PR checks and hosted deployment follow separately.
 
 ## Why
 

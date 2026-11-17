@@ -7,5 +7,5 @@
 - [x] Update data-source/configuration docs and add a user-visible CHANGELOG entry.
 - [x] Verify real statements/DCF/history through the TUI harness, local GUI Diagnostics, and the actual hosted fetch/relay transport to live LSE.
 - [ ] Verify an LSE-specific journey in the deployed hosted GUI after authorized runtime/relay deployment.
-- [ ] Pass the complete `npm run gates:full` before shipping on the final charged-row correction and a fixed HEAD.
+- [x] Pass the complete `npm run gates:full` on the final charged-row correction and a clean, fixed HEAD, including browser coverage.
 - [x] Complete final branch autoreview after the charged-row contract correction; both batches are clean.
