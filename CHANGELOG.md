@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Direct choices between two named assets use the comparison workflow and preserve the requested alternatives.
+
 - Live router checks require the correct ticker and route without requiring a duplicate optional symbol slot.
 
 - Release checks correctly recognize rejected guarantees and financial table column units.
