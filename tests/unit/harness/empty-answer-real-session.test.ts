@@ -116,8 +116,25 @@ describe("real session terminal completion contract", () => {
       textEmpty: false,
     });
   });
-  it("rejects successful-but-empty output even when a disclaimer entry exists", async () => {
-    await expect(runSession(() => ({ kind: "text", text: "" }))).rejects.toThrow("empty_answer");
+  it("rejects exhausted empty responses even when a disclaimer entry exists", {
+    timeout: 20_000,
+  }, async () => {
+    const failure = await runSession(() => ({ kind: "text", text: "" })).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toContain("OpenCandle session did not complete:");
+    const diagnostic = JSON.parse(readFileSync(message.split("Diagnostic: ")[1], "utf8"));
+    expect(diagnostic.terminalOutcome).toMatchObject({
+      stopReason: "error",
+      errorPresent: true,
+      textEmpty: true,
+    });
+    expect(diagnostic.retryEvents).toContainEqual(
+      expect.objectContaining({ type: "auto_retry_end", success: false }),
+    );
   });
 
   it("rejects a terminal provider error and persists only safe metadata", async () => {

@@ -405,7 +405,7 @@ export function convertVitestJsonReport(
   }
 
   const mismatchReasons = payloadCountMismatches(payload, assertionCases);
-  if (suiteErrorCases.length === 0 && (payload.numFailedTestSuites ?? 0) > 0) {
+  if (!files.some((file) => file.status === "failed") && (payload.numFailedTestSuites ?? 0) > 0) {
     mismatchReasons.push("payload reported failing test suites without a file-level error");
   }
   const cases: CompletionReportCase[] = [...assertionCases, ...suiteErrorCases];

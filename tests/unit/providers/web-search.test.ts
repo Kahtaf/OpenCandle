@@ -396,6 +396,7 @@ describe("braveSearch", () => {
     "keeps only source-dated past-hour %s results",
     async (category) => {
       vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-17T12:00:00Z"));
+      rateLimiter.configure("brave_search", 1000, 1000);
       const rows = [
         { title: "Recent", page_age: "2026-11-17T11:30:00", age: "yesterday" },
         { title: "Old", page_age: "2026-11-17T10:59:59Z", age: "1 minute ago" },

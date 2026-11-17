@@ -17,6 +17,7 @@ import type {
   SessionCoordinatorOptions,
 } from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
+import { guardModelRuntimeAssistantResponses } from "./assistant-response-guard.js";
 import { chooseOpenCandleInitialModel, recordedSessionThinkingLevel } from "./default-model.js";
 import { guardModelRuntimeApiKeyLogins } from "./model-key-login-guard.js";
 import openCandleExtensionCore, {
@@ -119,6 +120,7 @@ export async function createOpenCandleSessionCore(
       authPath: join(agentDir, "auth.json"),
       modelsPath: join(agentDir, "models.json"),
     }));
+  guardModelRuntimeAssistantResponses(modelRuntime);
   const initialModel = options.model
     ? undefined
     : chooseOpenCandleInitialModel({

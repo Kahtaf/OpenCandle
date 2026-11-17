@@ -1901,6 +1901,44 @@ describe("opencandle extension", () => {
       expect(fake.api.setSessionName).toHaveBeenCalledWith("Covered Call Mechanics Explained");
     });
 
+    it("titles from the completed answer before the branch snapshot contains it", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
+      openCandleExtension(fake.api, { titleCompletion });
+      const ctx = titleCtx(chatBranch().slice(0, 1));
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+
+      await fireTurnEnd(fake, ctx);
+
+      expect(titleCompletion.mock.calls[0]![0]).toContain(
+        "A covered call sells upside above the strike...",
+      );
+      expect(fake.api.setSessionName).toHaveBeenCalledWith("Covered Call Mechanics Explained");
+    });
+
+    it.each([false, true])(
+      "keeps the placeholder for an empty exchange with user=%s",
+      async (hasUser) => {
+        const fake = createFakeApi();
+        const titleCompletion = vi.fn(async () => "Invented Session Title");
+        openCandleExtension(fake.api, { titleCompletion });
+        const ctx = titleCtx(hasUser ? chatBranch().slice(0, 1) : []);
+        await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+        for (const handler of fake.handlers.get("turn_end") ?? []) {
+          await handler(
+            {
+              ...finalAssistantTurnEnd,
+              message: { ...finalAssistantTurnEnd.message, content: [] },
+            },
+            ctx,
+          );
+        }
+
+        expect(titleCompletion).not.toHaveBeenCalled();
+        expect(fake.api.setSessionName).not.toHaveBeenCalled();
+      },
+    );
+
     it("prefers the opencandle-user-input original over the expanded first user message", async () => {
       const fake = createFakeApi();
       const titleCompletion = vi.fn(async () => "Nvidia Deep Dive Session");
