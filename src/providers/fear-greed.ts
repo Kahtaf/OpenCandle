@@ -1,5 +1,6 @@
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 import type { FearGreedData } from "../types/sentiment.js";
 
 // alternative.me provides a free crypto Fear & Greed index
@@ -20,17 +21,38 @@ export async function getFearGreedIndex(): Promise<FearGreedData> {
   if (cached) return cached;
 
   try {
-    const data = await httpGet<AlternativeMeFngResponse>(ENDPOINT);
+    await rateLimiter.acquire("feargreed");
+    const data = await httpGet<AlternativeMeFngResponse>(ENDPOINT, { maxRetries: 0 });
 
     const entries = data.data;
+    if (!Array.isArray(entries) || entries.length === 0)
+      throw new Error("Invalid Fear & Greed response");
+    for (const entry of entries) {
+      const value = Number(entry.value);
+      const epoch = Number(entry.timestamp) * 1000;
+      if (
+        !entry.value?.trim() ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        value > 100 ||
+        typeof entry.value_classification !== "string" ||
+        !entry.value_classification.trim() ||
+        !Number.isFinite(epoch) ||
+        epoch <= 0 ||
+        !Number.isFinite(new Date(epoch).getTime())
+      ) {
+        throw new Error("Invalid Fear & Greed observation");
+      }
+    }
     const current = entries[0];
-    const value = parseInt(current.value, 10);
+    const value = Number(current.value);
 
     const result: FearGreedData = {
       value,
       label: current.value_classification,
       timestamp: Date.now(),
-      previousClose: entries[1] ? parseInt(entries[1].value, 10) : value,
+      asOf: new Date(Number(current.timestamp) * 1000).toISOString(),
+      previousClose: entries[1] ? Number(entries[1].value) : value,
       weekAgo: null,
       monthAgo: null,
     };

@@ -8,11 +8,19 @@ import type { FundHoldings } from "../../../../src/types/portfolio.js";
 import qqqFixture from "../../../fixtures/yahoo/QQQ-holdings.json";
 import vooFixture from "../../../fixtures/yahoo/VOO-holdings.json";
 
+const librarySummary = vi.hoisted(() => vi.fn());
+vi.mock("yahoo-finance2", () => ({
+  default: vi.fn(function YahooFinance() {
+    return { quoteSummary: librarySummary };
+  }),
+}));
+
 describe("holdings overlap", () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     cache.clear();
+    librarySummary.mockReset().mockRejectedValue(new Error("Library transport unavailable"));
   });
 
   afterEach(() => {

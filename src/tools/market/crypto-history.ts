@@ -3,7 +3,6 @@ import { getCryptoHistory } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { AgentTool } from "../../types/agent-tool.js";
 import type { OHLCV } from "../../types/market.js";
-import { computeRiskMetrics } from "../portfolio/risk-analysis.js";
 
 const params = Type.Object({
   id: Type.String({
@@ -44,29 +43,16 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
     const table = recent
       .map(
         (b) =>
-          `${b.date} | O:${b.open.toFixed(2)} H:${b.high.toFixed(2)} L:${b.low.toFixed(2)} C:${b.close.toFixed(2)}`,
+          `${b.timestamp ? new Date(b.timestamp * 1000).toISOString() : b.date} | O:${b.open.toFixed(2)} H:${b.high.toFixed(2)} L:${b.low.toFixed(2)} C:${b.close.toFixed(2)}`,
       )
       .join("\n");
 
-    const riskLines = buildRiskLines(id, bars);
-    const text = [...summary, ...riskLines, "", "Recent bars:", table].join("\n");
+    const caveats = [
+      "Candle spacing varies with the requested range; bars are not necessarily daily.",
+      "Trading volume is unavailable from this OHLC endpoint; zero volume fields are placeholders.",
+      "Stock-daily risk metrics are not calculated for these candles.",
+    ];
+    const text = [...summary, ...caveats, "", "Recent bars:", table].join("\n");
     return { content: [{ type: "text", text }], details: bars };
   },
 };
-
-function buildRiskLines(id: string, bars: OHLCV[]): string[] {
-  if (bars.length < 30) return [];
-  const metrics = computeRiskMetrics(
-    id.toUpperCase(),
-    bars.map((bar) => bar.close),
-  );
-  return [
-    "",
-    "Risk metrics from crypto history:",
-    `Annualized Return: ${(metrics.annualizedReturn * 100).toFixed(2)}%`,
-    `Annualized Volatility: ${(metrics.annualizedVolatility * 100).toFixed(2)}%`,
-    `Sharpe Ratio: ${metrics.sharpeRatio.toFixed(2)}`,
-    `Max Drawdown: ${(metrics.maxDrawdown * 100).toFixed(2)}%`,
-    `Value at Risk (95%, daily): ${(metrics.var95 * 100).toFixed(2)}%`,
-  ];
-}

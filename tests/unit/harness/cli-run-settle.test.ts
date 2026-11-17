@@ -173,6 +173,11 @@ async function setUpScriptedPortfolio(synthesis: () => Promise<ModelScriptedRepl
 
   const guard = installDeterministicFetchGuard([
     { prefix: modelServer.baseUrl, passthrough: true },
+    // A daily quote must pair its current price with the same session candle.
+    {
+      prefix: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
+      json: buildHistoryFixture("AAPL", 1),
+    },
     {
       prefix: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
       json: buildHistoryFixture("AAPL"),

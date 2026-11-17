@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { getFearGreedIndex } from "../../../src/providers/fear-greed.js";
 import fixture from "../../fixtures/coingecko/fear-greed.json";
 
@@ -8,6 +9,7 @@ describe("fear-greed provider", () => {
 
   beforeEach(() => {
     cache.clear();
+    rateLimiter.configure("feargreed", 1000, 1000);
   });
 
   afterEach(() => {
@@ -70,6 +72,67 @@ describe("fear-greed provider", () => {
     const fg = await getFearGreedIndex();
     expect(fg.weekAgo).toBeNull();
     expect(fg.monthAgo).toBeNull();
+  });
+
+  it.each([{}, { data: null }, { data: {} }, { data: [] }])(
+    "rejects malformed response %j without caching an observation",
+    async (response) => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(response),
+      });
+
+      await expect(getFearGreedIndex()).rejects.toThrow("Invalid Fear & Greed response");
+      expect(cache.get("feargreed:index")).toBeUndefined();
+    },
+  );
+
+  it.each([
+    { value: "" },
+    { value: "NaN" },
+    { value: "-1" },
+    { value: "101" },
+    { value_classification: " " },
+    { value_classification: null },
+    { timestamp: "" },
+    { timestamp: "not-a-date" },
+    { timestamp: "-1" },
+    { timestamp: "999999999999999" },
+  ])("rejects invalid observation %j without inventing a source date", async (invalid) => {
+    const response = structuredClone(fixture);
+    Object.assign(response.data[0], invalid);
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(response),
+    });
+
+    await expect(getFearGreedIndex()).rejects.toThrow("Invalid Fear & Greed observation");
+    expect(cache.get("feargreed:index")).toBeUndefined();
+  });
+
+  it("rejects an invalid prior observation instead of reporting a fabricated previous close", async () => {
+    const response = structuredClone(fixture);
+    response.data[1].value = "not-a-number";
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(response),
+    });
+
+    await expect(getFearGreedIndex()).rejects.toThrow("Invalid Fear & Greed observation");
+    expect(cache.get("feargreed:index")).toBeUndefined();
+  });
+
+  it("preserves the provider observation date independently of retrieval time", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-17T12:00:00Z"));
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(fixture),
+    });
+
+    const result = await getFearGreedIndex();
+
+    expect(result.asOf).toBe("2024-03-31T16:00:00.000Z");
+    expect(result.timestamp).toBe(Date.parse("2026-11-17T12:00:00Z"));
   });
 
   it("caches results", async () => {

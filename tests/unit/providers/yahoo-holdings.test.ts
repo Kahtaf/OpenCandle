@@ -4,17 +4,40 @@ import { clearCrumbCache, getFundHoldings } from "../../../src/providers/yahoo-f
 import type { FundHoldings } from "../../../src/types/portfolio.js";
 import vooFixture from "../../fixtures/yahoo/VOO-holdings.json";
 
+const librarySummary = vi.hoisted(() => vi.fn());
+vi.mock("yahoo-finance2", () => ({
+  default: vi.fn(function YahooFinance() {
+    return { quoteSummary: librarySummary };
+  }),
+}));
+
 describe("Yahoo fund holdings provider", () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     cache.clear();
     clearCrumbCache();
+    librarySummary.mockReset().mockRejectedValue(new Error("Library transport unavailable"));
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+  });
+
+  it("uses the library holdings transport without a second direct request", async () => {
+    librarySummary.mockResolvedValue({
+      ...vooFixture.quoteSummary.result[0],
+      topHoldings: {
+        ...vooFixture.quoteSummary.result[0].topHoldings,
+        sectorWeightings: [{ technology: 0.31 }],
+      },
+    });
+    globalThis.fetch = vi.fn();
+    const result = await getFundHoldings("VOO");
+    expect(result.holdings.length).toBeGreaterThan(0);
+    expect(result.sectorWeights).toEqual({ technology: 0.31 });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("normalizes top holdings and sector weights from quoteSummary", async () => {

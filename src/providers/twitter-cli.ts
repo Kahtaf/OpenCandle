@@ -128,8 +128,10 @@ async function runTwitterCli<T>(args: readonly string[]): Promise<T> {
 }
 
 function adaptRawTweet(raw: RawTweet): TwitterTweet {
+  const id = stringValue(raw.id);
+  const canonicalUrl = /^[1-9]\d*$/.test(id) ? `https://x.com/i/status/${id}` : "";
   return {
-    id: stringValue(raw.id),
+    id,
     text: stringValue(raw.text).slice(0, 280),
     author:
       stringValue(raw.author?.username) ||
@@ -140,7 +142,7 @@ function adaptRawTweet(raw: RawTweet): TwitterTweet {
     retweets: numberValue(raw.metrics?.retweets ?? raw.retweetCount ?? raw.retweets),
     replies: numberValue(raw.metrics?.replies ?? raw.replyCount ?? raw.replies),
     views: nullableNumberValue(raw.metrics?.views ?? raw.viewCount ?? raw.views),
-    url: stringValue(raw.url ?? raw.permanentUrl),
+    url: canonicalUrl || stringValue(raw.url ?? raw.permanentUrl),
     created: normalizeExternalTimestamp(raw.createdAt ?? raw.created_at),
   };
 }

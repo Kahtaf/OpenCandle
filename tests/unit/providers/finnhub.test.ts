@@ -205,3 +205,11 @@ describe("result cap", () => {
     expect(result.length).toBeGreaterThan(0);
   });
 });
+
+it("rejects malformed HTTP-200 news instead of caching empty success", async () => {
+  const { getCompanyNews } = await import("../../../src/providers/finnhub.js");
+  mockedHttpGet.mockResolvedValue({ unexpected: "payload" });
+  await expect(getCompanyNews("AAPL", "2026-11-10", "2026-11-17", "test-key")).rejects.toThrow(
+    /schema/i,
+  );
+});

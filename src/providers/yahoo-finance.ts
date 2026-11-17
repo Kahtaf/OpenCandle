@@ -104,6 +104,7 @@ interface YahooQuoteSummaryResult {
       holdingName?: string;
       holdingPercent?: YahooNumber;
     }>;
+    sectorWeightings?: Array<Record<string, YahooNumber>>;
     equityHoldings?: {
       sectorWeightings?: Array<Record<string, YahooNumber>>;
     };
@@ -200,8 +201,17 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     const change = price - prevClose;
     const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
 
-    // Open price: try meta first, fall back to indicators
-    const open = meta.regularMarketOpen ?? indicators?.open?.[0] ?? price;
+    // Daily indicator fields share a candle; metadata extrema can be rounded differently.
+    const candle = [indicators?.open?.[0], indicators?.high?.[0], indicators?.low?.[0]];
+    const metadata = [meta.regularMarketOpen, meta.regularMarketDayHigh, meta.regularMarketDayLow];
+    const ohlc = [candle, metadata].find(
+      ([open, high, low]) =>
+        [open, high, low].every(
+          (value) => typeof value === "number" && Number.isFinite(value) && value > 0,
+        ) &&
+        high >= Math.max(open, price) &&
+        low <= Math.min(open, price),
+    );
 
     const quote: StockQuote = {
       symbol: meta.symbol,
@@ -214,9 +224,9 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       price,
       change,
       changePercent,
-      open,
-      high: meta.regularMarketDayHigh ?? indicators?.high?.[0] ?? price,
-      low: meta.regularMarketDayLow ?? indicators?.low?.[0] ?? price,
+      open: ohlc?.[0] ?? NaN,
+      high: ohlc?.[1] ?? NaN,
+      low: ohlc?.[2] ?? NaN,
       previousClose: prevClose,
       volume: meta.regularMarketVolume ?? 0,
       marketCap: meta.marketCap ?? 0,
@@ -234,6 +244,8 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     if (isZeroResultQuote(quote)) {
       throw new InvalidSymbolError(symbol.toUpperCase(), "yahoo");
     }
+
+    if (!ohlc) throw new Error(`Yahoo Finance: inconsistent session OHLC for ${symbol}`);
 
     const enrichedQuote = await enrichQuoteWithExtendedHours(symbol, quote);
     const rawCurrency = typeof meta.currency === "string" ? meta.currency.trim() : null;
@@ -619,7 +631,9 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
           },
         ];
       }),
-      sectorWeights: normalizeSectorWeights(result.topHoldings.equityHoldings?.sectorWeightings),
+      sectorWeights: normalizeSectorWeights(
+        result.topHoldings.sectorWeightings ?? result.topHoldings.equityHoldings?.sectorWeightings,
+      ),
     };
     if (holdings.holdings.length === 0) {
       throw new Error(`Yahoo Finance: no weighted fund holdings returned for ${normalizedSymbol}`);
@@ -635,7 +649,19 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
 }
 
 async function getFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
-  return getYahooQuoteSummary(symbol, "price,topHoldings");
+  try {
+    const result = await getYahooFinance2Client().quoteSummary(
+      symbol,
+      { modules: ["price", "topHoldings"] },
+      { validateResult: false },
+    );
+    if (!(result as YahooQuoteSummaryResult).topHoldings?.holdings?.length) {
+      throw new Error("Yahoo Finance: no library fund holdings returned");
+    }
+    return { quoteSummary: { result: [result as YahooQuoteSummaryResult], error: null } };
+  } catch (_error) {
+    return getYahooQuoteSummary(symbol, "price,topHoldings");
+  }
 }
 
 async function getYahooCompanySummary(symbol: string): Promise<YahooQuoteSummaryResult> {

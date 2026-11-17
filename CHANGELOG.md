@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+- A dedicated live provider contract command checks data and tool output against real APIs and treats blocked required checks as unsuccessful.
+
+- Alpha Vantage financials report source annual earnings per share, pace requests, and distinguish incomplete data, quota limits, and premium access.
+
+- Yahoo fund holdings use the updated library transport before the direct endpoint to improve availability.
+
+- Yahoo stock quotes keep open, high, and low values consistent with a complete session observation.
+
+- Finnhub news reports malformed upstream responses as unavailable instead of returning an empty successful result.
+
+- TradingView quotes and screens explicitly disclose that their freshness is unverified.
+
+- Prediction-market searches use supported upstream limits and bounded pagination while preserving the requested outcome-quote count.
+
+- FRED requests pace series metadata and observation calls individually.
+
+- Crypto Fear & Greed readings display their source observation time and Alternative.me attribution alongside retrieval time.
+
+- SEC filing searches select the same recent filings with or without evidence snippets and return the newest requested forms first.
+
+- Cryptocurrency history preserves candle timestamps and explains variable spacing and unavailable volume instead of displaying unsupported daily risk metrics.
+
+- Twitter sentiment includes canonical citations when the CLI returns post IDs without URLs.
+
+- Exa search requests news explicitly and lets fallback providers handle MCP tool failures.
+
+- Brave search preserves source dates and excludes results outside the requested past hour.
+
 - London Strategic Edge financial statements and price-history fallbacks use LSE Data 3.0, with account-access diagnostics and current quota handling in local and hosted runtimes.
 
 - The public site gives the homepage one canonical address with a trailing slash and links back to it instead of `/index.html`, so search engines stop filing duplicate URLs as alternate pages.

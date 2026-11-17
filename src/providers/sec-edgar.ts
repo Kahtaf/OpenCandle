@@ -3,7 +3,6 @@ import { cache, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 
-const EFTS_BASE = "https://efts.sec.gov/LATEST/search-index";
 const COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
 const SEC_DOCUMENT_FETCH_TIMEOUT_MS = 10_000;
@@ -24,23 +23,6 @@ export interface SECFiling {
 export interface SearchFilingsOptions {
   includeSnippets?: boolean;
   snippetLimitPerFiling?: number;
-}
-
-interface EFTSResponse {
-  hits: {
-    hits: Array<{
-      _id: string;
-      _source: {
-        file_date: string;
-        form: string;
-        adsh: string;
-        display_names: string[];
-        period_ending: string;
-        ciks: string[];
-        items?: string[];
-      };
-    }>;
-  };
 }
 
 interface CompanyTickerEntry {
@@ -64,82 +46,23 @@ interface SubmissionsResponse {
   };
 }
 
+/** Selects only the company submissions recent window, not archived filing history. */
 export async function searchFilings(
   ticker: string,
   formTypes: string[] = ["10-K", "10-Q", "8-K"],
   limit: number = 10,
   options: SearchFilingsOptions = {},
 ): Promise<SECFiling[]> {
-  const cacheKey = `sec:${ticker}:${formTypes.join(",")}:${limit}:${options.includeSnippets ? "snippets" : "metadata"}`;
-  const cached = cache.get<SECFiling[]>(cacheKey);
-  if (cached) return cached;
-
-  if (options.includeSnippets) {
-    const submissions = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit).catch(
-      () => [],
-    );
-    if (submissions.length > 0) {
-      await enrichWithEvidenceSnippets(submissions, options.snippetLimitPerFiling ?? 3);
-      cache.set(cacheKey, submissions, TTL.FUNDAMENTALS);
-      return submissions;
-    }
+  const cacheKey = `sec:recent:${ticker.toUpperCase()}:${formTypes.join(",")}:${limit}`;
+  let selected = cache.get<SECFiling[]>(cacheKey);
+  if (!selected) {
+    selected = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit);
+    cache.set(cacheKey, selected, TTL.FUNDAMENTALS);
   }
-
-  const params = new URLSearchParams({
-    q: ticker,
-    forms: formTypes.join(","),
-    dateRange: "custom",
-    startdt: getDateYearsAgo(3),
-    enddt: new Date().toISOString().split("T")[0],
-    from: "0",
-    size: String(limit),
-  });
-
-  const url = `${EFTS_BASE}?${params}`;
-  const data = await httpGet<EFTSResponse>(url, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "OpenCandle/1.0 (financial analysis agent)",
-    },
-  });
-
-  // Deduplicate by accession number (EDGAR returns multiple hits per filing)
-  const seen = new Set<string>();
-  const filings: SECFiling[] = [];
-
-  for (const hit of data.hits?.hits ?? []) {
-    const src = hit._source;
-    const accession = src.adsh;
-    if (!accession || seen.has(accession)) continue;
-    if (!matchesTicker(src.display_names, ticker)) continue;
-    seen.add(accession);
-
-    const cik = src.ciks?.[0] ?? "";
-    const displayName = src.display_names?.[0] ?? "";
-    // Extract entity name from display format: "APPLE INC  (AAPL)  (CIK 0000320193)"
-    const entityName = displayName.split("(")[0]?.trim() ?? displayName;
-    const archiveDir = buildEdgarArchiveDir(cik, accession);
-    const primaryDocumentUrl = buildPrimaryDocumentUrl(archiveDir, hit._id);
-
-    filings.push({
-      formType: src.form ?? "",
-      filedDate: src.file_date ?? "",
-      periodOfReport: src.period_ending ?? "",
-      entityName,
-      accessionNumber: accession,
-      url: `${archiveDir}/${accession}-index.htm`,
-      primaryDocumentUrl,
-      items: src.items ?? [],
-    });
-
-    if (filings.length >= limit) break;
-  }
-
+  const filings = selected.map((filing) => ({ ...filing, items: filing.items?.slice() }));
   if (options.includeSnippets) {
     await enrichWithEvidenceSnippets(filings, options.snippetLimitPerFiling ?? 3);
   }
-
-  cache.set(cacheKey, filings, TTL.FUNDAMENTALS);
   return filings;
 }
 
@@ -152,13 +75,15 @@ async function searchFilingsFromCompanySubmissions(
   if (!company) return [];
 
   const cik = String(company.cik_str).padStart(10, "0");
+  await rateLimiter.acquire("sec_edgar");
   const data = await httpGet<SubmissionsResponse>(`${SUBMISSIONS_BASE}/CIK${cik}.json`, {
+    maxRetries: 0,
     headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
   });
 
   const filings: SECFiling[] = [];
   const recent = data.filings.recent;
-  for (let i = 0; i < recent.form.length && filings.length < limit; i++) {
+  for (let i = 0; i < recent.form.length; i++) {
     const formType = recent.form[i] ?? "";
     if (!formTypes.includes(formType)) continue;
     const accession = recent.accessionNumber[i];
@@ -176,14 +101,26 @@ async function searchFilingsFromCompanySubmissions(
       items: splitFilingItems(recent.items?.[i]),
     });
   }
-  return filings;
+  return filings
+    .sort(
+      (a, b) =>
+        b.filedDate.localeCompare(a.filedDate) ||
+        b.accessionNumber.localeCompare(a.accessionNumber),
+    )
+    .filter(
+      (filing, index, all) =>
+        all.findIndex((other) => other.accessionNumber === filing.accessionNumber) === index,
+    )
+    .slice(0, Math.max(0, Math.floor(limit)));
 }
 
 async function resolveCompanyTicker(ticker: string): Promise<CompanyTickerEntry | undefined> {
   const cacheKey = "sec:company-tickers";
   let companies = cache.get<CompanyTickerEntry[]>(cacheKey);
   if (!companies) {
+    await rateLimiter.acquire("sec_edgar");
     const data = await httpGet<Record<string, CompanyTickerEntry>>(COMPANY_TICKERS_URL, {
+      maxRetries: 0,
       headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
     });
     companies = Object.values(data);
@@ -202,36 +139,10 @@ function splitFilingItems(raw: string | undefined): string[] {
     : [];
 }
 
-function matchesTicker(displayNames: string[] | undefined, ticker: string): boolean {
-  const normalized = ticker.toUpperCase();
-  return (displayNames ?? []).some((name) => {
-    const tickerGroups = name.match(/\(([^)]*)\)/g) ?? [];
-    return tickerGroups.some((group) =>
-      group
-        .slice(1, -1)
-        .split(",")
-        .map((part) => part.trim().toUpperCase())
-        .includes(normalized),
-    );
-  });
-}
-
 function buildEdgarArchiveDir(cik: string, accession: string): string {
   const cikNum = cik.replace(/^0+/, "");
   const accessionNoDash = accession.replace(/-/g, "");
   return `https://www.sec.gov/Archives/edgar/data/${cikNum}/${accessionNoDash}`;
-}
-
-function buildPrimaryDocumentUrl(archiveDir: string, hitId: string): string | undefined {
-  const fileName = hitId.split(":")[1];
-  if (!fileName || !/\.(?:htm|html|txt)$/i.test(fileName)) return undefined;
-  return `${archiveDir}/${fileName}`;
-}
-
-function getDateYearsAgo(years: number): string {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - years);
-  return d.toISOString().split("T")[0];
 }
 
 async function enrichWithEvidenceSnippets(

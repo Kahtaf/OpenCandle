@@ -17,6 +17,7 @@ const MISSING_OVERVIEW_TTL = 15 * 60_000;
  * so that a real 401/403 does not silently get masked by cached data.
  */
 function throwIfAuthError(error: unknown): void {
+  if (error instanceof ProviderCredentialError) throw error;
   if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
     throw new ProviderCredentialError("alpha_vantage", "stale", error.status);
   }
@@ -35,8 +36,15 @@ function throwIfApiMessage(data: unknown): void {
   if (typeof message !== "string" || message.length === 0) return;
 
   const normalized = message.toLowerCase();
-  if (normalized.includes("api call frequency") || normalized.includes("rate limit")) {
+  if (
+    /api call frequency|rate limit|requests? per (?:day|second)|calls? per (?:day|minute)|daily.*(?:limit|quota)/.test(
+      normalized,
+    )
+  ) {
     throw new Error(`Alpha Vantage rate limited: ${message}`);
+  }
+  if (/premium|entitlement|subscription/.test(normalized)) {
+    throw new Error("Alpha Vantage entitlement unavailable: premium access required");
   }
   if (normalized.includes("invalid api")) {
     throw new ProviderCredentialError("alpha_vantage", "stale");
@@ -101,13 +109,10 @@ export async function getEarnings(symbol: string, apiKey: string): Promise<Earni
   if (cached) return cached;
 
   try {
-    await rateLimiter.acquire("alphavantage");
+    const data = await fetchEarningsPayload(symbol, apiKey);
+    const reports = reportRows(data, "quarterlyEarnings");
 
-    const url = buildUrl("EARNINGS", { symbol }, apiKey);
-    const data = await httpGet<{ quarterlyEarnings: any[] }>(url);
-    throwIfApiMessage(data);
-
-    const quarterly = (data.quarterlyEarnings ?? []).slice(0, 8).map((e: any) => ({
+    const quarterly = reports.slice(0, 8).map((e: any) => ({
       date: e.fiscalDateEnding,
       reportedEPS: parseFloat(e.reportedEPS) || 0,
       estimatedEPS: parseFloat(e.estimatedEPS) || 0,
@@ -149,15 +154,31 @@ export async function getFinancials(symbol: string, apiKey: string): Promise<Fin
       apiKey,
     );
 
-    const incomeReports = incomeData.annualReports ?? [];
-    const balanceReports = balanceData.annualReports ?? [];
-    const cashFlowReports = cashFlowData.annualReports ?? [];
+    const incomeReports = reportRows(incomeData, "annualReports");
+    const balanceReports = reportRows(balanceData, "annualReports");
+    const cashFlowReports = reportRows(cashFlowData, "annualReports");
+    const earnings = await fetchEarningsPayload(symbol, apiKey);
+    const annualEps = new Map(
+      reportRows(earnings, "annualEarnings").map((row) => {
+        const value = row.reportedEPS;
+        if (typeof value !== "string" || value.trim() === "" || !Number.isFinite(Number(value))) {
+          throw new Error("Alpha Vantage incomplete financial data: invalid annual EPS");
+        }
+        return [row.fiscalDateEnding, Number(value)] as const;
+      }),
+    );
 
     // Index balance sheet and cash flow by fiscal date for merging
     const balanceByDate = new Map(balanceReports.map((r: any) => [r.fiscalDateEnding, r]));
     const cashFlowByDate = new Map(cashFlowReports.map((r: any) => [r.fiscalDateEnding, r]));
 
     const statements = incomeReports.slice(0, 4).map((r: any) => {
+      const eps = annualEps.get(r.fiscalDateEnding);
+      if (eps === undefined) {
+        throw new Error(
+          `Alpha Vantage incomplete financial data: missing annual EPS for ${r.fiscalDateEnding}`,
+        );
+      }
       const balance = balanceByDate.get(r.fiscalDateEnding) ?? {};
       const cf = cashFlowByDate.get(r.fiscalDateEnding) ?? {};
       const opCashFlow = parseNum(cf.operatingCashflow);
@@ -172,7 +193,7 @@ export async function getFinancials(symbol: string, apiKey: string): Promise<Fin
         grossProfit: parseNum(r.grossProfit),
         operatingIncome: parseNum(r.operatingIncome),
         netIncome: parseNum(r.netIncome),
-        eps: parseFloat(r.reportedEPS) || 0,
+        eps,
         totalAssets: parseNum(balance.totalAssets),
         totalLiabilities: parseNum(balance.totalLiabilities),
         totalEquity: parseNum(balance.totalShareholderEquity),
@@ -191,6 +212,40 @@ export async function getFinancials(symbol: string, apiKey: string): Promise<Fin
     if (stale) return stale.value;
     throw error;
   }
+}
+
+function reportRows(data: unknown, field: string): Record<string, string>[] {
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !Array.isArray((data as Record<string, unknown>)[field])
+  ) {
+    throw new Error(`Alpha Vantage invalid response schema: missing ${field}`);
+  }
+  const rows = (data as Record<string, unknown>)[field] as unknown[];
+  if (
+    rows.some(
+      (row) =>
+        !row ||
+        typeof row !== "object" ||
+        typeof (row as Record<string, unknown>).fiscalDateEnding !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test((row as Record<string, string>).fiscalDateEnding),
+    )
+  ) {
+    throw new Error(`Alpha Vantage invalid response schema: malformed ${field} row`);
+  }
+  return rows as Record<string, string>[];
+}
+
+async function fetchEarningsPayload(symbol: string, apiKey: string): Promise<unknown> {
+  const key = `av:earnings-payload:${symbol}`;
+  const cached = cache.get<unknown>(key);
+  if (cached) return cached;
+  const data = await fetchStatement<unknown>("EARNINGS", symbol, apiKey);
+  reportRows(data, "quarterlyEarnings");
+  reportRows(data, "annualEarnings");
+  cache.set(key, data, TTL.FUNDAMENTALS);
+  return data;
 }
 
 async function fetchStatement<T>(fn: string, symbol: string, apiKey: string): Promise<T> {

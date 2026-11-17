@@ -163,6 +163,60 @@ describe("get_stock_quote tool", () => {
     expect(urls.some((u: string) => u.includes("alphavantage.co"))).toBe(true);
   });
 
+  it("formats a falling Yahoo quote with a negative percentage", async () => {
+    const response = structuredClone(quoteFixture);
+    response.chart.result[0].meta.previousClose = 180;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(response),
+    });
+
+    const result = await stockQuoteTool.execute("call-falling", { symbol: "AAPL" });
+
+    expect(result.details?.change).toBeCloseTo(-1.28);
+    expect(result.details?.changePercent).toBeCloseTo(-0.711111);
+    expect(result.content[0]).toEqual({
+      type: "text",
+      text: expect.stringContaining("AAPL: $178.72 (-0.71%)"),
+    });
+  });
+
+  it.each([false, true])(
+    "rejects invalid Yahoo source prices with Alpha Vantage configured: %s",
+    async (configured) => {
+      process.env.ALPHA_VANTAGE_API_KEY = configured ? "test-av-key" : "";
+      resetConfigCache();
+      rateLimiter.configure("yahoo", 1000, 1000);
+      rateLimiter.configure("alphavantage", 1000, 1000);
+      const response = structuredClone(quoteFixture);
+      response.chart.result[0].meta.regularMarketPrice = -178.72;
+      globalThis.fetch = vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              String(url).includes("alphavantage.co") ? globalQuoteFixture : response,
+            ),
+        }),
+      );
+
+      const result = await stockQuoteTool.execute("call-invalid-price", { symbol: "AAPL" });
+
+      if (configured) {
+        expect(result.details?.price).toBe(186.35);
+        expect(result.details?.symbol).toBe("AAPL");
+      } else {
+        expect(result.details).toBeNull();
+        expect(result.content[0]).toEqual({
+          type: "text",
+          text: expect.stringContaining("Stock quote unavailable for AAPL"),
+        });
+      }
+      const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+      expect(urls.some((url) => url.includes("alphavantage.co"))).toBe(configured);
+    },
+  );
+
   it("never calls Alpha Vantage when no key is configured", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("yahoo down"));
 

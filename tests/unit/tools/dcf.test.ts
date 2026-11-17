@@ -11,6 +11,7 @@ import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamen
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
 import cashFlowFixture from "../../fixtures/alphavantage/AAPL-cash-flow.json";
+import earningsFixture from "../../fixtures/alphavantage/AAPL-earnings.json";
 import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
 import lseBalance from "../../fixtures/lse/financial-reports-AAPL-balance.json";
 import lseCashflow from "../../fixtures/lse/financial-reports-AAPL-cashflow.json";
@@ -254,6 +255,7 @@ function handleFetch(input: RequestInfo | URL): Promise<Response> {
       );
     }
     if (state.av === "fail") return Promise.resolve(jsonResponse({}, 400));
+    if (fn === "EARNINGS") return Promise.resolve(jsonResponse(earningsFixture));
     if (fn === "INCOME_STATEMENT") return Promise.resolve(jsonResponse(incomeFixture));
     if (fn === "BALANCE_SHEET") return Promise.resolve(jsonResponse(state.balance));
     if (fn === "CASH_FLOW") return Promise.resolve(jsonResponse(cashFlowFixture));
@@ -488,7 +490,8 @@ describe("compute_dcf tool (real providers over fixture HTTP)", () => {
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(textContent(result)).toMatch(/current stock price|current quote price/i);
+    expect(textContent(result)).toContain("DCF valuation unavailable");
+    expect(textContent(result)).toContain("stock quote");
     expect(textContent(result)).not.toContain("Current Price: $0.00");
     expect(toolDetails(result)).toBeNull();
   });

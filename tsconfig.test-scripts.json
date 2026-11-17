@@ -10,7 +10,8 @@
     "tests/scripts/run-live-router-eval.ts",
     "tests/scripts/run-competitive-finance-eval.ts",
     "tests/e2e/live-canary-results.ts",
-    "tests/e2e/provider-release-smoke.ts"
+    "tests/e2e/provider-release-smoke.ts",
+    "tests/e2e/provider-contracts.ts"
   ],
   "exclude": [
     "node_modules",
