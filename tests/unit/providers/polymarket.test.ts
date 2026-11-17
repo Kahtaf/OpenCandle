@@ -24,7 +24,7 @@ describe("Polymarket provider", () => {
   it("maps open Gamma outcome prices, resolution criteria, URLs, volume, liquidity, close date, and provider as-of", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(searchFixture),
+      json: () => Promise.resolve({ ...searchFixture, pagination: { hasMore: false } }),
     });
 
     const quotes = await searchPredictionMarkets("fed rate cut", 8);
@@ -51,7 +51,7 @@ describe("Polymarket provider", () => {
   it("filters closed or inactive markets so settled prices are not shown as live odds", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(searchFixture),
+      json: () => Promise.resolve({ ...searchFixture, pagination: { hasMore: false } }),
     });
 
     const quotes = await searchPredictionMarkets("fed rate cut", 20);
@@ -242,7 +242,7 @@ describe("Polymarket provider", () => {
   it("serves identical searches from cache without a second network request", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(searchFixture),
+      json: () => Promise.resolve({ ...searchFixture, pagination: { hasMore: false } }),
     });
 
     await searchPredictionMarkets("fed rate cut", 8);
@@ -251,10 +251,35 @@ describe("Polymarket provider", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("pages past empty results using the per-type limit and bounds outcome count", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ events: [], pagination: { hasMore: true } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ...searchFixture, pagination: { hasMore: false } }),
+      });
+    const quotes = await searchPredictionMarkets("fed rate cut", 3);
+    expect(quotes).toHaveLength(3);
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input)));
+    expect(urls.map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
+    expect(
+      urls.every(
+        (url) => url.searchParams.get("limit_per_type") === "3" && !url.searchParams.has("limit"),
+      ),
+    ).toBe(true);
+    expect(new Set(quotes.map((quote) => `${quote.marketId}:${quote.outcome}`)).size).toBe(
+      quotes.length,
+    );
+  });
+
   it("uses the polymarket rate-limiter bucket", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(searchFixture),
+      json: () => Promise.resolve({ ...searchFixture, pagination: { hasMore: false } }),
     });
     const acquire = vi.spyOn(rateLimiter, "acquire");
 
@@ -271,7 +296,7 @@ describe("Polymarket provider", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(searchFixture),
+        json: () => Promise.resolve({ ...searchFixture, pagination: { hasMore: false } }),
       })
       .mockRejectedValueOnce(new Error("network down"));
 

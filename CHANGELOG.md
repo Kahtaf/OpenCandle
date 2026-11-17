@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Prediction-market searches use supported upstream limits and bounded pagination while preserving the requested outcome-quote count.
+
 - FRED requests pace series metadata and observation calls individually.
 
 - Crypto Fear & Greed readings display their source observation time and Alternative.me attribution alongside retrieval time.

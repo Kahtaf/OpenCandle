@@ -7,6 +7,7 @@ const BASE_URL = "https://gamma-api.polymarket.com";
 const POLYMARKET_URL = "https://polymarket.com";
 
 interface GammaSearchResponse {
+  pagination?: { hasMore?: boolean };
   events?: GammaEvent[];
   markets?: GammaMarket[];
 }
@@ -61,13 +62,24 @@ export async function searchPredictionMarkets(
   if (cached) return cached;
 
   try {
-    await rateLimiter.acquire("polymarket");
-    const url = `${BASE_URL}/public-search?q=${encodeURIComponent(normalizedQuery)}&limit=${normalizedLimit}`;
-    const response = await httpGet<GammaSearchResponse>(url, {
-      headers: { Accept: "application/json" },
-      maxRetries: 0,
-    });
-    const quotes = decodeSearchResponse(response).slice(0, normalizedLimit);
+    const quotes: PredictionMarketQuote[] = [];
+    const seen = new Set<string>();
+    for (let page = 1; page <= 3 && quotes.length < normalizedLimit; page++) {
+      await rateLimiter.acquire("polymarket");
+      const url = `${BASE_URL}/public-search?q=${encodeURIComponent(normalizedQuery)}&limit_per_type=${normalizedLimit}&page=${page}`;
+      const response = await httpGet<GammaSearchResponse>(url, {
+        headers: { Accept: "application/json" },
+        maxRetries: 0,
+      });
+      for (const quote of decodeSearchResponse(response)) {
+        const key = JSON.stringify([quote.marketId, quote.outcome]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        quotes.push(quote);
+        if (quotes.length >= normalizedLimit) break;
+      }
+      if (!response.pagination?.hasMore) break;
+    }
     cache.set(cacheKey, quotes, TTL.PREDICTION_MARKETS);
     return quotes;
   } catch (error) {
