@@ -392,6 +392,72 @@ describe("braveSearch", () => {
     expect(result.results[0].category).toBe("general");
   });
 
+  it.each(["news", "general"] as const)(
+    "keeps only source-dated past-hour %s results",
+    async (category) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-17T12:00:00Z"));
+      const rows = [
+        { title: "Recent", page_age: "2026-11-17T11:30:00", age: "yesterday" },
+        { title: "Old", page_age: "2026-11-17T10:59:59Z", age: "1 minute ago" },
+        { title: "Undated", age: "1 minute ago" },
+        { title: "Invalid", page_age: "unknown", age: "1 minute ago" },
+        { title: "Future", page_age: "2026-11-17T12:00:01Z" },
+      ].map((row) => ({
+        ...row,
+        url: `https://example.com/${row.title.toLowerCase()}`,
+        description: "Source text",
+      }));
+      mockedHttpGet.mockResolvedValue(
+        category === "news" ? { results: rows } : { web: { results: rows } },
+      );
+
+      const result = await braveSearch(
+        "market developments",
+        { category, freshness: "hours", limit: 10 },
+        "key",
+      );
+
+      expect(result.results).toEqual([
+        {
+          title: "Recent",
+          url: "https://example.com/recent",
+          snippet: "Source text",
+          source: "example.com",
+          published: "2026-11-17T11:30:00.000Z",
+          category,
+        },
+      ]);
+    },
+  );
+
+  it.each(["news", "general"] as const)(
+    "preserves source dates and leaves undated %s results undated outside strict hours",
+    async (category) => {
+      const rows = [
+        { title: "Dated", page_age: "2026-11-16T09:30:00+02:00" },
+        { title: "Undated", age: "2 hours ago" },
+      ].map((row) => ({
+        ...row,
+        url: `https://example.com/${row.title}`,
+        description: "Source text",
+      }));
+      mockedHttpGet.mockResolvedValue(
+        category === "news" ? { results: rows } : { web: { results: rows } },
+      );
+
+      const result = await braveSearch(
+        "market developments",
+        { category, freshness: "week", limit: 10 },
+        "key",
+      );
+
+      expect(result.results.map(({ title, published }) => ({ title, published }))).toEqual([
+        { title: "Dated", published: "2026-11-16T07:30:00.000Z" },
+        { title: "Undated", published: null },
+      ]);
+    },
+  );
+
   it("throws ProviderCredentialError with reason=stale on 401", async () => {
     const { HttpError } = (await import("../../../src/infra/http-client.js")) as any;
     const { ProviderCredentialError } = await import(

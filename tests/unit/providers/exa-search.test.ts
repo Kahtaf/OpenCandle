@@ -18,6 +18,7 @@ import {
   mapApiResults,
   parseMcpResultBlocks,
 } from "../../../src/providers/exa-search.js";
+import { searchWeb } from "../../../src/providers/web-search.js";
 import apiResponseFixture from "../../fixtures/exa/api-response.json";
 import mcpEmptyFixture from "../../fixtures/exa/mcp-empty-response.json";
 import mcpErrorFixture from "../../fixtures/exa/mcp-error-response.json";
@@ -285,6 +286,78 @@ describe("exaSearch (MCP path)", () => {
     ).rejects.toThrow("Rate limit exceeded");
   });
 
+  it.each(["application/json", "text/event-stream"])(
+    "rejects MCP tool errors without caching successful empty results (%s)",
+    async (contentType) => {
+      const payload = JSON.stringify({
+        result: { isError: true, content: [{ type: "text", text: "Synthetic rate limit" }] },
+      });
+      globalThis.fetch = mockFetchResponse(
+        contentType === "text/event-stream" ? `data: ${payload}\n\n` : payload,
+        { contentType },
+      );
+
+      await expect(
+        exaSearch("market developments", { category: "news", freshness: "day", limit: 5 }),
+      ).rejects.toThrow("Exa MCP tool reported an error");
+      expect(cache.get("web:exa:market developments:news:day:5")).toBeUndefined();
+    },
+  );
+
+  it("falls back to Brave when the MCP tool reports an error", async () => {
+    mockedGetConfig.mockReturnValue({ braveApiKey: "test-brave-key" } as ReturnType<
+      typeof getConfig
+    >);
+    rateLimiter.configure("brave_search", 100, 100);
+    globalThis.fetch = vi.fn().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "https://mcp.exa.ai/mcp") {
+        return new Response(
+          JSON.stringify({
+            result: { isError: true, content: [{ type: "text", text: "Synthetic rate limit" }] },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      expect(new URL(url).origin + new URL(url).pathname).toBe(
+        "https://api.search.brave.com/res/v1/news/search",
+      );
+      return new Response(
+        JSON.stringify({
+          results: [
+            {
+              title: "Fallback article",
+              url: "https://example.com/news",
+              description: "Source text",
+              page_age: "2026-04-14T23:30:00Z",
+            },
+          ],
+        }),
+        {
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+
+    const result = await searchWeb("market developments", {
+      category: "news",
+      freshness: "day",
+      limit: 5,
+      allowedProviders: ["exa", "brave"],
+    });
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("Expected Brave fallback");
+    expect(result.data.provider).toBe("brave");
+    expect(result.data.results[0]).toMatchObject({
+      title: "Fallback article",
+      url: "https://example.com/news",
+    });
+    expect(cache.get("web:exa:market developments:news:day:5")).toBeUndefined();
+  });
+
   it("returns zero results for empty text (not an error)", async () => {
     globalThis.fetch = mockFetchResponse(JSON.stringify(mcpEmptyFixture), {
       contentType: "application/json",
@@ -350,7 +423,10 @@ describe("exaSearch (MCP path)", () => {
     await exaSearch("AAPL", { category: "news", freshness: "day", limit: 5 });
 
     const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
-    expect(body.params.arguments.query).toBe("AAPL past 24 hours category:news");
+    expect(body.params.arguments).toEqual({
+      query: "AAPL past 24 hours category:news",
+      numResults: 5,
+    });
   });
 
   it("post-filters results by freshness", async () => {
@@ -438,6 +514,21 @@ describe("exaSearch (API path)", () => {
       nowSpy.mockRestore();
     }
   });
+
+  it.each(["news", "general"] as const)(
+    "requests %s through the direct API without misclassifying general searches",
+    async (category) => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify(apiResponseFixture), {
+        contentType: "application/json",
+      });
+
+      await exaSearch("market developments", { category, freshness: "week", limit: 5 });
+
+      const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
+      if (category === "news") expect(body.category).toBe("news");
+      else expect(body).not.toHaveProperty("category");
+    },
+  );
 
   it("sends startPublishedDate computed from Date.now()", async () => {
     globalThis.fetch = mockFetchResponse(JSON.stringify(apiResponseFixture), {
