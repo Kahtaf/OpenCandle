@@ -392,7 +392,7 @@ export function relayProviderForUrl(url: URL): RelayProvider | undefined {
       return "finnhub";
     case "api.stlouisfed.org":
       return "fred";
-    case "api.londonstrategicedge.com":
+    case "download.londonstrategicedge.com":
       return "lse";
     case "efts.sec.gov":
     case "www.sec.gov":

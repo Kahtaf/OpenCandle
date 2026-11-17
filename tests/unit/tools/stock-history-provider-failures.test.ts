@@ -42,7 +42,7 @@ describe("stock history provider failures", () => {
         if (host === "www.alphavantage.co") {
           return Promise.resolve(Response.json({}));
         }
-        if (host === "api.londonstrategicedge.com") {
+        if (host === "download.londonstrategicedge.com") {
           return Promise.resolve(Response.json({ detail: "Invalid API key" }, { status: 401 }));
         }
         throw new Error(`Unexpected provider host: ${host}`);

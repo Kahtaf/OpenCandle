@@ -658,14 +658,16 @@ describe("hosted provider relay", () => {
     ["ddg", "https://links.duckduckgo.com/d.js?q=AAPL&vqd=1-1", {}],
     [
       "lse",
-      "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+      "https://download.londonstrategicedge.com/v3/export?market=us_stocks&symbol=AAPL&timeframe=1d&from=2026-10-01&to=2026-10-14&format=csv&adjusted=1",
       { "x-api-key": "test" },
     ],
     [
       "lse",
-      "https://api.londonstrategicedge.com/vault/ref/financial_reports?symbol=AAPL&report_type=income&period=FY",
+      "https://download.londonstrategicedge.com/v3/reference/export?dataset=financial_reports&symbol=AAPL&format=csv",
       { "x-api-key": "test" },
     ],
+    ["lse", "https://download.londonstrategicedge.com/v3/usage", { "x-api-key": "test" }],
+    ["lse", "https://download.londonstrategicedge.com/v3/reference/estimate?dataset=financial_reports&symbol=AAPL", { "x-api-key": "test" }],
   ])("forwards the audited %s provider endpoint", async (provider, url, headers) => {
     const upstreamFetch = vi.fn(async () => new Response("[]"));
     const relay = createProviderRelay({ fetchImpl: upstreamFetch });
@@ -677,6 +679,41 @@ describe("hosted provider relay", () => {
 
     expect(response.status).toBe(200);
     expect(upstreamFetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { code: "unrecognized-code", message: "must-not-leak" },
+    { message: "must-not-leak" },
+    "not-json must-not-leak",
+  ])("discards unrecognized or malformed LSE refusals", async upstreamBody => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn(async () => new Response(typeof upstreamBody === "string" ? upstreamBody : JSON.stringify(upstreamBody), { status: 403 })) });
+    const response = await relay.fetch(relayRequest({ provider: "lse", method: "GET", url: "https://download.londonstrategicedge.com/v3/export" }), environment());
+    const body = await response.json() as { status: number; bodyBase64: string };
+    expect(body).toMatchObject({ status: 403, bodyBase64: "" });
+    expect(JSON.stringify(body)).not.toContain("must-not-leak");
+  });
+
+  it.each([-1, "60", null])("discards invalid LSE retry timing: %s", async retry_after => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn(async () => Response.json({ code: "rows-exhausted", retry_after }, { status: 429 })) });
+    const response = await relay.fetch(relayRequest({ provider: "lse", method: "GET", url: "https://download.londonstrategicedge.com/v3/export" }), environment());
+    const body = await response.json() as { bodyBase64: string };
+    expect(JSON.parse(Buffer.from(body.bodyBase64, "base64").toString())).not.toHaveProperty("retry_after");
+  });
+
+  it("preserves only known LSE refusal codes and retry timing, with no upstream message or key", async () => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn(async () => Response.json({ code: "rows-exhausted", message: "secret-key-value", retry_after: 3600, key: "secret-key-value" }, { status: 429 })) });
+    const response = await relay.fetch(relayRequest({ provider: "lse", method: "GET", url: "https://download.londonstrategicedge.com/v3/export", headers: { "x-api-key": "secret-key-value" } }), environment());
+    const body = await response.json() as { bodyBase64: string };
+    const refusal = JSON.parse(Buffer.from(body.bodyBase64, "base64").toString());
+    expect(refusal).toMatchObject({ code: "rows-exhausted", retry_after: 3600 });
+    expect(JSON.stringify(refusal)).not.toContain("secret-key-value");
+  });
+
+  it("preserves LSE file integrity and adjustment metadata", async () => {
+    const relay = createProviderRelay({ fetchImpl: vi.fn(async () => new Response("csv", { headers: { "content-type": "text/csv", "x-lse3-adjusted": "1", "x-checksum-sha256": "a".repeat(64), "x-export-rows": "1" } })) });
+    const response = await relay.fetch(relayRequest({ provider: "lse", method: "GET", url: "https://download.londonstrategicedge.com/v3/export", headers: { "x-api-key": "test" } }), environment());
+    const body = await response.json() as { headers: Record<string, string> };
+    expect(body.headers).toMatchObject({ "x-lse3-adjusted": "1", "x-checksum-sha256": "a".repeat(64), "x-export-rows": "1" });
   });
 
   it.each([
@@ -704,7 +741,9 @@ describe("hosted provider relay", () => {
   it.each([
     ["finnhub", "https://finnhub.io/api/v1/profile2?symbol=AAPL&token=test"],
     ["ddg", "https://duckduckgo.com/settings"],
-    ["lse", "https://api.londonstrategicedge.com/vault/admin"],
+    ["lse", "https://download.londonstrategicedge.com/v3/admin"],
+    ["lse", "https://download.londonstrategicedge.com/v3/export/extra"],
+    ["lse", "https://download.londonstrategicedge.com.evil.test/v3/export"],
   ])("rejects %s paths outside its audited contract", async (provider, url) => {
     const upstreamFetch = vi.fn();
     const relay = createProviderRelay({ fetchImpl: upstreamFetch });

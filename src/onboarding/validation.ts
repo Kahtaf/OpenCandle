@@ -19,6 +19,7 @@
 // All validators share a 5-second timeout via `AbortSignal.timeout` so the
 // connect flow cannot hang if a provider is unreachable.
 
+import { rateLimiter } from "../infra/rate-limiter.js";
 import type { ApiKeyProviderId } from "./providers.js";
 
 const VALIDATION_TIMEOUT_MS = 5_000;
@@ -108,6 +109,7 @@ function classifyAlphaVantageBody(body: string): ValidationResult | undefined {
 export async function validateCredential(
   providerId: ApiKeyProviderId,
   key: string,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<ValidationResult> {
   switch (providerId) {
     case "alpha_vantage":
@@ -148,16 +150,42 @@ export async function validateCredential(
         body: JSON.stringify({ query: "test", numResults: 1 }),
       });
 
-    case "lse":
-      return validateWithFetch(
-        "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
-        {
-          method: "GET",
-          headers: {
-            "x-api-key": key,
-            Accept: "application/json",
+    case "lse": {
+      try {
+        const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
+        await rateLimiter.acquire("lse");
+        const response = await fetchImpl(
+          "https://download.londonstrategicedge.com/v3/reference/estimate?dataset=financial_reports&symbol=AAPL&format=csv",
+          {
+            headers: { "x-api-key": key, Accept: "application/json" },
+            method: "GET",
+            signal,
+            redirect: "error",
           },
-        },
-      );
+        );
+        if (response.status === 200) return { status: "valid" };
+        let message = `HTTP ${response.status}`;
+        try {
+          const body = (await response.json()) as { code?: string; message?: string };
+          message = `${body.code ?? message}: ${body.message ?? "LSE request refused"}`.replaceAll(
+            key,
+            "[redacted]",
+          );
+        } catch {
+          /* retain HTTP status */
+        }
+        if (response.status === 401 || response.status === 403)
+          return { status: "invalid", httpStatus: response.status, message };
+        return { status: "transient", reason: message };
+      } catch (error) {
+        return {
+          status: "transient",
+          reason:
+            error instanceof Error
+              ? error.message.replaceAll(key, "[redacted]")
+              : "LSE validation failed",
+        };
+      }
+    }
   }
 }

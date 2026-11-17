@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getConfig } from "../config.js";
-import { getUsage, isOverSoftThreshold, LSE_MONTHLY_BYTE_CAP } from "../infra/lse-byte-budget.js";
+import { getUsage, isOverSoftThreshold, LSE_WEEKLY_BYTE_CAP } from "../infra/lse-byte-budget.js";
 import { getUnsupportedNodeVersionMessage } from "../infra/node-version.js";
 import {
   getConfigPath,
@@ -26,6 +26,7 @@ import {
   type ProviderId,
 } from "../onboarding/providers.js";
 import { loadOnboardingState } from "../onboarding/state.js";
+import { validateCredential } from "../onboarding/validation.js";
 
 export const DOCTOR_REPORT_SCHEMA_VERSION = 1;
 
@@ -385,16 +386,50 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
       respectSkipped: true,
     }));
   const checks: DoctorCheck[] = statuses.map((status) => providerStatusCheck(status));
+  const lseKey = getConfig().lseApiKey;
+  // Injected statuses are a caller-supplied offline snapshot unless a transport
+  // is explicitly supplied. Normal CLI/GUI diagnostics verify actual access.
+  if (lseKey && (!options.providerStatuses || options.fetchImpl)) {
+    const readiness = await validateCredential("lse", lseKey, options.fetchImpl);
+    checks.push({
+      id: "provider.lse.readiness",
+      label: "London Strategic Edge data access",
+      capability: "optional",
+      status: readiness.status === "valid" ? "pass" : "warn",
+      summary:
+        readiness.status === "valid"
+          ? "LSE Data 3.0 accepted the key for financial-report access."
+          : readiness.status === "invalid"
+            ? (readiness.message ?? "LSE rejected this key.")
+            : `LSE readiness could not be verified: ${readiness.reason}`,
+      ...(readiness.status === "valid"
+        ? {}
+        : {
+            remediation:
+              "Check the key and account access at londonstrategicedge.com/data, then reconnect LSE in Settings.",
+          }),
+    });
+  }
 
   if (getConfig().lseApiKey && isOverSoftThreshold()) {
-    const percentUsed = Math.round((getUsage().bytesUsed / LSE_MONTHLY_BYTE_CAP) * 100);
+    const percentUsed = Math.round(
+      (getUsage().bytesUsed /
+        (getUsage().allowanceBytes > 0 ? getUsage().allowanceBytes : LSE_WEEKLY_BYTE_CAP)) *
+        100,
+    );
     checks.push({
       id: "provider.lse.byte_budget",
       label: "London Strategic Edge",
       status: "warn",
       capability: "optional",
-      summary: `London Strategic Edge monthly data allowance is ${percentUsed}% used; answers use Yahoo/Alpha Vantage until the month resets.`,
-      remediation: "Wait for the monthly allowance to reset before relying on this provider again.",
+      summary:
+        getUsage().blockReason === "rows-exhausted"
+          ? "London Strategic Edge daily row allowance is exhausted; answers use Yahoo/Alpha Vantage until the daily reset."
+          : getUsage().blockReason === "allowance-exhausted"
+            ? "London Strategic Edge reported weekly data allowance exhaustion; answers use Yahoo/Alpha Vantage until the server reset."
+            : `London Strategic Edge weekly data allowance is ${percentUsed}% used; answers use Yahoo/Alpha Vantage until the allowance resets.`,
+      remediation:
+        "Wait for the weekly byte or daily row allowance to reset before relying on this provider again.",
     });
   }
 

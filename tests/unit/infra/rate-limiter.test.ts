@@ -138,21 +138,19 @@ describe("RateLimiter", () => {
     }
   });
 
-  it("configures the shared lse bucket for the 100 requests/minute free tier", async () => {
+  it("paces the shared LSE v3 bucket at 60 requests/minute without a burst", async () => {
     vi.useFakeTimers();
     try {
       const { rateLimiter } = await import("../../../src/infra/rate-limiter.js");
 
-      for (let i = 0; i < 100; i += 1) {
-        await rateLimiter.acquire("lse");
-      }
+      await rateLimiter.acquire("lse");
 
       let acquired = false;
       const acquirePromise = rateLimiter.acquire("lse").then(() => {
         acquired = true;
       });
 
-      await vi.advanceTimersByTimeAsync(602);
+      await vi.advanceTimersByTimeAsync(999);
       expect(acquired).toBe(false);
 
       await vi.advanceTimersByTimeAsync(1);

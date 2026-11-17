@@ -265,13 +265,13 @@ export const PROVIDERS = [
     category: "market",
     tier: "soft",
     aliases: ["lse", "london strategic edge", "londonstrategicedge"],
-    signupUrl: "https://londonstrategicedge.com/databank",
+    signupUrl: "https://londonstrategicedge.com/data",
     freeTier: true,
     envVar: "LSE_API_KEY",
     configPath: ["providers", "lse", "apiKey"],
     unlocks: [
       "financial statements (income, balance sheet, and cash flow)",
-      "deep split-adjusted intraday history back to 2003",
+      "split-adjusted intraday and daily history where the archive has coverage",
     ],
     fallbackDescription:
       "Market data continues through Yahoo Finance and Alpha Vantage when London Strategic Edge is unavailable",

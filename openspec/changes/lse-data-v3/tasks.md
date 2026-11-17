@@ -1,0 +1,11 @@
+- [x] Obtain maintainer approval for this migration scope.
+- [x] Privately configure a working, account-associated v3 key and capture sanitized fixtures in `tests/fixtures/lse/`.
+- [x] Write failing-first tests for v3 statement and candle normalization, incomplete data, error codes, quotas/resets, and download serialization.
+- [x] Implement shared v3 transport using existing cache/rate-limiter infrastructure and bounded downloads/retries.
+- [x] Restore annual statements and history through existing tool contracts and provider fallback chains.
+- [x] Update credential validation, doctor, hosted relay policy, and security tests.
+- [x] Update data-source/configuration docs and add a user-visible CHANGELOG entry.
+- [x] Verify real statements/DCF/history through the TUI harness, local GUI Diagnostics, and the actual hosted fetch/relay transport to live LSE.
+- [ ] Verify an LSE-specific journey in the deployed hosted GUI after authorized runtime/relay deployment.
+- [x] Pass the complete `npm run gates:full` on the final charged-row correction and a clean, fixed HEAD, including browser coverage.
+- [x] Complete final branch autoreview after the charged-row contract correction; both batches are clean.

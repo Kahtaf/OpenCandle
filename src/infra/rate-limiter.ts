@@ -76,4 +76,4 @@ rateLimiter.configure("tradingview", 5, 1); // 5 burst, 1 req/s sustained
 rateLimiter.configure("polymarket", 10, 5); // 10 burst, 5 req/s sustained
 // SEC EDGAR fair-access guideline is 10 req/s; stay below it.
 rateLimiter.configure("sec_edgar", 5, 5); // 5 burst, 5 req/s sustained
-rateLimiter.configure("lse", 100, 1.66); // 100 req/min (free tier)
+rateLimiter.configure("lse", 1, 1); // v3 free tier: pace at 60 req/min without a burst

@@ -9,6 +9,7 @@ import {
   type DoctorCheck,
   deriveDoctorStatus,
 } from "../../../src/doctor/report.js";
+import { getUsage, lseCredentialId } from "../../../src/infra/lse-byte-budget.js";
 import {
   type ApiKeyProviderStatus,
   type CommandRunner,
@@ -52,15 +53,123 @@ function check(overrides: Partial<DoctorCheck>): DoctorCheck {
 }
 
 describe("doctor report", () => {
-  it("warns when London Strategic Edge reaches its monthly soft threshold", async () => {
+  it("checks LSE statement access instead of treating a configured key as proof of readiness", async () => {
+    useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "private-lse-key");
+    resetConfigCache();
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        { code: "account-required", message: "Attach key private-lse-key to an account" },
+        { status: 403 },
+      ),
+    );
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      fetchImpl,
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+    const checks = report.sections.flatMap((section) => section.checks);
+    expect(checks.find((check) => check.id === "provider.lse.readiness")).toMatchObject({
+      status: "warn",
+      summary: expect.stringContaining("account-required"),
+    });
+    expect(JSON.stringify(report)).not.toContain("private-lse-key");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { status: 200, expected: "pass", text: "accepted the key" },
+    { status: 503, expected: "warn", text: "could not be verified" },
+  ])("reports LSE data access readiness for HTTP $status", async ({ status, expected, text }) => {
+    useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        status === 200
+          ? { rows: 1, estimated_bytes: 100, mode: "stream" }
+          : { code: "exports-busy", message: "try again later" },
+        { status },
+      ),
+    );
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      fetchImpl,
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .find((check) => check.id === "provider.lse.readiness"),
+    ).toMatchObject({ status: expected, summary: expect.stringContaining(text) });
+  });
+
+  it("reports server byte exhaustion without presenting low local usage as the provider total", async () => {
     const home = useTempOpenCandleHome();
     vi.stubEnv("LSE_API_KEY", "lse-test-key");
     resetConfigCache();
     writeFileSync(
-      join(home, "lse-byte-budget.json"),
+      join(home, "lse-v3-usage.json"),
       JSON.stringify({
-        month: new Date().toISOString().slice(0, 7),
-        bytesUsed: 42_949_672_960,
+        weekStart: getUsage().weekStart,
+        credentialId: lseCredentialId(),
+        allowanceBytes: 13_421_772_800,
+        bytesUsed: 0,
+        blockedUntil: Date.now() + 60_000,
+        blockReason: "allowance-exhausted",
+      }),
+    );
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .find((check) => check.id === "provider.lse.byte_budget"),
+    ).toMatchObject({
+      status: "warn",
+      summary: expect.stringContaining("reported weekly data allowance exhaustion"),
+    });
+  });
+
+  it("distinguishes a daily LSE row block from the weekly byte budget", async () => {
+    const home = useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    writeFileSync(
+      join(home, "lse-v3-usage.json"),
+      JSON.stringify({
+        weekStart: getUsage().weekStart,
+        credentialId: lseCredentialId(),
+        allowanceBytes: 13_421_772_800,
+        bytesUsed: 100,
+        blockedUntil: Date.now() + 60_000,
+        blockReason: "rows-exhausted",
+      }),
+    );
+    const report = await buildDoctorReport({
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .find((check) => check.id === "provider.lse.byte_budget"),
+    ).toMatchObject({ status: "warn", summary: expect.stringContaining("daily row allowance") });
+  });
+
+  it("warns when London Strategic Edge reaches its weekly soft threshold", async () => {
+    const home = useTempOpenCandleHome();
+    vi.stubEnv("LSE_API_KEY", "lse-test-key");
+    resetConfigCache();
+    writeFileSync(
+      join(home, "lse-v3-usage.json"),
+      JSON.stringify({
+        weekStart: getUsage().weekStart,
+        credentialId: lseCredentialId(),
+        allowanceBytes: 13_421_772_800,
+        bytesUsed: 10_737_418_240,
       }),
     );
     const lseStatus: ApiKeyProviderStatus = {
@@ -86,7 +195,7 @@ describe("doctor report", () => {
       status: "warn",
       capability: "optional",
       summary:
-        "London Strategic Edge monthly data allowance is 80% used; answers use Yahoo/Alpha Vantage until the month resets.",
+        "London Strategic Edge weekly data allowance is 80% used; answers use Yahoo/Alpha Vantage until the allowance resets.",
       remediation: expect.any(String),
     });
     expect(renderDoctorReport(report)).toContain(`Fix: ${budgetChecks?.[0]?.remediation}`);
@@ -97,10 +206,12 @@ describe("doctor report", () => {
     vi.stubEnv("LSE_API_KEY", "");
     resetConfigCache();
     writeFileSync(
-      join(home, "lse-byte-budget.json"),
+      join(home, "lse-v3-usage.json"),
       JSON.stringify({
-        month: new Date().toISOString().slice(0, 7),
-        bytesUsed: 53_687_091_200,
+        weekStart: getUsage().weekStart,
+        credentialId: lseCredentialId(),
+        allowanceBytes: 13_421_772_800,
+        bytesUsed: 13_421_772_800,
       }),
     );
 
@@ -121,10 +232,12 @@ describe("doctor report", () => {
     vi.stubEnv("LSE_API_KEY", "lse-test-key");
     resetConfigCache();
     writeFileSync(
-      join(home, "lse-byte-budget.json"),
+      join(home, "lse-v3-usage.json"),
       JSON.stringify({
-        month: new Date().toISOString().slice(0, 7),
-        bytesUsed: 42_949_672_959,
+        weekStart: getUsage().weekStart,
+        credentialId: lseCredentialId(),
+        allowanceBytes: 13_421_772_800,
+        bytesUsed: 10_737_418_239,
       }),
     );
 

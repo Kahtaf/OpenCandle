@@ -229,7 +229,7 @@ async function main(): Promise<void> {
   await check("lse", "disabled", true, async () => {
     const status = await relayStatus({
       provider: "lse",
-      url: "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+      url: "https://download.londonstrategicedge.com/v3/reference/estimate?dataset=financial_reports&symbol=AAPL&format=csv",
     });
     return status === 400;
   });

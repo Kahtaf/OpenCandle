@@ -125,8 +125,7 @@ const PROVIDER_POLICIES: Readonly<Record<RelayProvider, ProviderPolicy>> = {
     ["GET"],
     new Set([...COMMON_GET_HEADERS, "x-api-key"]),
     (url) =>
-      exact(url, "api.londonstrategicedge.com", "/vault/candles") ||
-      exact(url, "api.londonstrategicedge.com", "/vault/ref/financial_reports"),
+      ["/v3/export", "/v3/reference/export", "/v3/reference/estimate", "/v3/usage"].some((path) => exact(url, "download.londonstrategicedge.com", path)),
   ),
   tradingview: policy(
     ["POST"],
@@ -363,14 +362,25 @@ export function createProviderRelay(options: ProviderRelayOptions = {}) {
           return respondError(502, "upstream_redirect_rejected");
         }
         if (!upstream.ok) {
-          await upstream.body?.cancel();
+          // LSE's refusal code determines quota/reset and credential handling.
+          // Preserve a closed set of codes, never the upstream message/body.
+          let refusal: Uint8Array | undefined;
+          if (envelope.provider === "lse") {
+            const codes = new Set(["key-missing", "key-unknown", "account-required", "key-withheld", "plan-ended", "plan-required", "market-not-in-plan", "history-limit", "calls-exhausted", "allowance-exhausted", "rows-exhausted", "connections-exhausted", "exports-busy", "export-too-wide", "data-unavailable", "symbol-unknown", "pair-unknown", "market-unknown", "market-not-enabled"]);
+            try {
+              const parsed = JSON.parse(new TextDecoder().decode(await readBounded(upstream.body, 16_384))) as { code?: unknown; retry_after?: unknown };
+              if (typeof parsed.code === "string" && codes.has(parsed.code)) {
+                refusal = new TextEncoder().encode(JSON.stringify({ code: parsed.code, message: `LSE request refused: ${parsed.code}`, ...(typeof parsed.retry_after === "number" && Number.isFinite(parsed.retry_after) && parsed.retry_after >= 0 ? { retry_after: parsed.retry_after } : {}) }));
+              }
+            } catch { /* Unknown or oversized refusals retain the HTTP status only. */ }
+          } else await upstream.body?.cancel();
           return respondJson(200, {
             version: CONTRACT_VERSION,
             status: upstream.status,
             statusText: "",
             headers: responseHeaders(upstream.headers),
             ...upstreamCookieResponse(envelope.provider, upstream.headers),
-            bodyBase64: "",
+            bodyBase64: refusal ? encodeBase64(refusal) : "",
           });
         }
         const body = await readBounded(upstream.body, maxResponseBytes);
@@ -875,7 +885,7 @@ async function readBounded(
 }
 
 function responseHeaders(headers: Headers): Record<string, string> {
-  const allowed = ["content-type", "retry-after", "x-data-bytes"];
+  const allowed = ["content-type", "retry-after", "x-data-bytes", "x-checksum-sha256", "x-lse3-adjusted", "x-export-rows"];
   return Object.fromEntries(
     allowed.flatMap((name) => {
       const value = headers.get(name);

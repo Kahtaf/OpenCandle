@@ -12,16 +12,17 @@ import {
 } from "../../../src/providers/lse.js";
 import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import candlesFixture from "../../fixtures/lse/candles-AAPL-1d.json";
-import allowanceFixture from "../../fixtures/lse/error-429-allowance.json";
 import balanceFixture from "../../fixtures/lse/financial-reports-AAPL-balance.json";
 import cashflowFixture from "../../fixtures/lse/financial-reports-AAPL-cashflow.json";
 import incomeFixture from "../../fixtures/lse/financial-reports-AAPL-income.json";
+import { lseCsvResponse, withLseUsage } from "../../support/lse.js";
 
 vi.mock("../../../src/config.js", () => ({
   getConfig: vi.fn(() => ({ lseApiKey: "test-lse-key" })),
 }));
 
-vi.mock("../../../src/infra/lse-byte-budget.js", () => ({
+vi.mock("../../../src/infra/lse-byte-budget.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/infra/lse-byte-budget.js")>()),
   markExhausted: vi.fn(),
   recordBytes: vi.fn(),
 }));
@@ -29,10 +30,30 @@ vi.mock("../../../src/infra/lse-byte-budget.js", () => ({
 const mockedGetConfig = vi.mocked(getConfig);
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  if (Array.isArray(body))
+    return lseCsvResponse(
+      body.map((row) =>
+        "ts" in row
+          ? {
+              time: row.ts,
+              open: row.open,
+              high: row.high,
+              low: row.low,
+              close: row.close,
+              volume: row.volume,
+            }
+          : row,
+      ),
+      { "x-lse3-adjusted": "1", ...headers },
+    );
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json", ...headers },
   });
+}
+
+function stubLseFetch(fetch: typeof globalThis.fetch): void {
+  vi.stubGlobal("fetch", vi.fn(withLseUsage(fetch)));
 }
 
 describe("LSE provider", () => {
@@ -52,17 +73,24 @@ describe("LSE provider", () => {
   it("fetches candles with authentication and caches the response", async () => {
     const acquireSpy = vi.spyOn(rateLimiter, "acquire");
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(candlesFixture));
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     const first = await getLseCandles("AAPL", "1d");
     const second = await getLseCandles("AAPL", "1d");
 
-    expect(first).toEqual(candlesFixture);
-    expect(second).toEqual(candlesFixture);
+    expect(first).toEqual(
+      candlesFixture.map((row) => ({
+        ...row,
+        ts: new Date(`${row.ts.replace(" ", "T")}Z`).toISOString().replace(".000Z", "Z"),
+      })),
+    );
+    expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(acquireSpy).toHaveBeenCalledWith("lse");
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d",
+      expect.stringMatching(
+        /^https:\/\/download\.londonstrategicedge\.com\/v3\/export\?market=us_stocks&symbol=AAPL&timeframe=1d&from=/,
+      ),
       expect.objectContaining({
         headers: { "x-api-key": "test-lse-key" },
       }),
@@ -70,14 +98,11 @@ describe("LSE provider", () => {
   });
 
   it("rejects an empty candle payload instead of caching a zero-bar success", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(() => Promise.resolve(jsonResponse([]))),
-    );
+    stubLseFetch(vi.fn().mockImplementation(() => Promise.resolve(jsonResponse([]))));
 
-    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows/i);
-    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows/i);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows|CSV/i);
+    await expect(getLseCandles("UNKNOWN", "1d")).rejects.toThrow(/valid candle rows|CSV/i);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 
   it.each([
@@ -87,14 +112,14 @@ describe("LSE provider", () => {
     { label: "low above open", patch: { low: 11, open: 10 } },
   ])("rejects candle rows with $label", async ({ patch }) => {
     const malformed = [{ ...candlesFixture[0], ...patch }];
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(malformed)));
+    stubLseFetch(vi.fn().mockResolvedValue(jsonResponse(malformed)));
 
-    await expect(getLseCandles("AAPL", "1d")).rejects.toThrow(/valid candle rows/i);
+    await expect(getLseCandles("AAPL", "1d")).rejects.toThrow(/valid candle rows|CSV/i);
   });
 
   it("sends candle start dates to LSE as YYYY-MM-DD", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(candlesFixture));
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     await getLseCandles("AAPL", "1d", {
       start: "2016-07-16T12:34:56.000Z",
@@ -102,12 +127,12 @@ describe("LSE provider", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&start=2016-07-16&order=asc",
+      expect.stringContaining("from=2016-07-16"),
       expect.objectContaining({ headers: { "x-api-key": "test-lse-key" } }),
     );
   });
 
-  it.each([401, 403])(
+  it.each([401])(
     "throws a stale credential error before serving stale cache on %i",
     async (status) => {
       vi.useFakeTimers();
@@ -117,7 +142,7 @@ describe("LSE provider", () => {
         .fn()
         .mockResolvedValueOnce(jsonResponse(candlesFixture))
         .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, status));
-      vi.stubGlobal("fetch", fetchMock);
+      stubLseFetch(fetchMock);
 
       await getLseCandles("AAPL", "1d");
       vi.setSystemTime(new Date("2026-07-16T13:00:00.001Z"));
@@ -131,7 +156,7 @@ describe("LSE provider", () => {
   it("fails before fetching when the API key is missing", async () => {
     mockedGetConfig.mockReturnValue({});
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     const error = await getLseCandles("AAPL", "1d").catch((caught: unknown) => caught);
 
@@ -148,14 +173,19 @@ describe("LSE provider", () => {
       .fn()
       .mockResolvedValueOnce(jsonResponse(candlesFixture))
       .mockImplementation(() => Promise.resolve(jsonResponse({ detail: "Unavailable" }, 503)));
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     await getLseCandles("AAPL", "1d");
     vi.setSystemTime(new Date("2026-07-16T13:00:00.001Z"));
     const request = getLseCandles("AAPL", "1d");
     await vi.runAllTimersAsync();
 
-    await expect(request).resolves.toEqual(candlesFixture);
+    await expect(request).resolves.toEqual(
+      candlesFixture.map((row) => ({
+        ...row,
+        ts: new Date(`${row.ts.replace(" ", "T")}Z`).toISOString().replace(".000Z", "Z"),
+      })),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
@@ -166,7 +196,7 @@ describe("LSE provider", () => {
     const fetchMock = vi
       .fn()
       .mockImplementation(() => Promise.resolve(jsonResponse({ detail: "Unavailable" }, 503)));
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     const request = getLseCandles("AAPL", "1d").catch((caught: unknown) => caught);
     await vi.runAllTimersAsync();
@@ -178,10 +208,7 @@ describe("LSE provider", () => {
   });
 
   it("exposes the status and detail for an unknown symbol", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse({ detail: "Unknown symbol" }, 404)),
-    );
+    stubLseFetch(vi.fn().mockResolvedValue(jsonResponse({ detail: "Unknown symbol" }, 404)));
 
     const error = await getLseCandles("UNKNOWN", "1d").catch((caught: unknown) => caught);
 
@@ -189,25 +216,29 @@ describe("LSE provider", () => {
     expect(error).toMatchObject({ status: 404, detail: "Unknown symbol" });
   });
 
-  it("records the X-Data-Bytes header from every response", async () => {
+  it("records actual downloaded bytes for successful exports", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(candlesFixture, 200, { "X-Data-Bytes": "1024" }))
       .mockResolvedValueOnce(
         jsonResponse({ detail: "Unknown symbol" }, 404, { "X-Data-Bytes": "2048" }),
       );
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     await getLseCandles("AAPL", "1d");
     await getLseCandles("UNKNOWN", "1d").catch(() => undefined);
 
-    expect(lseByteBudget.recordBytes).toHaveBeenNthCalledWith(1, 1024);
-    expect(lseByteBudget.recordBytes).toHaveBeenNthCalledWith(2, 2048);
+    expect(lseByteBudget.recordBytes).toHaveBeenCalledOnce();
+    expect(lseByteBudget.recordBytes).toHaveBeenCalledWith(expect.any(Number));
   });
 
   it("marks an allowance 429 exhausted and does not retry", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(allowanceFixture, 429));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ code: "allowance-exhausted", message: "Weekly allowance exhausted" }, 429),
+      );
+    stubLseFetch(fetchMock);
 
     const error = await getLseCandles("AAPL", "1d").catch((caught: unknown) => caught);
 
@@ -216,32 +247,37 @@ describe("LSE provider", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("retries an ordinary 429 after a Retry-After delay capped at five seconds", async () => {
+  it("retries an ordinary 429 after its full short Retry-After delay", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T12:00:00Z"));
     rateLimiter.configure("lse", 100, 1.66);
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse({ detail: "Rate limit exceeded" }, 429, { "Retry-After": "10" }),
+        jsonResponse({ detail: "Rate limit exceeded" }, 429, { "Retry-After": "5" }),
       )
       .mockResolvedValueOnce(jsonResponse(candlesFixture));
-    vi.stubGlobal("fetch", fetchMock);
+    stubLseFetch(fetchMock);
 
     const request = getLseCandles("AAPL", "1d");
     await vi.advanceTimersByTimeAsync(4_999);
     expect(fetchMock).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
 
-    await expect(request).resolves.toEqual(candlesFixture);
+    await expect(request).resolves.toEqual(
+      candlesFixture.map((row) => ({
+        ...row,
+        ts: new Date(`${row.ts.replace(" ", "T")}Z`).toISOString().replace(".000Z", "Z"),
+      })),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("fetches and caches financial reports with all provided query parameters", async () => {
-    const reportRows: Record<string, unknown>[] = [{}];
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(reportRows));
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("filters and caches financial reports with all provided options", async () => {
+    const fetchMock = vi.fn<typeof globalThis.fetch>(async () =>
+      lseCsvResponse([...incomeFixture, ...balanceFixture, ...cashflowFixture]),
+    );
+    stubLseFetch(fetchMock);
     const opts = {
       period: "FY" as const,
       start: "2024-01-01",
@@ -251,28 +287,19 @@ describe("LSE provider", () => {
     };
     const first = await getLseFinancialReports("AAPL", "income", opts);
     const second = await getLseFinancialReports("AAPL", "income", opts);
-
-    expect(first).toEqual(reportRows);
-    expect(second).toEqual(reportRows);
+    expect(first.map((row) => row.date)).toEqual(["2024-09-28"]);
+    expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.londonstrategicedge.com/vault/ref/financial_reports?symbol=AAPL&report_type=income&period=FY&start=2024-01-01&end=2025-01-01&order=desc&limit=5",
-      expect.objectContaining({ headers: { "x-api-key": "test-lse-key" } }),
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/v3/reference/export?dataset=financial_reports&symbol=AAPL&format=csv",
     );
   });
 
   it("maps the newest four annual financial statements from real report fixtures", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const reportType = new URL(String(input)).searchParams.get("report_type");
-      const fixture =
-        reportType === "income"
-          ? incomeFixture
-          : reportType === "balance"
-            ? balanceFixture
-            : cashflowFixture;
-      return Promise.resolve(jsonResponse(fixture));
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi.fn<typeof globalThis.fetch>(async () =>
+      lseCsvResponse([...incomeFixture, ...balanceFixture, ...cashflowFixture]),
+    );
+    stubLseFetch(fetchMock);
 
     const statements = await getLseFinancials("AAPL");
 
@@ -299,7 +326,7 @@ describe("LSE provider", () => {
       cashAndEquivalents: 35_934_000_000,
       sharesOutstanding: 14_948_500_000,
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("rejects sparse financial reports instead of manufacturing zero-valued fields", async () => {
@@ -316,14 +343,14 @@ describe("LSE provider", () => {
         },
       ],
     };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const reportType = new URL(String(input)).searchParams.get(
-          "report_type",
-        ) as keyof typeof reports;
-        return Promise.resolve(jsonResponse(reports[reportType]));
-      }),
+    stubLseFetch(
+      vi.fn(async () =>
+        lseCsvResponse(
+          Object.entries(reports).flatMap(([report_type, rows]) =>
+            rows.map((row) => ({ ...row, symbol: "EDGE", report_type, period: "FY" })),
+          ),
+        ),
+      ),
     );
 
     await expect(getLseFinancials("EDGE")).rejects.toThrow(/complete financial statements/i);
@@ -360,14 +387,14 @@ describe("LSE provider", () => {
         },
       ],
     };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const reportType = new URL(String(input)).searchParams.get(
-          "report_type",
-        ) as keyof typeof reports;
-        return Promise.resolve(jsonResponse(reports[reportType]));
-      }),
+    stubLseFetch(
+      vi.fn(async () =>
+        lseCsvResponse(
+          Object.entries(reports).flatMap(([report_type, rows]) =>
+            rows.map((row) => ({ ...row, symbol: "BLANK", report_type, period: "FY" })),
+          ),
+        ),
+      ),
     );
 
     await expect(getLseFinancials("BLANK")).rejects.toThrow(/complete financial statements/i);

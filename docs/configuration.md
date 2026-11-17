@@ -123,7 +123,7 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `onboarding.json` | Provider setup, snooze, never-ask, and welcome state. |
 | `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
-| `lse-byte-budget.json` | Monthly London Strategic Edge free-tier usage meter; LSE drops out of fallback chains at 80% of the allowance. |
+| `lse-v3-usage.json` | LSE Data 3.0 weekly byte meter and timed quota blocks, scoped to the configured key; LSE drops out of fallback chains at 80% of its byte allowance or reported quota exhaustion. The old `lse-byte-budget.json` monthly meter is ignored. |
 
 Durable market state, including watchlists, portfolios, and alerts, lives only in `state.db`. There is no JSON-file alternative for that state.
 

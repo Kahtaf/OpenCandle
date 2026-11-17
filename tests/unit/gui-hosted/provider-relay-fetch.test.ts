@@ -159,6 +159,12 @@ describe("hosted provider relay fetch", () => {
     expect(relayFetch).toHaveBeenCalledOnce();
   });
 
+  it("routes LSE v3 through the relay", () => {
+    expect(relayProviderForUrl(new URL("https://download.londonstrategicedge.com/v3/export"))).toBe(
+      "lse",
+    );
+  });
+
   it("routes the fixed DuckDuckGo request hosts through the relay", () => {
     expect(relayProviderForUrl(new URL("https://duckduckgo.com/?q=AAPL"))).toBe("ddg");
     expect(relayProviderForUrl(new URL("https://links.duckduckgo.com/d.js?vqd=1-1"))).toBe("ddg");
