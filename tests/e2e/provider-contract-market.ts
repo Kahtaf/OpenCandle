@@ -54,6 +54,10 @@ export async function getMarketContractCases(): Promise<CanaryCase[]> {
     {
       name: "yahoo:quote-tool",
       run: async () => {
+        const direct = await yahoo.getQuote("AAPL");
+        ohlc(direct);
+        dated(direct.asOf);
+        cache.clear();
         const result = await tool("get_stock_quote", { symbol: "AAPL" });
         const verdict = verifyQuotePayload(result.details);
         assert.equal(verdict.status, "passed", verdict.reason ?? "payload validation failed");
@@ -65,6 +69,8 @@ export async function getMarketContractCases(): Promise<CanaryCase[]> {
     {
       name: "yahoo:history-tool",
       run: async () => {
+        history(await yahoo.getHistory("AAPL", "1mo", "1d"));
+        cache.clear();
         const result = await tool("get_stock_history", {
           symbol: "AAPL",
           range: "1mo",
