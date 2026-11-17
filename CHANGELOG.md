@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- SEC filing searches select the same recent filings with or without evidence snippets and return the newest requested forms first.
+
 - Cryptocurrency history preserves candle timestamps and explains variable spacing and unavailable volume instead of displaying unsupported daily risk metrics.
 
 - Twitter sentiment includes canonical citations when the CLI returns post IDs without URLs.

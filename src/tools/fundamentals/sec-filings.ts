@@ -27,7 +27,7 @@ export const secFilingsTool: AgentTool<typeof params> = {
   name: "get_sec_filings",
   label: "SEC Filings",
   description:
-    "Search SEC EDGAR for company filings (10-K annual reports, 10-Q quarterly reports, 8-K material events). Returns filing dates, types, and direct links to the documents. Free API, no key required.",
+    "Search recent SEC EDGAR company submissions for filings (10-K annual reports, 10-Q quarterly reports, 8-K material events). Returns filing dates, types, and direct links to the documents. Archived submission history is not searched. Free API, no key required.",
   parameters: params,
   async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
@@ -53,7 +53,7 @@ export const secFilingsTool: AgentTool<typeof params> = {
         content: [
           {
             type: "text",
-            text: `No SEC filings found for ${symbol}. Verify the ticker is a US-listed company.`,
+            text: `No matching filings found in recent SEC submissions for ${symbol}. Archived submission history is not searched. Verify the ticker is a US-listed company.`,
           },
         ],
         details: null,
@@ -62,6 +62,7 @@ export const secFilingsTool: AgentTool<typeof params> = {
 
     const lines = [
       `**${symbol} SEC Filings** (${filings.length} found)`,
+      "Scope: recent SEC company submissions; archived submission history is not searched.",
       ``,
       ...filings.map(
         (f) =>
