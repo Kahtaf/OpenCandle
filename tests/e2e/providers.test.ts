@@ -8,7 +8,7 @@ import { getEarnings, getFinancials, getOverview } from "../../src/providers/alp
 import { getCryptoHistory, getCryptoPrice } from "../../src/providers/coingecko.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
 import { getSeries } from "../../src/providers/fred.js";
-import { getLseCandles } from "../../src/providers/lse.js";
+import { getLseCandles, getLseFinancials } from "../../src/providers/lse.js";
 import { searchPredictionMarkets } from "../../src/providers/polymarket.js";
 import { getPostComments, getSubredditPosts } from "../../src/providers/reddit.js";
 import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
@@ -200,8 +200,28 @@ if (avKey) {
 // --- LONDON STRATEGIC EDGE ---
 if (lseKey) {
   console.log("\n--- London Strategic Edge ---");
+  await test("lse_financials", "AAPL", async () => {
+    const statements = await getLseFinancials("AAPL");
+    if (
+      statements.length === 0 ||
+      statements.some(
+        (row) =>
+          !row.fiscalDate ||
+          ![row.revenue, row.netIncome, row.operatingCashFlow, row.freeCashFlow].every(
+            Number.isFinite,
+          ),
+      )
+    )
+      throw new Error("LSE annual statement normalization failed");
+    return statements;
+  });
+
   await test("lse_candles", "AAPL", async () => {
-    const rows: unknown = await getLseCandles("AAPL", "1d", { limit: 5 });
+    const rows: unknown = await getLseCandles("AAPL", "1d", {
+      start: new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10),
+      order: "desc",
+      limit: 5,
+    });
     const validRows =
       Array.isArray(rows) &&
       rows.length > 0 &&

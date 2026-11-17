@@ -1,17 +1,12 @@
-import { getConfig } from "../config.js";
+import { currentAbortSignal } from "../infra/abort-context.js";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
-import { markExhausted, recordBytes } from "../infra/lse-byte-budget.js";
-import { rateLimiter } from "../infra/rate-limiter.js";
 import type { FinancialStatement } from "../types/fundamentals.js";
+import { lseCacheKey, lseExport } from "./lse-transport.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
-const BASE_URL = "https://api.londonstrategicedge.com/vault";
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1_000;
-const MAX_RETRY_AFTER_MS = 5_000;
+export { getLseUsage, LseHttpError } from "./lse-transport.js";
 
 export type LseTimeframe = "1m" | "5m" | "15m" | "1h" | "1d" | "1w" | "1mo";
-
 export interface LseCandle {
   ts: string;
   symbol: string;
@@ -21,16 +16,13 @@ export interface LseCandle {
   close: number;
   volume: number;
 }
-
 export type LseFinancialReportRow = Record<string, unknown>;
-
 interface LseCandleOptions {
   start?: string;
   end?: string;
   order?: "asc" | "desc";
   limit?: number;
 }
-
 interface LseFinancialReportOptions {
   period?: "FY" | "Q1" | "Q2" | "Q3" | "Q4";
   start?: string;
@@ -39,84 +31,32 @@ interface LseFinancialReportOptions {
   limit?: number;
 }
 
-export class LseHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly detail: string,
-  ) {
-    super(`LSE HTTP ${status}: ${detail}`);
-    this.name = "LseHttpError";
-  }
+function validateLimit(limit: number | undefined): void {
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1))
+    throw new Error("LSE limit must be a positive integer");
 }
 
-function throwIfLseAuthError(error: unknown): void {
-  if (error instanceof ProviderCredentialError && error.provider === "lse") throw error;
-  if (error instanceof LseHttpError && (error.status === 401 || error.status === 403)) {
-    throw new ProviderCredentialError("lse", "stale", error.status);
-  }
+// OC's history tool accepts equity tickers, including Yahoo's exchange suffixes.
+// Do not guess an international listing as a US security when its suffix is unknown.
+function equityIdentity(symbol: string): { market: string; symbol: string } {
+  const upper = symbol.toUpperCase();
+  if (upper.endsWith(".L") || upper.endsWith(".UK"))
+    return { market: "uk_stocks", symbol: upper.replace(/\.(?:L|UK)$/, "") };
+  if (upper.endsWith(".TO")) return { market: "ca_stocks", symbol: upper.slice(0, -3) };
+  if (/^[A-Z0-9]+(?:[.-][A-Z])?$/.test(upper))
+    return { market: "us_stocks", symbol: upper.replace(/-([A-Z])$/, ".$1") };
+  throw new Error(`LSE history does not support this ticker's market: ${symbol}`);
 }
 
-async function readErrorDetail(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") return body.detail;
-  } catch {
-    // Preserve a useful typed HTTP error even when the provider body is not JSON.
-  }
-  return response.statusText || `HTTP ${response.status}`;
-}
-
-function parseRetryAfterMs(value: string | null): number | undefined {
-  if (!value?.trim()) return undefined;
-  const seconds = Number(value.trim());
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
-
-  const dateMs = Date.parse(value.trim());
-  if (Number.isNaN(dateMs)) return undefined;
-  return Math.max(0, dateMs - Date.now());
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function lseGet<T>(path: string, params: Record<string, string>): Promise<T> {
-  const apiKey = getConfig().lseApiKey;
-  if (!apiKey) throw new ProviderCredentialError("lse", "missing");
-
-  const url = `${BASE_URL}${path}?${new URLSearchParams(params)}`;
-  let lastError: LseHttpError | undefined;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await globalThis.fetch(url, { headers: { "x-api-key": apiKey } });
-    const dataBytes = response.headers.get("x-data-bytes");
-    if (dataBytes !== null) {
-      const parsedBytes = Number(dataBytes);
-      if (Number.isFinite(parsedBytes)) recordBytes(parsedBytes);
-    }
-    if (response.ok) return (await response.json()) as T;
-
-    const error = new LseHttpError(response.status, await readErrorDetail(response));
-    throwIfLseAuthError(error);
-    lastError = error;
-
-    if (response.status === 429 && error.detail.toLowerCase().includes("allowance")) {
-      markExhausted();
-      throw error;
-    }
-
-    const retryable = response.status === 429 || response.status >= 500;
-    if (!retryable || attempt === MAX_RETRIES) throw error;
-
-    const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-    await sleep(
-      retryAfterMs === undefined
-        ? RETRY_DELAY_MS * (attempt + 1)
-        : Math.min(retryAfterMs, MAX_RETRY_AFTER_MS),
-    );
-  }
-
-  throw lastError ?? new Error("LSE request failed without an error");
+function dateBound(value: string): string {
+  const date = value.slice(0, 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !Number.isFinite(Date.parse(date)) ||
+    new Date(date).toISOString().slice(0, 10) !== date
+  )
+    throw new Error("LSE date must be a valid YYYY-MM-DD date");
+  return date;
 }
 
 export async function getLseCandles(
@@ -124,58 +64,67 @@ export async function getLseCandles(
   timeframe: LseTimeframe,
   opts: LseCandleOptions = {},
 ): Promise<LseCandle[]> {
-  const params: Record<string, string> = { symbol, timeframe };
-  if (opts.start !== undefined) params.start = opts.start.slice(0, 10);
-  if (opts.end !== undefined) params.end = opts.end;
-  if (opts.order !== undefined) params.order = opts.order;
-  if (opts.limit !== undefined) params.limit = String(opts.limit);
-  const cacheKey = `lse:candles:${new URLSearchParams(params)}`;
-  const cached = cache.get<LseCandle[]>(cacheKey);
+  currentAbortSignal()?.throwIfAborted();
+  validateLimit(opts.limit);
+  const params = {
+    ...equityIdentity(symbol),
+    timeframe,
+    from: dateBound(opts.start ?? "1900-01-01"),
+    to: dateBound(opts.end ?? new Date().toISOString()),
+    adjusted: "1",
+    format: "csv",
+  };
+  if (params.from > params.to) throw new Error("LSE start date must precede end date");
+  const key = lseCacheKey("candles", {
+    ...params,
+    order: opts.order ?? "asc",
+    limit: String(opts.limit ?? "all"),
+  });
+  const cached = cache.get<LseCandle[]>(key);
   if (cached) return cached;
-
   try {
-    await rateLimiter.acquire("lse");
-    const rows = await lseGet<LseCandle[]>("/candles", params);
-    if (!isValidLseCandlePayload(rows)) {
-      throw new Error("LSE candles response did not contain valid candle rows");
-    }
-    cache.set(cacheKey, rows, TTL.CANDLES);
-    return rows;
+    const raw = await lseExport("/export", params);
+    currentAbortSignal()?.throwIfAborted();
+    const rows = raw
+      .map((row) => {
+        const ts = /(?:Z|[+-]\d{2}:\d{2})$/i.test(row.time ?? "")
+          ? row.time!
+          : `${row.time?.replace(" ", "T")}Z`;
+        const values = [row.open, row.high, row.low, row.close, row.volume].map((value) =>
+          value?.trim() ? Number(value) : Number.NaN,
+        );
+        const [open, high, low, close, volume] = values as [number, number, number, number, number];
+        if (
+          !Number.isFinite(Date.parse(ts)) ||
+          !values.every(Number.isFinite) ||
+          Math.min(open, high, low, close) <= 0 ||
+          high < Math.max(open, close) ||
+          low > Math.min(open, close) ||
+          volume < 0
+        )
+          throw new Error("LSE candles response did not contain valid candle rows");
+        return {
+          ts: new Date(ts).toISOString().replace(".000Z", "Z"),
+          symbol,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        };
+      })
+      .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    if (!rows.length) throw new Error("LSE candles response did not contain valid candle rows");
+    if (opts.order === "desc") rows.reverse();
+    const result = opts.limit === undefined ? rows : rows.slice(0, opts.limit);
+    cache.set(key, result, TTL.CANDLES);
+    return result;
   } catch (error) {
-    throwIfLseAuthError(error);
-    const stale = cache.getStale<LseCandle[]>(cacheKey, STALE_LIMIT.CANDLES);
+    if (currentAbortSignal()?.aborted || error instanceof ProviderCredentialError) throw error;
+    const stale = cache.getStale<LseCandle[]>(key, STALE_LIMIT.CANDLES);
     if (stale) return stale.value;
     throw error;
   }
-}
-
-function isValidLseCandlePayload(value: unknown): value is LseCandle[] {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((row) => {
-      if (typeof row !== "object" || row === null) return false;
-      const candle = row as Partial<LseCandle>;
-      const timestamp =
-        typeof candle.ts === "string"
-          ? Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(candle.ts) ? candle.ts : `${candle.ts}Z`)
-          : Number.NaN;
-      const prices = [candle.open, candle.high, candle.low, candle.close];
-      return (
-        Number.isFinite(timestamp) &&
-        prices.every((price) => typeof price === "number" && Number.isFinite(price) && price > 0) &&
-        (candle.high ?? 0) >= Math.max(candle.open ?? 0, candle.close ?? 0) &&
-        (candle.low ?? Number.POSITIVE_INFINITY) <=
-          Math.min(
-            candle.open ?? Number.POSITIVE_INFINITY,
-            candle.close ?? Number.POSITIVE_INFINITY,
-          ) &&
-        typeof candle.volume === "number" &&
-        Number.isFinite(candle.volume) &&
-        candle.volume >= 0
-      );
-    })
-  );
 }
 
 export async function getLseFinancialReports(
@@ -183,27 +132,47 @@ export async function getLseFinancialReports(
   reportType: "income" | "balance" | "cashflow",
   opts: LseFinancialReportOptions = {},
 ): Promise<LseFinancialReportRow[]> {
-  const params: Record<string, string> = { symbol, report_type: reportType };
-  if (opts.period !== undefined) params.period = opts.period;
-  if (opts.start !== undefined) params.start = opts.start;
-  if (opts.end !== undefined) params.end = opts.end;
-  if (opts.order !== undefined) params.order = opts.order;
-  if (opts.limit !== undefined) params.limit = String(opts.limit);
-  const cacheKey = `lse:financial_reports:${new URLSearchParams(params)}`;
-  const cached = cache.get<LseFinancialReportRow[]>(cacheKey);
-  if (cached) return cached;
-
-  try {
-    await rateLimiter.acquire("lse");
-    const rows = await lseGet<LseFinancialReportRow[]>("/ref/financial_reports", params);
-    cache.set(cacheKey, rows, TTL.FINANCIAL_REPORTS);
-    return rows;
-  } catch (error) {
-    throwIfLseAuthError(error);
-    const stale = cache.getStale<LseFinancialReportRow[]>(cacheKey, STALE_LIMIT.FINANCIAL_REPORTS);
-    if (stale) return stale.value;
-    throw error;
+  currentAbortSignal()?.throwIfAborted();
+  validateLimit(opts.limit);
+  const params = { dataset: "financial_reports", symbol: symbol.toUpperCase(), format: "csv" };
+  const key = lseCacheKey("financial_reports", params);
+  let rows = cache.get<LseFinancialReportRow[]>(key);
+  if (!rows) {
+    try {
+      rows = await lseExport("/reference/export", params);
+      currentAbortSignal()?.throwIfAborted();
+      if (
+        !rows.length ||
+        rows.some(
+          (row) =>
+            typeof row.symbol !== "string" ||
+            row.symbol.toUpperCase() !== params.symbol ||
+            typeof row.date !== "string" ||
+            !Number.isFinite(Date.parse(row.date)) ||
+            typeof row.report_type !== "string" ||
+            typeof row.data !== "string",
+        )
+      )
+        throw new Error("LSE financial report export has invalid rows");
+      cache.set(key, rows, TTL.FINANCIAL_REPORTS);
+    } catch (error) {
+      if (currentAbortSignal()?.aborted || error instanceof ProviderCredentialError) throw error;
+      const stale = cache.getStale<LseFinancialReportRow[]>(key, STALE_LIMIT.FINANCIAL_REPORTS);
+      if (!stale) throw error;
+      rows = stale.value;
+    }
   }
+  const filtered = rows
+    .filter(
+      (row) =>
+        row.report_type === reportType &&
+        (opts.period === undefined || row.period === opts.period) &&
+        (opts.start === undefined || String(row.date) >= dateBound(opts.start)) &&
+        (opts.end === undefined || String(row.date) <= dateBound(opts.end)),
+    )
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (opts.order === "desc") filtered.reverse();
+  return opts.limit === undefined ? filtered : filtered.slice(0, opts.limit);
 }
 
 function parseNum(value: unknown): number | undefined {

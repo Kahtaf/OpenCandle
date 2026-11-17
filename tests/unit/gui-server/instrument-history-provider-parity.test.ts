@@ -7,6 +7,7 @@ import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import alphaVantageHistory from "../../fixtures/alphavantage/AAPL-time-series-daily.json";
 import yahooHistory from "../../fixtures/yahoo/AAPL-history.json";
+import { lseCsvResponse, lseUsageFixture } from "../../support/lse.js";
 
 vi.mock("../../../src/config.js", () => ({
   getConfig: () => ({ alphaVantageApiKey: "av-test-key", lseApiKey: "lse-test-key" }),
@@ -77,18 +78,22 @@ describe("instrument history provider parity", () => {
         if (url.hostname.includes("yahoo")) {
           return Promise.resolve(new Response("{}", { status: 404 }));
         }
-        if (url.hostname === "api.londonstrategicedge.com") {
+        if (url.hostname === "download.londonstrategicedge.com") {
+          if (url.pathname === "/v3/usage") return Promise.resolve(Response.json(lseUsageFixture));
           return Promise.resolve(
-            Response.json([
-              {
-                ts: "2026-07-16T14:35:00",
-                open: 210,
-                high: 212,
-                low: 209,
-                close: 211,
-                volume: 12_345,
-              },
-            ]),
+            lseCsvResponse(
+              [
+                {
+                  time: "2026-07-16 14:35:00",
+                  open: 210,
+                  high: 212,
+                  low: 209,
+                  close: 211,
+                  volume: 12_345,
+                },
+              ],
+              { "x-lse3-adjusted": "1" },
+            ),
           );
         }
         throw new Error(`Unexpected provider host: ${url.hostname}`);

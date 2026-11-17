@@ -1,0 +1,16 @@
+{
+  "plan": "free",
+  "weekly": {
+    "allowance_bytes": 13421772800,
+    "used_bytes": 0,
+    "week": "2026-W47"
+  },
+  "rows": {
+    "day": "2026-11-16",
+    "per_day": 12500000,
+    "per_export": 2500000,
+    "resets_in_seconds": 10088,
+    "used_today": 0
+  },
+  "withheld": null
+}

@@ -13,7 +13,7 @@ In the web app at web.opencandle.app, most sources work the same. SEC EDGAR fili
 
 | Domain | Tools | Providers |
 | --- | --- | --- |
-| Market | `search_ticker`, `screen_stocks`, `get_stock_quote`, `get_stock_history`, `get_price_comparison` | Yahoo Finance; TradingView scanner for breadth screening and watchlist batch quotes; Alpha Vantage fallback for quote/history when configured; London Strategic Edge fallback for intraday and deep-range history (back to 2003) when configured |
+| Market | `search_ticker`, `screen_stocks`, `get_stock_quote`, `get_stock_history`, `get_price_comparison` | Yahoo Finance; TradingView scanner for breadth screening and watchlist batch quotes; Alpha Vantage fallback for quote/history when configured; London Strategic Edge fallback for intraday and deep-range history where available when configured |
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | London Strategic Edge (when configured), then Alpha Vantage for financial statements; `compute_dcf` additionally falls back to Yahoo Finance for statements and market cap; Alpha Vantage with Yahoo Finance fallbacks for overview, earnings, and comparisons |
@@ -48,7 +48,7 @@ Optional keys (see [configuration.md](./configuration.md) for env var names and 
 - [Brave](https://brave.com/search/api/) adds a web search fallback.
 - [Exa](https://exa.ai) web search runs keylessly through its MCP endpoint by default; a key upgrades it to the direct API for better quality and limits.
 - [Finnhub](https://finnhub.io) adds company news to sentiment summaries.
-- [London Strategic Edge](https://londonstrategicedge.com/databank) unlocks its free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles back to 2003 as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key; bring your own key. OpenCandle does not redistribute LSE data.
+- [London Strategic Edge](https://londonstrategicedge.com/data) unlocks its free tier: financial-statement access (used before Alpha Vantage by `get_financials` and `compute_dcf`) and split-adjusted intraday plus deep-range daily candles where the archive has coverage as the last fallback behind Yahoo Finance and Alpha Vantage. The data is licensed per key; bring your own key. OpenCandle does not redistribute LSE data.
 
 ## Caching and Degradation
 
@@ -61,7 +61,13 @@ External provider calls go through OpenCandle's shared cache and rate limiter. W
 
 TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens; single-security quotes, history, options, and company analysis use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
 
-London Strategic Edge usage is metered against its free-tier allowance: OpenCandle persists a monthly byte budget and stops using LSE once 80% of the monthly free allowance is used, and notes this in `opencandle doctor`. Doctor and the GUI Diagnostics section report LSE readiness automatically when a key is configured.
+London Strategic Edge uses the LSE Data 3.0 API. Create an account-associated key at its [data dashboard](https://londonstrategicedge.com/data) and add it as `LSE_API_KEY` or in Settings. An old key may need replacing: `key-unknown` means the new API does not recognize it; `account-required` means the key needs an account. Doctor and GUI Diagnostics check financial-report access rather than just key presence.
+
+OC downloads financial reports once per symbol and serializes CSV exports. Candle exports explicitly request split adjustment; checksums are verified when supplied, and malformed or incomplete files fail with a fallback instead of a partial success. OC supports US equities and Yahoo-style UK (`.L`/`.UK`) and Canadian (`.TO`) ticker suffixes for history. Availability depends on the symbol and dates: OC does not promise that every instrument has history back to 2003. A request beyond the provider's export limits or OC's 16 MiB local download bound should be narrowed; the hosted relay additionally limits responses to 4 MiB.
+
+The free v3 plan currently allows 60 requests/minute, 12.5 GiB/week (reset Monday 00:00 UTC), 2.5 million measured rows per export, and 12.5 million measured rows/day. OC reads `/v3/usage`, persists a meter per credential in `lse-v3-usage.json`, and stops new LSE requests at 80% of the byte allowance or a reported quota exhaustion. Paid-plan unlimited byte allowances are respected. Daily row exhaustion and weekly byte exhaustion have separate resets. Doctor reports local quota blocks. Limits can change; the server's refusal and reset timing take precedence.
+
+LSE's own-market prices are derived prices, not an official exchange or consolidated feed. Its [data licence](https://londonstrategicedge.com/licence/) permits personal research with your own key; organizational use and redistribution need separate licensing. OC's integration does not grant those rights. Paid Nasdaq/CME feeds, Level 3 orders, options, and macro datasets are not enabled by this compatibility update.
 
 Polymarket probabilities are market-implied prices from a crypto-settled venue, not calibrated forecasts. `get_event_probabilities` reports the market question, per-outcome probability, volume/liquidity, close date, and the market's resolution criteria so the model can compare the market wording with the user's question.
 

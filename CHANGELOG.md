@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- London Strategic Edge financial statements and price-history fallbacks use LSE Data 3.0, with account-access diagnostics and current quota handling in local and hosted runtimes.
+
 - The public site gives the homepage one canonical address with a trailing slash and links back to it instead of `/index.html`, so search engines stop filing duplicate URLs as alternate pages.
 
 - USD/EUR/GBP portfolio valuation separates converted market values from unavailable historical reporting-currency P&L.

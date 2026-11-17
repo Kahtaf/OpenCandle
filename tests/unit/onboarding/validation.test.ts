@@ -218,7 +218,60 @@ describe("validateCredential", () => {
   });
 
   describe("lse", () => {
-    it("validates with a candle request and sends the x-api-key header", async () => {
+    it("classifies an unknown v3 key as invalid", async () => {
+      mockFetchOnce({
+        status: 401,
+        body: JSON.stringify({ code: "key-unknown", message: "this key is not known" }),
+      });
+      await expect(validateCredential("lse", "bad-key")).resolves.toMatchObject({
+        status: "invalid",
+        httpStatus: 401,
+      });
+    });
+
+    it.each([{}, { body: "not-json" }])(
+      "keeps a provider refusal transient when it has no structured reason: %j",
+      async ({ body }) => {
+        mockFetchOnce({ status: 429, body: body ?? "{}" });
+        await expect(validateCredential("lse", "test-key")).resolves.toMatchObject({
+          status: "transient",
+          reason: expect.stringContaining("HTTP 429"),
+        });
+      },
+    );
+
+    it("redacts the key from network failures", async () => {
+      mockFetchOnce({ throwError: new Error("request with private-key failed") });
+      await expect(validateCredential("lse", "private-key")).resolves.toEqual({
+        status: "transient",
+        reason: "request with [redacted] failed",
+      });
+    });
+
+    it("handles a non-Error transport rejection without exposing its value", async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue("private-key");
+      await expect(validateCredential("lse", "private-key")).resolves.toEqual({
+        status: "transient",
+        reason: "LSE validation failed",
+      });
+    });
+
+    it("reports account restrictions without calling the key unknown", async () => {
+      mockFetchOnce({
+        status: 403,
+        body: JSON.stringify({
+          code: "account-required",
+          message: "Attach this key to an account",
+        }),
+      });
+      await expect(validateCredential("lse", "good-but-unattached")).resolves.toMatchObject({
+        status: "invalid",
+        httpStatus: 403,
+        message: "account-required: Attach this key to an account",
+      });
+    });
+
+    it("validates account access with a financial-report estimate and sends the x-api-key header", async () => {
       const getRequest = mockFetchOnce({ status: 200, body: "[]" });
 
       const result = await validateCredential("lse", "lse-live-key");
@@ -227,7 +280,7 @@ describe("validateCredential", () => {
       expect(result.status).toBe("valid");
       expect(request.method).toBe("GET");
       expect(request.url).toBe(
-        "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+        "https://download.londonstrategicedge.com/v3/reference/estimate?dataset=financial_reports&symbol=AAPL&format=csv",
       );
       expect(request.headers.get("x-api-key")).toBe("lse-live-key");
       expect(request.url).not.toContain("lse-live-key");

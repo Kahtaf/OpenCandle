@@ -6,6 +6,7 @@ export {
   getLseCandles,
   getLseFinancialReports,
   getLseFinancials,
+  getLseUsage,
   type LseCandle,
   type LseFinancialReportRow,
   LseHttpError,

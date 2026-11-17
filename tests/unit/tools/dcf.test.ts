@@ -6,6 +6,7 @@ import { resetConfigCache } from "../../../src/config.js";
 import { runWithAbortSignal } from "../../../src/infra/abort-context.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
+import { lseCacheKey } from "../../../src/providers/lse-transport.js";
 import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
@@ -16,6 +17,7 @@ import lseCashflow from "../../fixtures/lse/financial-reports-AAPL-cashflow.json
 import lseIncome from "../../fixtures/lse/financial-reports-AAPL-income.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import yahooFundamentals from "../../fixtures/yahoo-finance2/fundamentals-timeseries-AAPL.json";
+import { lseCsvResponse, lseUsageFixture } from "../../support/lse.js";
 
 describe("computeDCF", () => {
   const baseParams = {
@@ -171,14 +173,6 @@ describe("computeDCF", () => {
 const AV_FINANCIALS_KEY = "av:financials:AAPL";
 const YAHOO_FINANCIALS_KEY = "yahoo:financials:AAPL";
 
-function lseReportKey(reportType: "income" | "balance" | "cashflow"): string {
-  return `lse:financial_reports:${new URLSearchParams({
-    symbol: "AAPL",
-    report_type: reportType,
-    period: "FY",
-  })}`;
-}
-
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -265,22 +259,20 @@ function handleFetch(input: RequestInfo | URL): Promise<Response> {
     if (fn === "CASH_FLOW") return Promise.resolve(jsonResponse(cashFlowFixture));
   }
 
-  if (url.includes("api.londonstrategicedge.com")) {
-    const reportType = new URL(url).searchParams.get("report_type");
+  if (url.includes("download.londonstrategicedge.com")) {
+    if (new URL(url).pathname === "/v3/usage")
+      return Promise.resolve(jsonResponse(lseUsageFixture));
     if (state.lse === "fail")
-      return Promise.resolve(jsonResponse({ detail: "Invalid API key" }, 400));
-    if (state.lse === "incomplete") {
       return Promise.resolve(
-        reportType === "income" ? jsonResponse(state.lseIncome) : jsonResponse([]),
+        jsonResponse({ code: "data-unavailable", message: "Unavailable" }, 404),
       );
-    }
-    const fixture =
-      reportType === "income"
-        ? state.lseIncome
-        : reportType === "balance"
-          ? lseBalance
-          : lseCashflow;
-    return Promise.resolve(jsonResponse(fixture));
+    return Promise.resolve(
+      lseCsvResponse(
+        state.lse === "incomplete"
+          ? state.lseIncome
+          : [...state.lseIncome, ...lseBalance, ...lseCashflow],
+      ),
+    );
   }
 
   if (url.includes("fc.yahoo.com") || url.includes("getcrumb")) {
@@ -387,9 +379,9 @@ describe("compute_dcf tool (real providers over fixture HTTP)", () => {
 
     expect(textContent(result)).toContain("Financial statements source: Yahoo Finance");
     expect(toolDetails(result)).not.toBeNull();
-    expect(callIndex("api.londonstrategicedge.com")).toBeGreaterThanOrEqual(0);
+    expect(callIndex("download.londonstrategicedge.com")).toBeGreaterThanOrEqual(0);
     expect(callIndex("www.alphavantage.co")).toBeGreaterThan(
-      callIndex("api.londonstrategicedge.com"),
+      callIndex("download.londonstrategicedge.com"),
     );
     expect(callIndex("fundamentals-timeseries")).toBeGreaterThan(callIndex("www.alphavantage.co"));
   });
@@ -469,9 +461,15 @@ describe("compute_dcf tool (real providers over fixture HTTP)", () => {
     state.lse = "fail";
     state.av = "fail";
     state.yahooFinancials = "fail";
-    cache.set(lseReportKey("income"), lseIncome, -1);
-    cache.set(lseReportKey("balance"), lseBalance, -1);
-    cache.set(lseReportKey("cashflow"), lseCashflow, -1);
+    cache.set(
+      lseCacheKey("financial_reports", {
+        dataset: "financial_reports",
+        symbol: "AAPL",
+        format: "csv",
+      }),
+      [...lseIncome, ...lseBalance, ...lseCashflow],
+      -1,
+    );
     cache.set(AV_FINANCIALS_KEY, [staleStatement], -1);
     cache.set(YAHOO_FINANCIALS_KEY, [staleStatement], -1);
 

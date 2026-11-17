@@ -56,7 +56,7 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | Target | Provider(s) | Unlocks |
 | --- | --- | --- |
 | `financials`, `fundamentals`, `alphavantage` | Alpha Vantage | Fundamentals, earnings, financial statements, DCF, comps |
-| `lse`, `london strategic edge` | London Strategic Edge | Free-tier financial statements plus deep split-adjusted intraday history back to 2003 |
+| `lse`, `london strategic edge` | London Strategic Edge | LSE Data 3.0 financial statements plus split-adjusted intraday/daily history where available |
 | `economy`, `macro`, `fred` | FRED | Macro series: rates, CPI, GDP, unemployment |
 | `news`, `finnhub` | Finnhub | Company news in sentiment summaries |
 | `search` (category), `brave`, `exa` | Brave Search, Exa | Expanded web search beyond keyless DuckDuckGo |
