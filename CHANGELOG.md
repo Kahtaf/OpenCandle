@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- A dedicated live provider contract command checks data and tool output against real APIs and treats blocked required checks as unsuccessful.
+
 - Alpha Vantage financials report source annual earnings per share, pace requests, and distinguish incomplete data, quota limits, and premium access.
 
 - Yahoo fund holdings use the updated library transport before the direct endpoint to improve availability.

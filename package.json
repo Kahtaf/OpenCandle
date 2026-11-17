@@ -143,7 +143,8 @@
     "test:coverage:browser": "npm run coverage:node && npm run coverage:browser",
     "coverage:node": "vitest run --project unit --coverage && npm --workspace @opencandle/provider-relay run test -- --coverage && node scripts/coverage-merge.mjs --out coverage",
     "coverage:check": "node scripts/coverage-report.mjs --input coverage/coverage-summary.json --baseline scripts/coverage-baseline.json --check",
-    "coverage:browser": "node -e \"for (const d of ['coverage/browser', 'coverage/merged']) require('node:fs').rmSync(d, { recursive: true, force: true })\" && npm run gui:web:build -- -- --sourcemap && OPENCANDLE_BROWSER_COVERAGE=1 OPENCANDLE_GUI_INTEGRATION=1 vitest run --project gui-integration --project gui-journey && node scripts/coverage-browser.mjs && node scripts/coverage-merge.mjs --out coverage/merged --browser coverage/browser/coverage-final.json && node scripts/coverage-report.mjs --input coverage/merged/coverage-summary.json --informational --metadata coverage/browser/metadata.json"
+    "coverage:browser": "node -e \"for (const d of ['coverage/browser', 'coverage/merged']) require('node:fs').rmSync(d, { recursive: true, force: true })\" && npm run gui:web:build -- -- --sourcemap && OPENCANDLE_BROWSER_COVERAGE=1 OPENCANDLE_GUI_INTEGRATION=1 vitest run --project gui-integration --project gui-journey && node scripts/coverage-browser.mjs && node scripts/coverage-merge.mjs --out coverage/merged --browser coverage/browser/coverage-final.json && node scripts/coverage-report.mjs --input coverage/merged/coverage-summary.json --informational --metadata coverage/browser/metadata.json",
+    "test:providers:contracts": "tsx tests/e2e/provider-contracts.ts"
   },
   "engines": {
     "node": "^22.22.2 || >=24.0.0 <27"
