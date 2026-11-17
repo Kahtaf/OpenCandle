@@ -262,19 +262,33 @@ try {
   // (including the Markets strip) fail.
   stage = "return visit";
   await page.addInitScript(() => {
+    const observation = {
+      href: location.href,
+      timeOrigin: performance.timeOrigin,
+      readSucceeded: false,
+      hint: null,
+      error: null,
+    };
+    globalThis.__opencandleInitialWriterHint = observation;
     try {
-      globalThis.__opencandleInitialWriterHint = localStorage.getItem(
+      observation.hint = localStorage.getItem(
         "opencandle.hosted.runtime-writer.v1",
       );
-    } catch {
-      // about:blank has no storage.
+      observation.readSucceeded = true;
+    } catch (error) {
+      observation.error = error instanceof Error ? error.name : String(error);
     }
   });
   await page.goto("about:blank");
   await page.goto(origin, { waitUntil: "domcontentloaded" });
+  const returnVisit = await page.evaluate(() => ({
+    initial: globalThis.__opencandleInitialWriterHint ?? null,
+    href: location.href,
+    timeOrigin: performance.timeOrigin,
+  }));
   assert(
-    (await page.evaluate(() => globalThis.__opencandleInitialWriterHint)) === null,
-    "a return visit starts without the departed page's writer hint",
+    returnVisit.initial?.readSucceeded === true && returnVisit.initial.hint === null,
+    `a return visit starts without the departed page's writer hint: ${JSON.stringify(returnVisit)}`,
   );
   await waitForRuntimeReady(page, 120_000);
   await waitForText(page, "What are we watching?", 60_000);

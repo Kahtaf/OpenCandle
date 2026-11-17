@@ -193,6 +193,100 @@ const FINANCIAL_METRIC_PATTERN = new RegExp(
   "gi",
 );
 
+interface TableCell {
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface CurrencyCellUnit {
+  start: number;
+  end: number;
+  magnitude: number;
+}
+
+const HEADER_MAGNITUDE = new RegExp(`\\((${COMPACT_MAGNITUDE}|${SPELLED_MAGNITUDE})\\)$`);
+const CURRENCY_CELL = new RegExp(`^(?:${CURRENCY_PATTERN.source})$`);
+
+function withoutEmphasis(text: string): string {
+  return text
+    .trim()
+    .replace(/^(\*\*|__|\*|_)(.*)\1$/, "$2")
+    .trim();
+}
+
+function tableCells(line: string, offset: number): TableCell[] | undefined {
+  if (!line.includes("|") || line.includes("\\|") || line.includes("`")) return undefined;
+  const cells: TableCell[] = [];
+  let start = 0;
+  for (const part of line.split("|")) {
+    cells.push({ text: part, start: offset + start, end: offset + start + part.length });
+    start += part.length + 1;
+  }
+  if (cells[0]?.text.trim() === "") cells.shift();
+  if (cells.at(-1)?.text.trim() === "") cells.pop();
+  return cells.length > 0 ? cells : undefined;
+}
+
+function isTableSeparator(cells: TableCell[] | undefined, width: number): boolean {
+  return (
+    cells !== undefined &&
+    cells.length === width &&
+    cells.every((cell) => /^:?-{3,}:?$/.test(cell.text.trim()))
+  );
+}
+
+function currencyCellUnits(text: string): CurrencyCellUnit[] {
+  let offset = 0;
+  const lines = text.split("\n").map((line) => {
+    const entry = { text: line, offset };
+    offset += line.length + 1;
+    return entry;
+  });
+  const units: CurrencyCellUnit[] = [];
+  let fence: string | undefined;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const delimiter = line.text.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
+    if (delimiter) {
+      if (!fence) fence = delimiter;
+      else if (delimiter[0] === fence[0] && delimiter.length >= fence.length) fence = undefined;
+      continue;
+    }
+    if (fence) continue;
+    const headers = tableCells(line.text, line.offset);
+    const separator = lines[i + 1];
+    if (
+      !headers ||
+      !separator ||
+      !isTableSeparator(tableCells(separator.text, separator.offset), headers.length)
+    ) {
+      continue;
+    }
+    const magnitudes = headers.map((header) => {
+      const match = withoutEmphasis(header.text).match(HEADER_MAGNITUDE);
+      return match ? magnitudeMultiplier(match[1]) : undefined;
+    });
+    i += 2;
+    for (; i < lines.length; i += 1) {
+      const row = lines[i];
+      const cells = tableCells(row.text, row.offset);
+      if (!cells || cells.length !== headers.length) break;
+      const next = lines[i + 1];
+      if (next && isTableSeparator(tableCells(next.text, next.offset), cells.length)) break;
+      for (let column = 0; column < cells.length; column += 1) {
+        const cell = cells[column];
+        const magnitude = magnitudes[column];
+        if (magnitude !== undefined && CURRENCY_CELL.test(withoutEmphasis(cell.text))) {
+          units.push({ start: cell.start, end: cell.end, magnitude });
+        }
+      }
+    }
+    i -= 1;
+  }
+  return units;
+}
+
 /**
  * Extract financial numbers from response text.
  * Matches: $185.50, 28.5%, 1.2B, 15.3x, -0.5%, plain decimals in financial context.
@@ -200,10 +294,14 @@ const FINANCIAL_METRIC_PATTERN = new RegExp(
  */
 export function extractFinancialNumbers(text: string): number[] {
   const numbers: number[] = [];
+  const cellUnits = currencyCellUnits(text);
 
   // Currency amounts: $185.50, -$2.50, $-2.50, +$3.25, $1,234.56, -$2.5B
   for (const m of text.matchAll(CURRENCY_PATTERN)) {
-    const num = parseSignedCurrency(m[1], m[2], m[3], m[4]);
+    const start = m.index ?? 0;
+    const unit = cellUnits.find((cell) => start >= cell.start && start + m[0].length <= cell.end);
+    const magnitude = m[4] === undefined ? (unit?.magnitude ?? 1) : 1;
+    const num = parseSignedCurrency(m[1], m[2], m[3], m[4]) * magnitude;
     if (Number.isFinite(num)) numbers.push(num);
   }
 

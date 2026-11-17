@@ -1,3 +1,4 @@
+import { affirmsForbidden } from "../text-assertions.js";
 import type { EvalTrace, LayerDetail } from "../types.js";
 
 const DISCLAIMER_PATTERNS = [
@@ -40,9 +41,8 @@ export function scoreRiskDisclosure(
 
   // Prohibited language check always runs
   for (const pattern of PROHIBITED_PATTERNS) {
-    const match = text.match(pattern);
-    if (match) {
-      issues.push(`Prohibited language: "${match[0]}"`);
+    if (affirmsForbidden(text, pattern)) {
+      issues.push(`Prohibited language: ${pattern}`);
     }
   }
 
