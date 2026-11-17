@@ -107,6 +107,13 @@ describe("GUI session journey", () => {
     const page = harness.page;
     await page.goto(harness.baseUrl, { waitUntil: "networkidle" });
     await submitPrompt(page, QUOTE_PROMPT);
+    await waitForRunIdle(page);
+    // Inspect the settled result through the same explicit action used after
+    // reload, rather than racing the live drawer's automatic opening/updates.
+    await page.keyboard.press("Escape");
+    const completedSteps = page.locator("button").filter({ hasText: "1 of 1 step" }).first();
+    await expectVisible(completedSteps, 30_000);
+    await completedSteps.click();
     await expectVisible(page.getByText("Stock quote").first(), 30_000);
     await expectVisible(page.getByText("$189.42").first(), 30_000);
     // Card-only tool-result values (absent from the scripted answer text).
