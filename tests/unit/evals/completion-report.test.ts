@@ -504,6 +504,7 @@ describe("Vitest JSON report conversion", () => {
   it("carries failed assertion messages into a failed case", () => {
     const converted = convertVitestJsonReport(
       vitestPayload({
+        numFailedTestSuites: 2,
         numPassedTests: 0,
         numFailedTests: 1,
         numTotalTests: 1,
