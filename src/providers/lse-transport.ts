@@ -333,8 +333,7 @@ export function lseExport(
         const advertisedRows = response.headers.get("x-export-rows");
         if (
           advertisedRows !== null &&
-          (!/^\d+$/.test(advertisedRows) ||
-            !Number.isSafeInteger(Number(advertisedRows)))
+          (!/^\d+$/.test(advertisedRows) || !Number.isSafeInteger(Number(advertisedRows)))
         )
           throw new Error("LSE export charged row count is invalid");
         return rows;
