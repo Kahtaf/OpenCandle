@@ -54,6 +54,7 @@ function startPublishedDate(freshness: WebSearchOpts["freshness"]): string {
 
 interface McpRpcResponse {
   result?: {
+    isError?: boolean;
     content?: Array<{ type?: string; text?: string; _meta?: Record<string, unknown> }>;
   };
   error?: {
@@ -203,7 +204,7 @@ function exaCacheKey(query: string, opts: WebSearchOpts): string {
 // ---------------------------------------------------------------------------
 
 async function exaMcpSearch(query: string, opts: WebSearchOpts): Promise<WebSearchEnvelope> {
-  const enrichedQuery = enrichQueryForMcp(query, opts.freshness);
+  const enrichedQuery = `${enrichQueryForMcp(query, opts.freshness)}${opts.category === "news" ? " category:news" : ""}`;
 
   const response = await fetch(EXA_MCP_URL, {
     method: "POST",
@@ -220,9 +221,6 @@ async function exaMcpSearch(query: string, opts: WebSearchOpts): Promise<WebSear
         arguments: {
           query: enrichedQuery,
           numResults: opts.limit,
-          livecrawl: "fallback",
-          type: "auto",
-          contextMaxCharacters: CONTEXT_MAX_CHARS,
         },
       },
     }),
@@ -253,6 +251,10 @@ async function exaMcpSearch(query: string, opts: WebSearchOpts): Promise<WebSear
 
   if (payload.error) {
     throw new Error(payload.error.message ?? `Exa MCP error: code ${payload.error.code}`);
+  }
+
+  if (payload.result?.isError) {
+    throw new Error("Exa MCP tool reported an error; search unavailable");
   }
 
   const text = payload.result?.content?.find(
@@ -301,6 +303,7 @@ async function exaApiSearch(
     body: JSON.stringify({
       query,
       type: "auto",
+      ...(opts.category === "news" ? { category: "news" } : {}),
       numResults: opts.limit,
       startPublishedDate: startPublishedDate(opts.freshness),
       contents: {

@@ -350,7 +350,7 @@ describe("exaSearch (MCP path)", () => {
     await exaSearch("AAPL", { category: "news", freshness: "day", limit: 5 });
 
     const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
-    expect(body.params.arguments.query).toBe("AAPL past 24 hours");
+    expect(body.params.arguments.query).toBe("AAPL past 24 hours category:news");
   });
 
   it("post-filters results by freshness", async () => {

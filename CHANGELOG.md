@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Exa search requests news explicitly and lets fallback providers handle MCP tool failures.
+
 - Brave search preserves source dates and excludes results outside the requested past hour.
 
 - London Strategic Edge financial statements and price-history fallbacks use LSE Data 3.0, with account-access diagnostics and current quota handling in local and hosted runtimes.
