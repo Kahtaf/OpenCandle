@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Release checks correctly recognize rejected guarantees and financial table column units.
+
 - Empty model answers use bounded recovery without replaying completed tools and report an explicit error if recovery fails.
 
 - Release diagnostics preserve failed test assertions without adding a spurious reporter inconsistency.

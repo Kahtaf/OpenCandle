@@ -42,8 +42,7 @@ describe("risk disclosure distinguishes rejection from a promise", () => {
 
   it("does not waive a caller's explicit forbidden-pattern assertion", () => {
     expect(
-      scoreRiskDisclosure(trace("This is not a guaranteed return."), [/./], [/guaranteed/])
-        .passed,
+      scoreRiskDisclosure(trace("This is not a guaranteed return."), [/./], [/guaranteed/]).passed,
     ).toBe(false);
   });
 });
@@ -74,8 +73,7 @@ describe("financial table column units", () => {
 
   it("still rejects an incorrect amount under the same unit header", () => {
     expect(
-      scoreDataFaithfulness(trace(capturedTable.replace("$331.84", "$931.84"), evidence))
-        .passed,
+      scoreDataFaithfulness(trace(capturedTable.replace("$331.84", "$931.84"), evidence)).passed,
     ).toBe(false);
   });
 
@@ -109,5 +107,29 @@ describe("financial table column units", () => {
       "| $2 |",
     ].join("\n");
     expect(extractFinancialNumbers(text)).toEqual([2e9, 2]);
+  });
+
+  it("supports signed dollar cells and a spelled-out column magnitude", () => {
+    const text = "Revenue (billion) | Price\n--- | ---\n-$2.5 | $42";
+    expect(extractFinancialNumbers(text)).toEqual([-2.5e9, 42]);
+  });
+
+  it.each([
+    "| Revenue (B) |\n| $2 |",
+    "| Revenue (B) |\n| --- |\n| $2 | $3 |",
+    "```\n| Revenue (B) |\n| --- |\n| $2 |\n```",
+    "| Revenue (B) |\n| --- |\n| `$2` |",
+    "| Revenue (B) |\n| --- |\n| about $2 |",
+  ])("does not infer a scale from unsupported or ambiguous table syntax: %s", (text) => {
+    expect(extractFinancialNumbers(text)).toContain(2);
+    expect(extractFinancialNumbers(text)).not.toContain(2e9);
+  });
+
+  it.each([
+    capturedTable.replace("Revenue (B)", "Revenue (M)"),
+    capturedTable.replace("$331.84", "-$331.84"),
+    capturedTable.replace("$331.84", "$331.84M"),
+  ])("rejects a wrong column scale, sign, or explicit cell unit", (text) => {
+    expect(scoreDataFaithfulness(trace(text, evidence)).passed).toBe(false);
   });
 });

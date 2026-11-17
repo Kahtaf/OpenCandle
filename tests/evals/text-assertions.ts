@@ -32,7 +32,7 @@ const REJECTION_FILLER =
  * filler words may sit between the cue and the phrase.
  */
 const REJECTING_CUE = new RegExp(
-  `\\b(?:no|not|never|without|nor|isn't|aren't|wasn't|weren't|doesn't|don't|won't|cannot|can't|rather than|instead of|as opposed to|unlike)(?:[\\s-]+${REJECTION_FILLER}){0,5}[\\s-]+$`,
+  `\\b(?:no such thing as|no|not|never|without|nor|isn't|aren't|wasn't|weren't|doesn't|don't|won't|cannot|can't|rather than|instead of|as opposed to|unlike)(?:[\\s-]+${REJECTION_FILLER}){0,5}[\\s-]+$`,
   "i",
 );
 
