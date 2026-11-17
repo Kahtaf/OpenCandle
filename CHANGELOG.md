@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Empty model answers use bounded recovery without replaying completed tools and report an explicit error if recovery fails.
+
 - Release diagnostics preserve failed test assertions without adding a spurious reporter inconsistency.
 
 - Update the agent runtime, database engines, charting, icons, and build dependencies to their latest stable releases while preserving hosted-browser compatibility.
