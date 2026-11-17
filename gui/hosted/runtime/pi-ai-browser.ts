@@ -44,3 +44,13 @@ export {
 } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/overflow.js";
 export { uuidv7 } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/uuid.js";
 export { validateToolArguments } from "../../../node_modules/@earendil-works/pi-ai/dist/utils/validation.js";
+export {
+  CACHE_WARMING_MAX_AGE_MS,
+  CACHE_WARMING_MAX_IDLE_AGE_MS,
+  CACHE_WARMING_MINIMUM_EXPECTED_SAVINGS,
+  evaluateCacheWarming,
+  getCacheWarmingDelayMs,
+  getCacheWarmingRequestOptions,
+  getPromptCacheTtlMs,
+  isCacheWarmingReplayable,
+} from "../../../node_modules/@earendil-works/pi-ai/dist/cache-warming.js";

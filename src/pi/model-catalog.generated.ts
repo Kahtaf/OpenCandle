@@ -349,6 +349,11 @@ export const firstClassModelCatalog = [
   },
   {
     provider: "anthropic",
+    id: "claude-fable-5-2",
+    label: "anthropic/claude-fable-5-2",
+  },
+  {
+    provider: "anthropic",
     id: "claude-haiku-4-5",
     label: "anthropic/claude-haiku-4-5",
   },

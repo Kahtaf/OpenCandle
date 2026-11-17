@@ -2,8 +2,7 @@
 
 ## [Unreleased]
 
-### Changed
-- Update the agent runtime, database engines, charting, icons, and build dependencies to their latest stable releases.
+- Update the agent runtime, database engines, charting, icons, and build dependencies to their latest stable releases while preserving hosted-browser compatibility.
 
 - A dedicated live provider contract command checks data and tool output against real APIs and treats blocked required checks as unsuccessful.
 

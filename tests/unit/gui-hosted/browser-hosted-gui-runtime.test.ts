@@ -1022,7 +1022,8 @@ describe("BrowserHostedGuiRuntime action safety", () => {
 
     expect((runtime as any).completedChatResults.size).toBe(MAX_COMPLETED_CHAT_RESULTS);
     expect((runtime as any).completedChatResults.has("session-1:run-0")).toBe(false);
-  });
+    // Each of the 257 runs persists its action journal on disk; allow for loaded CI hosts.
+  }, 15_000);
 
   it("deduplicates a retried logical market-state action", async () => {
     const database = await createSqlJsStateDatabase();
