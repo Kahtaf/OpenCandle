@@ -138,7 +138,7 @@ const BRAVE_BASE = "https://api.search.brave.com/res/v1";
 function mapBraveFreshness(freshness: WebSearchOpts["freshness"]): string {
   switch (freshness) {
     case "hours":
-      return "ph";
+      return "pd";
     case "day":
       return "pd";
     case "week":
@@ -153,6 +153,7 @@ interface BraveNewsResult {
   url: string;
   description: string;
   age?: string;
+  page_age?: string;
   source?: string;
   meta_url?: { hostname: string };
 }
@@ -162,7 +163,14 @@ interface BraveWebResult {
   url: string;
   description: string;
   age?: string | null;
+  page_age?: string;
   meta_url?: { hostname: string };
+}
+
+function braveSourceDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const epoch = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`);
+  return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
 }
 
 function mapBraveNewsResult(r: BraveNewsResult): WebSearchResult {
@@ -171,7 +179,7 @@ function mapBraveNewsResult(r: BraveNewsResult): WebSearchResult {
     url: r.url,
     snippet: r.description,
     source: r.source || r.meta_url?.hostname || extractDomain(r.url),
-    published: null, // Brave news returns relative "age" not absolute timestamps
+    published: braveSourceDate(r.page_age),
     category: "news",
   };
 }
@@ -182,7 +190,7 @@ function mapBraveWebResult(r: BraveWebResult): WebSearchResult {
     url: r.url,
     snippet: r.description,
     source: r.meta_url?.hostname || extractDomain(r.url),
-    published: null,
+    published: braveSourceDate(r.page_age),
     category: "general",
   };
 }
@@ -221,6 +229,16 @@ export async function braveSearch(
     } else {
       const webResults = ((data as any).web?.results || []) as BraveWebResult[];
       results = webResults.slice(0, opts.limit).map(mapBraveWebResult);
+    }
+
+    if (opts.freshness === "hours") {
+      const now = Date.now();
+      const cutoff = now - 3_600_000;
+      results = results.filter((result) => {
+        if (!result.published) return false;
+        const published = Date.parse(result.published);
+        return published >= cutoff && published <= now;
+      });
     }
 
     const envelope: WebSearchEnvelope = {

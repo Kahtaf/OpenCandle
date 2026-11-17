@@ -336,7 +336,7 @@ describe("braveSearch", () => {
 
     await braveSearch("test", { category: "news", freshness: "hours", limit: 10 }, "key");
     expect(mockedHttpGet).toHaveBeenCalledWith(
-      expect.stringContaining("freshness=ph"),
+      expect.stringContaining("freshness=pd"),
       expect.any(Object),
     );
 
