@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Sentiment release checks recognize explicit shortages of usable sentiment evidence.
+
 - Direct choices between two named assets use the comparison workflow and preserve the requested alternatives.
 
 - Live router checks require the correct ticker and route without requiring a duplicate optional symbol slot.

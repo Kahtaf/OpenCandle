@@ -14,6 +14,7 @@ import type {
   ProductEvalReport,
 } from "../../evals/product/types.js";
 import type { EvalTrace } from "../../evals/types.js";
+import sentimentEvidenceShortfall from "../../fixtures/evals/sentiment-evidence-shortfall.json";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
   return {
@@ -895,6 +896,69 @@ describe("product eval scoring", () => {
     );
     expect(result.dimensions.every((dimension) => dimension.passed)).toBe(true);
     expect(result.passed).toBe(true);
+  });
+
+  it.each([
+    sentimentEvidenceShortfall.text,
+    "The aggregate sentiment looks positive, but most sampled posts had no classifiable sentiment evidence.",
+    "Do not overread the aggregate sentiment because most sampled posts lacked usable sentiment evidence.",
+    "The sentiment score is positive, though many sampled records were unscored by keyword matching.",
+  ])("recognizes a concrete sentiment evidence shortfall: %s", (text) => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+    const result = scoreProductEvalCase(sentimentCase, makeTrace({ text }));
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    "Reddit sentiment is unavailable right now.",
+    "The sentiment sample was mostly neutral.",
+    "Sentiment is bullish and all records contain keyword sentiment evidence.",
+    "Most records did not lack keyword sentiment evidence.",
+    "No sentiment records lacked keyword sentiment evidence.",
+    "Sentiment is bullish, but shipping records lacked tracking evidence.",
+    "Sentiment is positive, but no sampled posts were unscored by keyword matching.",
+    "Most shipping records lacked tracking evidence. Sentiment is bullish.",
+    "Sentiment is bullish, but the picture is incomplete and should be treated with caution.",
+    "The sentiment records were not unscored by keyword matching.",
+  ])("rejects absent, unrelated or denied sentiment shortfalls: %s", (text) => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+    const result = scoreProductEvalCase(sentimentCase, makeTrace({ text }));
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      false,
+    );
+  });
+
+  it("requires the sentiment shortfall in the visible answer rather than tool evidence", () => {
+    const sentimentCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "sentiment-market-ai-stocks",
+    );
+    if (!sentimentCase) throw new Error("missing sentiment eval case");
+    const result = scoreProductEvalCase(
+      sentimentCase,
+      makeTrace({
+        text: "Sentiment is bullish.",
+        toolCalls: [
+          {
+            name: "get_sentiment_summary",
+            args: { query: "sentiment" },
+            result: {
+              content: [{ type: "text", text: "Most records lacked keyword sentiment evidence." }],
+            },
+          },
+        ],
+      }),
+    );
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(
+      false,
+    );
   });
 
   it("accepts an independently worded data-quality limitation as risk framing", () => {

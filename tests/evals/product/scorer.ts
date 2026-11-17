@@ -296,6 +296,25 @@ function passesFamilyAwareDimension(
 // so it is deliberately kept outside the negation filter. Missing-source impact
 // is handled separately by missingSourceDivergence.
 function sentimentDataQualityRisk(text: string): boolean {
+  const shortfallPatterns = [
+    /\b(?<subject>(?:sentiment\s+)?(?:sampled\s+)?(?:posts?|records?))\b[^.;!?,\n]{0,80}?\b(?<shortfall>lacks?|lacked|lacking|had\s+no)\s+(?:(?:usable|classifiable|keyword)\s+){0,2}sentiment\s+evidence\b/gi,
+    /\bsentiment\b[^.;!?\n]{0,120}?\b(?<subject>(?:sampled\s+)?(?:posts?|records?))\b[^.;!?,\n]{0,80}?\b(?<shortfall>unscored)\s+by\s+keyword\s+matching\b/gi,
+  ];
+  for (const pattern of shortfallPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const subject = match.groups?.subject;
+      const shortfall = match.groups?.shortfall;
+      if (
+        subject &&
+        shortfall &&
+        !limitationNegated(text, match.index + match[0].lastIndexOf(subject)) &&
+        !limitationNegated(text, match.index + match[0].lastIndexOf(shortfall))
+      ) {
+        return true;
+      }
+    }
+  }
+
   if (
     /\b(?:sample|evidence|data|sources?|read|signal|sentiment)\b[^.;!?\n]{0,80}?\b(?:not|isn't|aren't)\s+(?:be\s+)?(?:fully\s+)?representative\b/i.test(
       text,
