@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Crypto Fear & Greed readings display their source observation time and Alternative.me attribution alongside retrieval time.
+
 - SEC filing searches select the same recent filings with or without evidence snippets and return the newest requested forms first.
 
 - Cryptocurrency history preserves candle timestamps and explains variable spacing and unavailable volume instead of displaying unsupported daily risk metrics.

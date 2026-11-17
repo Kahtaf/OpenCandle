@@ -26,6 +26,8 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData | null> = {
     const text = [
       `**Fear & Greed Index: ${fg.value} — ${fg.label}**`,
       gauge,
+      `Source: Alternative.me Crypto Fear & Greed Index (https://alternative.me/crypto/fear-and-greed-index/).`,
+      `Source observation: ${fg.asOf ?? "unavailable"} | Retrieved: ${new Date(fg.timestamp).toISOString()}`,
       `Previous Close: ${fg.previousClose}${fg.weekAgo != null ? ` | Week Ago: ${fg.weekAgo}` : ""}${fg.monthAgo != null ? ` | Month Ago: ${fg.monthAgo}` : ""}`,
     ].join("\n");
 

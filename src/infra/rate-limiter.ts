@@ -57,6 +57,7 @@ export class RateLimiter {
 export const rateLimiter = new RateLimiter();
 rateLimiter.configure("yahoo", 5, 5); // 5 req/s
 rateLimiter.configure("coingecko", 10, 0.167); // 10 req/min
+rateLimiter.configure("feargreed", 1, 1);
 rateLimiter.configure(
   "alphavantage",
   ALPHA_VANTAGE_RATE_LIMIT.maxTokens,

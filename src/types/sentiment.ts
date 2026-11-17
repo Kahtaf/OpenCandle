@@ -1,6 +1,7 @@
 import type { SentinelRecord } from "../sentiment/types.js";
 
 export interface FearGreedData {
+  asOf?: string;
   value: number;
   label: string; // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
   timestamp: number;
