@@ -25,10 +25,12 @@ const answer: Part[] = [{ text: "Investments can lose value." }];
 
 async function runLocalSession(
   parts: Part[][],
-  options: { enabled?: boolean; abort?: boolean; summary?: boolean } = {},
+  options: { enabled?: boolean; abort?: "backoff" | "active"; summary?: boolean } = {},
 ) {
   const requests: Record<string, unknown>[] = [];
   const events: AgentSessionEvent[] = [];
+  let cancelActiveRequest: (() => Promise<void>) | undefined;
+  let activeRequestCancelled = false;
   const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -53,6 +55,13 @@ async function runLocalSession(
         ? [{ text: "Investment uncertainty" }]
         : parts[Math.min(requests.length, parts.length - 1)];
     if (!ancillary) requests.push(request);
+    if (!ancillary && options.abort === "active" && requests.length === 2) {
+      res.once("close", () => {
+        activeRequestCancelled = true;
+      });
+      void cancelActiveRequest?.();
+      return;
+    }
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.end(
       `data: ${JSON.stringify({ candidates: [{ content: { role: "model", parts: responseParts }, finishReason: "STOP", index: 0 }], usageMetadata: { promptTokenCount: 12, candidatesTokenCount: responseParts.length, totalTokenCount: 12 + responseParts.length } })}\n\n`,
@@ -111,15 +120,19 @@ async function runLocalSession(
     useInlineExtension: !options.summary,
   });
   try {
+    cancelActiveRequest = () => created.session.abort();
     created.session.subscribe((event) => {
       events.push(structuredClone(event));
-      if (options.abort && event.type === "auto_retry_start")
+      if (options.abort === "backoff" && event.type === "auto_retry_start")
         setTimeout(() => void created.session.abort(), 10);
     });
     await created.session.prompt("Explain investment uncertainty.");
     await created.waitForSettled();
     expect(created.session.isIdle).toBe(true);
-    if (options.abort) await new Promise((resolve) => setTimeout(resolve, 250));
+    if (options.abort === "backoff") await new Promise((resolve) => setTimeout(resolve, 250));
+    if (options.abort === "active") {
+      await vi.waitFor(() => expect(activeRequestCancelled).toBe(true));
+    }
     let summaryAuthCalls: number | undefined;
     let summaryRequests: number | undefined;
     if (options.summary) {
@@ -148,6 +161,7 @@ async function runLocalSession(
       summaryAuthCalls,
       summaryRequests,
       title: created.session.sessionName,
+      activeRequestCancelled,
     };
   } finally {
     created.session.dispose();
@@ -223,12 +237,20 @@ describe("OpenCandle local Gemini SSE completion", () => {
   });
 
   it("cancels Pi backoff without another request", async () => {
-    const proof = await runLocalSession([[], answer], { abort: true });
+    const proof = await runLocalSession([[], answer], { abort: "backoff" });
     expect(proof.requests).toHaveLength(1);
     expect(proof.events.filter((event) => event.type === "auto_retry_start")).toHaveLength(1);
     expect(proof.events).toContainEqual(
       expect.objectContaining({ type: "auto_retry_end", success: false }),
     );
+  });
+
+  it("cancels an active recovery request without another attempt", async () => {
+    const proof = await runLocalSession([[], answer], { abort: "active" });
+    expect(proof.requests).toHaveLength(2);
+    expect(proof.activeRequestCancelled).toBe(true);
+    expect(proof.assistants.at(-1)?.stopReason).toBe("aborted");
+    expect(proof.events.filter((event) => event.type === "auto_retry_start")).toHaveLength(1);
   });
 
   it("leaves a nonempty normal STOP alone", async () => {
