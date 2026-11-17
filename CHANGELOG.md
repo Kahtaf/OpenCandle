@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- FRED requests pace series metadata and observation calls individually.
+
 - Crypto Fear & Greed readings display their source observation time and Alternative.me attribution alongside retrieval time.
 
 - SEC filing searches select the same recent filings with or without evidence snippets and return the newest requested forms first.

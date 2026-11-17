@@ -33,15 +33,17 @@ export async function getSeries(
   if (cached) return cached;
 
   try {
-    await rateLimiter.acquire("fred");
-
     // Fetch series metadata and observations in parallel
     const metaUrl = `${BASE_URL}/series?series_id=${seriesId}&api_key=${apiKey}&file_type=json`;
     const obsUrl = `${BASE_URL}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=${limit}`;
 
     const [metaData, obsData] = await Promise.all([
-      httpGet<FredSeriesResponse>(metaUrl),
-      httpGet<FredObservationsResponse>(obsUrl),
+      rateLimiter
+        .acquire("fred")
+        .then(() => httpGet<FredSeriesResponse>(metaUrl, { maxRetries: 0 })),
+      rateLimiter
+        .acquire("fred")
+        .then(() => httpGet<FredObservationsResponse>(obsUrl, { maxRetries: 0 })),
     ]);
 
     const meta = metaData.seriess[0];
