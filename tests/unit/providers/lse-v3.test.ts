@@ -15,6 +15,7 @@ import {
 } from "../../../src/providers/lse.js";
 import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import liveCandles from "../../fixtures/lse/v3-candles-AAPL-1d.json";
+import meteredCandles from "../../fixtures/lse/v3-candles-AAPL-metered.json";
 import liveReports from "../../fixtures/lse/v3-financial-reports-AAPL.json";
 import { lseCsvResponse, withLseUsage } from "../../support/lse.js";
 
@@ -339,8 +340,28 @@ describe("LSE v3 compatibility", () => {
     await expect(pending).resolves.toBe(reason);
   });
 
-  it.each(["3", "-1", "1.5", "not-a-count"])(
-    "rejects contradictory or invalid advertised export rows: %s",
+  it("accepts charged input-row counts that differ from returned candle records", async () => {
+    vi.stubGlobal(
+      "fetch",
+      withLseUsage(
+        vi.fn(async () =>
+          lseCsvResponse(meteredCandles.rows, {
+            "x-lse3-adjusted": "1",
+            "x-export-rows": meteredCandles.headers["x-export-rows"],
+          }),
+        ),
+      ),
+    );
+    const rows = await getLseCandles("AAPL", "1d", {
+      start: "2026-11-03",
+      end: "2026-11-17",
+    });
+    expect(rows).toHaveLength(10);
+    expect(rows.at(-1)?.ts).toBe("2026-11-16T09:00:00Z");
+  });
+
+  it.each(["-1", "1.5", "not-a-count", "9007199254740992"])(
+    "rejects invalid advertised charged rows: %s",
     async (count) => {
       vi.stubGlobal(
         "fetch",

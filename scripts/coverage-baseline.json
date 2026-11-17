@@ -11,7 +11,7 @@
       "totals": {
         "lines": [9957, 10989],
         "functions": [2122, 2248],
-        "branches": [8398, 10575],
+        "branches": [8397, 10574],
         "statements": [10910, 12353]
       },
       "files": {
@@ -107,7 +107,7 @@
         "src/providers/finnhub.ts": [42, 42, 7, 7, 23, 25, 46, 47],
         "src/providers/fred.ts": [21, 21, 3, 3, 9, 10, 22, 23],
         "src/providers/index.ts": [0, 0, 0, 0, 0, 0, 0, 0],
-        "src/providers/lse-transport.ts": [170, 178, 31, 31, 129, 144, 188, 202],
+        "src/providers/lse-transport.ts": [170, 178, 31, 31, 128, 143, 188, 202],
         "src/providers/lse.ts": [109, 109, 19, 19, 125, 136, 122, 126],
         "src/providers/polymarket.ts": [81, 88, 22, 22, 90, 111, 94, 110],
         "src/providers/provider-credential-error.ts": [5, 5, 1, 1, 0, 0, 5, 5],

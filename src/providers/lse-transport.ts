@@ -328,14 +328,15 @@ export function lseExport(
         if (checksum && createHash("sha256").update(bytes).digest("hex") !== checksum.toLowerCase())
           throw new Error("LSE export checksum mismatch");
         const rows = parseCsv(new TextDecoder().decode(bytes));
+        // This is the charged input-row count, not the CSV record count.
+        // Aggregation and server-side selection can return fewer records.
         const advertisedRows = response.headers.get("x-export-rows");
         if (
           advertisedRows !== null &&
           (!/^\d+$/.test(advertisedRows) ||
-            !Number.isSafeInteger(Number(advertisedRows)) ||
-            Number(advertisedRows) !== rows.length)
+            !Number.isSafeInteger(Number(advertisedRows)))
         )
-          throw new Error("LSE export row count mismatch");
+          throw new Error("LSE export charged row count is invalid");
         return rows;
       });
     });
