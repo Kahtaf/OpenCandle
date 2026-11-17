@@ -108,7 +108,23 @@ export async function getCompanyNews(
     const url = `${FINNHUB_BASE}/company-news?symbol=${encodeURIComponent(symbol)}&from=${from}&to=${to}&token=${apiKey}`;
     const data = await httpGet<FinnhubArticle[]>(url);
 
-    const articles = Array.isArray(data) ? data : [];
+    if (
+      !Array.isArray(data) ||
+      data.some(
+        (article) =>
+          !article ||
+          typeof article.headline !== "string" ||
+          typeof article.summary !== "string" ||
+          typeof article.source !== "string" ||
+          typeof article.url !== "string" ||
+          !Number.isFinite(article.datetime) ||
+          article.datetime <= 0 ||
+          !Number.isFinite(article.id),
+      )
+    ) {
+      throw new Error("Finnhub invalid company-news response schema");
+    }
+    const articles = data;
     const filtered = filterByRelevance(articles, symbol);
 
     cache.set(key, filtered, TTL.FINNHUB_NEWS);

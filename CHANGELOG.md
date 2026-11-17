@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Finnhub news reports malformed upstream responses as unavailable instead of returning an empty successful result.
+
 - TradingView quotes and screens explicitly disclose that their freshness is unverified.
 
 - Prediction-market searches use supported upstream limits and bounded pagination while preserving the requested outcome-quote count.
