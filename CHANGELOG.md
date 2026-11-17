@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Twitter sentiment includes canonical citations when the CLI returns post IDs without URLs.
+
 - Exa search requests news explicitly and lets fallback providers handle MCP tool failures.
 
 - Brave search preserves source dates and excludes results outside the requested past hour.
