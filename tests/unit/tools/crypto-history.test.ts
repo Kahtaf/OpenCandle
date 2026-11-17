@@ -14,7 +14,7 @@ describe("get_crypto_history tool", () => {
     vi.restoreAllMocks();
   });
 
-  it("includes risk metrics when enough crypto history is available", async () => {
+  it("shows raw candles and source caveats without stock-daily risk metrics", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(makeOhlcRows(45)),
@@ -23,10 +23,10 @@ describe("get_crypto_history tool", () => {
     const result = await cryptoHistoryTool.execute("call-1", { id: "bitcoin", days: 45 });
     const text = result.content[0].text;
 
-    expect(text).toContain("Risk metrics");
-    expect(text).toContain("Annualized Volatility");
-    expect(text).toContain("Max Drawdown");
-    expect(text).toContain("Value at Risk");
+    expect(text).toContain("Candle spacing");
+    expect(text).toContain("volume is unavailable");
+    expect(text).not.toMatch(/Annualized|Sharpe|Value at Risk/);
+    expect(result.details).toHaveLength(45);
   });
 });
 

@@ -80,8 +80,26 @@ export async function getCryptoHistory(id: string, days: number = 180): Promise<
     const url = `${BASE_URL}/coins/${encodeURIComponent(id)}/ohlc?vs_currency=usd&days=${days}`;
     const data = await httpGet<number[][]>(url, { headers: COINGECKO_HEADERS });
 
+    if (!Array.isArray(data)) throw new Error("Invalid CoinGecko OHLC response");
+    let previousTimestamp = 0;
+    for (const row of data) {
+      if (!Array.isArray(row) || row.length < 5) throw new Error("Invalid CoinGecko OHLC row");
+      const [ts, open, high, low, close] = row;
+      if (
+        ![ts, open, high, low, close].every((value) => Number.isFinite(value) && value > 0) ||
+        !Number.isFinite(new Date(ts).getTime()) ||
+        ts <= previousTimestamp ||
+        high < Math.max(open, low, close) ||
+        low > Math.min(open, high, close)
+      ) {
+        throw new Error("Invalid CoinGecko OHLC candle");
+      }
+      previousTimestamp = ts;
+    }
+
     const ohlcv: OHLCV[] = data.map(([ts, open, high, low, close]) => ({
       date: new Date(ts).toISOString().split("T")[0],
+      timestamp: ts / 1000,
       open,
       high,
       low,

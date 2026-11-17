@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Cryptocurrency history preserves candle timestamps and explains variable spacing and unavailable volume instead of displaying unsupported daily risk metrics.
+
 - Twitter sentiment includes canonical citations when the CLI returns post IDs without URLs.
 
 - Exa search requests news explicitly and lets fallback providers handle MCP tool failures.

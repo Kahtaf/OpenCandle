@@ -65,6 +65,18 @@ describe("coingecko provider", () => {
       expect(bars[0].volume).toBe(0); // OHLC endpoint doesn't include volume
     });
 
+    it.each([
+      [
+        [1711900800000, 1, 2, 0.5, 1],
+        [1711900800000, 1, 2, 0.5, 1],
+      ],
+      [[1711900800000, 5, 2, 1, 4]],
+      [[1711900800000, 1, 2, 0.5, null]],
+    ])("rejects malformed or unordered source candles", async (...rows) => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => rows });
+      await expect(getCryptoHistory("bitcoin", 1)).rejects.toThrow("Invalid CoinGecko OHLC");
+    });
+
     it("caches history results", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
