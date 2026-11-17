@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Live router checks require the correct ticker and route without requiring a duplicate optional symbol slot.
+
 - Release checks correctly recognize rejected guarantees and financial table column units.
 
 - Empty model answers use bounded recovery without replaying completed tools and report an explicit error if recovery fails.

@@ -9,13 +9,7 @@
         "AAPL"
       ]
     },
-    "slots": {
-      "symbol": {
-        "value": "AAPL",
-        "source": "user",
-        "confidence": "high"
-      }
-    },
+    "slots": {},
     "preference_updates": [],
     "missing_required": [],
     "tool_bundles": [
