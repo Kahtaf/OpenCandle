@@ -1,0 +1,13 @@
+{
+  "annualEarnings": [
+    {
+      "fiscalDateEnding": "2024-09-30",
+      "reportedEPS": "6.08"
+    },
+    {
+      "fiscalDateEnding": "2023-09-30",
+      "reportedEPS": "6.13"
+    }
+  ],
+  "quarterlyEarnings": []
+}

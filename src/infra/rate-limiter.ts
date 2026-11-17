@@ -10,7 +10,7 @@ interface Bucket {
 }
 
 export const ALPHA_VANTAGE_RATE_LIMIT = {
-  maxTokens: 5,
+  maxTokens: 1,
   refillRate: 0.083,
 } as const;
 

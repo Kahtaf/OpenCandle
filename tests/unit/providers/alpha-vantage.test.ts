@@ -10,6 +10,7 @@ import {
 } from "../../../src/providers/alpha-vantage.js";
 import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
 import cashFlowFixture from "../../fixtures/alphavantage/AAPL-cash-flow.json";
+import earningsFixture from "../../fixtures/alphavantage/AAPL-earnings.json";
 import globalQuoteFixture from "../../fixtures/alphavantage/AAPL-global-quote.json";
 import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
 import dailyHistoryFixture from "../../fixtures/alphavantage/AAPL-time-series-daily.json";
@@ -31,6 +32,9 @@ describe("alpha-vantage provider", () => {
   describe("getFinancials", () => {
     function mockThreeStatements() {
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("EARNINGS")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(earningsFixture) });
+        }
         if (url.includes("INCOME_STATEMENT")) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(incomeFixture) });
         }
@@ -44,11 +48,57 @@ describe("alpha-vantage provider", () => {
       });
     }
 
+    it("sources exact annual EPS rather than absent income EPS", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.includes("EARNINGS")
+            ? {
+                annualEarnings: [{ fiscalDateEnding: "2024-09-30", reportedEPS: "6.08" }],
+                quarterlyEarnings: [],
+              }
+            : { annualReports: [{ fiscalDateEnding: "2024-09-30" }] },
+      }));
+      const statements = await getFinancials("AAPL", "test-key");
+      expect(statements[0].eps).toBe(6.08);
+    });
+
+    it("rejects a missing quarterly earnings schema", async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ unexpected: "payload" }) });
+      await expect(getEarnings("AAPL", "test-key")).rejects.toThrow(/schema/i);
+    });
+
+    it("shares the earnings transport between financials and quarterly earnings", async () => {
+      mockThreeStatements();
+      await getFinancials("AAPL", "test-key");
+      await getEarnings("AAPL", "test-key");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+    });
+
+    it.each(["None", "", "Infinity"])("rejects unavailable annual EPS %s", async (reportedEPS) => {
+      mockThreeStatements();
+      const fetchStatements = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockImplementation((url: string, options: RequestInit) =>
+        url.includes("EARNINGS")
+          ? Promise.resolve({
+              ok: true,
+              json: async () => ({
+                quarterlyEarnings: [],
+                annualEarnings: [{ fiscalDateEnding: "2024-09-30", reportedEPS }],
+              }),
+            })
+          : fetchStatements(url, options),
+      );
+      await expect(getFinancials("AAPL", "test-key")).rejects.toThrow(/annual EPS/);
+    });
+
     it("fetches income statement, balance sheet, and cash flow", async () => {
       mockThreeStatements();
       const _statements = await getFinancials("AAPL", "test-key");
 
-      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
 
       const urls = (globalThis.fetch as any).mock.calls.map((c: any) => c[0]);
       expect(urls.some((u: string) => u.includes("INCOME_STATEMENT"))).toBe(true);
@@ -99,7 +149,7 @@ describe("alpha-vantage provider", () => {
       await getFinancials("AAPL", "test-key");
 
       // Should only fetch once (3 calls), second call uses cache
-      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
     });
 
     it("parses totalDebt and cashAndEquivalents from balance sheet", async () => {
@@ -331,6 +381,14 @@ describe("alpha-vantage provider", () => {
       // avgVolume should NOT be 180.50 (the 50DayMovingAverage price)
       expect(overview.avgVolume).not.toBe(180.5);
     });
+  });
+
+  it.each([
+    ["This is a premium endpoint", "entitlement"],
+    ["Our limit is 25 requests per day. Subscribe to premium.", "rate limited"],
+  ])("classifies upstream capability and quota messages %s", async (Information, category) => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ Information }) });
+    await expect(getOverview("AAPL", "test-key")).rejects.toThrow(category);
   });
 
   describe("credential errors", () => {

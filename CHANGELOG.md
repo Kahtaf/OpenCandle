@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Alpha Vantage financials report source annual earnings per share, pace requests, and distinguish incomplete data, quota limits, and premium access.
+
 - Yahoo fund holdings use the updated library transport before the direct endpoint to improve availability.
 
 - Yahoo stock quotes keep open, high, and low values consistent with a complete session observation.
