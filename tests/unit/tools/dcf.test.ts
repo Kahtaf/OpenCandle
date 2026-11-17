@@ -490,7 +490,8 @@ describe("compute_dcf tool (real providers over fixture HTTP)", () => {
 
     const result = await dcfTool.execute("t", { symbol: "AAPL" });
 
-    expect(textContent(result)).toMatch(/current stock price|current quote price/i);
+    expect(textContent(result)).toContain("DCF valuation unavailable");
+    expect(textContent(result)).toContain("stock quote");
     expect(textContent(result)).not.toContain("Current Price: $0.00");
     expect(toolDetails(result)).toBeNull();
   });
