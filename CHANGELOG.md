@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Yahoo stock quotes keep open, high, and low values consistent with a complete session observation.
+
 - Finnhub news reports malformed upstream responses as unavailable instead of returning an empty successful result.
 
 - TradingView quotes and screens explicitly disclose that their freshness is unverified.
