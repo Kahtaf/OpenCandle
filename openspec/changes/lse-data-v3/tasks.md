@@ -7,5 +7,5 @@
 - [x] Update data-source/configuration docs and add a user-visible CHANGELOG entry.
 - [x] Verify real statements/DCF/history through the TUI harness, local GUI Diagnostics, and the actual hosted fetch/relay transport to live LSE.
 - [ ] Verify an LSE-specific journey in the deployed hosted GUI after authorized runtime/relay deployment.
-- [ ] Pass the complete `npm run gates:full` before shipping: latest run is blocked by the separate GUI quote-card visibility assertion (isolated diagnostic passed; failure not waived).
+- [ ] Pass the complete `npm run gates:full` before shipping: GUI quote-card journey is fixed and every lane passed; a fixed-HEAD run is required after the prior gate rejected commits made during execution.
 - [x] Run `npm run review:pr` and final local autoreview; all three substantive findings were fixed and the third review is clean.

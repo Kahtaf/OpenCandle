@@ -4,7 +4,7 @@
 
 LSE Data 3.0 implementation is complete and live-verified with the replacement key. Final autoreview is clean. All 5,123 unit tests and 88 relay tests passed, including a fresh complete node/relay coverage run; `npm run coverage:check` passed against the explicitly reviewed ownership baseline migration.
 
-PR preparation is in progress. The prior full-gate failure is retained below. The GUI quote-card journey now waits for completion and explicitly opens the result before inspecting it; its focused run passes. A fresh full gate and final branch review are required before the PR is ready. Hosted deployment was not performed, and a deployed LSE-specific hosted GUI journey remains pending that deployment.
+PR preparation is in progress. The GUI quote-card journey now waits for completion and explicitly opens the result before inspecting it. All functional and coverage lanes passed on 2026-11-17, including 58 browser coverage cases, but the gate rejected that run because HEAD changed during execution. A fixed-HEAD full gate and final branch review are required before the PR is ready. Hosted deployment was not performed, and a deployed LSE-specific hosted GUI journey remains pending that deployment.
 
 
 ## Sources
@@ -117,4 +117,6 @@ Follow-up before release: fix or deterministically diagnose the separate GUI quo
 
 The quote-card journey inspected the automatically opened live drawer while the run was still updating. It now waits for the run to finish, closes the transient drawer with Escape, and opens the completed steps explicitly before checking the same card-only prices. Model tool-message and persisted reload assertions are retained. The closed-drawer reproduction failed before adding the explicit open (`/tmp/lse-pr-gui-closed-red.log`); the final focused journey passed (`/tmp/lse-pr-gui-green.log`). No GUI production source changed.
 
-Public documentation links passed (39 links, `/tmp/lse-pr-doc-links.log`). The changed-file credential scan found no copy of the configured LSE key. Full gate: `/tmp/lse-pr-full-gates.log` (in progress).
+Public documentation links passed (39 links, `/tmp/lse-pr-doc-links.log`). The changed-file credential scan found no copy of the configured LSE key. Packed-install smoke also passed (`/tmp/lse-pr-packed-install.log`).
+
+The first PR-preparation full gate passed every test lane: 5,123 unit, 88 relay, 358 agent-tool, 31 site, 29 GUI integration, 29 GUI journey, nine release smoke, hosted PWA smoke, package contents, Node/relay coverage ratchet, and all 58 browser coverage tests. Its final integrity check rejected the run because commits were made during execution; exit 1 is preserved and is not treated as a successful gate. Log: `/tmp/lse-pr-full-gates.log`; report: `validation-output/gates/2026-11-17T00-52-38-124Z-5735.json`. Final branch autoreview will run the complete gate on a clean, fixed commit.
