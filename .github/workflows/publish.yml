@@ -153,6 +153,12 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
 
+          tag_refs="$(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+          if [[ -n "$tag_refs" ]]; then
+            tagged_commit="$(awk -v ref="refs/tags/$tag" '$2 == ref { tag = $1 } $2 == ref "^{}" { peeled = $1 } END { print peeled ? peeled : tag }' <<< "$tag_refs")"
+            test "$tagged_commit" = "$GITHUB_SHA"
+          fi
+
           # A rerun after npm accepted the version can finish the GitHub release.
           # Only a byte-identical public package satisfies this recovery path.
           if npm view "$name@$version" dist.integrity --prefer-online > "$RUNNER_TEMP/release-integrity"; then
@@ -162,9 +168,7 @@ jobs:
             npm publish "$tarball" --ignore-scripts --access public --provenance
           fi
 
-          if git show-ref --verify --quiet "refs/tags/$tag"; then
-            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
-          else
+          if [[ -z "$tag_refs" ]]; then
             git push origin "HEAD:refs/tags/$tag"
           fi
 
