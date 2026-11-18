@@ -513,11 +513,13 @@ export function postProcessRouterOutput(
     };
   }
 
+  const assetChoice = readAssetChoice(text, disambiguateSymbols(extracted.symbols, text).kept);
+
   if (
     next.workflow !== "compare_assets" &&
     next.workflow !== "options_screener" &&
     extracted.symbols.length >= 2 &&
-    isPlainMultiAssetComparisonRequest(text)
+    (isPlainMultiAssetComparisonRequest(text) || assetChoice !== undefined)
   ) {
     diagnostics.push({
       code: "explicit_comparison_recovered",
@@ -529,7 +531,7 @@ export function postProcessRouterOutput(
       workflow: "compare_assets",
       entities: {
         ...next.entities,
-        symbols: orderSymbolsByText(text, extracted.symbols),
+        symbols: assetChoice ?? orderSymbolsByText(text, extracted.symbols),
       },
       slots: removeSymbolSlots(next.slots),
       missing_required: [],
@@ -673,7 +675,7 @@ export function postProcessRouterOutput(
   if (
     next.workflow === "options_screener" &&
     mergeSymbols(next.entities.symbols, extracted.symbols).length >= 2 &&
-    isPlainMultiAssetComparisonRequest(text)
+    (isPlainMultiAssetComparisonRequest(text) || assetChoice !== undefined)
   ) {
     diagnostics.push({
       code: "options_comparison_corrected_to_compare_assets",
@@ -687,11 +689,14 @@ export function postProcessRouterOutput(
       missing_required: [],
       entities: {
         ...next.entities,
-        symbols: orderSymbolsByText(text, mergeSymbols(extracted.symbols, next.entities.symbols)),
+        symbols:
+          assetChoice ??
+          orderSymbolsByText(text, mergeSymbols(extracted.symbols, next.entities.symbols)),
         direction: undefined,
         dteHint: undefined,
         optionStrategy: undefined,
       },
+      slots: assetChoice ? removeSymbolSlots(next.slots) : next.slots,
       diagnostics,
     };
   }
@@ -1139,6 +1144,38 @@ function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
       lower,
     )
   );
+}
+
+function readAssetChoice(
+  text: string,
+  trustedSymbols: readonly string[],
+): [string, string] | undefined {
+  if (
+    hasExplicitOptionContractLanguage(text.toLowerCase()) ||
+    isStatefulTrackingRequest(text) ||
+    (/\b(?:build|create|construct|put\s+together)\b/i.test(text) &&
+      /\b(?:portfolio|allocation)\b/i.test(text))
+  ) {
+    return undefined;
+  }
+
+  const choices = text.matchAll(
+    /(?:^|[.!?;]\s*|,\s*)(?:should\s+I\s+(?:use|buy|hold|choose|prioritize)|would\s+you\s+choose|which\s+should\s+I\s+hold,?)\s+\$?([A-Z][A-Z0-9]*(?:[.-][A-Z0-9]+)*)\s+or\s+\$?([A-Z][A-Z0-9]*(?:[.-][A-Z0-9]+)*)(?=\s*(?:[?!;]|\.(?:\s|$)|$|(?:for|as|over|in|with)\b))/gi,
+  );
+  for (const match of choices) {
+    const first = match[1]?.toUpperCase();
+    const second = match[2]?.toUpperCase();
+    if (
+      first &&
+      second &&
+      first !== second &&
+      trustedSymbols.includes(first) &&
+      trustedSymbols.includes(second)
+    ) {
+      return [first, second];
+    }
+  }
+  return undefined;
 }
 
 function isPlainMultiAssetComparisonRequest(text: string): boolean {

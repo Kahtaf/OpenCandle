@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RouterOutput } from "../../../src/routing/router-types.js";
 import { stripNonContract } from "../../evals/router-live-contract.js";
+import simpleQuoteFixture from "../../fixtures/router/007-fallback-data-fetch.json";
 
 function output(overrides: Partial<RouterOutput>): RouterOutput {
   return {
@@ -18,6 +19,40 @@ function output(overrides: Partial<RouterOutput>): RouterOutput {
 }
 
 describe("router-live contract normalization", () => {
+  it("accepts a simple main-agent request with its ticker in entities and no duplicate slot", () => {
+    const expected = simpleQuoteFixture.expectedRouterOutput as RouterOutput;
+    const contract = {
+      slotKeys: Object.keys(expected.slots),
+      toolBundles: expected.tool_bundles,
+    };
+    const actual = output({
+      routeKind: "agent_task",
+      entities: { symbols: ["AAPL"] },
+      tool_bundles: ["core_market"],
+    });
+    expect(stripNonContract(actual, contract)).toEqual(stripNonContract(expected, contract));
+  });
+
+  it.each([
+    { entities: { symbols: [] } },
+    { entities: { symbols: ["MSFT"] } },
+    { routeKind: "pass_through" as const },
+    { tool_bundles: [] },
+  ])("keeps ticker, route, and required tools contractual for simple requests: %j", (override) => {
+    const expected = simpleQuoteFixture.expectedRouterOutput as RouterOutput;
+    const contract = {
+      slotKeys: Object.keys(expected.slots),
+      toolBundles: expected.tool_bundles,
+    };
+    const actual = output({
+      routeKind: "agent_task",
+      entities: { symbols: ["AAPL"] },
+      tool_bundles: ["core_market"],
+      ...override,
+    });
+    expect(stripNonContract(actual, contract)).not.toEqual(stripNonContract(expected, contract));
+  });
+
   it("preserves exact Alphabet share-class identity", () => {
     const normalized = stripNonContract(
       output({

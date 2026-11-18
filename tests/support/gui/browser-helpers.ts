@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, type Locator, type Page } from "playwright-core";
-import { expect } from "vitest";
 
 export function resolveChromiumExecutable(): string {
   const configured = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -36,7 +35,6 @@ export async function startNewChat(page: Page): Promise<void> {
 
 export async function expectVisible(locator: Locator, timeout = 5_000): Promise<void> {
   await locator.waitFor({ state: "visible", timeout });
-  await expect(locator.isVisible()).resolves.toBe(true);
 }
 
 export function isPointerTarget(element: Element): boolean {
