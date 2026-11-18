@@ -27,6 +27,7 @@ describe("alpha-vantage provider", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("getFinancials", () => {
@@ -317,7 +318,10 @@ describe("alpha-vantage provider", () => {
       cache.set("av:globalquote:AAPL", fresh, -1);
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
 
-      await expect(getGlobalQuote("AAPL", "test-key")).resolves.toEqual(fresh);
+      vi.useFakeTimers();
+      const quote = getGlobalQuote("AAPL", "test-key");
+      await vi.runAllTimersAsync();
+      await expect(quote).resolves.toEqual(fresh);
     });
   });
 
@@ -469,9 +473,6 @@ describe("alpha-vantage provider", () => {
     });
 
     it("still throws generic errors for non-auth failures", async () => {
-      const { ProviderCredentialError } = await import(
-        "../../../src/providers/provider-credential-error.js"
-      );
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
@@ -479,13 +480,13 @@ describe("alpha-vantage provider", () => {
         text: () => Promise.resolve("Internal Server Error"),
       });
 
-      try {
-        await getOverview("AAPL", "test-key");
-        throw new Error("expected an error to be thrown");
-      } catch (err) {
-        // Must NOT be ProviderCredentialError — a 500 is not a credential issue.
-        expect(err).not.toBeInstanceOf(ProviderCredentialError);
-      }
+      vi.useFakeTimers();
+      const failure = expect(getOverview("AAPL", "test-key")).rejects.toMatchObject({
+        name: "HttpError",
+        status: 500,
+      });
+      await vi.runAllTimersAsync();
+      await failure;
     });
   });
 });

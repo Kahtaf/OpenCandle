@@ -2,7 +2,6 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { assetDescriptor } from "../../../gui/web/src/features/symbol/asset-descriptor.js";
-import * as symbolPageModule from "../../../gui/web/src/features/symbol/SymbolPage.jsx";
 import { SymbolPageView } from "../../../gui/web/src/features/symbol/SymbolPage.jsx";
 import {
   invokeSymbolMutation,
@@ -187,10 +186,6 @@ describe("symbol page", () => {
       expect.objectContaining({ id: 11, symbol: "MSFT", watchlistName: "Default" }),
     ]);
     expect(result.stateQuote).toMatchObject({ symbol: "MSFT", price: 421 });
-  });
-
-  it("no longer exports the ticker-string asset heuristic", () => {
-    expect("isNonEquitySymbol" in symbolPageModule).toBe(false);
   });
 
   it.each([

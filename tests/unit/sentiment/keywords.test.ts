@@ -18,8 +18,8 @@ describe("shared keyword lists", () => {
     expect(new Set(BEARISH_TERMS).size).toBe(BEARISH_TERMS.length);
   });
 
-  it("contains all existing twitter provider bullish terms", () => {
-    const twitterBullish = [
+  it("preserves the shared bullish vocabulary", () => {
+    const bullishTerms = [
       "moon",
       "buy",
       "undervalued",
@@ -34,13 +34,13 @@ describe("shared keyword lists", () => {
       "rip",
       "squeeze",
     ];
-    for (const term of twitterBullish) {
+    for (const term of bullishTerms) {
       expect(BULLISH_TERMS).toContain(term);
     }
   });
 
-  it("contains all existing twitter provider bearish terms", () => {
-    const twitterBearish = [
+  it("preserves the shared bearish vocabulary", () => {
+    const bearishTerms = [
       "crash",
       "overvalued",
       "sell",
@@ -55,49 +55,7 @@ describe("shared keyword lists", () => {
       "tank",
       "rug",
     ];
-    for (const term of twitterBearish) {
-      expect(BEARISH_TERMS).toContain(term);
-    }
-  });
-
-  it("contains all existing reddit provider bullish terms", () => {
-    const redditBullish = [
-      "moon",
-      "buy",
-      "undervalued",
-      "breakout",
-      "calls",
-      "bullish",
-      "rocket",
-      "diamond hands",
-      "accumulate",
-      "dip buy",
-      "long",
-      "rip",
-      "squeeze",
-    ];
-    for (const term of redditBullish) {
-      expect(BULLISH_TERMS).toContain(term);
-    }
-  });
-
-  it("contains all existing reddit provider bearish terms", () => {
-    const redditBearish = [
-      "crash",
-      "overvalued",
-      "sell",
-      "puts",
-      "bearish",
-      "bubble",
-      "dump",
-      "short",
-      "bagholding",
-      "exit",
-      "drill",
-      "tank",
-      "rug",
-    ];
-    for (const term of redditBearish) {
+    for (const term of bearishTerms) {
       expect(BEARISH_TERMS).toContain(term);
     }
   });

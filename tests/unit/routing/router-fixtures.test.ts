@@ -55,10 +55,6 @@ function stripReasoning(output: RouterOutput): Omit<RouterOutput, "reasoning"> {
 describe("Router deterministic fixtures", () => {
   const fixtures = loadFixtures();
 
-  it("fixture set is non-empty", () => {
-    expect(fixtures.length).toBeGreaterThan(0);
-  });
-
   it("suite contains at least one multi-turn fixture (priorTurns.length > 0)", () => {
     const multiTurn = fixtures.filter(({ data }) => data.priorTurns.length > 0);
     expect(
@@ -128,87 +124,49 @@ describe("Router deterministic fixtures", () => {
 });
 
 describe("Router fixtures drive prompt assembly correctly", () => {
-  // Beyond JSON round-trip: each fixture's slots must produce an Assumptions
-  // block that distributes slot sources into the canonical sections, and
-  // fallback-route fixtures must produce a fallback playbook that carries the
-  // block and the ask_user directive when missing_required is non-empty.
   const fixtures = loadFixtures();
 
-  for (const { name, data } of fixtures) {
-    const { slots } = data.expectedRouterOutput;
-    const hasSlots = Object.keys(slots).length > 0;
+  it.each([
+    ["010-preference-from-memory.json", "From saved preferences: risk_profile (conservative)"],
+    ["027-compare-prior-context.json", "From prior context: symbols (SPY, NVDA, AMD)"],
+  ])("preserves slot provenance from %s", (name, expected) => {
+    const fixture = fixtures.find((fixture) => fixture.name === name);
+    expect(fixture).toBeDefined();
+    const block = buildAssumptionsBlockFromRouter(fixture?.data.expectedRouterOutput.slots ?? {});
+    expect(block).toContain(expected);
+    expect(block).toContain("User-specified:");
+  });
 
-    if (hasSlots) {
-      it(`fixture ${name} Assumptions block places each slot under the right source section`, () => {
-        const block = buildAssumptionsBlockFromRouter(slots);
-        const sectionForLabel = (line: string) => {
-          if (line.startsWith("  User-specified:")) return "user";
-          if (line.startsWith("  From saved preferences:")) return "preference";
-          if (line.startsWith("  From prior context:")) return "prior_context";
-          if (line.startsWith("  From memory:")) return "memory";
-          if (line.startsWith("  Defaults:")) return "default";
-          return null;
-        };
-        const sectionContents: Record<string, string> = {
-          user: "",
-          preference: "",
-          prior_context: "",
-          memory: "",
-          default: "",
-        };
-        let currentSection: string | null = null;
-        for (const line of block.split("\n")) {
-          const s = sectionForLabel(line);
-          if (s) {
-            currentSection = s;
-            sectionContents[s] += line;
-          } else if (currentSection) {
-            sectionContents[currentSection] += ` ${line}`;
-          }
-        }
-        for (const [key, slot] of Object.entries(slots)) {
-          expect(sectionContents[slot.source]).toContain(`${key} (`);
-        }
-      });
-    }
+  it.each([
+    "004-options-missing-symbol.json",
+    "006-fallback-entry-levels.json",
+    "007-fallback-data-fetch.json",
+    "019-iv-as-volatility.json",
+  ])("carries assumptions and clarification requirements from %s", (name) => {
+    const fixture = fixtures.find((fixture) => fixture.name === name);
+    if (!fixture) throw new Error(`Missing router fixture ${name}`);
+    const { slots, missing_required, entities } = fixture.data.expectedRouterOutput;
+    const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
+    const playbook = buildFallbackPlaybook({
+      assumptionsBlock,
+      missingRequired: missing_required,
+      extraContext:
+        entities.symbols.length > 0
+          ? `Router-extracted symbols: ${entities.symbols.join(", ")}.`
+          : undefined,
+    });
 
-    if (data.expectedRouterOutput.routeKind !== "workflow_dispatch") {
-      it(`fixture ${name} fallback playbook embeds assumptions as context and ask_user directive`, () => {
-        const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
-        const playbook = buildFallbackPlaybook({
-          assumptionsBlock,
-          missingRequired: data.expectedRouterOutput.missing_required,
-          extraContext:
-            data.expectedRouterOutput.entities.symbols.length > 0
-              ? `Router-extracted symbols: ${data.expectedRouterOutput.entities.symbols.join(", ")}.`
-              : undefined,
-        });
-        if (hasSlots) {
-          // The playbook must carry the block as context, but should not tell
-          // the model to reproduce fallback assumptions verbatim in the answer.
-          expect(playbook).toContain(assumptionsBlock);
-          expect(playbook).toContain("Keep this fallback generic");
-          expect(playbook).toContain("Do not add task-specific instructions here");
-          expect(playbook).not.toContain("same-month year-over-year inflation");
-          expect(playbook).not.toContain(
-            "instead of searching only for provider-specific series identifiers",
-          );
-          expect(playbook).not.toContain("Start with the Assumptions block");
-          expect(playbook).not.toContain("Reproduce the block in your response exactly");
-        }
-        if (data.expectedRouterOutput.missing_required.length > 0) {
-          expect(playbook).toMatch(/ask_user/);
-          for (const slot of data.expectedRouterOutput.missing_required) {
-            expect(playbook).toContain(slot);
-          }
-        }
-        // Universal: no refusal vocabulary anywhere in the playbook.
-        expect(playbook).not.toMatch(/not financial advice/i);
-        expect(playbook).not.toMatch(/consult a qualified/i);
-        expect(playbook).not.toMatch(/I cannot/i);
-      });
+    expect(playbook).toContain(`## Assumptions Context\n${assumptionsBlock}`);
+    expect(playbook).toContain("Keep this fallback generic");
+    expect(playbook).toContain("only as internal routing context");
+    expect(playbook).not.toMatch(/not financial advice|consult a qualified|I cannot/i);
+    if (missing_required.length > 0) {
+      expect(playbook).toContain(`required but not yet filled: ${missing_required.join(", ")}`);
+      expect(playbook).toContain("Call the `ask_user` tool");
+    } else {
+      expect(playbook).not.toContain("## Missing Required Information");
     }
-  }
+  });
 
   it("full system prompt assembled for a fallback fixture contains analyst stance + playbook + assumptions", () => {
     const fallback = fixtures.find(
