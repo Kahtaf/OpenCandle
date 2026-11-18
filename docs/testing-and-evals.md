@@ -32,7 +32,7 @@ For release-facing changes, run the same local gate that release and publish pat
 npm run release:check
 ```
 
-That command runs the shared `release` gate: typecheck and lint, unit/relay/agent-tool tests, the docs site build, GUI integration and release smoke, hosted PWA smoke, package-content validation, coverage, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. `scripts/release.mjs` commits the final version candidate first, then runs `release:check`, prepares the exact release package, runs the live provider release smoke (`npm run test:providers:release`), and reruns fresh `npm run eval -- release` against that unchanged candidate; it tags and pushes only if every proof passes. There is no eval-confirmation prompt and no bypass flag.
+That command runs the shared `release` gate: typecheck and lint, unit/relay/agent-tool tests, the docs site build, GUI integration and release smoke, hosted PWA smoke, package-content validation, coverage, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. The Publish workflow runs the release gate and prepares the exact package on the same GitHub runner before live evals.
 
 ## First-Run Release Smoke
 
@@ -84,13 +84,7 @@ npm run eval -- release
 | `router-live` | `tests/scripts/run-live-router-eval.ts` | `--provider <id>`, `--model <id>` |
 | `release` | `router-live`, `cases`, `product`, `competitive:frozen` | continues past failures and exits non-zero if any suite fails |
 
-For release preparation, run the full manual eval cadence:
-
-```bash
-npm run eval -- release
-```
-
-This gate is deliberately not part of `release:check` or CI because it requires live credentials and can run external agent baselines. The release script records it as a manual confirmation checkpoint before version or tag mutation.
+The Publish workflow runs the required live suites against the dispatched release commit. `npm run eval -- release` is also available for local diagnosis. It runs all four suites in parallel, and the frozen suite checks the mandatory assertions without calling the comparison judge or competitor agents.
 
 Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. The front-door index at `tests/evals/runs/index.jsonl` records suite id, timestamps, exit code, argv, and report paths. Treat those run files as local evidence, not committed documentation.
 
@@ -136,7 +130,7 @@ npm run eval -- competitive
 
 The runner generates (or accepts) finance prompts, runs each through OpenCandle and the baselines, judges usefulness, correctness, evidence, clarity, and uncertainty handling with a configured judge model, and writes a timestamped `*_competitive-finance.json` report under `tests/evals/runs/`.
 
-For release preparation, rerun the frozen competitive panel:
+To run the advisory judged comparison on the frozen panel:
 
 ```bash
 npm run eval -- competitive:frozen

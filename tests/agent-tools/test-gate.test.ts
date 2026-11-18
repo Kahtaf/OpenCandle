@@ -39,7 +39,10 @@ const EXPECTED_FULL = [
   "package:contents:check",
   "test:coverage",
 ];
-const EXPECTED_RELEASE = [...EXPECTED_FULL, "test:packed-install", "docs:links:check"];
+const EXPECTED_RELEASE = [
+  ...EXPECTED_FULL.flatMap((step) => (step === "test:site" ? [step, "docs:links:check"] : [step])),
+  "release:package:prepare",
+];
 
 function makePolicy(overrides: Record<string, unknown> = {}) {
   return {

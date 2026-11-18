@@ -39,46 +39,11 @@ public-docs link check (`npm run docs:links:check`) as an explicit Node 24 step
 because the shared `full` policy does not include it. The packed-install smoke
 and packaged CLI-boot proof run on every supported runtime.
 
-## Local release
+## Prepare the version PR
 
-`node scripts/release.mjs <major|minor|patch> [--dry-run]`
-`node scripts/release.mjs --resume [--dry-run]`
+Run `node scripts/release.mjs <major|minor|patch> [--dry-run]` in a clean version branch at the current `origin/main`. It checks that the tag is unused, bumps the version, moves the changelog notes into the version heading, restores `Unreleased`, and commits those three files. Merge that commit through the normal version PR. Dry run prints the proposed version without mutations.
 
-The release script:
-
-1. Refuses to run unless the tree is clean and `main` is current with
-   `origin/main`, and the tag is unused.
-2. Bumps the version, marks the changelog, and commits the candidate **without
-   tagging or pushing**. Final version metadata is committed as-is; it is never
-   normalized, because fresh behavioral evals must run against the exact final
-   version commit that will be tagged.
-3. Runs, against that unchanged committed candidate, in this order:
-   `release:check`, `node scripts/release-package.mjs prepare --out validation-output/release-package`,
-   then `npm run test:providers:release` (live provider smoke), then fresh
-   `npm run eval -- release`, then `node scripts/release-summary.mjs --package-dir validation-output/release-package`.
-   Fresh evals are the last executable proof; the summary only aggregates the
-   evidence they produced. The live provider smoke is intentionally outside the
-   deterministic gate policy and is enforced only by the trusted local release
-   and publish paths.
-4. Only if every proof returns zero, the tree is still clean, and HEAD has not
-   moved: creates the tag, commits the changelog reset, and pushes main + tag.
-
-A failed proof leaves the candidate commit in place and performs no automatic
-rollback or force-push. The recovery output reports the accurate completed
-state (candidate commit, version bump, local tag, changelog reset, main pushed,
-tag pushed), gives inspect-only git commands, and only suggests a concrete
-manual undo when that is safe (for example removing a local tag that was never
-pushed). A thrown step is reported with its real stage and side effects.
-
-`--resume` re-verifies the existing release commit (message, version, parent
-version via semver, changelog, and that only `package.json`, `package-lock.json`,
-and `CHANGELOG.md` changed) and then reruns every proof before tagging. It
-cannot bypass the gate.
-
-`--dry-run` validates arguments and prints the plan without mutating anything or
-running any command that uses credentials.
-
-There is **no** eval-confirmation prompt and no `--skip-eval-confirm` bypass.
+Use [the maintainer instructions](../../CONTRIBUTING.md#release-notes-and-changelog-discipline) to dispatch Publish. Local tests are available for diagnosis. The trusted workflow owns the release decision.
 
 ## Compact release summary
 
@@ -166,19 +131,13 @@ evals and before upload/publish, and uploads the bounded summary directory.
 
 ## Publish workflow
 
-`.github/workflows/publish.yml` triggers only on `v*` tags, has read-only global
-permissions, and grants `contents: write` + `id-token: write` only to the
-`publish` job. It declares `environment: release`; repository settings must
-create the required-reviewer protection (the workflow cannot create or verify
-it).
+`.github/workflows/publish.yml` accepts manual dispatches from `main`. The requested version must match the manifest at the dispatched SHA. The commit must be reachable from `origin/main`. Producing a release requires `publish=true`. Repository settings must restrict the `release` environment to `main` and enforce any reviewer requirement.
 
-The workflow checks out the tag with `fetch-depth: 0`, verifies the tag matches
-the package version and that the tagged commit is reachable from `origin/main`,
-runs `release:check` without secrets, prepares the exact release package once,
-runs the live provider release smoke on that same candidate, then runs fresh
-live release evals, then writes the compact release summary, so evals are the
-last executable proof before publication. Provider data secrets are scoped to
-the provider-smoke step; model/provider secrets are scoped to the eval step.
+The job probes the required Gemini model before installing dependencies, then runs the strict provider smoke before the expensive gate. `release:check` prepares and smoke-tests the exact publishable tarball once. The docs link step runs immediately after the site build. It retries network and server errors for the affected URL with bounded backoff and logs failed attempts. Definitive broken links and exhausted retries fail the step.
+
+Next, `npm run eval -- release` starts the router, cases, product and frozen deterministic suites in parallel and preserves a completion result for each. The frozen release runner exercises the same session and manifest assertions without the external competitors or comparison judge. An optional, separate advisory job runs the judged panel and has read-only repository permissions. Its result does not gate publication.
+
+After the required suites pass, the workflow generates the compact summary. The publish job verifies the proof and tarball on the same runner, creates the tag at the verified commit, and publishes that tarball with provenance. A tag on a different commit blocks publication. A registry version that already exists is accepted only when its public integrity matches the tarball, so a rerun can recover GitHub release creation without replacing the npm version.
 
 It always uploads bounded release evidence
 (`validation-output/release-evals/**/release-eval-startup.json`,

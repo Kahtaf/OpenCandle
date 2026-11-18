@@ -14,7 +14,7 @@
  * a separate invocation with its own preserved run directory.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   mkdirSync,
@@ -209,7 +209,9 @@ export interface ReleaseEvidenceDeps {
   now(): Date;
   fingerprint(root: string): CandidateIdentity;
   collectExpectedCaseIds(context: ExpectedCaseIdContext): ExpectedCaseIds;
-  executeSuite(request: ReleaseSuiteRequest): ReleaseSuiteExecution;
+  executeSuite(
+    request: ReleaseSuiteRequest,
+  ): ReleaseSuiteExecution | Promise<ReleaseSuiteExecution>;
   readTextFile(path: string): string;
   writeTextAtomic(path: string, content: string): void;
   appendText(path: string, content: string): void;
@@ -315,7 +317,12 @@ function buildSuiteRequest(
 ): ReleaseSuiteRequest {
   const resolved: ResolvedEvalCommand = resolveEvalCommand(suite, []);
   const completionPath = join(runDir, `${suite.replace(/[^a-z0-9]+/gi, "-")}.completion.json`);
-  const mergedEnv = { ...env, ...resolved.env, OPENCANDLE_EVAL_COMPLETION_PATH: completionPath };
+  const mergedEnv = {
+    ...env,
+    ...resolved.env,
+    OPENCANDLE_EVAL_COMPLETION_PATH: completionPath,
+    OPENCANDLE_COMPETITIVE_ASSERTIONS_ONLY: suite === "competitive:frozen" ? "1" : "",
+  };
   if (suite === "cases") {
     const vitestJsonPath = join(runDir, "cases.vitest.json");
     return {
@@ -487,7 +494,9 @@ function sameCandidate(a: CandidateIdentity, b: CandidateIdentity): boolean {
   );
 }
 
-export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEvidenceOutcome {
+export async function runReleaseWithEvidence(
+  deps: ReleaseEvidenceDeps,
+): Promise<ReleaseEvidenceOutcome> {
   const startedAt = deps.now().toISOString();
   const runId = deps.runId ?? (deps.createRunId ?? buildReleaseRunId)(deps.now());
   const optionalCaseIds = deps.optionalCaseIds ?? DEFAULT_OPTIONAL_CASE_IDS;
@@ -504,9 +513,7 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
       attempts: Array<{ exitCode: number | null; startedAt: string; finishedAt: string }>;
     }
   > = {};
-  // Suites the run never attempted because startup/collection failed, or that
-  // fail-fast skipped after an earlier required suite failed. Marked explicitly
-  // so a missing suite is never mistaken for a pass.
+  // Record suites not started when startup or independent collection fails.
   const notRunSuites: ReleaseSuiteId[] = [];
 
   let candidateBefore: CandidateIdentity | null = null;
@@ -530,7 +537,7 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
   // Crash-safety anchor: persist the full candidate identity atomically before
   // the independent case collection or any child runs, so a SIGINT leaves a
   // scoped run whose identity the collector can require. This never depends on
-  // JS signal handlers, which cannot interrupt a live spawnSync.
+  // JS signal handlers.
   let startupPersisted = false;
   if (candidateBefore !== null) {
     try {
@@ -569,101 +576,100 @@ export function runReleaseWithEvidence(deps: ReleaseEvidenceDeps): ReleaseEviden
   }
 
   if (expected !== null && startupPersisted) {
-    for (let index = 0; index < RELEASE_SUITE_IDS.length; index += 1) {
-      const suite = RELEASE_SUITE_IDS[index];
-      const request = buildSuiteRequest(
-        suite,
-        env,
-        deps.cwd,
-        runDir,
-        deps.suiteTimeoutMs ?? DEFAULT_SUITE_TIMEOUT_MS,
-      );
-      const attemptStartedAt = deps.now();
-      let execution: ReleaseSuiteExecution;
-      try {
-        execution = deps.executeSuite(request);
-      } catch (error) {
-        // A throwing executor is a failed attempt, never an orchestrator crash:
-        // the attempt is journaled and the run finalizes with a normal record.
-        execution = { exitCode: null, signal: null, errorMessage: errorMessage(error) };
-      }
-      const attemptFinishedAt = deps.now();
-      const window = {
-        startedAtMs: attemptStartedAt.getTime(),
-        finishedAtMs: attemptFinishedAt.getTime(),
-      };
-      const executionProblems: string[] = [];
-      if (execution.errorMessage) {
-        executionProblems.push(`${suite} child failed to run: ${execution.errorMessage}`);
-      }
-      if (execution.signal) {
-        executionProblems.push(`${suite} child was terminated by signal ${execution.signal}`);
-      }
-      if (execution.exitCode !== 0) {
-        executionProblems.push(`${suite} child exited with ${String(execution.exitCode)}`);
-      }
-      const read = readCompletion(
-        request,
-        execution,
-        window,
-        optionalCaseIds,
-        slackMs,
-        deps.readTextFile,
-      );
-      const suiteProblems = [...executionProblems, ...read.problems];
-      const passed = suiteProblems.length === 0 && read.report !== undefined;
-      const attempt: AttemptRecord = {
-        format: RELEASE_EVAL_FORMAT_V2,
-        runId,
-        candidate: candidateBefore,
-        suite,
-        exitCode: execution.exitCode,
-        signal: execution.signal ?? null,
-        error: execution.errorMessage ?? null,
-        verdict: passed ? "passed" : "failed",
-        startedAt: attemptStartedAt.toISOString(),
-        finishedAt: attemptFinishedAt.toISOString(),
-        completionPath: request.completionPath,
-        vitestJsonPath: request.vitestJsonPath,
-      };
-      attempts.push(attempt);
-      deps.appendText(attemptsPath, `${JSON.stringify(attempt)}\n`);
-
-      if (!passed || read.report === undefined) {
-        problems.push(...suiteProblems);
-        // Fail fast: later required suites are marked not run, never passed.
-        notRunSuites.push(...RELEASE_SUITE_IDS.slice(index + 1));
-        break;
-      }
-      const settings = suiteSettings(suite, read.report.settings, env);
-      if (Object.keys(settings).length > 0) suiteSettingsById[suite] = settings;
-      if (suite === "competitive:frozen") {
-        competitorMetadata = readCompetitorMetadata(request.completionPath, deps.readTextFile);
-        if (competitorMetadata.problem) problems.push(competitorMetadata.problem);
-      }
-      const optional = new Set(optionalCaseIds);
-      suites[suite] = {
-        cases: read.report.cases
-          .filter((testCase) => !optional.has(testCase.id))
-          .map((testCase) => ({ id: testCase.id, status: testCase.status })),
-        attempts: [
-          {
-            exitCode: execution.exitCode,
-            startedAt: attemptStartedAt.toISOString(),
-            finishedAt: attemptFinishedAt.toISOString(),
-          },
-        ],
-      };
-      for (const testCase of read.report.cases) {
-        if (optional.has(testCase.id) && testCase.status === "skipped") {
-          optionalSkips.push({
-            suite,
-            id: testCase.id,
-            reason: testCase.reason ?? "optional default-tier placeholder skipped",
-          });
+    await Promise.all(
+      RELEASE_SUITE_IDS.map(async (suite) => {
+        const request = buildSuiteRequest(
+          suite,
+          env,
+          deps.cwd,
+          runDir,
+          deps.suiteTimeoutMs ?? DEFAULT_SUITE_TIMEOUT_MS,
+        );
+        const attemptStartedAt = deps.now();
+        let execution: ReleaseSuiteExecution;
+        try {
+          execution = await deps.executeSuite(request);
+        } catch (error) {
+          // A throwing executor is a failed attempt, never an orchestrator crash:
+          // the attempt is journaled and the run finalizes with a normal record.
+          execution = { exitCode: null, signal: null, errorMessage: errorMessage(error) };
         }
-      }
-    }
+        const attemptFinishedAt = deps.now();
+        const window = {
+          startedAtMs: attemptStartedAt.getTime(),
+          finishedAtMs: attemptFinishedAt.getTime(),
+        };
+        const executionProblems: string[] = [];
+        if (execution.errorMessage) {
+          executionProblems.push(`${suite} child failed to run: ${execution.errorMessage}`);
+        }
+        if (execution.signal) {
+          executionProblems.push(`${suite} child was terminated by signal ${execution.signal}`);
+        }
+        if (execution.exitCode !== 0) {
+          executionProblems.push(`${suite} child exited with ${String(execution.exitCode)}`);
+        }
+        const read = readCompletion(
+          request,
+          execution,
+          window,
+          optionalCaseIds,
+          slackMs,
+          deps.readTextFile,
+        );
+        const suiteProblems = [...executionProblems, ...read.problems];
+        const passed = suiteProblems.length === 0 && read.report !== undefined;
+        const attempt: AttemptRecord = {
+          format: RELEASE_EVAL_FORMAT_V2,
+          runId,
+          candidate: candidateBefore,
+          suite,
+          exitCode: execution.exitCode,
+          signal: execution.signal ?? null,
+          error: execution.errorMessage ?? null,
+          verdict: passed ? "passed" : "failed",
+          startedAt: attemptStartedAt.toISOString(),
+          finishedAt: attemptFinishedAt.toISOString(),
+          completionPath: request.completionPath,
+          vitestJsonPath: request.vitestJsonPath,
+        };
+        attempts.push(attempt);
+        deps.appendText(attemptsPath, `${JSON.stringify(attempt)}\n`);
+
+        if (!passed || read.report === undefined) {
+          problems.push(...suiteProblems);
+          return;
+        }
+        const settings = suiteSettings(suite, read.report.settings, env);
+        if (Object.keys(settings).length > 0) suiteSettingsById[suite] = settings;
+        if (suite === "competitive:frozen") {
+          competitorMetadata = readCompetitorMetadata(request.completionPath, deps.readTextFile);
+          if (competitorMetadata.problem) problems.push(competitorMetadata.problem);
+        }
+        const optional = new Set(optionalCaseIds);
+        suites[suite] = {
+          cases: read.report.cases
+            .filter((testCase) => !optional.has(testCase.id))
+            .map((testCase) => ({ id: testCase.id, status: testCase.status })),
+          attempts: [
+            {
+              exitCode: execution.exitCode,
+              startedAt: attemptStartedAt.toISOString(),
+              finishedAt: attemptFinishedAt.toISOString(),
+            },
+          ],
+        };
+        for (const testCase of read.report.cases) {
+          if (optional.has(testCase.id) && testCase.status === "skipped") {
+            optionalSkips.push({
+              suite,
+              id: testCase.id,
+              reason: testCase.reason ?? "optional default-tier placeholder skipped",
+            });
+          }
+        }
+      }),
+    );
   } else {
     notRunSuites.push(...RELEASE_SUITE_IDS);
   }
@@ -789,20 +795,21 @@ export function createRealReleaseDependencies(options: {
     now: () => new Date(),
     fingerprint: (root) => fingerprintCandidate(root) as CandidateIdentity,
     collectExpectedCaseIds: (context) => collectRealExpectedCaseIds(context),
-    executeSuite: (request) => {
-      const result = spawnSync(request.command, request.args, {
-        cwd,
-        env: request.env,
-        shell: false,
-        stdio: "inherit",
-        timeout: request.timeoutMs,
-      });
-      return {
-        exitCode: result.status,
-        signal: result.signal,
-        errorMessage: result.error?.message,
-      };
-    },
+    executeSuite: (request) =>
+      new Promise((resolve) => {
+        const child = spawn(request.command, request.args, {
+          cwd: request.cwd,
+          env: request.env,
+          shell: false,
+          stdio: "inherit",
+          timeout: request.timeoutMs,
+          killSignal: "SIGKILL",
+        });
+        child.once("error", (error) =>
+          resolve({ exitCode: null, signal: null, errorMessage: error.message }),
+        );
+        child.once("close", (exitCode, signal) => resolve({ exitCode, signal }));
+      }),
     readTextFile: (path) => readFileSync(path, "utf-8"),
     writeTextAtomic: (path, content) => {
       mkdirSync(dirname(path), { recursive: true });

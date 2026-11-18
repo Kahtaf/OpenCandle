@@ -163,22 +163,11 @@ mkdirSync(competitorCwd, { recursive: true });
 registerBuiltInApiProviders();
 const modelRuntime = await ModelRuntime.create();
 const modelRegistry = new ModelRegistry(modelRuntime);
-const competitorAnswerCache = selectCompetitiveReportCache(process.env, loadCompetitiveReportCache);
 // The model under test (OpenCandle's session model and the prompt generator).
 const competitiveModel = await resolveModelWithAuth(
   requestedProvider,
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
-);
-// The comparison judge is independent of the model under test: the
-// calibrated default (DEFAULT_COMPETITIVE_JUDGE) unless the judge-only
-// override is set. A missing judge fails loudly; there is no fallback judge.
-const judgeSelection = selectCompetitiveJudgeModel(process.env);
-const judgeModel = await resolveModelWithAuth(
-  judgeSelection.provider,
-  judgeSelection.model,
-  competitiveJudgeMissingAuthMessage(judgeSelection),
-  { requireKnownModel: true },
 );
 const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
 // The frozen panel's loss-class contracts live in the prompt-policy
@@ -198,6 +187,58 @@ if (frozenPanel) {
     }
   }
 }
+function evaluateManifestAssertions(prompt: { promptPolicyManifestId?: string }, trace: EvalTrace) {
+  const assertions = policyManifestAssertions.get(prompt.promptPolicyManifestId ?? "") ?? [];
+  const results = assertions.map((assertion) => evaluateFinalAnswerAssertion(assertion, trace));
+  for (const result of results) {
+    console.log(
+      `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+    );
+  }
+  return { assertions, results };
+}
+
+if (process.env.OPENCANDLE_COMPETITIVE_ASSERTIONS_ONLY === "1") {
+  if (!frozenPanel) throw new Error("Deterministic assertions require the full frozen panel");
+  const { completionCases } = await runCompetitivePrompts(frozenPanel, {
+    frozen: true,
+    runOpenCandle: (prompt) => {
+      console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
+      return runOpenCandle(prompt.prompt);
+    },
+    completePrompt: async (prompt, trace) => {
+      const { assertions, results } = evaluateManifestAssertions(prompt, trace);
+      return { mandatory: completionCaseForPrompt(prompt.id, assertions, results) };
+    },
+  });
+  const completionPath = writeCompletionReport(
+    buildCompletionReport({
+      suite: "competitive:frozen",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      cases: completionCases,
+      settings: {
+        provider: competitiveModel.model.provider,
+        model: competitiveModel.model.id,
+        mode: "deterministic",
+      },
+    }),
+  );
+  if (completionPath) console.log(`Completion report: ${completionPath}`);
+  process.exit(completionCases.every((testCase) => testCase.status === "passed") ? 0 : 1);
+}
+
+// The comparison judge is independent of the model under test: the
+// calibrated default (DEFAULT_COMPETITIVE_JUDGE) unless the judge-only
+// override is set. A missing judge fails loudly; there is no fallback judge.
+const judgeSelection = selectCompetitiveJudgeModel(process.env);
+const judgeModel = await resolveModelWithAuth(
+  judgeSelection.provider,
+  judgeSelection.model,
+  competitiveJudgeMissingAuthMessage(judgeSelection),
+  { requireKnownModel: true },
+);
+const competitorAnswerCache = selectCompetitiveReportCache(process.env, loadCompetitiveReportCache);
 const fixedPrompt = fixedPromptFromEnv(process.env);
 const rawPrompts = frozenPanel
   ? frozenPanel
@@ -313,16 +354,14 @@ const {
         `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
       );
     }
-    const manifestId = (prompt as { promptPolicyManifestId?: string }).promptPolicyManifestId;
-    const hardAssertions = manifestId ? (policyManifestAssertions.get(manifestId) ?? []) : [];
-    const hardAssertionResults = hardAssertions.map((assertion) =>
-      evaluateFinalAnswerAssertion(assertion, openCandleTrace),
-    );
-    for (const result of hardAssertionResults) {
-      console.log(
-        `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+    const { assertions: hardAssertions, results: hardAssertionResults } =
+      evaluateManifestAssertions(
+        {
+          promptPolicyManifestId: (prompt as { promptPolicyManifestId?: string })
+            .promptPolicyManifestId,
+        },
+        openCandleTrace,
       );
-    }
     // Only the frozen release panel has manifest-required hard assertions. A
     // generated/fixed discovery run is not made to fail just because no frozen
     // manifest exists; it is excluded from this completion helper entirely.

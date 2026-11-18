@@ -15,6 +15,7 @@ export function isAcceptedStatus(status) {
 export function classifyLinkOutcome({ status, error } = {}) {
   if (error != null) return "unverified";
   if (typeof status !== "number") return "unverified";
+  if (status >= 500 && status < 600) return "unverified";
   return isAcceptedStatus(status) ? "ok" : "broken";
 }
 
@@ -53,7 +54,7 @@ export async function checkUrlWithRetry({
     }
     if (attempt < attempts) {
       onRetry({ attempt, detail: last.detail });
-      await sleep(delayMs);
+      await sleep(Math.min(delayMs * 4 ** (attempt - 1), 30_000));
     }
   }
   return last;
