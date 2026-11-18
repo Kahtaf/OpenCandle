@@ -97,36 +97,9 @@ be implied.
 **Deterministic `release:check`** is the `release` gate (steps in `scripts/test-gate-policy.json`);
 no secrets and no live eval.
 
-**Local release (`node scripts/release.mjs <major|minor|patch>`)** runs this exact order:
+**Release candidate preparation** commits only the version and changelog metadata on a version PR branch. **Trusted publication** runs `.github/workflows/publish.yml` from `main` at the dispatched commit. It probes the required live model and data provider early, runs `release:check` once with the exact package smoke, then runs all four live eval suites in parallel. The frozen suite applies its deterministic assertions. Comparative judging is an opt-in advisory job.
 
-1. Preflight: clean tree, branch `main`, fetch `origin/main`, HEAD equals `origin/main`, tag unused.
-2. Prepare: bump the version, mark the changelog released, and commit the candidate (`Release vX`)
-   with **no tag or push**. Final metadata is committed unnormalized so proof runs on the exact
-   commit that will be tagged.
-3. `release:check` on that candidate.
-4. `node scripts/release-package.mjs prepare --out validation-output/release-package` once (exact
-   tarball plus `package-proof.json`).
-5. `npm run test:providers:release`: the live provider release smoke, on the same candidate, strict.
-6. `npm run eval -- release`: fresh live release evals, the last meaningful proof (no expensive
-   build runs after them). Required suites: `router-live`, `cases`, `product`,
-   `competitive:frozen`.
-7. Finalize only if every proof returned zero, the tree is clean, and HEAD is unchanged: create the
-   tag, commit the changelog reset, push `main`, then push the tag.
-
-`--resume` re-verifies the candidate (message, version, parent version, changelog, changed files) and
-reruns every proof; it cannot bypass the gate. `--dry-run` prints the plan without mutating anything
-or running credentialed commands. `--skip-eval-confirm` is **rejected**; there is no eval-confirmation
-prompt.
-
-**Trusted publish (`.github/workflows/publish.yml`).** Tag-only (`v*`), global `contents: read`,
-with `contents: write` + `id-token: write` scoped to `publish`. It declares `environment: release`;
-**required-reviewer protection is a repository setting verified externally**, not by the workflow. It
-checks out the tag (`fetch-depth: 0`), verifies tag/version and that the commit is reachable from
-`origin/main`, runs `release:check` without secrets, prepares the package once, runs the provider
-smoke with provider-data secrets, then fresh `npm run eval -- release` with model/provider secrets
-scoped to that step. Evidence is uploaded `if: always()`; the proof is re-verified and the exact
-tarball published with `npm publish <tarball> --ignore-scripts --access public --provenance`. The
-GitHub release follows a successful publish.
+The same runner validates release evidence, verifies the package hash, tags the tested commit, and publishes that exact tarball. A verification-only dispatch runs the checks without tagging or publishing. See [release enforcement](release-enforcement.md) for the workflow and security settings.
 
 **Candidate identity.** `scripts/release-evidence.mjs` validates content against
 `{commit, sourceDigest, lockDigest, policyDigest}` on a clean tree; required suites must pass, evidence

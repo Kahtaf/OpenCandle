@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Release validation runs in one GitHub workflow with early credential checks, bounded link retries, and parallel live suites.
+
 ## [0.15.1] - 2026-11-18
 
 - Sentiment release checks recognize explicit shortages of usable sentiment evidence.

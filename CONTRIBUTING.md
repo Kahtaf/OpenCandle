@@ -55,7 +55,7 @@ Run `npm run gates:full` before opening or updating a PR; `npm run gates` is the
 npm run release:check
 ```
 
-See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke and the `agent-tools` coverage-browser fixture require Chromium; install it once with `npx playwright-core install chromium` (Linux: `--with-deps`). Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. The release script commits the final version candidate first, runs `release:check`, prepares the exact release package once, runs the live provider release smoke (`npm run test:providers:release`), and reruns fresh `npm run eval -- release` against that unchanged candidate; it tags and pushes only if every proof passes. There is no eval-confirmation prompt and no `--skip-eval-confirm` bypass.
+See [Testing and Evals](docs/testing-and-evals.md) for what the gate covers. The GUI smoke and the `agent-tools` coverage-browser fixture require Chromium; install it once with `npx playwright-core install chromium` (Linux: `--with-deps`). Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. The Publish workflow is the release owner and runs its required live checks in GitHub.
 
 ## Engineering Conventions
 
@@ -91,21 +91,23 @@ Prefer clear commit-message prefixes such as:
 
 Release notes should describe user-visible impact, not just implementation detail.
 
-Release commands:
+Prepare the version in a PR from the latest `origin/main`. Choose `release:patch`, `release:minor`, or `release:major`:
 
 ```bash
-npm run version:patch
-npm run version:minor
-npm run version:major
-npm run publish:dry
+git fetch origin main
+git switch -c release/next origin/main
 npm run release:patch
-npm run release:minor
-npm run release:major
 ```
 
-The `release:*` scripts are intended for maintainers. They bump the version and commit the final version candidate without tagging, then run `release:check`, prepare the exact release package once, run the required live provider smoke (`npm run test:providers:release`), and run fresh `npm run eval -- release` against that unchanged commit; only if every proof passes do they tag, restore the `Unreleased` section, and push `main` and the tag. There is no eval-confirmation prompt and no `--skip-eval-confirm` bypass.
+After merging the version PR, start the Publish workflow from `main` with the merged version. For example:
 
-The actual npm publish step runs in GitHub Actions from the pushed `v*` tag using npm trusted publishing with `--provenance`, publishing the exact verified tarball. The publish job declares the `release` environment; required-reviewer protection is a repository setting that maintainers must verify, and the workflow cannot create or verify it.
+```bash
+gh workflow run publish.yml --ref main -f version=0.16.0 -F publish=true
+```
+
+Omit `publish=true` to validate without tagging or publishing. Supply `advisory_comparison=true` to also run the judged comparison on a separate runner. GitHub validates the dispatched commit and publishes the exact tarball that passed the install test using npm trusted publishing with provenance.
+
+Configure the GitHub `release` environment to allow only `main` and set its required reviewers in repository settings. The required live checks use `GEMINI_API_KEY` (or `GOOGLE_API_KEY`). The optional judged comparison also needs `OPENAI_API_KEY`.
 
 ## Public Agent Artifacts
 

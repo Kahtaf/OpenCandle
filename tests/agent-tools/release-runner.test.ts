@@ -46,32 +46,6 @@ describe("default release runner npm normalization", () => {
     );
   });
 
-  it("routes runReleaseCheck through the resolved npm invocation", () => {
-    const deps = createReleaseDeps({ cwd: "/repo" });
-
-    expect(deps.runReleaseCheck()).toBe(0);
-
-    expect(mocks.buildNpmInvocation).toHaveBeenCalledWith("npm", ["run", "release:check"]);
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
-      "C:/node/node.exe",
-      [NPM_CLI, "run", "release:check"],
-      expect.objectContaining({ shell: false }),
-    );
-  });
-
-  it("routes release evals through the resolved npm invocation", () => {
-    const deps = createReleaseDeps({ cwd: "/repo" });
-
-    expect(deps.runReleaseEvals()).toBe(0);
-
-    expect(mocks.buildNpmInvocation).toHaveBeenCalledWith("npm", ["run", "eval", "--", "release"]);
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
-      "C:/node/node.exe",
-      [NPM_CLI, "run", "eval", "--", "release"],
-      expect.objectContaining({ shell: false }),
-    );
-  });
-
   it("leaves git commands unchanged and never normalizes them", () => {
     const deps = createReleaseDeps({ cwd: "/repo" });
 
@@ -95,11 +69,11 @@ describe("default release runner npm normalization", () => {
     const deps = createReleaseDeps({ cwd: "/repo", runner });
 
     expect(deps.runBump("minor")).toBe(0);
-    expect(deps.runReleaseCheck()).toBe(0);
+    expect(deps.isWorkingTreeClean()).toBe(true);
 
     expect(calls).toEqual([
       { command: "npm", args: ["run", "version:minor"] },
-      { command: "npm", args: ["run", "release:check"] },
+      { command: "git", args: ["status", "--porcelain"] },
     ]);
     expect(mocks.buildNpmInvocation).not.toHaveBeenCalled();
     expect(mocks.spawnSync).not.toHaveBeenCalled();

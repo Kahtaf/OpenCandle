@@ -27,14 +27,15 @@ if (!suiteId) {
 }
 
 try {
-  const exitCode = suiteId === "release" ? runRelease(suiteArgs) : runSuite(suiteId, suiteArgs);
+  const exitCode =
+    suiteId === "release" ? await runRelease(suiteArgs) : runSuite(suiteId, suiteArgs);
   process.exit(exitCode);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
 
-function runRelease(argv: string[]): number {
+async function runRelease(argv: string[]): Promise<number> {
   const argumentProblem = releaseArgumentProblem(argv);
   if (argumentProblem) {
     console.error(argumentProblem);
@@ -47,7 +48,9 @@ function runRelease(argv: string[]): number {
   // Load local credentials before sanitizing; cleanReleaseEnv pins every
   // selector so a .env filter cannot narrow the release coverage.
   loadEnv();
-  const outcome = runReleaseWithEvidence(createRealReleaseDependencies({ cwd, env: process.env }));
+  const outcome = await runReleaseWithEvidence(
+    createRealReleaseDependencies({ cwd, env: process.env }),
+  );
 
   appendRunIndexEntry({
     cwd,

@@ -392,9 +392,9 @@ describe("release eval evidence orchestration", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes complete evidence with required cases only and preserves optional skips", () => {
+  it("writes complete evidence with required cases only and preserves optional skips", async () => {
     const { deps } = makeHarness();
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.evidencePath).not.toBeNull();
@@ -413,48 +413,52 @@ describe("release eval evidence orchestration", () => {
     );
   });
 
-  it("merges resolved runner env so competitive:frozen is actually frozen", () => {
+  it("merges resolved runner env so competitive:frozen is actually frozen", async () => {
     const seenPanel = new Map<string, string | undefined>();
     const seenNoCache = new Map<string, string | undefined>();
+    const assertionsOnly = new Map<string, string | undefined>();
     const { deps } = makeHarness({
       executeSuite: (request) => {
         seenPanel.set(request.suite, request.env.OPENCANDLE_COMPETITIVE_PANEL);
         seenNoCache.set(request.suite, request.env.OPENCANDLE_COMPETITIVE_NO_CACHE);
+        assertionsOnly.set(request.suite, request.env.OPENCANDLE_COMPETITIVE_ASSERTIONS_ONLY);
         return writeDefaultCompletion(request);
       },
     });
-    runReleaseWithEvidence(deps);
+    await runReleaseWithEvidence(deps);
 
     expect(seenPanel.get("competitive:frozen")).toBe("frozen");
     expect(seenPanel.get("cases")).toBe("");
+    expect(assertionsOnly.get("competitive:frozen")).toBe("1");
+    expect(assertionsOnly.get("cases")).toBe("");
     // Release runs never reuse cached competitor answers or prompt metadata.
     expect(seenNoCache.get("competitive:frozen")).toBe("1");
     expect(seenNoCache.get("cases")).toBe("1");
   });
 
-  it("records disabled competitive cache in the linked run summary", () => {
+  it("records disabled competitive cache in the linked run summary", async () => {
     const { deps } = makeHarness();
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
     expect(summary.competitiveCache).toBe("disabled");
   });
 
-  it("refuses to run when independently collected expected ids are empty", () => {
+  it("refuses to run when independently collected expected ids are empty", async () => {
     const executeSuite = vi.fn(writeDefaultCompletion);
     const { deps } = makeHarness({
       collectExpectedCaseIds: () => ({ ...EXPECTED_RAW, cases: [] }),
       executeSuite,
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(executeSuite).not.toHaveBeenCalled();
     expect(outcome.evidencePath).toBeNull();
   });
 
-  it("rejects a complete product report whose one case failed because its session threw", () => {
+  it("rejects a complete product report whose one case failed because its session threw", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) => {
         if (request.suite !== "product") return writeDefaultCompletion(request);
@@ -473,7 +477,7 @@ describe("release eval evidence orchestration", () => {
         return { exitCode: 1, signal: null };
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.evidencePath).toBeNull();
@@ -484,14 +488,14 @@ describe("release eval evidence orchestration", () => {
     );
   });
 
-  it("fails a child crash or signal even when a report is present", () => {
+  it("fails a child crash or signal even when a report is present", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) =>
         request.suite === "product"
           ? { exitCode: null, signal: "SIGKILL" }
           : writeDefaultCompletion(request),
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.evidencePath).toBeNull();
@@ -502,27 +506,27 @@ describe("release eval evidence orchestration", () => {
     );
   });
 
-  it("fails a child timeout even when no signal is surfaced", () => {
+  it("fails a child timeout even when no signal is surfaced", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) =>
         request.suite === "router-live"
           ? { exitCode: null, signal: null, errorMessage: "spawnSync vitest ETIMEDOUT" }
           : writeDefaultCompletion(request),
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.problems.some((problem) => problem.includes("ETIMEDOUT"))).toBe(true);
   });
 
-  it("blocks a zero-exit child that writes no completion report", () => {
+  it("blocks a zero-exit child that writes no completion report", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) =>
         request.suite === "competitive:frozen"
           ? { exitCode: 0, signal: null }
           : writeDefaultCompletion(request),
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(
@@ -532,7 +536,7 @@ describe("release eval evidence orchestration", () => {
     ).toBe(true);
   });
 
-  it("keeps the first missing-report attempt blocked and preserved across a green rerun", () => {
+  it("keeps the first missing-report attempt blocked and preserved across a green rerun", async () => {
     const root = mkdtempSync(join(tmpdir(), "oc-release-rerun-"));
     const parent = join(root, "validation-output", "release-evals");
     const first = makeHarness(
@@ -546,12 +550,12 @@ describe("release eval evidence orchestration", () => {
       },
       root,
     );
-    const firstOutcome = runReleaseWithEvidence(first.deps);
+    const firstOutcome = await runReleaseWithEvidence(first.deps);
     expect(firstOutcome.exitCode).toBe(1);
     expect(existsSync(join(firstOutcome.runDir, "release-evidence.json"))).toBe(false);
 
     const second = makeHarness({ runId: "run-second", runDirParent: parent }, root);
-    const secondOutcome = runReleaseWithEvidence(second.deps);
+    const secondOutcome = await runReleaseWithEvidence(second.deps);
     expect(secondOutcome.exitCode).toBe(0);
     expect(secondOutcome.runDir).not.toBe(firstOutcome.runDir);
 
@@ -564,7 +568,7 @@ describe("release eval evidence orchestration", () => {
     );
   });
 
-  it("rejects a stale reused completion report outside the attempt window", () => {
+  it("rejects a stale reused completion report outside the attempt window", async () => {
     const runDir = join(tmpdir(), `oc-stale-${process.pid}-${Date.now()}`);
     mkdirSync(runDir, { recursive: true });
     writeFileSync(
@@ -589,7 +593,7 @@ describe("release eval evidence orchestration", () => {
           ? { exitCode: 0, signal: null }
           : writeDefaultCompletion(request),
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(
@@ -597,7 +601,7 @@ describe("release eval evidence orchestration", () => {
     ).toBe(true);
   });
 
-  it("fails when the candidate fingerprint changes during the run", () => {
+  it("fails when the candidate fingerprint changes during the run", async () => {
     let calls = 0;
     const { deps } = makeHarness({
       fingerprint: () => {
@@ -605,7 +609,7 @@ describe("release eval evidence orchestration", () => {
         return calls === 1 ? CANDIDATE : { ...CANDIDATE, sourceDigest: "sha256:changed" };
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(
@@ -615,7 +619,7 @@ describe("release eval evidence orchestration", () => {
     ).toBe(true);
   });
 
-  it("rejects a partial case selection that omits an independently collected id", () => {
+  it("rejects a partial case selection that omits an independently collected id", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) => {
         if (request.suite !== "cases") return writeDefaultCompletion(request);
@@ -626,7 +630,7 @@ describe("release eval evidence orchestration", () => {
         return { exitCode: 0, signal: null };
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(
@@ -636,7 +640,7 @@ describe("release eval evidence orchestration", () => {
     ).toBe(true);
   });
 
-  it("uses validated report settings as primary per-suite metadata with env fallback", () => {
+  it("uses validated report settings as primary per-suite metadata with env fallback", async () => {
     const { deps } = makeHarness({
       env: {
         OPENCANDLE_ROUTER_PROVIDER: "google",
@@ -661,7 +665,7 @@ describe("release eval evidence orchestration", () => {
         return { exitCode: 0, signal: null };
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
@@ -682,7 +686,7 @@ describe("release eval evidence orchestration", () => {
     expect(evidence.model).toBeUndefined();
   });
 
-  it("carries real writer competitor skip metadata into the linked summary and evidence", () => {
+  it("carries real writer competitor skip metadata into the linked summary and evidence", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) => {
         const result = writeDefaultCompletion(request);
@@ -694,7 +698,7 @@ describe("release eval evidence orchestration", () => {
         return result;
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
@@ -704,9 +708,9 @@ describe("release eval evidence orchestration", () => {
     expect(evidence.competitors).toEqual([{ id: "gemini", reason: "no credentials" }]);
   });
 
-  it("marks missing competitor metadata as unknown rather than none", () => {
+  it("marks missing competitor metadata as unknown rather than none", async () => {
     const { deps } = makeHarness();
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
@@ -716,7 +720,7 @@ describe("release eval evidence orchestration", () => {
     expect(evidence.competitors).toBeUndefined();
   });
 
-  it("blocks the release when competitor metadata is malformed", () => {
+  it("blocks the release when competitor metadata is malformed", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) => {
         const result = writeDefaultCompletion(request);
@@ -726,7 +730,7 @@ describe("release eval evidence orchestration", () => {
         return result;
       },
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(
@@ -746,7 +750,7 @@ describe("candidate-scoped v2 release evidence", () => {
 
   const STARTUP = "release-eval-startup.json";
 
-  it("persists the candidate-scoped startup manifest before collection and children", () => {
+  it("persists the candidate-scoped startup manifest before collection and children", async () => {
     const events: string[] = [];
     let manifestAtCollection: Record<string, unknown> | null = null;
     let manifestAtChild: Record<string, unknown> | null = null;
@@ -769,7 +773,7 @@ describe("candidate-scoped v2 release evidence", () => {
       },
     });
 
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.runDir).toBe(
@@ -791,28 +795,29 @@ describe("candidate-scoped v2 release evidence", () => {
     ]);
   });
 
-  it("fails fast after the first failed suite and marks later suites not run", () => {
+  it("starts all four suites before any finishes and preserves a failed suite", async () => {
     const calls: string[] = [];
-    const { deps } = makeHarness({
-      executeSuite: (request) => {
+    const { deps } = makeHarness();
+    const execute = deps.executeSuite;
+    const pending: Array<() => void> = [];
+    deps.executeSuite = (request) =>
+      new Promise((resolve) => {
         calls.push(request.suite);
-        if (request.suite === "cases") return { exitCode: 1, signal: null };
-        return writeDefaultCompletion(request);
-      },
-    });
-
-    const outcome = runReleaseWithEvidence(deps);
-
+        pending.push(() =>
+          resolve(request.suite === "cases" ? { exitCode: 1, signal: null } : execute(request)),
+        );
+      });
+    const result = runReleaseWithEvidence(deps);
+    expect(calls).toEqual(["router-live", "cases", "product", "competitive:frozen"]);
+    for (const complete of pending) complete();
+    const outcome = await result;
     expect(outcome.exitCode).toBe(1);
-    expect(calls).toEqual(["router-live", "cases"]);
+    expect(readAttempts(outcome.attemptsPath)).toHaveLength(4);
     const incomplete = JSON.parse(readFileSync(outcome.incompletePath as string, "utf-8"));
-    expect(incomplete.notRunSuites).toEqual(["product", "competitive:frozen"]);
-    const summary = JSON.parse(readFileSync(outcome.summaryPath, "utf-8"));
-    expect(summary.notRunSuites).toEqual(["product", "competitive:frozen"]);
-    expect(summary.candidate).toEqual(CANDIDATE);
+    expect(incomplete.notRunSuites).toEqual([]);
   });
 
-  it("turns an executeSuite throw into a failed attempt and still finalizes", () => {
+  it("turns an executeSuite throw into a failed attempt and still finalizes", async () => {
     const { deps } = makeHarness({
       executeSuite: (request) => {
         if (request.suite === "router-live") throw new Error("spawn boom");
@@ -820,7 +825,7 @@ describe("candidate-scoped v2 release evidence", () => {
       },
     });
 
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.incompletePath).not.toBeNull();
@@ -830,9 +835,9 @@ describe("candidate-scoped v2 release evidence", () => {
     expect(JSON.parse(readFileSync(outcome.summaryPath, "utf-8")).candidate).toEqual(CANDIDATE);
   });
 
-  it("writes run and candidate identity into every attempt journal record", () => {
+  it("writes run and candidate identity into every attempt journal record", async () => {
     const { deps } = makeHarness();
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     const attempts = readAttempts(outcome.attemptsPath);
     expect(attempts).toHaveLength(4);
@@ -878,7 +883,7 @@ describe("fresh release without credentials", () => {
     vi.restoreAllMocks();
   });
 
-  it("fails honestly and never writes evidence when every runner lacks credentials", () => {
+  it("fails honestly and never writes evidence when every runner lacks credentials", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { deps } = makeHarness({
@@ -889,7 +894,7 @@ describe("fresh release without credentials", () => {
         errorMessage: "no API key configured",
       }),
     });
-    const outcome = runReleaseWithEvidence(deps);
+    const outcome = await runReleaseWithEvidence(deps);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.evidencePath).toBeNull();

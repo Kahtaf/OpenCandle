@@ -19,13 +19,13 @@
     "relay:test",
     "test:agent-tools",
     "test:site",
+    "docs:links:check",
     "test:gui:integration",
     "test:gui:journey",
     "test:gui:release-smoke",
     "test:gui:hosted",
     "package:contents:check",
     "test:coverage",
-    "test:packed-install",
-    "docs:links:check"
+    "release:package:prepare"
   ]
 }

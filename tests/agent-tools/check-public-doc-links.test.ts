@@ -91,6 +91,7 @@ describe("public docs link release gate", () => {
     expect(result.code, result.output).toBe(1);
     expect(requests).toBe(3);
     expect(result.output).toContain("HTTP 503");
+    expect(result.output).toContain("unverified: HTTP 503");
     expect(result.output).not.toContain("Checked 1");
   });
 
