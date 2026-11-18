@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.1] - 2026-11-18
 
 - Sentiment release checks recognize explicit shortages of usable sentiment evidence.
 
