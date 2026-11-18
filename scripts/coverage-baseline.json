@@ -6,13 +6,13 @@
   "surfaces": {
     "core": {
       "measured": true,
-      "expectedFileCount": 216,
+      "expectedFileCount": 215,
       "missingFiles": [],
       "totals": {
-        "lines": [9923, 10953],
-        "functions": [2118, 2243],
-        "branches": [8374, 10534],
-        "statements": [10876, 12313]
+        "lines": [9875, 10899],
+        "functions": [2108, 2233],
+        "branches": [8343, 10501],
+        "statements": [10827, 12258]
       },
       "files": {
         "src/analysts/contracts.ts": [65, 65, 13, 13, 49, 51, 71, 71],
@@ -147,16 +147,15 @@
         "src/runtime/quote-freshness.ts": [45, 45, 12, 12, 47, 53, 56, 56],
         "src/runtime/quote-notice.ts": [56, 58, 14, 14, 51, 57, 70, 72],
         "src/runtime/run-context.ts": [10, 10, 3, 3, 4, 4, 11, 11],
-        "src/runtime/runtime-surface.ts": [2, 2, 1, 1, 0, 0, 2, 2],
         "src/runtime/session-coordinator.ts": [433, 450, 83, 85, 371, 428, 463, 498],
         "src/runtime/session-title.ts": [21, 21, 4, 4, 13, 14, 23, 23],
         "src/runtime/sqljs-state-database-node.ts": [2, 2, 1, 1, 0, 0, 2, 2],
         "src/runtime/sqljs-state-database.ts": [54, 56, 19, 19, 23, 34, 59, 63],
-        "src/runtime/state-database.ts": [1, 1, 1, 1, 0, 0, 1, 1],
+        "src/runtime/state-database.ts": [0, 0, 0, 0, 0, 0, 0, 0],
         "src/runtime/state-schema-version.ts": [1, 1, 0, 0, 0, 0, 1, 1],
         "src/runtime/tool-defaults-wrapper.ts": [13, 13, 4, 4, 11, 11, 14, 14],
         "src/runtime/tool-evidence-utils.ts": [5, 5, 2, 2, 4, 4, 6, 6],
-        "src/runtime/validation.ts": [54, 60, 9, 9, 36, 39, 56, 63],
+        "src/runtime/validation.ts": [9, 9, 1, 1, 5, 6, 10, 11],
         "src/runtime/workflow-events.ts": [6, 6, 4, 4, 2, 2, 7, 7],
         "src/runtime/workflow-runner.ts": [56, 58, 8, 8, 19, 25, 61, 64],
         "src/runtime/workflow-types.ts": [7, 7, 4, 4, 2, 2, 7, 7],

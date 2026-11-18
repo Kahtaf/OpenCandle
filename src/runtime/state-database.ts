@@ -30,11 +30,3 @@ export interface StateDatabase {
   pragma(source: string, options?: { simple?: boolean }): unknown;
   close(): StateDatabase;
 }
-
-/**
- * Compile-time adapter for structurally compatible synchronous SQLite drivers.
- * It deliberately adds no runtime wrapper or per-query overhead.
- */
-export function asStateDatabase(database: StateDatabase): StateDatabase {
-  return database;
-}

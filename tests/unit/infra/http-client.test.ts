@@ -121,7 +121,7 @@ describe("httpGet", () => {
     });
 
     try {
-      await httpGet("https://api.example.com/limited");
+      await httpGet("https://api.example.com/limited", { maxRetries: 0 });
       expect.fail("Should have thrown");
     } catch (e) {
       expect(e).toBeInstanceOf(HttpError);

@@ -102,13 +102,6 @@ describe("SentimentPipeline", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("returns warnings array", async () => {
-    const records = [makeRecord({ text: "bullish" })];
-    const result = await pipeline.processRecords(records, "AAPL");
-    expect(result).toHaveProperty("warnings");
-    expect(Array.isArray(result.warnings)).toBe(true);
-  });
-
   it("returns divergence when sources diverge", async () => {
     // Create enough records per source for divergence detection
     const twitterRecords = Array.from({ length: 6 }, (_, i) =>
@@ -119,9 +112,7 @@ describe("SentimentPipeline", () => {
     );
 
     const result = await pipeline.processRecords([...twitterRecords, ...webRecords], "AAPL");
-    expect(result.divergence).not.toBeNull();
-    // May or may not be detected depending on scoring, but the field should exist
-    expect(result.divergence).toHaveProperty("detected");
+    expect(result.divergence?.detected).toBe(true);
   });
 
   it("caps aggregate representative items while preserving full sample size", async () => {

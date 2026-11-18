@@ -40,7 +40,7 @@ describe("get_stock_quote tool", () => {
     expect(stockQuoteTool.description).toBeTruthy();
   });
 
-  it("returns formatted text with price data", async () => {
+  it("normalizes the symbol and returns a formatted and structured price", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-05T16:00:00.000Z"));
     rateLimiter.configure("yahoo", 1000, 1000);
@@ -49,7 +49,11 @@ describe("get_stock_quote tool", () => {
       json: () => Promise.resolve(quoteFixture),
     });
 
-    const result = await stockQuoteTool.execute("call-1", { symbol: "AAPL" });
+    const result = await stockQuoteTool.execute("call-1", { symbol: "aapl" });
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/AAPL?"), expect.anything());
+    expect(result.details.symbol).toBe("AAPL");
+    expect(result.details.price).toBe(178.72);
+    expect(result.details.freshness.providerDataAt).toBe("2026-07-02T20:00:00.000Z");
     const text = result.content[0];
     expect(text.type).toBe("text");
     if (text.type !== "text") throw new Error("expected text content");
@@ -57,18 +61,6 @@ describe("get_stock_quote tool", () => {
     expect(text.text).toContain("178.72");
     expect(text.text).toContain("52W Range");
     expect(text.text.split("\n").at(-1)).toMatch(/^As of 2026-07-02 16:00 ET \(.+\)\.$/);
-  });
-
-  it("returns StockQuote in details", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(quoteFixture),
-    });
-
-    const result = await stockQuoteTool.execute("call-2", { symbol: "aapl" });
-    expect(result.details.symbol).toBe("AAPL");
-    expect(result.details.price).toBe(178.72);
-    expect(result.details.freshness.providerDataAt).toBe("2026-07-02T20:00:00.000Z");
   });
 
   it("discloses weekend-stale provider dates without the old cached prefix", async () => {
@@ -106,22 +98,15 @@ describe("get_stock_quote tool", () => {
     cache.set("yahoo:quote:AAPL", staleQuote, -1);
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
 
-    const result = await stockQuoteTool.execute("call-stale-cache", { symbol: "AAPL" });
+    vi.useFakeTimers();
+    const quote = stockQuoteTool.execute("call-stale-cache", { symbol: "AAPL" });
+    await vi.runAllTimersAsync();
+    const result = await quote;
     const text = (result.content[0] as any).text;
 
     expect(text).toContain("Using cached data from");
     expect(text).not.toContain("Using cached quote from");
     expect(result.details.freshness.cacheStatus).toBe("stale");
-  });
-
-  it("uppercases the symbol", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(quoteFixture),
-    });
-
-    await stockQuoteTool.execute("call-3", { symbol: "aapl" });
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("AAPL"), expect.anything());
   });
 
   it("surfaces invalid sparse quote responses as unavailable without zero-filled details", async () => {
@@ -152,7 +137,10 @@ describe("get_stock_quote tool", () => {
       return Promise.reject(new Error("yahoo down"));
     });
 
-    const result = await stockQuoteTool.execute("call-av-fallback", { symbol: "AAPL" });
+    vi.useFakeTimers();
+    const quote = stockQuoteTool.execute("call-av-fallback", { symbol: "AAPL" });
+    await vi.runAllTimersAsync();
+    const result = await quote;
 
     // The Alpha Vantage fixture is the only available price, so a successful
     // quote proves Yahoo was skipped in favour of the configured fallback.
@@ -220,7 +208,10 @@ describe("get_stock_quote tool", () => {
   it("never calls Alpha Vantage when no key is configured", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("yahoo down"));
 
-    const result = await stockQuoteTool.execute("call-no-av", { symbol: "AAPL" });
+    vi.useFakeTimers();
+    const quote = stockQuoteTool.execute("call-no-av", { symbol: "AAPL" });
+    await vi.runAllTimersAsync();
+    const result = await quote;
 
     const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
     expect(urls.every((u: string) => !u.includes("alphavantage.co"))).toBe(true);

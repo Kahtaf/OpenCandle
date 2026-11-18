@@ -30,14 +30,17 @@ import {
  * It asserts the runtime contract we depend on (guard runs, one repair attempt,
  * failed terminal status) and records the observed outcome (the fabricated
  * draft is what the trace preserves). The contrast case proves the same stack
- * captures real tool calls when the model asks for a registered tool whose
- * provider response is served from a checked-in fixture.
+ * captures real tool calls from fixture HTTP responses and completes even
+ * when Pi must retry the risk review.
  */
 
 const PROVIDER_ID = "oc-portfolio-real";
 const MODEL_ID = "oc-portfolio-real-model";
 const TEST_MODEL_KEY = "test-portfolio-key";
 const USER_PROMPT = "Build me a portfolio with $50k";
+// The real coordinator waits for workflow completion. A scripted fixture
+// only needs a short quiet window after that signal.
+const SETTLE_GRACE_MS = 20;
 
 const ROUTER_RESPONSE = {
   routeKind: "workflow_dispatch",
@@ -340,6 +343,7 @@ describe("portfolio builder real-session evidence guard", () => {
         sessionManager,
         defaultProvider: PROVIDER_ID,
         defaultModel: MODEL_ID,
+        settleGraceMs: SETTLE_GRACE_MS,
         timeoutMs: 60_000,
       }).then(
         () => undefined,
@@ -443,7 +447,7 @@ describe("portfolio builder real-session evidence guard", () => {
     }
   });
 
-  it("completes when Pi auto-retries a transient error in the risk review step", {
+  it("captures tool evidence and completes after a transient risk-review error", {
     timeout: 90_000,
   }, async () => {
     const harness = createHarness();
@@ -529,6 +533,7 @@ describe("portfolio builder real-session evidence guard", () => {
         sessionManager,
         defaultProvider: PROVIDER_ID,
         defaultModel: MODEL_ID,
+        settleGraceMs: SETTLE_GRACE_MS,
         timeoutMs: 60_000,
       });
 
@@ -545,118 +550,10 @@ describe("portfolio builder real-session evidence guard", () => {
         ]),
       );
       expect(result.agentTrace.toolSequence).toEqual(["get_stock_quote", "analyze_risk"]);
-      expect(workflow.completeStatus).toBe("completed");
-      expect(
-        modelServer.requests.some((request) =>
-          lastUserText(request).includes("Present the final portfolio draft"),
-        ),
-      ).toBe(true);
-      expect(guard.unrecognizedUrls).toEqual([]);
-    } finally {
-      restoreAgentDir();
-      restoreProviderKeys();
-      harness.cleanup();
-    }
-  });
-
-  it("captures real tool calls and completes when the model asks for registered tools", {
-    timeout: 90_000,
-  }, async () => {
-    const harness = createHarness();
-    const restoreProviderKeys = isolateDataProviderKeys();
-    const restoreAgentDir = isolatePiAgentDir(harness.agentDir);
-    const modelServer = await startDeterministicModelServer((request) => {
-      if (isRouterRequest(request)) {
-        return { kind: "text", text: JSON.stringify(ROUTER_RESPONSE) };
-      }
-      if (isTitleRequest(request)) {
-        return { kind: "text", text: "Portfolio build" };
-      }
-      const userText = lastUserText(request);
-      const lastRole = request.messages.at(-1)?.role;
-      if (userText.includes("Present the final portfolio draft")) {
-        return {
-          kind: "text",
-          text: `Assumptions: $50,000 budget, defaults for scope and horizon.
-| Symbol | Allocation % |
-| VOO | 20% |
-| VXUS | 15% |
-| BND | 20% |
-| SHY | 15% |
-| TIP | 15% |
-| BNDX | 15%`,
-        };
-      }
-      if (userText.includes("Now review the risk and diversification")) {
-        return lastRole === "tool"
-          ? { kind: "text", text: "Risk reviewed from the returned metrics." }
-          : {
-              kind: "tool_call",
-              id: "call-portfolio-risk",
-              name: "analyze_risk",
-              arguments: { symbol: "AAPL" },
-            };
-      }
-      if (userText.includes("Identify candidate holdings")) {
-        return lastRole === "tool"
-          ? { kind: "text", text: "AAPL is the candidate, quoted from the fixture." }
-          : {
-              kind: "tool_call",
-              id: "call-portfolio-quote",
-              name: "get_stock_quote",
-              arguments: { symbol: "AAPL" },
-            };
-      }
-      return { kind: "text", text: "unexpected scripted request" };
-    });
-    activeModelServers.push(modelServer);
-    const guard = installDeterministicFetchGuard([
-      { prefix: modelServer.baseUrl, passthrough: true },
-      // A daily quote must pair its current price with the same session candle.
-      {
-        prefix: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
-        json: buildHistoryFixture("AAPL", 1),
-      },
-      {
-        prefix: "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
-        json: buildHistoryFixture("AAPL"),
-      },
-      { prefix: "https://query1.finance.yahoo.com/", status: 404 },
-      { prefix: "https://query2.finance.yahoo.com/", status: 404 },
-      { prefix: "https://finance.yahoo.com/", status: 404 },
-    ]);
-    activeFetchGuards.push(guard);
-
-    try {
-      const modelRuntime = await createModelRuntime(modelServer.baseUrl);
-      const sessionManager = SessionManager.create(process.cwd(), harness.sessionDir);
-
-      const result = await runOpenCandleSession({
-        prompt: USER_PROMPT,
-        cwd: process.cwd(),
-        openCandleHome: harness.openCandleHome,
-        modelRuntime,
-        sessionManager,
-        defaultProvider: PROVIDER_ID,
-        defaultModel: MODEL_ID,
-        timeoutMs: 60_000,
-      });
-
-      const entries = (result.agentTrace.customEntries ?? []).map((entry) => ({
-        customType: entry.customType,
-        data: entry.data,
-      }));
-      const workflow = summarizeWorkflow(entries);
-
-      // The same real stack captures the tool calls and completes the run when
-      // the model actually asks for the registered tools.
-      expect(result.agentTrace.toolSequence).toEqual(["get_stock_quote", "analyze_risk"]);
       expect(workflow.validationFailedSteps).toEqual([]);
       expect(workflow.completeStatus).toBe("completed");
-      // A healthy run carries no workflow failure summary.
       expect(result.agentTrace.workflowFailure).toBeUndefined();
       expect(result.evalTrace.workflowFailure).toBeUndefined();
-      // A healthy run emits no terminal validation-failure notice.
       expect(visibleValidationFailureMessages(sessionManager.getEntries())).toEqual([]);
       expect(
         modelServer.requests.some((request) =>

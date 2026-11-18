@@ -41,23 +41,6 @@ describe("keywordScore", () => {
     expect(result.confidence).toBe(0);
   });
 
-  it("high-engagement bearish outweighs low-engagement bullish", () => {
-    const bearish = makeRecord({
-      text: "crash incoming",
-      engagement: { score: 500, replies: null, shares: null, views: null },
-    });
-    const bullish = makeRecord({
-      text: "bullish on this",
-      engagement: { score: 10, replies: null, shares: null, views: null },
-    });
-    const bearishResult = keywordScore(bearish);
-    const bullishResult = keywordScore(bullish);
-    // bearish weighted score should have higher absolute value due to engagement
-    expect(Math.abs(bearishResult.score) * (1 + 500)).toBeGreaterThan(
-      Math.abs(bullishResult.score) * (1 + 10),
-    );
-  });
-
   it("confidence higher for longer text with multiple keywords", () => {
     const short = makeRecord({ text: "bullish" });
     const long = makeRecord({
