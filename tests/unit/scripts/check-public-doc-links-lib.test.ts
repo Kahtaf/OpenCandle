@@ -13,9 +13,9 @@ describe("classifyLinkOutcome", () => {
     expect(classifyLinkOutcome({ status: 429 })).toBe("ok");
   });
 
-  it("treats real HTTP error statuses as broken", () => {
+  it("distinguishes a broken destination from an unavailable server", () => {
     expect(classifyLinkOutcome({ status: 404 })).toBe("broken");
-    expect(classifyLinkOutcome({ status: 500 })).toBe("broken");
+    expect(classifyLinkOutcome({ status: 500 })).toBe("unverified");
   });
 
   it("treats thrown network errors as unverified, not broken", () => {

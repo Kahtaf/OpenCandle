@@ -159,8 +159,11 @@ export function evaluatePackageProof({ proof, manifest, headCommit, tarballSha25
   if (proof.smokePassed !== true) {
     errors.push("smokePassed must be true");
   }
+  const expectedTarball = `${manifest.name.replace(/^@/, "").replace("/", "-")}-${manifest.version}.tgz`;
   if (typeof proof.tarball !== "string" || !generatedTarballPattern.test(proof.tarball)) {
     errors.push("tarball must be a .tgz filename");
+  } else if (proof.tarball !== expectedTarball) {
+    errors.push(`tarball must match the manifest filename ${expectedTarball}`);
   }
   if (typeof proof.testedAt !== "string" || Number.isNaN(Date.parse(proof.testedAt))) {
     errors.push("testedAt must be a parseable timestamp");

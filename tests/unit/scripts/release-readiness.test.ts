@@ -123,7 +123,9 @@ describe("release workflow security contract", () => {
     expect(publishWorkflow).toContain("package-proof.json");
     expect(publishWorkflow).toContain("--ignore-scripts");
     expect(publishWorkflow).toContain("--provenance");
-    expect(publishWorkflow.indexOf("gh release create")).toBeGreaterThan(publish);
+    const tag = publishWorkflow.indexOf('git push origin "HEAD:refs/tags/$tag"');
+    expect(tag).toBeGreaterThan(publish);
+    expect(publishWorkflow.indexOf("gh release create")).toBeGreaterThan(tag);
   });
 
   it("uploads bounded release evidence always without masking an earlier failure", () => {

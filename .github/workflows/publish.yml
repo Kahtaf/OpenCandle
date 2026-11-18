@@ -153,12 +153,6 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
 
-          if git show-ref --verify --quiet "refs/tags/$tag"; then
-            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
-          else
-            git push origin "HEAD:refs/tags/$tag"
-          fi
-
           # A rerun after npm accepted the version can finish the GitHub release.
           # Only a byte-identical public package satisfies this recovery path.
           if npm view "$name@$version" dist.integrity --prefer-online > "$RUNNER_TEMP/release-integrity"; then
@@ -168,6 +162,12 @@ jobs:
             npm publish "$tarball" --ignore-scripts --access public --provenance
           fi
 
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
+          else
+            git push origin "HEAD:refs/tags/$tag"
+          fi
+
       - name: Create GitHub Release
         if: inputs.publish
         env:
@@ -175,7 +175,11 @@ jobs:
         run: |
           set -euo pipefail
           tag="v$(node -p "require('./package.json').version")"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --verify-tag --generate-notes
+          if state=$(gh release view "$tag" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease'); then
+            test "$state" = false
+          else
+            gh release create "$tag" --verify-tag --generate-notes
+          fi
 
   advisory:
     if: github.ref == 'refs/heads/main' && inputs.advisory_comparison

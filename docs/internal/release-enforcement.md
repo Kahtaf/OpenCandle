@@ -137,7 +137,7 @@ The job probes the required Gemini model before installing dependencies, then ru
 
 Next, `npm run eval -- release` starts the router, cases, product and frozen deterministic suites in parallel and preserves a completion result for each. The frozen release runner exercises the same session and manifest assertions without the external competitors or comparison judge. An optional, separate advisory job runs the judged panel and has read-only repository permissions. Its result does not gate publication.
 
-After the required suites pass, the workflow generates the compact summary. The publish job verifies the proof and tarball on the same runner, creates the tag at the verified commit, and publishes that tarball with provenance. A tag on a different commit blocks publication. A registry version that already exists is accepted only when its public integrity matches the tarball, so a rerun can recover GitHub release creation without replacing the npm version.
+After the required suites pass, the workflow generates the compact summary. The publish job verifies the proof and tarball on the same runner, publishes that tarball with provenance, and creates the tag at the verified commit after npm accepts the package. A tag on a different commit blocks publication. A registry version that already exists is accepted only when its public integrity matches the tarball, so a rerun can recover GitHub release creation without replacing the npm version.
 
 It always uploads bounded release evidence
 (`validation-output/release-evals/**/release-eval-startup.json`,

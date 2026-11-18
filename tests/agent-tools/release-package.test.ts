@@ -452,6 +452,17 @@ describe("release package proof helpers", () => {
     expect(result.errors.join(" ")).toMatch(/tarball must be a \.tgz/i);
   });
 
+  it("rejects a tarball filename for a different package even if the hash matches", async () => {
+    const { evaluatePackageProof } = await loadReleaseHelpers();
+    const input = validInput();
+    const result = evaluatePackageProof({
+      ...input,
+      proof: { ...input.proof, tarball: "other-0.15.0.tgz" },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toContain("opencandle-0.15.0.tgz");
+  });
+
   it("rejects malformed testedAt, node, and platform fields", async () => {
     const { evaluatePackageProof } = await loadReleaseHelpers();
     const input = validInput();
